@@ -353,7 +353,7 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
   ]
 
   return (
-    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+    <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
           The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
@@ -972,6 +972,40 @@ Return ONLY valid JSON:
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <style>{`
+        /* inputs: mono font instead of Fraunces so selects/inputs look sharp */
+        .triage-root .input-field {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 13px;
+          padding: 10px 14px;
+          background: #FAF7F1;
+          border: 1px solid #D4CCBC;
+          color: #1A1814;
+          width: 100%;
+          box-sizing: border-box;
+          transition: border-color 0.2s;
+        }
+        .triage-root .input-field:focus { outline: none; border-color: #1A1814; }
+        .triage-root select.input-field { appearance: auto; }
+        .triage-root textarea.input-field {
+          font-family: 'Fraunces', Georgia, serif;
+          font-size: 14px;
+          line-height: 1.6;
+          padding: 12px 14px;
+        }
+        .triage-root .input-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: #6B5F4D;
+          margin-bottom: 6px;
+          display: block;
+        }
+        /* warm up Tailwind cool borders */
+        .triage-root .border-stone-200 { border-color: #D4CCBC !important; }
+        .triage-root .border-stone-300 { border-color: #C8BFB2 !important; }
+        .triage-root .border-stone-100 { border-color: #E4DECE !important; }
+        /* dividers */
         .tri-section-rule { border: none; border-top: 1px solid #D4CCBC; margin: 28px 0; }
         .tri-sub-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #A89B88; margin-bottom: 12px; }
       `}</style>
