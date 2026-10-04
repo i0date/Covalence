@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
   consumerWindowDays:   120,
   absoluteCapDays:      540,
   pcMilestones:         [10, 45, 90],
+  trackerWindowDays:    60,
 }
 
 // ─── Business-day helpers ─────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ export default function Covalence() {
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
           <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
-            <div className="cov-nav-logo" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
+            <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
             </div>
             <div style={{ display:'flex', alignItems:'center' }}>
@@ -345,12 +346,16 @@ export default function Covalence() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function HomeView({ outcomes: _parentOutcomes, settings, setActiveSection, platformMode }) {
+function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, platformMode }) {
   // Always read fresh from localStorage so stats reflect Desk additions without page reload
   const [outcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
   })
-  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+  const settings = React.useMemo(() => {
+    try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
+  }, [])
+  const windowDays = settings.trackerWindowDays || 60
+  const sixtyDaysAgo = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
   const recent   = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
@@ -924,6 +929,17 @@ Return ONLY valid JSON:
     }
   }
 
+  const reloadCase = (o) => {
+    if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
+    if (o.amount && o.amount !== '—') {
+      const parts = (o.amount || '').split(' ')
+      if (parts[0]) setAmount(parts[0])
+      if (parts[1]) setCurrency(parts[1])
+    }
+    if (o.network) setNetwork(o.network.toLowerCase())
+    setResult(null); setError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   const markOutcome = (id, val) =>
     setOutcomes(prev => prev.map(o => o.id === id ? { ...o, outcome: val } : o))
 
@@ -1968,14 +1984,18 @@ Return ONLY valid JSON:
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
                           {o.outcome === 'pending' ? (
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 flex-wrap">
                               <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
                               <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
+                              <button onClick={() => reloadCase(o)} className="mono-font text-xs px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
                             </div>
                           ) : (
-                            <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
-                              {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
-                            </span>
+                            <div className="flex gap-1 items-center flex-wrap">
+                              <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
+                                {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
+                              </span>
+                              <button onClick={() => reloadCase(o)} className="mono-font text-xs px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2079,6 +2099,32 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, platformMode,
   const [mchRepDeadline, setMchRepDeadline]                 = useState('')
   const [mchSubmitDate, setMchSubmitDate]                   = useState('')
   const [mchTrackingRef, setMchTrackingRef]                 = useState('')
+
+  // ── Deadline push notifications ─────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+    const fireAlerts = () => {
+      if (Notification.permission !== 'granted') return
+      outcomes.forEach(o => {
+        if (!o.provCreditDate || o.mode === 'merchant') return
+        const pc45 = addBusinessDays(o.provCreditDate, 45)
+        const d = Math.ceil((pc45 - new Date()) / 86400000)
+        if (d === 3 || d === 1) {
+          new Notification('Covalence — Reg E Deadline', {
+            body: `${o.merchant || o.id}: ${d === 1 ? 'tomorrow' : '3 days'} until 45BD provisional credit deadline`,
+            icon: '/favicon.ico',
+          })
+        }
+      })
+    }
+    fireAlerts()
+    const timer = setInterval(fireAlerts, 60 * 60 * 1000)
+    return () => clearInterval(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Outcome tracking (60-day dispute log) ─────────────────────────────────
   const [outcomes, setOutcomes] = useState(() => {
@@ -2680,7 +2726,7 @@ Return ONLY valid JSON:
   }
 
   const exportCSV = () => {
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+    const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
     const isMerchant = platformMode === 'merchant'
     const rows = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo && (isMerchant ? o.mode === 'merchant' : o.mode !== 'merchant'))
     // Export DFA-compatible schema so this CSV can be uploaded directly to DisputeFundingAssessor
@@ -2774,7 +2820,7 @@ Return ONLY valid JSON:
   // Outcome tracker: 60-day window only
   // Lifecycle stages: pending → filed → representment → pre_arb → won | lost | withdrawn
   const LIFECYCLE_IN_PROGRESS = new Set(['filed', 'representment', 'pre_arb'])
-  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+  const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
     ? visibleOutcomes.filter(o => o.mode === 'merchant')
@@ -4155,7 +4201,7 @@ Return ONLY valid JSON:
                 <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '05' : '07'}</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Dispute Tracker</h2>
                 <div className="flex items-center gap-3 ml-auto flex-wrap">
-                  <span className="mono-font text-xs text-stone-400">60-DAY WINDOW · {filteredTrackerOutcomes.length}{trackerFilter !== 'all' || trackerSearch ? ` / ${trackerOutcomes.length}` : ''} CASE{filteredTrackerOutcomes.length !== 1 ? 'S' : ''}</span>
+                  <span className="mono-font text-xs text-stone-400">{settings.trackerWindowDays || 60}-DAY WINDOW · {filteredTrackerOutcomes.length}{trackerFilter !== 'all' || trackerSearch ? ` / ${trackerOutcomes.length}` : ''} CASE{filteredTrackerOutcomes.length !== 1 ? 'S' : ''}</span>
                   <button onClick={() => setShowSettings(v => !v)} className={`mono-font text-[10px] tracking-widest px-2.5 py-1 border transition-colors ${showSettings ? 'border-stone-900 bg-stone-900 text-stone-50' : 'border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700'}`}>
                     ⚙ THRESHOLDS
                   </button>
@@ -4178,6 +4224,7 @@ Return ONLY valid JSON:
                   </div>
                   <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {[
+                      { key: 'trackerWindowDays',    label: 'TRACKER WINDOW (DAYS)',    type: 'number', hint: 'Days of cases shown in tracker and home screen (default: 60)' },
                       { key: 'smallDollarThreshold', label: 'WRITE-OFF THRESHOLD ($)', type: 'number', hint: 'Disputes below this amount trigger a write-off recommendation instead of formal dispute filing' },
                       { key: 'sarThreshold',          label: 'SAR TRIGGER ($)',          type: 'number', hint: 'Fraud disputes at or above this amount display a SAR filing reminder' },
                       { key: 'fraudWindowDays',       label: 'FRAUD WINDOW (DAYS)',       type: 'number', hint: 'Filing window for fraud disputes (Visa/MC standard: 120 days from transaction)' },
@@ -5789,7 +5836,29 @@ function DfaView({ dfaQueue, setDfaQueue }) {
           <div className="flex items-baseline gap-3 mb-2 flex-wrap">
             <span className="mono-font text-xs text-stone-500">03</span>
             <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:"-0.01em" }}>Receivables Detail</h2>
-            <div className="sm:ml-auto"><button className="upload-btn" onClick={() => exportResultsCSV(activeScored,advanceRate)}><Download style={{ width:13,height:13 }} /> Export scored CSV</button></div>
+            <div className="sm:ml-auto flex gap-2 flex-wrap">
+              <button className="upload-btn" onClick={() => {
+                const w = window.open('','_blank')
+                const g = grade
+                w.document.write('<!DOCTYPE html><html><head><title>Covalence DFA — Portfolio Summary</title><style>body{font-family:monospace;padding:40px;color:#1A1814;max-width:900px;margin:0 auto}h1{font-size:26px;margin-bottom:4px}h2{font-size:13px;color:#78716c;margin:0 0 28px;font-weight:normal}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.card{border:1px solid #D4CCBC;padding:10px}.label{font-size:9px;letter-spacing:0.1em;color:#78716c;margin-bottom:3px}.val{font-size:19px;font-weight:600}.sub{font-size:10px;color:#a8a29e;margin-top:1px}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;padding:5px 8px;background:#EEE9E0;font-size:9px;letter-spacing:0.08em;font-weight:normal}td{padding:5px 8px;border-top:1px solid #f5f5f4}.A{color:#064e3b;font-weight:700}.B{color:#065f46}.C{color:#92400e}.D{color:#7f1d1d}.footer{margin-top:32px;font-size:9px;color:#a8a29e;border-top:1px solid #D4CCBC;padding-top:10px}@media print{button{display:none}}</style></head><body>'
+                  + '<h1>Covalence — Dispute Funding Assessor</h1>'
+                  + '<h2>Portfolio Summary &mdash; ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + '</h2>'
+                  + '<div class="grid">'
+                  + '<div class="card"><div class="label">PORTFOLIO VALUE</div><div class="val">$' + totalValue.toLocaleString() + '</div><div class="sub">' + activeScored.length + ' receivables</div></div>'
+                  + '<div class="card"><div class="label">EXPECTED RECOVERY</div><div class="val">$' + Math.round(totalExpected).toLocaleString() + '</div><div class="sub">' + Math.round(totalValue>0?totalExpected/totalValue*100:0) + '% of face</div></div>'
+                  + '<div class="card"><div class="label">RECOMMENDED ADVANCE</div><div class="val">$' + Math.round(advanceValue).toLocaleString() + '</div><div class="sub">' + Math.round(advanceRate*100) + '% of expected recovery</div></div>'
+                  + '<div class="card"><div class="label">PORTFOLIO GRADE</div><div class="val">' + grade(weightedScore).label + '</div><div class="sub">' + Math.round(weightedScore) + ' weighted score</div></div>'
+                  + '</div>'
+                  + '<table><thead><tr><th>ID</th><th>FACE VALUE</th><th>CODE</th><th>GRADE</th><th>EXP. RECOVERY</th><th>ADVANCE</th><th>DAYS LEFT</th><th>NOTE</th></tr></thead><tbody>'
+                  + activeScored.map(c=>{const gl=grade(c.fundability).label;return '<tr><td>'+c.id+'</td><td>$'+c.amount.toLocaleString()+'</td><td>'+c.code+'</td><td class="'+gl+'">'+gl+'</td><td>$'+Math.round(c.expectedRecovery).toLocaleString()+'</td><td>$'+Math.round(c.expectedRecovery*advanceRate).toLocaleString()+'</td><td>'+Math.max(0,c.windowDays-c.filedDaysAgo)+'d</td><td>'+String(c.note||'').replace(/</g,'&lt;').slice(0,60)+'</td></tr>'}).join('')
+                  + '</tbody></table>'
+                  + '<div class="footer">Generated by Covalence &middot; ' + new Date().toISOString().slice(0,19).replace('T',' ') + ' UTC</div>'
+                  + '<br><button onclick="window.print()">&#128438; Print / Save as PDF</button>'
+                  + '</body></html>')
+                w.document.close()
+              }}><Download style={{ width:13,height:13 }} /> Print Summary</button>
+              <button className="upload-btn" onClick={() => exportResultsCSV(activeScored,advanceRate)}><Download style={{ width:13,height:13 }} /> Export CSV</button>
+            </div>
           </div>
           <p className="display-font text-stone-500 text-[15px] mb-4 ml-7" style={{ lineHeight:"1.5" }}>
             Each claim scored as a standalone receivable. Select any row to view the full breakdown. Use <em>Exclude from portfolio</em> to model the portfolio without a claim.
