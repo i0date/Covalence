@@ -6157,6 +6157,7 @@ function SettingsView({ settings, setSettings }) {
     { key:'fraudWindowDays',      label:'Fraud Filing Window (days)' },
     { key:'consumerWindowDays',   label:'Consumer Filing Window (days)' },
     { key:'absoluteCapDays',      label:'Absolute Filing Cap (days)' },
+    { key:'trackerWindowDays',    label:'Tracker Window (days)' },
   ]
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
