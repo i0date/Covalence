@@ -3130,7 +3130,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-baseline gap-3 mb-2">
-                <span className="mono-font text-xs text-stone-500">04</span>
+                <span className="mono-font text-xs text-stone-500">06</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Chargeback Ratio Monitor</h2>
               </div>
               <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">Network monitoring thresholds. Dispute count and volume are auto-filled from your tracker — enter total monthly transactions to compute your CBR.</p>
