@@ -169,18 +169,27 @@ function parseDfaCSV(text) {
 // ─── GLOBAL CSS (injected once by root component) ─────────────────────────────
 const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
   .display-font { font-family:'Fraunces',Georgia,serif; }
   .mono-font    { font-family:'JetBrains Mono',monospace; }
-  .cov-input {
+
+  /* ── Shared inputs ────────────────────────────────────────────────────── */
+  .cov-input, .input-field {
     background:#FAF7F1; border:1px solid #D4CCBC; padding:14px 16px;
     font-family:'Fraunces',Georgia,serif; font-size:15px; width:100%; color:#1A1814;
     transition:border-color 0.2s;
   }
-  .cov-input:focus { outline:none; border-color:#1A1814; }
-  .cov-label {
+  .cov-input:focus, .input-field:focus { outline:none; border-color:#1A1814; }
+  select.input-field { appearance:auto; }
+
+  /* ── Labels ───────────────────────────────────────────────────────────── */
+  .cov-label, .input-label {
     font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.15em;
     text-transform:uppercase; color:#6B5F4D; margin-bottom:6px; display:block;
   }
+
+  /* ── Primary button ───────────────────────────────────────────────────── */
   .cov-btn {
     font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em;
     padding:14px 24px; background:#1A1814; color:#F5F1EA; border:none; cursor:pointer;
@@ -189,12 +198,24 @@ const GLOBAL_CSS = `
   }
   .cov-btn:hover { background:#2D2820; }
   .cov-btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+  /* ── Network / mode toggle buttons ───────────────────────────────────── */
   .net-btn {
     font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em;
     padding:10px 20px; border:1px solid #D4CCBC; background:#FAF7F1; color:#1A1814;
     cursor:pointer; transition:all 0.15s; text-transform:uppercase;
   }
   .net-btn.active { background:#1A1814; color:#F5F1EA; border-color:#1A1814; }
+  .network-btn {
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.12em;
+    padding:10px 20px; border:1px solid #1A1814; cursor:pointer;
+    transition:all 0.15s; flex:1; text-align:center;
+  }
+  .network-btn.active   { background:#1A1814; color:#F5F1EA; }
+  .network-btn.inactive { background:#FAF7F1; color:#6B5F4D; }
+  .network-btn.inactive:hover { background:#F0EBE2; }
+
+  /* ── Upload button ────────────────────────────────────────────────────── */
   .upload-btn {
     font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em;
     padding:9px 16px; border:1px solid #1A1814; background:#FAF7F1; color:#1A1814;
@@ -202,6 +223,30 @@ const GLOBAL_CSS = `
     transition:all 0.15s; white-space:nowrap;
   }
   .upload-btn:hover { background:#1A1814; color:#F5F1EA; }
+
+  /* ── Section divider ──────────────────────────────────────────────────── */
+  .section-divider { border-top:1px solid #1A1814; margin:32px 0 24px 0; }
+
+  /* ── DFA claim table rows ─────────────────────────────────────────────── */
+  .claim-row { border-bottom:1px solid #E8E0D4; transition:background 0.1s; }
+  .claim-row:hover td { background:#EEE9E0; }
+  .claim-row.selected td { background:#1A1814; color:#F5F1EA; }
+  .claim-row.selected td .sub-text { color:#78716c; }
+  .claim-row.excluded-row { opacity:0.38; }
+
+  /* ── DFA grade filter tabs ────────────────────────────────────────────── */
+  .grade-tab {
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em;
+    padding:5px 12px; border:1px solid #D4CCBC; background:#FAF7F1; color:#6B5F4D;
+    cursor:pointer;
+  }
+  .grade-tab.active { background:#1A1814; color:#F5F1EA; border-color:#1A1814; }
+  .grade-tab:hover:not(.active) { border-color:#78716c; color:#1A1814; }
+  input[type=range] { accent-color:#1A1814; }
+
+  /* ── Responsive helpers ───────────────────────────────────────────────── */
+  @media(max-width:767px) { .desktop-only { display:none !important; } }
+  @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -234,7 +279,10 @@ export default function Covalence() {
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
           <div style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
-            <span className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.35em', color:'#D6CFC4', padding:'14px 0', flexShrink:0 }}>COVALENCE</span>
+            <div style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
+              <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
+              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.18em', color:'#5A5248', marginTop:'4px' }}>DISPUTE SUITE</div>
+            </div>
             <div style={{ display:'flex', alignItems:'center' }}>
               {NAV.map(({ id, label }) => (
                 <button key={id} onClick={() => setActiveSection(id)}
@@ -307,10 +355,14 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
 
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-8">
-        <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'clamp(36px,5vw,60px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
-          Dispute Operations<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Dashboard</span>
+      <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
+        <div className="mono-font text-stone-400 mb-4" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>COVALENCE — DISPUTE OPERATIONS SUITE</div>
+        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
+          Operations<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Dashboard</span>
         </h1>
+        <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
+          Three tools, one workflow — triage incoming disputes, manage the desk, and score portfolios for funding.
+        </p>
       </div>
 
       {urgent.length > 0 && (
