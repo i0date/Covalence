@@ -281,7 +281,6 @@ export default function Covalence() {
           <div style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
             <div style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
-              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.18em', color:'#5A5248', marginTop:'4px' }}>DISPUTE SUITE</div>
             </div>
             <div style={{ display:'flex', alignItems:'center' }}>
               {NAV.map(({ id, label }) => (
@@ -561,7 +560,7 @@ function TriageView({ onHandoff }) {
 
       {/* ── Masthead ── */}
       <div className="border-b-2 border-black pb-6 mb-10 sm:pb-8 sm:mb-14">
-        <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>ISSUE Nº 001 — DISPUTE OPERATIONS</div>
+        <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>ISSUE Nº 001 — TRIAGE</div>
         <div className="mono-font text-stone-400 mb-4" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>
           {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
         </div>
@@ -1663,8 +1662,7 @@ Return ONLY valid JSON:
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 002 — DISPUTE OPERATIONS</div>
-            <div className="mono-font text-xs tracking-widest text-stone-600 sm:hidden">DISPUTE OPERATIONS</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 002 — THE DISPUTE DESK</div>
             <div className="mono-font text-xs tracking-widest text-stone-600">
               {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
             </div>
@@ -4141,7 +4139,7 @@ function DfaView({ dfaQueue, setDfaQueue }) {
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 003 — DISPUTE RECEIVABLES</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 003 — DFA</div>
             <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
