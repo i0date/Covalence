@@ -444,21 +444,372 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
 // 001 TRIAGE VIEW — stub (full build next)
 // ═══════════════════════════════════════════════════════════════════════════════
 function TriageView({ onHandoff }) {
+  const [caseId, setCaseId] = useState(() => {
+    const d = new Date(), pad = n => String(n).padStart(2, '0')
+    return `CVL-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`
+  })
+  const [triNetwork, setTriNetwork]       = useState('visa')
+  const [triAmount, setTriAmount]         = useState('')
+  const [triCurrency, setTriCurrency]     = useState('USD')
+  const [triDate, setTriDate]             = useState('')
+  const [triMerchant, setTriMerchant]     = useState('')
+  const [triComplaint, setTriComplaint]   = useState('')
+  const [classifying, setClassifying]     = useState(false)
+  const [classResult, setClassResult]     = useState(null)
+  const [classProgress, setClassProgress] = useState('')
+  const [analystNotes, setAnalystNotes]   = useState('')
+  const [overrideType, setOverrideType]   = useState('')
+  const [handedOff, setHandedOff]         = useState(false)
+
+  const TYPE_LABELS = {
+    unauthorized_transaction: 'Unauthorized Transaction',
+    merchandise_not_received: 'Merchandise / Services Not Received',
+    cancelled_recurring:      'Cancelled Recurring Transaction',
+    not_as_described:         'Not As Described / Defective',
+    atm_dispute:              'ATM Dispute',
+    duplicate_charge:         'Duplicate Charge',
+    credit_not_processed:     'Credit / Refund Not Processed',
+  }
+
+  function runClassification(text, amount, network) {
+    const t = text.toLowerCase()
+    let type = 'unauthorized_transaction', confidence = 72, signals = []
+    if (/i didn.t (make|place|do|authorize)|not (me|authorized)|unauthorized|someone (else|used)|stolen|lost (card|my card)|fraud(ulent)?/.test(t)) {
+      type = 'unauthorized_transaction'; confidence = 89
+      signals = ['Unauthorized / fraud language detected', 'No cardholder authorization indicated', 'Check 3DS + AVS/CVV response codes']
+    } else if (/never (received|got|arrived)|not (delivered|received)|didn.t receive|missing (package|item|order)|where is my (order|package)/.test(t)) {
+      type = 'merchandise_not_received'; confidence = 85
+      signals = ['Non-delivery language detected', 'Fulfillment or carrier failure likely', 'Request tracking and proof of delivery']
+    } else if (/cancel(led|ed|lation)|subscription|recurring|keep(s?) (charging|billing)|still being charged|charged after (i |we )cancel/.test(t)) {
+      type = 'cancelled_recurring'; confidence = 83
+      signals = ['Recurring billing keywords present', 'Cancellation claim indicated', 'Verify cancellation confirmation record']
+    } else if (/not (as described|what i (ordered|expected)|correct)|different (from|than)|wrong (item|product|size)|defective|broken|counterfeit/.test(t)) {
+      type = 'not_as_described'; confidence = 80
+      signals = ['Merchandise mismatch language', 'Quality or description dispute', 'Collect product listing and delivery evidence']
+    } else if (/atm|cash (machine|dispenser)|withdraw(al)?|dispense|didn.t (dispense|give me)/.test(t)) {
+      type = 'atm_dispute'; confidence = 87
+      signals = ['ATM transaction keywords detected', 'Possible dispense error or skimming', 'Request ATM journal and camera footage']
+    } else if (/charged (twice|double|two times)|duplicate|double charge|two (charges|transactions|debits)/.test(t)) {
+      type = 'duplicate_charge'; confidence = 88
+      signals = ['Duplicate processing language', 'Multiple debits on same transaction', 'Reconcile merchant settlement records']
+    } else if (/(refund|credit) (not|hasn.t|didn.t)|promised (a )?refund|returned? (item|product|it)/.test(t)) {
+      type = 'credit_not_processed'; confidence = 81
+      signals = ['Refund / return claim', 'Credit expected but not posted', 'Obtain merchant refund confirmation']
+    } else {
+      signals = ['No dominant keyword pattern — manual review recommended', 'Default classification applied']
+    }
+    const rcMap = {
+      unauthorized_transaction: network === 'mastercard' ? '4863' : '10.4',
+      merchandise_not_received: network === 'mastercard' ? '4855' : '13.1',
+      cancelled_recurring:      network === 'mastercard' ? '4841' : '13.2',
+      not_as_described:         network === 'mastercard' ? '4853' : '13.3',
+      atm_dispute:              network === 'mastercard' ? '4808' : '10.1',
+      duplicate_charge:         network === 'mastercard' ? '4834' : '12.6',
+      credit_not_processed:     network === 'mastercard' ? '4860' : '13.6',
+    }
+    const hdMap = {
+      unauthorized_transaction: 'Cardholder reports transaction not initiated by them',
+      merchandise_not_received: 'Goods paid for but not received by cardholder',
+      cancelled_recurring:      'Recurring charge continued after reported cancellation',
+      not_as_described:         'Merchandise received does not match advertised description',
+      atm_dispute:              'ATM dispense discrepancy or unauthorized withdrawal',
+      duplicate_charge:         'Single transaction appears to have processed twice',
+      credit_not_processed:     'Refund or credit agreed but not posted to account',
+    }
+    const amt = parseFloat(amount) || 0
+    const regE = type === 'atm_dispute' || /debit|checking|savings|atm/.test(t)
+    return {
+      type, confidence, signals,
+      recommendedCode: rcMap[type] || '10.4',
+      priority: amt >= 500 ? 'urgent' : amt >= 100 ? 'standard' : 'routine',
+      regulatory: regE ? 'Reg E (EFTA)' : 'Reg Z (TILA)',
+      headline: hdMap[type] || 'Dispute requires manual review',
+    }
+  }
+
+  function handleClassify() {
+    if (!triComplaint.trim() || classifying) return
+    setClassifying(true); setClassResult(null)
+    const steps = ['Reading complaint text…', 'Identifying dispute pattern…', 'Matching reason codes…', 'Assessing regulatory framework…']
+    let s = 0
+    const iv = setInterval(() => { setClassProgress(steps[Math.min(s++, steps.length - 1)]) }, 420)
+    setTimeout(() => {
+      clearInterval(iv)
+      const r = runClassification(triComplaint, triAmount, triNetwork)
+      setClassResult(r); setOverrideType(r.type); setClassifying(false)
+    }, 1800)
+  }
+
+  function handleHandoff() {
+    const finalType = overrideType || classResult.type
+    onHandoff({
+      caseId, classification: finalType,
+      confidence: classResult.confidence + '%',
+      headline: classResult.headline,
+      network: triNetwork, amount: triAmount, merchant: triMerchant,
+      transactionDate: triDate, complaint: triComplaint, notes: analystNotes,
+    })
+    setHandedOff(true)
+  }
+
+  const canClassify = triComplaint.trim().length > 20
+  const canHandoff  = !handedOff && classResult && triAmount && triMerchant
+  const PRI = { urgent: { text:'#991B1B' }, standard: { text:'#92400E' }, routine: { text:'#166534' } }
+
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
-        <div className="mono-font text-stone-400 mb-3" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>001</div>
-        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em' }}>
-          Triage
+
+      {/* ── Masthead ── */}
+      <div className="border-b-2 border-black pb-6 mb-10 sm:pb-8 sm:mb-14">
+        <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>ISSUE Nº 001 — DISPUTE OPERATIONS</div>
+        <div className="mono-font text-stone-400 mb-4" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>
+          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
+        </div>
+        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,88px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
+          Dispute<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Triage</span>
         </h1>
-        <p className="display-font text-stone-600 mt-3 max-w-2xl" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.5 }}>
-          First-touch complaint intake. Classify the dispute, determine regulatory framework, and advance to the Dispute Desk.
+        <p className="display-font text-stone-700 mt-4 max-w-2xl" style={{ fontSize:'clamp(15px,2vw,17px)', lineHeight:1.6 }}>
+          First-touch complaint intake. Log the dispute, classify the transaction, determine the regulatory framework, and advance to the Dispute Desk.
         </p>
       </div>
-      <div className="border border-amber-300 px-5 py-4" style={{ background:'#FFFBEB' }}>
-        <div className="mono-font text-amber-900" style={{ fontSize:'10px', letterSpacing:'0.12em' }}>001 TRIAGE — IN PROGRESS</div>
-        <p className="display-font text-amber-800 mt-1" style={{ fontSize:'14px' }}>Full intake form, OCR extraction, and AI classification building now.</p>
+
+      {/* ── Step 01 — Case Intake ── */}
+      <div>
+        <div className="flex items-baseline gap-3 mb-2">
+          <span className="mono-font text-xs text-stone-500">01</span>
+          <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Case Intake</h2>
+        </div>
+        <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
+          Log the complaint details. Case ID is auto-generated — edit if your institution uses its own format.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="input-label">Case ID</label>
+            <input type="text" value={caseId} onChange={e => setCaseId(e.target.value)} className="input-field mono-font" style={{ fontSize:'12px' }} />
+          </div>
+          <div>
+            <label className="input-label">Card Network</label>
+            <div className="flex gap-0">
+              {['visa','mastercard'].map(n => (
+                <button key={n} onClick={() => setTriNetwork(n)} className={'network-btn ' + (triNetwork === n ? 'active' : 'inactive')}>
+                  {n === 'visa' ? 'VISA' : 'MC'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="input-label">Dispute Amount</label>
+            <div className="flex gap-2">
+              <input type="text" value={triAmount} onChange={e => setTriAmount(e.target.value)} placeholder="0.00" className="input-field flex-1" />
+              <select value={triCurrency} onChange={e => setTriCurrency(e.target.value)} className="input-field mono-font" style={{ width:'72px', fontSize:'11px' }}>
+                {['USD','GBP','EUR','CAD','AUD'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="input-label">Merchant / Payee Name</label>
+            <input type="text" value={triMerchant} onChange={e => setTriMerchant(e.target.value)} placeholder="e.g. Amazon, Apple, Shell" className="input-field" />
+          </div>
+          <div>
+            <label className="input-label">Transaction Date</label>
+            <input type="date" value={triDate} onChange={e => setTriDate(e.target.value)} className="input-field" />
+          </div>
+        </div>
+
+        <div>
+          <label className="input-label">
+            Customer Complaint / Dispute Narrative
+            <span className="mono-font text-[9px] text-stone-400 ml-2 normal-case tracking-normal">Paste verbatim from CRM, email, or branch notes</span>
+          </label>
+          <textarea
+            value={triComplaint}
+            onChange={e => setTriComplaint(e.target.value)}
+            placeholder={'e.g. "I did not make this purchase at Amazon on the 14th. My card was in my possession the whole time and I have never shopped at this merchant. Please investigate and refund the $247.50 charge."'}
+            className="input-field"
+            rows={6}
+            style={{ resize:'vertical', lineHeight:'1.6', fontSize:'14px' }}
+          />
+          <div className="flex items-center justify-between mt-1">
+            <p className="display-font text-[11px] text-stone-400 italic">Minimum 20 characters to enable classification</p>
+            <span className="mono-font text-[9px] text-stone-400">{triComplaint.length} chars</span>
+          </div>
+        </div>
       </div>
+
+      {/* ── Step 02 — Classification ── */}
+      <div className="section-divider" />
+      <div>
+        <div className="flex items-baseline gap-3 mb-2">
+          <span className="mono-font text-xs text-stone-500">02</span>
+          <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Classification</h2>
+        </div>
+        <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
+          Analyse the complaint text to identify dispute type, recommended reason code, priority, and regulatory framework.
+        </p>
+
+        <button
+          onClick={handleClassify}
+          disabled={!canClassify || classifying}
+          className="mono-font text-xs tracking-widest px-6 py-3 border border-stone-900 transition-all"
+          style={{ background: canClassify && !classifying ? '#1A1814' : '#E8E0D4', color: canClassify && !classifying ? '#F5F1EA' : '#9A9086', cursor: canClassify && !classifying ? 'pointer' : 'not-allowed' }}
+        >
+          {classifying ? classProgress || 'ANALYSING…' : classResult ? 'RE-CLASSIFY' : 'CLASSIFY DISPUTE'}
+        </button>
+
+        {classifying && (
+          <div className="flex items-center gap-3 mt-5">
+            <Loader2 className="w-4 h-4 text-stone-600 animate-spin" />
+            <span className="display-font text-stone-600 italic text-sm">{classProgress}</span>
+          </div>
+        )}
+
+        {classResult && !classifying && (
+          <div className="mt-6 border border-stone-300" style={{ background:'#FAF7F1' }}>
+            <div className="px-5 py-4 border-b border-stone-200" style={{ background:'#EEE9E0' }}>
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">CLASSIFICATION RESULT</div>
+                  <div className="display-font font-semibold text-stone-900" style={{ fontSize:'20px', letterSpacing:'-0.01em' }}>
+                    {TYPE_LABELS[classResult.type]}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">CONFIDENCE</div>
+                  <div className="display-font font-bold text-stone-900" style={{ fontSize:'28px', lineHeight:1 }}>{classResult.confidence}%</div>
+                </div>
+              </div>
+              <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background:'#C8C0B4' }}>
+                <div className="h-full rounded-full" style={{ width: classResult.confidence + '%', background:'#1A1814', transition:'width 0.6s ease' }} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-stone-200">
+              {[
+                { label:'REASON CODE', value: classResult.recommendedCode },
+                { label:'PRIORITY',    value: classResult.priority.toUpperCase(), style: PRI[classResult.priority] || {} },
+                { label:'FRAMEWORK',   value: classResult.regulatory },
+                { label:'NETWORK',     value: triNetwork === 'mastercard' ? 'MASTERCARD' : 'VISA' },
+              ].map(item => (
+                <div key={item.label} className="px-4 py-3">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{item.label}</div>
+                  <div className="mono-font text-sm font-semibold text-stone-900" style={item.style}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-5 py-3 border-t border-stone-200">
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">HEADLINE</div>
+              <p className="display-font text-stone-800 text-[15px] italic">"{classResult.headline}"</p>
+            </div>
+
+            <div className="px-5 py-3 border-t border-stone-200">
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">CLASSIFICATION SIGNALS</div>
+              {classResult.signals.map((s, i) => (
+                <div key={i} className="flex items-start gap-2 mb-1">
+                  <span className="mono-font text-[10px] text-stone-400 mt-0.5">—</span>
+                  <span className="display-font text-stone-700 text-[13px]">{s}</span>
+                </div>
+              ))}
+            </div>
+
+            {classResult.priority === 'urgent' && (
+              <div className="px-5 py-3 border-t border-red-300" style={{ background:'#FEF2F2' }}>
+                <div className="mono-font text-[9px] tracking-widest text-red-700">
+                  {'⚠ URGENT — ' + triCurrency + ' ' + parseFloat(triAmount || 0).toFixed(2) + ' EXCEEDS $500 · EXPEDITE REVIEW · CHECK SAR OBLIGATION'}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Step 03 — Review & Handoff ── */}
+      {classResult && (
+        <>
+          <div className="section-divider" />
+          <div>
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className="mono-font text-xs text-stone-500">03</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Review & Handoff</h2>
+            </div>
+            <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
+              Confirm or override the classification, add analyst notes, then advance to the Dispute Desk.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="input-label">Classification (override if needed)</label>
+                <select value={overrideType} onChange={e => setOverrideType(e.target.value)} className="input-field">
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+                {overrideType !== classResult.type && (
+                  <p className="mono-font text-[9px] tracking-widest text-amber-700 mt-1">
+                    {'OVERRIDDEN FROM: ' + (TYPE_LABELS[classResult.type] || '').toUpperCase()}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="input-label">Analyst Notes</label>
+                <textarea value={analystNotes} onChange={e => setAnalystNotes(e.target.value)}
+                  placeholder="Optional context, flags, or instructions for the desk analyst…"
+                  className="input-field" rows={3} style={{ resize:'none', fontSize:'13px' }} />
+              </div>
+            </div>
+
+            <div className="border border-stone-200 mb-6" style={{ background:'#FAF7F1' }}>
+              <div className="px-4 py-2.5 border-b border-stone-200" style={{ background:'#EEE9E0' }}>
+                <span className="mono-font text-[9px] tracking-widest text-stone-600">{'HANDOFF SUMMARY — ' + caseId}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-stone-200">
+                {[
+                  { label:'TYPE',     value: (TYPE_LABELS[overrideType] || '').split(' ').slice(0,2).join(' ') },
+                  { label:'AMOUNT',   value: triAmount ? triCurrency + ' ' + parseFloat(triAmount).toFixed(2) : '—' },
+                  { label:'MERCHANT', value: triMerchant || '—' },
+                  { label:'CODE',     value: classResult.recommendedCode },
+                ].map(item => (
+                  <div key={item.label} className="px-4 py-3">
+                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{item.label}</div>
+                    <div className="display-font text-stone-900 text-sm font-semibold">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {handedOff ? (
+              <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background:'#ECFDF5' }}>
+                <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0" />
+                <div>
+                  <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-0.5">HANDED OFF TO DISPUTE DESK</div>
+                  <div className="display-font text-emerald-900 text-sm">Case {caseId} is pre-filled in the Dispute Desk — switch to the Desk tab to continue.</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleHandoff}
+                  disabled={!canHandoff}
+                  className="flex items-center gap-3 mono-font text-xs tracking-widest px-6 py-3 border border-stone-900 transition-all"
+                  style={{ background: canHandoff ? '#1A1814' : '#E8E0D4', color: canHandoff ? '#F5F1EA' : '#9A9086', cursor: canHandoff ? 'pointer' : 'not-allowed' }}
+                >
+                  ADVANCE TO DISPUTE DESK
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                {!canHandoff && (
+                  <p className="display-font text-[12px] text-stone-400 italic mt-2">
+                    {!triAmount ? 'Enter dispute amount to enable handoff' : !triMerchant ? 'Enter merchant name to enable handoff' : ''}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
