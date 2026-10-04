@@ -2104,8 +2104,8 @@ Return ONLY valid JSON:
             <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Representment Package</h2>
           </div>
           <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
-            Submit your rebuttal letter and evidence to your acquirer — not directly to {network === 'mastercard' ? 'Mastercard' : network === 'amex' ? 'Amex' : 'Visa'}.
-            Your acquirer reviews and forwards the package to the card network on your behalf.
+            Compile the rebuttal letter from Step 02 with your evidence into a single package and log the submission details below.
+            Generic documentation almost always loses — every item must directly address the reason code.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
