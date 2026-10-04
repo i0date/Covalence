@@ -4687,7 +4687,8 @@ Return ONLY valid JSON:
                                         windowDays: 45,
                                         avsMismatch: false, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
                                         deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
-                                        pinVerified: false, isVFMP: false, strongDocs: false,
+                                        pinVerified: false, isVFMP: false,
+                                        strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
                                         merchantCBR: 0.5, priorClaims: 0,
                                         note: `From Dispute Desk: ${o.merchant || ''}`,
                                         source: 'desk',
@@ -5258,7 +5259,7 @@ const MANUAL_DEFAULTS = {
 }
 
 // ─── Claim detail panel ───────────────────────────────────────────────────────
-function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExclude }) {
+function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExclude, onRemove }) {
   const g       = grade(sc.fundability)
   const network = detectNetwork(sc.code)
   const evidenceItems = [
@@ -5293,10 +5294,18 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
       {onToggleExclude && (
         <div className="px-5 py-2 border-b border-stone-200 flex items-center justify-between" style={{ background:"#EEE9E0" }}>
           <span className="mono-font text-[9px] tracking-widest text-stone-500">PORTFOLIO INCLUSION</span>
-          <button onClick={() => onToggleExclude(sc.id)}
-            className={`mono-font text-[9px] tracking-wide px-2.5 py-1 border transition-colors ${excluded?"border-amber-700 bg-amber-50 text-amber-800":"border-stone-400 text-stone-600 hover:border-stone-800 hover:text-stone-900"}`}>
-            {excluded ? "EXCLUDED — CLICK TO RESTORE" : "EXCLUDE FROM PORTFOLIO"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => onToggleExclude(sc.id)}
+              className={`mono-font text-[9px] tracking-wide px-2.5 py-1 border transition-colors ${excluded?"border-amber-700 bg-amber-50 text-amber-800":"border-stone-400 text-stone-600 hover:border-stone-800 hover:text-stone-900"}`}>
+              {excluded ? "EXCLUDED — CLICK TO RESTORE" : "EXCLUDE FROM PORTFOLIO"}
+            </button>
+            {onRemove && (sc.source === 'manual' || sc.source === 'desk') && (
+              <button onClick={() => { if (window.confirm('Remove this claim permanently?')) onRemove(sc.id) }}
+                className="mono-font text-[9px] tracking-wide px-2.5 py-1 border border-red-400 text-red-600 hover:bg-red-50 transition-colors">
+                REMOVE
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -5388,6 +5397,8 @@ function DfaView({ dfaQueue, setDfaQueue }) {
   useEffect(() => {
     try { localStorage.setItem('dfa_excluded_ids', JSON.stringify([...excludedIds])) } catch {}
   }, [excludedIds])
+
+  const removeManualClaim = (id) => setManualClaims(prev => prev.filter(c => c.id !== id))
 
   const [gradeFilter, setGradeFilter]       = useState("all")
   const [showAddForm, setShowAddForm]       = useState(false)
@@ -5909,7 +5920,7 @@ function DfaView({ dfaQueue, setDfaQueue }) {
                       </div>
                     </div>
                   </button>
-                  {isExpanded&&<div className="border-t border-stone-300"><ClaimDetail sc={c} advanceRate={advanceRate} claimNet={claimNet} onClose={null} excluded={isExcluded} onToggleExclude={toggleExclude} /></div>}
+                  {isExpanded&&<div className="border-t border-stone-300"><ClaimDetail sc={c} advanceRate={advanceRate} claimNet={claimNet} onClose={null} excluded={isExcluded} onToggleExclude={toggleExclude} onRemove={removeManualClaim} /></div>}
                 </div>
               )
             })}
@@ -5973,7 +5984,7 @@ function DfaView({ dfaQueue, setDfaQueue }) {
             </div>
             <div className="w-80 flex-shrink-0">
               {sc ? (
-                <ClaimDetail sc={sc} advanceRate={advanceRate} claimNet={claimNet} onClose={() => setSelected(null)} excluded={excludedIds.has(sc.id)} onToggleExclude={toggleExclude} />
+                <ClaimDetail sc={sc} advanceRate={advanceRate} claimNet={claimNet} onClose={() => setSelected(null)} excluded={excludedIds.has(sc.id)} onToggleExclude={toggleExclude} onRemove={removeManualClaim} />
               ) : (
                 <div className="border border-dashed border-stone-300 flex flex-col items-center justify-center py-20" style={{ background:"#FAF7F1" }}>
                   <div className="mono-font text-[9px] tracking-widest text-stone-300 text-center leading-relaxed">SELECT A CLAIM<br />TO VIEW DETAIL</div>
