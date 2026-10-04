@@ -529,6 +529,12 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, platformMode,
   const [mchRepLetterLoading, setMchRepLetterLoading]       = useState(false)
   const [mchRepLetterError, setMchRepLetterError]           = useState(null)
   const [mchRepLetterCopied, setMchRepLetterCopied]         = useState(false)
+  const [mchEvidenceChecked, setMchEvidenceChecked]         = useState({})
+  const [mchRepPackage, setMchRepPackage]                   = useState({})
+  const [mchAcquirer, setMchAcquirer]                       = useState('')
+  const [mchRepDeadline, setMchRepDeadline]                 = useState('')
+  const [mchSubmitDate, setMchSubmitDate]                   = useState('')
+  const [mchTrackingRef, setMchTrackingRef]                 = useState('')
 
   // ── Outcome tracking (60-day dispute log) ─────────────────────────────────
   const [outcomes, setOutcomes] = useState(() => {
@@ -1323,7 +1329,7 @@ Return ONLY valid JSON:
           </p>
           <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
             <button onClick={() => setPlatformMode('fi')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
-            <button onClick={() => setPlatformMode('merchant')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT MODE</button>
+            <button onClick={() => setPlatformMode('merchant')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
           </div>
         </div>
 
@@ -1989,6 +1995,183 @@ Return ONLY valid JSON:
         </div>
         )}
 
+        {platformMode === 'merchant' && (<>
+
+        {/* ── Step 03 — Evidence Collection ── */}
+        <div className="section-divider" />
+        <div>
+          <div className="flex items-baseline gap-3 mb-2">
+            <span className="mono-font text-xs text-stone-500">03</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Evidence Collection</h2>
+          </div>
+          <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
+            Gather documents to support your representment. Items below are tailored to your reason code — enter it in Step 01 for a targeted list.
+          </p>
+
+          {transactionDate && (() => {
+            const ddDays = network === 'mastercard' ? 45 : network === 'amex' ? 20 : 30
+            const dl = new Date(transactionDate); dl.setDate(dl.getDate() + ddDays)
+            const dLeft = Math.ceil((dl - Date.now()) / 86400000)
+            const past = dLeft < 0; const urgent = !past && dLeft <= 7
+            return (
+              <div className={'flex items-start gap-4 px-4 py-3 mb-6 border ' + (past ? 'border-red-700' : urgent ? 'border-amber-700' : 'border-stone-300')}
+                style={{ background: past ? '#FEF2F2' : urgent ? '#FFFBEB' : '#FAF7F1' }}>
+                <div>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">
+                    {'NETWORK DEADLINE · ' + (network || 'VISA').toUpperCase() + ' · ' + ddDays + 'D FROM CHARGEBACK NOTICE'}
+                  </div>
+                  <div className={'mono-font text-sm font-semibold ' + (past ? 'text-red-700' : urgent ? 'text-amber-800' : 'text-stone-900')}>
+                    {dl.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    <span className="ml-3 font-normal text-xs">{past ? '⚠ DEADLINE PASSED' : dLeft + 'd remaining'}</span>
+                  </div>
+                  <div className="display-font text-[12px] text-stone-400 mt-1 italic">
+                    Your acquirer deadline is typically 3–5 days earlier — confirm with your processor
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {(() => {
+            const code = (mchReasonCode || '').trim()
+            const isFraud     = !code || /^10\.|^4835|^4863|^48\d{2}/.test(code)
+            const isNotRcvd   = !code || /^13\.1|^4855|^4860/.test(code)
+            const isCancelled = /^13\.[27]|^4841/.test(code)
+            const isNotAsDesc = /^13\.3|^4853/.test(code)
+            const items = [
+              { id: 'txn_receipt',    label: 'Transaction receipt and authorization record',                  tag: 'ALWAYS' },
+              { id: 'avs_cvv',        label: 'AVS and CVV response codes from the authorization',            tag: 'ALWAYS' },
+              { id: 'ip_device',      label: 'IP address, device fingerprint, and login logs',               tag: 'ALWAYS' },
+              { id: 'customer_comms', label: 'Customer communications — emails, chat logs, SMS',             tag: 'ALWAYS' },
+              { id: 'terms',          label: 'T&Cs and refund policy acknowledged at checkout',              tag: 'ALWAYS' },
+              ...(isFraud ? [
+                { id: '3ds',          label: '3DS authentication result — passed shifts liability to issuer', tag: 'FRAUD' },
+                { id: 'billing',      label: 'Billing address match confirmed at time of purchase',          tag: 'FRAUD' },
+                { id: 'prior_orders', label: 'Prior successful orders from same customer or device',         tag: 'FRAUD' },
+              ] : []),
+              ...(isNotRcvd ? [
+                { id: 'tracking',     label: 'Carrier tracking number and proof of delivery',               tag: 'NOT RECEIVED' },
+                { id: 'signed_rcpt',  label: 'Signed delivery receipt or digital delivery proof',           tag: 'NOT RECEIVED' },
+                { id: 'ship_date',    label: 'Proof of shipment date — must predate the dispute notice',    tag: 'NOT RECEIVED' },
+              ] : []),
+              ...(isCancelled ? [
+                { id: 'cancel_pol',   label: 'Cancellation policy displayed at point of signup',            tag: 'RECURRING' },
+                { id: 'cancel_conf',  label: 'Cancellation request record or evidence no request was made', tag: 'RECURRING' },
+                { id: 'post_use',     label: 'Evidence of service usage after the claimed cancellation date', tag: 'RECURRING' },
+              ] : []),
+              ...(isNotAsDesc ? [
+                { id: 'listing',      label: 'Product listing or spec description at time of purchase',     tag: 'NOT AS DESC' },
+                { id: 'photos',       label: 'Photos confirming item matched the description sold',         tag: 'NOT AS DESC' },
+              ] : []),
+            ]
+            const checkedCount = items.filter(it => mchEvidenceChecked[it.id]).length
+            const tagBg = { 'ALWAYS': '#1A1814', 'FRAUD': '#92400E', 'NOT RECEIVED': '#1E40AF', 'RECURRING': '#5B21B6', 'NOT AS DESC': '#065F46' }
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500">
+                    {code ? 'EVIDENCE REQUIRED — CODE ' + code : 'FULL CHECKLIST — ENTER REASON CODE IN STEP 01 FOR TAILORED LIST'}
+                  </div>
+                  <div className="mono-font text-[9px] text-stone-400">{checkedCount} / {items.length} CONFIRMED</div>
+                </div>
+                <div className="border border-stone-200" style={{ background: '#FAF7F1' }}>
+                  {items.map((it, idx) => (
+                    <label key={it.id} className={'flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors ' + (idx < items.length - 1 ? 'border-b border-stone-200' : '')}>
+                      <input type="checkbox" checked={!!mchEvidenceChecked[it.id]}
+                        onChange={e => setMchEvidenceChecked(prev => ({ ...prev, [it.id]: e.target.checked }))}
+                        className="mt-0.5 shrink-0" style={{ accentColor: '#1A1814' }} />
+                      <span className="display-font text-stone-800 text-[14px] leading-snug flex-1">{it.label}</span>
+                      <span className="mono-font text-[8px] tracking-widest px-1.5 py-0.5 shrink-0"
+                        style={{ background: tagBg[it.tag] || '#1A1814', color: '#F5F1EA' }}>{it.tag}</span>
+                    </label>
+                  ))}
+                </div>
+                {checkedCount > 0 && checkedCount === items.length && (
+                  <div className="mt-3 mono-font text-[9px] tracking-widest text-emerald-700">
+                    ✓ ALL EVIDENCE CONFIRMED — READY FOR STEP 04
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+
+        {/* ── Step 04 — Representment Package ── */}
+        <div className="section-divider" />
+        <div>
+          <div className="flex items-baseline gap-3 mb-2">
+            <span className="mono-font text-xs text-stone-500">04</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Representment Package</h2>
+          </div>
+          <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
+            Submit your rebuttal letter and evidence to your acquirer — not directly to {network === 'mastercard' ? 'Mastercard' : network === 'amex' ? 'Amex' : 'Visa'}.
+            Your acquirer reviews and forwards the package to the card network on your behalf.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="input-label">Acquirer / Processor Name</label>
+              <input type="text" value={mchAcquirer} onChange={e => setMchAcquirer(e.target.value)}
+                placeholder="e.g. Chase Merchant Services, Stripe, Square" className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Your Submission Deadline (from acquirer)</label>
+              <input type="date" value={mchRepDeadline} onChange={e => setMchRepDeadline(e.target.value)} className="input-field" />
+              <p className="display-font text-[11px] text-stone-400 mt-1 italic leading-snug">
+                {'Network allows ' + (network === 'mastercard' ? '45' : network === 'amex' ? '20' : '30') + 'd — acquirers typically cut off 3–5 days earlier'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">SUBMISSION CHECKLIST</div>
+            <div className="border border-stone-200" style={{ background: '#FAF7F1' }}>
+              {[
+                { id: 'rep_letter',    label: 'Rebuttal letter drafted and reviewed (Step 02)' },
+                { id: 'evidence_done', label: 'All evidence items collected and confirmed (Step 03)' },
+                { id: 'txn_records',   label: 'Transaction records and authorization response attached' },
+                { id: 'code_match',    label: 'Each piece of evidence directly addresses the reason code' },
+                { id: 'format_ok',     label: 'Package formatted per acquirer requirements (PDF, file size)' },
+                { id: 'submitted',     label: 'Package submitted to acquirer portal or case manager' },
+              ].map((item, idx, arr) => (
+                <label key={item.id} className={'flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors ' + (idx < arr.length - 1 ? 'border-b border-stone-200' : '')}>
+                  <input type="checkbox" checked={!!mchRepPackage[item.id]}
+                    onChange={e => setMchRepPackage(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                    className="mt-0.5 shrink-0" style={{ accentColor: '#1A1814' }} />
+                  <span className="display-font text-stone-800 text-[14px] leading-snug">{item.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Date Submitted to Acquirer</label>
+              <input type="date" value={mchSubmitDate} onChange={e => setMchSubmitDate(e.target.value)} className="input-field" />
+            </div>
+            <div>
+              <label className="input-label">Acquirer Reference / Case Number</label>
+              <input type="text" value={mchTrackingRef} onChange={e => setMchTrackingRef(e.target.value)}
+                placeholder="e.g. ACQ-2024-88341" className="input-field" />
+            </div>
+          </div>
+
+          {mchSubmitDate && (
+            <div className="mt-5 px-4 py-3 border border-emerald-700" style={{ background: '#ECFDF5' }}>
+              <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-1">SUBMITTED TO ACQUIRER</div>
+              <div className="display-font text-emerald-900 text-sm">
+                {new Date(mchSubmitDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                {mchTrackingRef && <> · Ref: <span className="font-semibold">{mchTrackingRef}</span></>}
+              </div>
+              <div className="display-font text-emerald-700 text-[12px] mt-1 italic">
+                Issuer decision typically arrives 30–75 days after submission. Track the outcome in Step 05 below.
+              </div>
+            </div>
+          )}
+        </div>
+
+        </>)}
+
         {platformMode === 'fi' && (<>
         {/* ── Step 03 — Evidence Package ── */}
             <div className="section-divider" />
@@ -2080,7 +2263,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-baseline gap-3 mb-2">
-                <span className="mono-font text-xs text-stone-500">04</span>
+                <span className="mono-font text-xs text-stone-500">06</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Merchant Defense Preview</h2>
               </div>
               <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
@@ -2394,7 +2577,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '03' : '07'}</span>
+                <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '05' : '07'}</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Dispute Tracker</h2>
                 <div className="flex items-center gap-3 ml-auto flex-wrap">
                   <span className="mono-font text-xs text-stone-400">60-DAY WINDOW · {trackerOutcomes.length} CASE{trackerOutcomes.length !== 1 ? 'S' : ''}</span>
@@ -2947,7 +3130,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-baseline gap-3 mb-2">
-                <span className="mono-font text-xs text-stone-500">08</span>
+                <span className="mono-font text-xs text-stone-500">04</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Chargeback Ratio Monitor</h2>
               </div>
               <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">Network monitoring thresholds. Dispute count and volume are auto-filled from your tracker — enter total monthly transactions to compute your CBR.</p>
