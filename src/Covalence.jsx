@@ -1303,6 +1303,31 @@ Return ONLY valid JSON:
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 sm:py-12">
+
+        {/* ── Masthead ── */}
+        <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
+          <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+            <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 002 — DISPUTE OPERATIONS</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600 sm:hidden">DISPUTE OPERATIONS</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">
+              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+            </div>
+          </div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 7vw, 88px)', letterSpacing: '-0.03em' }}>
+            The Dispute<br />
+            <span style={{ fontStyle: 'italic', fontWeight: 500 }}>Desk</span>
+          </h1>
+          <p className="display-font text-stone-700 mt-4 max-w-2xl" style={{ fontSize: 'clamp(15px, 2vw, 17px)', lineHeight: '1.5' }}>
+            {platformMode === 'fi'
+              ? 'An operational tool for translating customer complaints into compliant dispute summaries — with a built-in evidence package and merchant defense preview for every case.'
+              : 'Build your representment case, fight chargebacks with evidence, and monitor your chargeback ratio against Visa and Mastercard network thresholds.'}
+          </p>
+          <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
+            <button onClick={() => setPlatformMode('fi')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
+            <button onClick={() => setPlatformMode('merchant')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT MODE</button>
+          </div>
+        </div>
+
         {/* ── Triage handoff banner ── */}
         {showHandoffBanner && triageHandoff && (
           <div className="mb-6 flex items-start gap-3 px-4 py-3" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
@@ -2371,7 +2396,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <span className="mono-font text-xs text-stone-500">07</span>
+                <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '03' : '07'}</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Dispute Tracker</h2>
                 <div className="flex items-center gap-3 ml-auto flex-wrap">
                   <span className="mono-font text-xs text-stone-400">60-DAY WINDOW · {trackerOutcomes.length} CASE{trackerOutcomes.length !== 1 ? 'S' : ''}</span>
