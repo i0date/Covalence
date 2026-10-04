@@ -356,9 +356,8 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
-        <div className="mono-font text-stone-400 mb-4" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>COVALENCE — DISPUTE OPERATIONS SUITE</div>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
-          Operations<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Dashboard</span>
+          The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
         </h1>
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
           Three tools, one workflow — triage incoming disputes, manage the desk, and score portfolios for funding.
@@ -2391,8 +2390,7 @@ Return ONLY valid JSON:
         </>)}
 
         {/* ── Section 07 — Dispute Outcome Tracker ── */}
-        {trackerOutcomes.length > 0 && (
-          <>
+        <>
             <div className="section-divider" />
             <div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -2405,6 +2403,13 @@ Return ONLY valid JSON:
                   </button>
                 </div>
               </div>
+
+              {trackerOutcomes.length === 0 && (
+                <div className="border border-dashed border-stone-300 py-10 text-center mt-6" style={{ background: '#FAF7F1' }}>
+                  <p className="mono-font text-xs tracking-widest text-stone-400 mb-2">NO CASES LOGGED YET</p>
+                  <p className="display-font text-stone-500 italic text-sm">Outcomes recorded in the Dispute Desk will appear here once logged.</p>
+                </div>
+              )}
 
               {/* ── Compliance thresholds panel ── */}
               {showSettings && (
@@ -2841,8 +2846,7 @@ Return ONLY valid JSON:
                 </div>
               </div>
             </div>
-          </>
-        )}
+        </>
 
         {/* ── Pre-arb draft panel ── */}
         {(preArbDraft || preArbLoading || preArbError) && (
