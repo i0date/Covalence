@@ -345,7 +345,11 @@ export default function Covalence() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
+function HomeView({ outcomes: _parentOutcomes, settings, setActiveSection, platformMode }) {
+  // Always read fresh from localStorage so stats reflect Desk additions without page reload
+  const [outcomes] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
+  })
   const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
   const recent   = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
@@ -515,6 +519,7 @@ function TriageView({ onHandoff }) {
   const [error, setError]       = useState(null)
   const [exportCopied, setExportCopied] = useState(false)
   const [handedOff, setHandedOff]       = useState(false)
+  const [triageSearch, setTriageSearch] = useState('')
 
   // ── Platform mode: 'fi' = Financial Institution, 'ce' = Crypto Exchange ──────
   const [platformMode, setPlatformMode] = useState('fi')
@@ -1921,6 +1926,20 @@ Return ONLY valid JSON:
             ))}
           </div>
 
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Search by case ID, merchant, or verdict..."
+              value={triageSearch}
+              onChange={e => setTriageSearch(e.target.value)}
+              className="input-field"
+              style={{ fontSize: '12px', padding: '6px 10px', flex: 1, maxWidth: '360px' }}
+            />
+            {triageSearch && (
+              <button onClick={() => setTriageSearch('')} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors tracking-widest">✕ CLEAR</button>
+            )}
+          </div>
+
           <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
             <div className="overflow-x-auto">
               <div style={{ minWidth: '600px' }}>
@@ -1930,7 +1949,14 @@ Return ONLY valid JSON:
                   ))}
                 </div>
                 <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                  {outcomes.map(o => {
+                  {outcomes.filter(o => {
+                    if (!triageSearch.trim()) return true
+                    const q = triageSearch.toLowerCase()
+                    return (o.id||'').toLowerCase().includes(q) ||
+                      (o.merchant||'').toLowerCase().includes(q) ||
+                      (o.verdict||'').toLowerCase().includes(q) ||
+                      (o.amount||'').toLowerCase().includes(q)
+                  }).map(o => {
                     const vc = classConfig[o.verdict]
                     if (!vc) return null
                     return (
@@ -2010,6 +2036,7 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, platformMode,
   const [cardType, setCardType]                             = useState('credit') // 'credit' | 'debit'
   const [sarDiscoveryDate, setSarDiscoveryDate]             = useState('')     // FI: date fraud was detected (for SAR deadline)
   const [editingRow, setEditingRow]                         = useState(null)   // id of row being edited
+  const [case360Id, setCase360Id]                           = useState(null)   // id of case with 360 panel open
   const [editDraft, setEditDraft]                           = useState({})     // draft field values
 
   // ── 3DS / authentication ──────────────────────────────────────────────────
@@ -2635,9 +2662,9 @@ Return ONLY valid JSON:
   const revertCase = (id) =>
     setOutcomes(prev => prev.map(o => o.id === id ? { ...o, status: 'pending', resolvedDate: null } : o))
 
-  const startEdit = (o) => {
+  const startEdit = (o) => { // pre-populate draft from outcome row
     setEditingRow(o.id)
-    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: o.notes || '' })
+    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: o.notes || '', submitDate: o.submitDate || '', trackingRef: o.trackingRef || '' })
   }
   const cancelEdit = () => { setEditingRow(null); setEditDraft({}) }
   const saveEdit = (id) => {
@@ -2763,8 +2790,18 @@ Return ONLY valid JSON:
   const advanceStage = (id, newStatus) =>
     setOutcomes(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
 
+  // Escalation paths (post-resolution)
+  const escalateCase = (id, escalation) =>
+    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, escalation } : o))
+
+  // PC issued toggle
+  const markPcIssued = (id) =>
+    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, pcIssued: !o.pcIssued } : o))
+
   // Analytics — derived from visibleOutcomes
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [trackerFilter, setTrackerFilter] = useState('all')
+  const [trackerSearch, setTrackerSearch] = useState('')
   const analytics = React.useMemo(() => {
     const resolved = trackerOutcomes.filter(o => o.status === 'won' || o.status === 'lost')
     // by network
@@ -2799,6 +2836,28 @@ Return ONLY valid JSON:
     const avgDays = times.length > 0 ? Math.round(times.reduce((s, t) => s + t, 0) / times.length) : null
     return { byNetwork, topCodes, weeks, avgDays, resolvedCount: resolved.length }
   }, [outcomes, platformMode])
+
+  const filteredTrackerOutcomes = React.useMemo(() => {
+    let list = trackerOutcomes
+    if (trackerFilter === 'in_progress') list = list.filter(o => LIFECYCLE_IN_PROGRESS.has(o.status))
+    else if (trackerFilter === 'won')  list = list.filter(o => o.status === 'won')
+    else if (trackerFilter === 'lost') list = list.filter(o => o.status === 'lost')
+    else if (trackerFilter === 'fundable') list = list.filter(o => {
+      if (o.mode === 'merchant') return false
+      const dfaG = estimateFundingGrade(o.reasonCode, o.amount, { threeDSStatus: o.threeDSStatus, deliveryConfirmed: o.deliveryConfirmed, liabilityShift: o.liabilityShift, refundPolicyShown: o.refundPolicyShown, priorOrders: o.priorOrders, winProb: o.winProb, confidence: o.confidence })
+      return dfaG && (dfaG.label === 'A' || dfaG.label === 'B')
+    })
+    if (trackerSearch.trim()) {
+      const q = trackerSearch.toLowerCase()
+      list = list.filter(o =>
+        (o.id || '').toLowerCase().includes(q) ||
+        (o.merchant || '').toLowerCase().includes(q) ||
+        (o.reasonCode || '').toLowerCase().includes(q) ||
+        (o.notes || '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [trackerOutcomes, trackerFilter, trackerSearch])
 
   const impactStyle = (impact) => {
     if (impact === 'required')    return 'text-stone-900'
@@ -4096,7 +4155,7 @@ Return ONLY valid JSON:
                 <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '05' : '07'}</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Dispute Tracker</h2>
                 <div className="flex items-center gap-3 ml-auto flex-wrap">
-                  <span className="mono-font text-xs text-stone-400">60-DAY WINDOW · {trackerOutcomes.length} CASE{trackerOutcomes.length !== 1 ? 'S' : ''}</span>
+                  <span className="mono-font text-xs text-stone-400">60-DAY WINDOW · {filteredTrackerOutcomes.length}{trackerFilter !== 'all' || trackerSearch ? ` / ${trackerOutcomes.length}` : ''} CASE{filteredTrackerOutcomes.length !== 1 ? 'S' : ''}</span>
                   <button onClick={() => setShowSettings(v => !v)} className={`mono-font text-[10px] tracking-widest px-2.5 py-1 border transition-colors ${showSettings ? 'border-stone-900 bg-stone-900 text-stone-50' : 'border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700'}`}>
                     ⚙ THRESHOLDS
                   </button>
@@ -4269,6 +4328,37 @@ Return ONLY valid JSON:
                 </div>
               )}
 
+              {/* Filter / search bar */}
+              <div className="mb-3 flex items-center gap-2 flex-wrap">
+                <div className="flex border border-stone-200 overflow-hidden" style={{ borderRadius: 0 }}>
+                  {[
+                    { id: 'all',         label: 'ALL' },
+                    { id: 'in_progress', label: 'IN PROGRESS' },
+                    { id: 'won',         label: 'WON' },
+                    { id: 'lost',        label: 'LOST' },
+                    { id: 'fundable',    label: '★ FUNDABLE' },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTrackerFilter(tab.id)}
+                      className={'mono-font text-[10px] tracking-widest px-3 py-1.5 transition-colors ' + (trackerFilter === tab.id ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-500 hover:bg-stone-100')}
+                      title={tab.id === 'fundable' ? 'DFA grade A or B — cases eligible for dispute funding assessment' : undefined}
+                    >{tab.label}</button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search cases..."
+                  value={trackerSearch}
+                  onChange={e => setTrackerSearch(e.target.value)}
+                  className="input-field"
+                  style={{ fontSize: '12px', padding: '6px 10px', flex: '1', minWidth: '160px', maxWidth: '280px' }}
+                />
+                {(trackerFilter !== 'all' || trackerSearch) && (
+                  <button onClick={() => { setTrackerFilter('all'); setTrackerSearch('') }} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors tracking-widest">✕ CLEAR</button>
+                )}
+              </div>
+
               {/* Case table */}
               <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
                 <div className="overflow-x-auto">
@@ -4314,13 +4404,18 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 160px 40px', background: '#EEE9E0' }}>
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 160px 80px', background: '#EEE9E0' }}>
                       {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
                     </div>
                     <div style={{ maxHeight: '480px', overflowY: 'auto' }}>
-                      {trackerOutcomes.map(o => {
+                      {filteredTrackerOutcomes.length === 0 && trackerOutcomes.length > 0 && (
+                        <div className="py-8 text-center border-b border-stone-100">
+                          <p className="mono-font text-xs tracking-widest text-stone-400">NO CASES MATCH THIS FILTER</p>
+                        </div>
+                      )}
+                      {filteredTrackerOutcomes.map(o => {
                         const [m0, m1, m2] = settings.pcMilestones
                         const pc10 = o.provCreditDate ? addBusinessDays(o.provCreditDate, m0) : null
                         const pc45 = o.provCreditDate ? addBusinessDays(o.provCreditDate, m1) : null
@@ -4389,6 +4484,25 @@ Return ONLY valid JSON:
                                     </select>
                                   </div>
                                 </div>
+                                {o.mode === 'merchant' && (
+                                  <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                                    <div>
+                                      <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">DATE SUBMITTED TO ACQUIRER</label>
+                                      <input type="date" className="input-field" value={editDraft.submitDate || ''}
+                                        onChange={e => setEditDraft(d => ({ ...d, submitDate: e.target.value }))}
+                                        style={{ fontSize: '13px', padding: '8px 10px' }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">ACQUIRER REFERENCE #</label>
+                                      <input className="input-field" value={editDraft.trackingRef || ''}
+                                        onChange={e => setEditDraft(d => ({ ...d, trackingRef: e.target.value }))}
+                                        placeholder="e.g. ACQ-2024-88341"
+                                        style={{ fontSize: '13px', padding: '8px 10px' }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
                                 <div>
                                   <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTES</label>
                                   <input
@@ -4407,8 +4521,12 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 160px 40px' }}>
-                                <span className="mono-font text-xs text-stone-400">{o.id}</span>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 160px 80px' }}>
+                                <button
+                                  onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
+                                  className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
+                                  title="Toggle case 360 view"
+                                >{o.id}</button>
                                 <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                 <span className="display-font text-sm text-stone-700 truncate pr-2">{o.merchant}</span>
                                 <span className="mono-font text-xs text-stone-600">{o.amount}</span>
@@ -4420,6 +4538,12 @@ Return ONLY valid JSON:
                                     )}
                                   </div>
                                   {o.notes && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{o.notes}</p>}
+                                  {o.mode === 'merchant' && o.submitDate && (
+                                    <p className="mono-font text-[10px] text-emerald-700 mt-0.5">
+                                      REPMT FILED {new Date(o.submitDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                                      {o.trackingRef && <> · {o.trackingRef}</>}
+                                    </p>
+                                  )}
                                 </div>
                                 {/* DFA grade badge — FI only; merchant rows show winProb badge in reason cell */}
                                 {o.mode !== 'merchant' ? (() => {
@@ -4474,10 +4598,23 @@ Return ONLY valid JSON:
                                     </>
                                   )}
                                   {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 flex-wrap">
                                       <span className={`mono-font text-[10px] px-1.5 py-0.5 ${o.status === 'won' ? 'bg-emerald-900 text-emerald-50' : o.status === 'lost' ? 'bg-red-900 text-red-50' : 'bg-stone-600 text-stone-50'}`}>
                                         {o.status.toUpperCase()}
                                       </span>
+                                      {/* Escalation — post-loss paths */}
+                                      {o.status === 'lost' && o.mode !== 'merchant' && (
+                                        <>
+                                          {o.escalation === 'lea_referral'
+                                            ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-orange-900 text-orange-50" title="Referred to Law Enforcement">LEA ✓</span>
+                                            : <button onClick={() => escalateCase(o.id, 'lea_referral')} className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-700 text-orange-700 hover:bg-orange-50 transition-colors" title="Refer to law enforcement agency">LEA</button>
+                                          }
+                                          {o.escalation === 'writeoff'
+                                            ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-stone-700 text-stone-200" title="Written off">W/O ✓</span>
+                                            : <button onClick={() => escalateCase(o.id, 'writeoff')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-100 transition-colors" title="Mark as written off">W/O</button>
+                                          }
+                                        </>
+                                      )}
                                       <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark">↩</button>
                                     </div>
                                   )}
@@ -4486,14 +4623,41 @@ Return ONLY valid JSON:
                                     <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">PC</button>
                                   )}
                                 </div>
-                                <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
+                                <div className="flex items-center gap-1 justify-end">
+                                  {o.mode !== 'merchant' && onScoreInDfa && (
+                                    <button
+                                      onClick={() => onScoreInDfa([{
+                                        ...o,
+                                        code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
+                                        filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
+                                        windowDays: 45,
+                                        avsMismatch: false, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
+                                        deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
+                                        pinVerified: false, isVFMP: false, strongDocs: false,
+                                        merchantCBR: 0.5, priorClaims: 0,
+                                        note: `From Dispute Desk: ${o.merchant || ''}`,
+                                        source: 'desk',
+                                      }])}
+                                      className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                      title="Send to DFA for funding assessment"
+                                    >→DFA</button>
+                                  )}
+                                  <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
 
                             {/* Provisional credit deadline row */}
                             {!isEditing && o.provCreditDate && o.mode !== 'merchant' && (
                               <div className="px-4 pb-2 flex items-center gap-4 flex-wrap" style={{ background: '#EEF2FF' }}>
-                                <span className="mono-font text-[10px] text-blue-800 tracking-wider">PC ISSUED: {new Date(o.provCreditDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <span className="mono-font text-[10px] text-blue-800 tracking-wider">PC LOGGED: {new Date(o.provCreditDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <button
+                                  onClick={() => markPcIssued(o.id)}
+                                  className={`mono-font text-[10px] px-1.5 py-0.5 transition-colors ${o.pcIssued ? 'bg-blue-800 text-blue-50' : 'border border-blue-600 text-blue-600 hover:bg-blue-50'}`}
+                                  title={o.pcIssued ? 'Provisional credit confirmed as issued to customer' : 'Confirm provisional credit has been physically disbursed to customer'}
+                                >
+                                  {o.pcIssued ? 'CREDIT ISSUED ✓' : 'MARK ISSUED'}
+                                </button>
                                 {[{ label: `${m0}BD`, date: pc10 }, { label: `${m1}BD`, date: pc45 }, { label: `${m2}BD`, date: pc90 }].map(({ label, date }) => {
                                   if (!date) return null
                                   const d = daysUntil(date)
@@ -4508,6 +4672,45 @@ Return ONLY valid JSON:
                                     </span>
                                   )
                                 })}
+                              </div>
+                            )}
+
+                            {/* 360 panel — full case detail */}
+                            {case360Id === o.id && (
+                              <div className="px-4 py-3 border-t border-stone-200" style={{ background: '#F5F1EA' }}>
+                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CASE 360 — {o.id}</div>
+                                <div className="grid gap-x-6 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+                                  {[
+                                    ['MERCHANT',    o.merchant],
+                                    ['AMOUNT',      o.amount],
+                                    ['NETWORK',     o.network],
+                                    ['REASON CODE', o.reasonCode],
+                                    ['DATE FILED',  o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'],
+                                    ['STATUS',      (o.status || '').toUpperCase()],
+                                    ['RESOLVED',    o.resolvedDate ? new Date(o.resolvedDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'],
+                                    ['MODE',        (o.mode || 'fi').toUpperCase()],
+                                    ['PC DATE',     o.provCreditDate ? new Date(o.provCreditDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'],
+                                    ['PC ISSUED',   o.pcIssued ? 'YES ✓' : '—'],
+                                    ['ESCALATION',  o.escalation ? o.escalation.replace('_',' ').toUpperCase() : '—'],
+                                    ['DFA GRADE',   (() => { const g = estimateFundingGrade(o.reasonCode, o.amount, o); return g ? g.label : '—' })()],
+                                    ['TRIAGE CLASS', (o.classification || '—').replace(/_/g,' ')],
+                                    ['REPMT FILED',  o.submitDate ? new Date(o.submitDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'],
+                                    ['ACQ REF #',    o.trackingRef || '—'],
+                                    ['CONFIDENCE',  o.confidence || '—'],
+                                  ].map(([label, val]) => (
+                                    <div key={label}>
+                                      <div className="mono-font text-[9px] tracking-widest text-stone-400">{label}</div>
+                                      <div className="mono-font text-xs text-stone-700 mt-0.5">{val || '—'}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {o.notes && (
+                                  <div className="mt-3 pt-3 border-t border-stone-200">
+                                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                                    <div className="display-font text-sm text-stone-600 italic">{o.notes}</div>
+                                  </div>
+                                )}
+                                <button onClick={() => setCase360Id(null)} className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors mt-3">✕ CLOSE 360</button>
                               </div>
                             )}
                           </div>
@@ -5474,6 +5677,104 @@ function DfaView({ dfaQueue, setDfaQueue }) {
             </div>
           )}
         </div>
+
+        {/* ── Recovery timeline projection ── */}
+        {activeScored.length > 0 && (() => {
+          const now = new Date()
+          const buckets = [
+            { label: '0–30 DAYS',  max: 30,  claims: [], value: 0, expected: 0 },
+            { label: '31–60 DAYS', max: 60,  claims: [], value: 0, expected: 0 },
+            { label: '61–90 DAYS', max: 90,  claims: [], value: 0, expected: 0 },
+            { label: '91+ DAYS',   max: 9999, claims: [], value: 0, expected: 0 },
+          ]
+          activeScored.forEach(c => {
+            const daysLeft = Math.max(0, c.windowDays - c.filedDaysAgo)
+            const b = buckets.find(bk => daysLeft <= bk.max) || buckets[buckets.length-1]
+            b.claims.push(c); b.value += c.amount; b.expected += c.expectedRecovery
+          })
+          const maxExpected = Math.max(...buckets.map(b => b.expected), 1)
+          return (
+            <div className="mb-6 mt-2">
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">RECOVERY TIMELINE — PROJECTED CASH RETURN BY RESOLUTION WINDOW</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {buckets.map(b => {
+                  const barW = Math.round(b.expected / maxExpected * 100)
+                  const projDate = new Date(now)
+                  projDate.setDate(projDate.getDate() + (b.max === 9999 ? 120 : b.max))
+                  return (
+                    <div key={b.label} className="border border-stone-200 p-3" style={{ background: '#FAF7F1' }}>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{b.label}</div>
+                      <div className="display-font font-semibold text-stone-900 mb-0.5" style={{ fontSize: '18px', letterSpacing: '-0.02em' }}>
+                        ${Math.round(b.expected).toLocaleString()}
+                      </div>
+                      <div className="mono-font text-[10px] text-stone-400 mb-2">{b.claims.length} claim{b.claims.length !== 1 ? 's' : ''} · ${Math.round(b.value).toLocaleString()} face</div>
+                      <div style={{ height: '4px', background: '#D4CCBC', borderRadius: '2px' }}>
+                        <div style={{ height: '100%', width: `${barW}%`, background: '#064e3b', borderRadius: '2px', transition: 'width 0.4s' }} />
+                      </div>
+                      {b.claims.length > 0 && (
+                        <div className="mono-font text-[9px] text-stone-400 mt-1.5">
+                          est. return by {projDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-2 mono-font text-[9px] text-stone-400">
+                Timeline based on filing window remaining per claim (windowDays − daysAgo). Actual resolution may vary by network and issuer response.
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ── Concentration drill-down ── */}
+        {activeScored.length > 1 && (() => {
+          const byMerchant = {}
+          activeScored.forEach(c => {
+            const key = c.note?.replace(/^From Dispute Desk:\s*/,'').split('·')[0].trim() || c.id
+            if (!byMerchant[key]) byMerchant[key] = { count: 0, value: 0, expected: 0, codes: new Set() }
+            byMerchant[key].count++
+            byMerchant[key].value += c.amount
+            byMerchant[key].expected += c.expectedRecovery
+            byMerchant[key].codes.add(c.code)
+          })
+          const rows = Object.entries(byMerchant)
+            .map(([name, d]) => ({ name, ...d, codes: [...d.codes] }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 8)
+          if (rows.length < 2) return null
+          return (
+            <div className="mt-2 mb-6">
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CONCENTRATION BY MERCHANT / SOURCE (TOP {rows.length})</div>
+              <div className="border border-stone-200 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ background: '#EEE9E0' }}>
+                      {['MERCHANT / SOURCE','CLAIMS','FACE VALUE','EXP. RECOVERY','SHARE'].map(h=>(
+                        <th key={h} className="mono-font text-[9px] tracking-widest text-stone-400 px-3 py-2 text-left font-normal">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r,i) => {
+                      const share = totalValue > 0 ? Math.round(r.value / totalValue * 100) : 0
+                      const shareColor = share > 35 ? 'text-red-700 font-bold' : share > 20 ? 'text-amber-700' : 'text-stone-600'
+                      return (
+                        <tr key={r.name} className="border-t border-stone-100" style={{ background: i % 2 === 0 ? '#FAF7F1' : '#F5F1EA' }}>
+                          <td className="display-font text-sm text-stone-700 px-3 py-2 max-w-[200px] truncate">{r.name}</td>
+                          <td className="mono-font text-xs text-stone-500 px-3 py-2">{r.count}</td>
+                          <td className="mono-font text-xs text-stone-600 px-3 py-2">${r.value.toLocaleString()}</td>
+                          <td className="mono-font text-xs text-stone-600 px-3 py-2">${Math.round(r.expected).toLocaleString()}</td>
+                          <td className={`mono-font text-xs px-3 py-2 ${shareColor}`}>{share}%</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── Step 03 — Receivables Detail ── */}
         <div className="section-divider" />
