@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { FileText, AlertCircle, Loader2, Copy, Check, ArrowRight, CheckSquare, Square,
          Shield, MessageSquare, ClipboardList, Download, Pencil, Upload,
          ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, Plus, X,
-         Clipboard, BarChart2 } from 'lucide-react'
+         Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink } from 'lucide-react'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -442,376 +442,1496 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// 001 TRIAGE — full view (FI + Crypto Exchange modes)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Transaction types per account type ──────────────────────────────────────
+const TX_TYPES = {
+  debit:   ['Card-Present (In-person)', 'Card-Not-Present (Online)', 'Card-Not-Present (Phone order)', 'Digital Payment / Wallet', 'ATM Withdrawal'],
+  credit:  ['Card-Present (In-person)', 'Card-Not-Present (Online)', 'Card-Not-Present (Phone order)', 'Digital Payment / Wallet', 'Recurring / Subscription'],
+  p2p:     ['Zelle', 'Interac e-Transfer', 'P2P (Venmo / Cash App / PayPal)', 'Wire Transfer'],
+  ach_eft: ['ACH / EFT Transfer', 'Wire Transfer', 'Bill Payment (ACH)'],
+  bnpl:    ['BNPL Purchase', 'Recurring / Subscription'],
+  crypto:  ['Card-funded exchange purchase', 'Bank transfer to exchange', 'Wallet-to-wallet transfer', 'NFT marketplace purchase', 'Crypto investment platform deposit'],
+}
+
+// ── Known crypto exchanges / platforms for auto-detection ───────────────────
+const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
+const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
+
 function TriageView({ onHandoff }) {
-  const [caseId, setCaseId] = useState(() => {
-    const d = new Date(), pad = n => String(n).padStart(2, '0')
-    return `CVL-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`
+
+  // ── 01 Transaction details ──────────────────────────────────────────────────
+  const [accountType, setAccountType]         = useState('')
+  const [merchant, setMerchant]               = useState('')
+  const [amount, setAmount]                   = useState('')
+  const [currency, setCurrency]               = useState('CAD')
+  const [transactionDate, setTransactionDate] = useState('')
+  const [transactionType, setTransactionType] = useState('')
+
+  // ── 02 Claim & context ──────────────────────────────────────────────────────
+  const [flaggedBy, setFlaggedBy]           = useState('')
+  const [customerReason, setCustomerReason] = useState('')
+
+  // ── 03 Risk signals — cardholder ────────────────────────────────────────────
+  const [priorDisputes, setPriorDisputes]   = useState('')
+  const [accountAge, setAccountAge]         = useState('')
+  const [cardPossession, setCardPossession] = useState('')
+
+  // ── 03 Risk signals — account integrity (ATO) ───────────────────────────────
+  const [accountChanges, setAccountChanges]       = useState('')
+  const [deviceRecognized, setDeviceRecognized]   = useState('')
+
+  // ── 03 Risk signals — merchant (card-based only) ────────────────────────────
+  const [vfmp, setVfmp]                                   = useState('')
+  const [merchantDisputeRate, setMerchantDisputeRate]     = useState('')
+  const [mccRisk, setMccRisk]                             = useState('')
+
+  // ── Network (card-based + crypto) ───────────────────────────────────────────
+  const [network, setNetwork] = useState('')
+
+  // ── Crypto-specific signals ──────────────────────────────────────────────────
+  const [cryptoScenario, setCryptoScenario]       = useState('')
+  const [exchangeRegulated, setExchangeRegulated] = useState('')
+  const [walletCustody, setWalletCustody]         = useState('')
+  const [contactedExchange, setContactedExchange] = useState('')
+
+  const [loading, setLoading]   = useState(false)
+  const [result, setResult]     = useState(null)
+  const [error, setError]       = useState(null)
+  const [exportCopied, setExportCopied] = useState(false)
+  const [handedOff, setHandedOff]       = useState(false)
+
+  // ── Platform mode: 'fi' = Financial Institution, 'ce' = Crypto Exchange ──────
+  const [platformMode, setPlatformMode] = useState('fi')
+
+  // ── Crypto Exchange (CE) mode state ─────────────────────────────────────────
+  const [ceAccountType, setCeAccountType]               = useState('')
+  const [ceAsset, setCeAsset]                           = useState('')
+  const [ceChain, setCeChain]                           = useState('')
+  const [ceTxType, setCeTxType]                         = useState('')
+  const [ceAmount, setCeAmount]                         = useState('')
+  const [ceCurrency, setCeCurrency]                     = useState('USD')
+  const [ceTxDate, setCeTxDate]                         = useState('')
+  const [ceDestinationType, setCeDestinationType]       = useState('')
+  const [ceDestinationAddress, setCeDestinationAddress] = useState('')
+  const [ceReceivingExchange, setCeReceivingExchange]   = useState('')
+  const [ceCompromiseVector, setCeCompromiseVector]     = useState('')
+  const [ceRecentAcctChanges, setCeRecentAcctChanges]   = useState('')
+  const [ceDeviceNew, setCeDeviceNew]                   = useState('')
+  const [cePriorClaims, setCePriorClaims]               = useState('')
+  const [ceKycLevel, setCeKycLevel]                     = useState('')
+  const [ceBlockchainTrace, setCeBlockchainTrace]       = useState('')
+  const [ceCountry, setCeCountry]                       = useState('both')
+  const [ceComplaint, setCeComplaint]                   = useState('')
+  const [ceFlaggedBy, setCeFlaggedBy]                   = useState('')
+  const [ceSarDeadlineDate, setCeSarDeadlineDate]       = useState('')
+  const [ceActionPlan, setCeActionPlan]                 = useState(null)
+  const [ceActionPlanLoading, setCeActionPlanLoading]   = useState(false)
+  const [ceActionPlanError, setCeActionPlanError]       = useState(null)
+  const [ceActionPlanCopied, setCeActionPlanCopied]     = useState(false)
+
+  // ── Outcome tracking ────────────────────────────────────────────────────────
+  const [outcomes, setOutcomes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('triage_outcomes') || '[]') } catch { return [] }
   })
-  const [triNetwork, setTriNetwork]       = useState('visa')
-  const [triAmount, setTriAmount]         = useState('')
-  const [triCurrency, setTriCurrency]     = useState('USD')
-  const [triDate, setTriDate]             = useState('')
-  const [triMerchant, setTriMerchant]     = useState('')
-  const [triComplaint, setTriComplaint]   = useState('')
-  const [classifying, setClassifying]     = useState(false)
-  const [classResult, setClassResult]     = useState(null)
-  const [classProgress, setClassProgress] = useState('')
-  const [analystNotes, setAnalystNotes]   = useState('')
-  const [overrideType, setOverrideType]   = useState('')
-  const [handedOff, setHandedOff]         = useState(false)
+  useEffect(() => {
+    localStorage.setItem('triage_outcomes', JSON.stringify(outcomes))
+  }, [outcomes])
 
-  const TYPE_LABELS = {
-    unauthorized_transaction: 'Unauthorized Transaction',
-    merchandise_not_received: 'Merchandise / Services Not Received',
-    cancelled_recurring:      'Cancelled Recurring Transaction',
-    not_as_described:         'Not As Described / Defective',
-    atm_dispute:              'ATM Dispute',
-    duplicate_charge:         'Duplicate Charge',
-    credit_not_processed:     'Credit / Refund Not Processed',
+  // ── Reset transaction type when account type changes ─────────────────────────
+  useEffect(() => {
+    if (accountType && transactionType) {
+      const validTypes = TX_TYPES[accountType] ?? []
+      if (!validTypes.includes(transactionType)) setTransactionType('')
+    }
+  }, [accountType])
+
+  // ── Computed values ──────────────────────────────────────────────────────────
+  const isCardBased     = accountType === 'debit' || accountType === 'credit'
+  const isCrypto        = accountType === 'crypto'
+  const detectedCrypto  = !isCrypto && isCryptoMerchantName(merchant)
+  const showNetworkSel  = isCardBased || isCrypto
+
+  const daysSinceTransaction = transactionDate
+    ? Math.floor((Date.now() - new Date(transactionDate).getTime()) / 86400000)
+    : null
+
+  const fpfRiskScore = useMemo(() => {
+    let s = 40
+    if (priorDisputes === '3–5')        s += 15
+    if (priorDisputes === '5+')         s += 25
+    if (priorDisputes === '1–2')        s +=  5
+    if (priorDisputes === 'None')       s -= 20
+    if (accountAge === 'Under 6 months') s += 15
+    if (accountAge === '6–12 months')    s +=  5
+    if (accountAge === '3+ years')       s -= 15
+    if (cardPossession === 'Yes — card in hand')      s += 12
+    if (cardPossession === 'No — card lost or stolen') s -= 15
+    if (flaggedBy === 'System alert (fraud detection)')  s -= 20
+    if (flaggedBy?.includes('Customer-reported'))        s +=  5
+    if (daysSinceTransaction !== null && daysSinceTransaction > 60) s += 15
+    if (daysSinceTransaction !== null && daysSinceTransaction <= 7) s -= 10
+    if (accountChanges?.includes('Yes')) s += 8
+    if (deviceRecognized?.includes('New')) s -= 10
+    if (merchantDisputeRate === 'High (over 2%)') s -= 15
+    if (vfmp === 'Yes — VFMP listed')              s -= 15
+    if (mccRisk?.includes('High'))                 s -= 10
+    return Math.max(0, Math.min(100, Math.round(s)))
+  }, [priorDisputes, accountAge, cardPossession, flaggedBy, daysSinceTransaction, accountChanges, deviceRecognized, merchantDisputeRate, vfmp, mccRisk])
+
+  const regFramework =
+    accountType === 'debit' || accountType === 'ach_eft' ? 'REG_E' :
+    accountType === 'credit'                             ? 'REG_Z' :
+    accountType === 'p2p'                                ? 'PROVIDER' :
+    accountType === 'bnpl'                               ? 'REG_Z_PROVIDER' :
+    accountType === 'crypto'                             ? 'CRYPTO' : null
+
+  const regLabel =
+    regFramework === 'REG_E'          ? 'REG E'            :
+    regFramework === 'REG_Z'          ? 'REG Z'            :
+    regFramework === 'PROVIDER'       ? 'PROVIDER-HANDLED' :
+    regFramework === 'REG_Z_PROVIDER' ? 'REG Z / PROVIDER' :
+    regFramework === 'CRYPTO'         ? 'CRYPTO / DIGITAL ASSET' : null
+
+  const regSubtext =
+    regFramework === 'REG_E'          ? 'Debit / EFT — Electronic Fund Transfer Act applies' :
+    regFramework === 'REG_Z'          ? 'Credit — Truth in Lending Act / network chargeback rules apply' :
+    regFramework === 'PROVIDER'       ? 'No network chargeback path — contact recipient FI or network' :
+    regFramework === 'REG_Z_PROVIDER' ? 'BNPL — dispute through provider, not card network' :
+    regFramework === 'CRYPTO'         ? 'No blanket network protection — coverage depends on payment method used and exchange policies' : null
+
+  const regColor =
+    regFramework === 'REG_E'    ? { bg: '#1E3A8A', text: '#BFDBFE' } :
+    regFramework === 'REG_Z'    ? { bg: '#4C1D95', text: '#DDD6FE' } :
+    regFramework === 'CRYPTO'   ? { bg: '#064E3B', text: '#6EE7B7' } :
+                                  { bg: '#374151', text: '#D1D5DB' }
+
+  // ── CE computed values ───────────────────────────────────────────────────────
+  const isCE           = platformMode === 'ce'
+  const ceDaysSince    = ceTxDate ? Math.floor((Date.now() - new Date(ceTxDate).getTime()) / 86400000) : null
+  const ceAmountNum    = parseFloat(ceAmount) || 0
+  const ceSarFlagUS    = ceAmountNum >= 5000  && (ceCountry === 'us'   || ceCountry === 'both') && ceCurrency === 'USD'
+  const ceStrFlagCA    = ceAmountNum >= 10000 && (ceCountry === 'ca'   || ceCountry === 'both') && ceCurrency === 'CAD'
+  const ceSarRequired  = ceSarFlagUS || ceStrFlagCA
+  const ceSarDeadlineRaw = ceSarDeadlineDate
+    ? new Date(new Date(ceSarDeadlineDate).getTime() + 30 * 86400000)
+    : null
+  const ceSarDeadline  = ceSarDeadlineRaw ? ceSarDeadlineRaw.toLocaleDateString('en-CA') : null
+  const ceSarDaysLeft  = ceSarDeadlineRaw ? Math.ceil((ceSarDeadlineRaw - new Date()) / 86400000) : null
+  const ceRegLabel     = ceCountry === 'us' ? 'FINCEN / FinCEN MSB' : ceCountry === 'ca' ? 'FINTRAC / PCMLTFA' : 'FinCEN (US) + FINTRAC (CA)'
+  const ceRegSubtext   = ceCountry === 'us'
+    ? 'FinCEN registration required; SAR if suspicious activity ≥ $5,000 USD'
+    : ceCountry === 'ca'
+    ? 'FINTRAC STR required for suspicious transactions; $10,000 CAD large cash threshold'
+    : 'Dual jurisdiction — FinCEN SAR ($5k USD) and FINTRAC STR ($10k CAD) obligations apply'
+
+  const provisionalCreditApplies = regFramework === 'REG_E' && result &&
+    (result.classification === 'TRUE_FRAUD' || result.classification === 'AUTHORIZED_PUSH_PAYMENT')
+
+  const weightStyle = (w) =>
+    w === 'HIGH'   ? { bg: '#1A1814', text: '#F5F1EA' } :
+    w === 'MEDIUM' ? { bg: '#6B5F4D', text: '#FAF7F1' } :
+                     { bg: '#D4CCBC', text: '#1A1814' }
+
+  const classConfig = {
+    TRUE_FRAUD: {
+      bg: '#064E3B', text: '#D1FAE5', badge: '#065F46', badgeText: '#6EE7B7',
+      borderColor: '#065F46', label: 'TRUE FRAUD', Icon: Shield,
+    },
+    FIRST_PARTY_FRAUD: {
+      bg: '#7F1D1D', text: '#FEE2E2', badge: '#991B1B', badgeText: '#FCA5A5',
+      borderColor: '#991B1B', label: 'FIRST-PARTY FRAUD', Icon: AlertTriangle,
+    },
+    CONSUMER_DISPUTE: {
+      bg: '#78350F', text: '#FEF3C7', badge: '#92400E', badgeText: '#FCD34D',
+      borderColor: '#92400E', label: 'CONSUMER DISPUTE', Icon: MessageSquare,
+    },
+    AUTHORIZED_PUSH_PAYMENT: {
+      bg: '#1E3A5F', text: '#BFDBFE', badge: '#1D4ED8', badgeText: '#93C5FD',
+      borderColor: '#1D4ED8', label: 'AUTH. PUSH PAYMENT', Icon: Send,
+    },
   }
 
-  function runClassification(text, amount, network) {
-    const t = text.toLowerCase()
-    let type = 'unauthorized_transaction', confidence = 72, signals = []
-    if (/i didn.t (make|place|do|authorize)|not (me|authorized)|unauthorized|someone (else|used)|stolen|lost (card|my card)|fraud(ulent)?/.test(t)) {
-      type = 'unauthorized_transaction'; confidence = 89
-      signals = ['Unauthorized / fraud language detected', 'No cardholder authorization indicated', 'Check 3DS + AVS/CVV response codes']
-    } else if (/never (received|got|arrived)|not (delivered|received)|didn.t receive|missing (package|item|order)|where is my (order|package)/.test(t)) {
-      type = 'merchandise_not_received'; confidence = 85
-      signals = ['Non-delivery language detected', 'Fulfillment or carrier failure likely', 'Request tracking and proof of delivery']
-    } else if (/cancel(led|ed|lation)|subscription|recurring|keep(s?) (charging|billing)|still being charged|charged after (i |we )cancel/.test(t)) {
-      type = 'cancelled_recurring'; confidence = 83
-      signals = ['Recurring billing keywords present', 'Cancellation claim indicated', 'Verify cancellation confirmation record']
-    } else if (/not (as described|what i (ordered|expected)|correct)|different (from|than)|wrong (item|product|size)|defective|broken|counterfeit/.test(t)) {
-      type = 'not_as_described'; confidence = 80
-      signals = ['Merchandise mismatch language', 'Quality or description dispute', 'Collect product listing and delivery evidence']
-    } else if (/atm|cash (machine|dispenser)|withdraw(al)?|dispense|didn.t (dispense|give me)/.test(t)) {
-      type = 'atm_dispute'; confidence = 87
-      signals = ['ATM transaction keywords detected', 'Possible dispense error or skimming', 'Request ATM journal and camera footage']
-    } else if (/charged (twice|double|two times)|duplicate|double charge|two (charges|transactions|debits)/.test(t)) {
-      type = 'duplicate_charge'; confidence = 88
-      signals = ['Duplicate processing language', 'Multiple debits on same transaction', 'Reconcile merchant settlement records']
-    } else if (/(refund|credit) (not|hasn.t|didn.t)|promised (a )?refund|returned? (item|product|it)/.test(t)) {
-      type = 'credit_not_processed'; confidence = 81
-      signals = ['Refund / return claim', 'Credit expected but not posted', 'Obtain merchant refund confirmation']
-    } else {
-      signals = ['No dominant keyword pattern — manual review recommended', 'Default classification applied']
-    }
-    const rcMap = {
-      unauthorized_transaction: network === 'mastercard' ? '4863' : '10.4',
-      merchandise_not_received: network === 'mastercard' ? '4855' : '13.1',
-      cancelled_recurring:      network === 'mastercard' ? '4841' : '13.2',
-      not_as_described:         network === 'mastercard' ? '4853' : '13.3',
-      atm_dispute:              network === 'mastercard' ? '4808' : '10.1',
-      duplicate_charge:         network === 'mastercard' ? '4834' : '12.6',
-      credit_not_processed:     network === 'mastercard' ? '4860' : '13.6',
-    }
-    const hdMap = {
-      unauthorized_transaction: 'Cardholder reports transaction not initiated by them',
-      merchandise_not_received: 'Goods paid for but not received by cardholder',
-      cancelled_recurring:      'Recurring charge continued after reported cancellation',
-      not_as_described:         'Merchandise received does not match advertised description',
-      atm_dispute:              'ATM dispense discrepancy or unauthorized withdrawal',
-      duplicate_charge:         'Single transaction appears to have processed twice',
-      credit_not_processed:     'Refund or credit agreed but not posted to account',
-    }
-    const amt = parseFloat(amount) || 0
-    const regE = type === 'atm_dispute' || /debit|checking|savings|atm/.test(t)
-    return {
-      type, confidence, signals,
-      recommendedCode: rcMap[type] || '10.4',
-      priority: amt >= 500 ? 'urgent' : amt >= 100 ? 'standard' : 'routine',
-      regulatory: regE ? 'Reg E (EFTA)' : 'Reg Z (TILA)',
-      headline: hdMap[type] || 'Dispute requires manual review',
+  const cfg = result ? classConfig[result.classification] : null
+
+  const resolved       = outcomes.filter(o => o.outcome !== 'pending')
+  const confirmedCount = outcomes.filter(o => o.outcome === 'confirmed').length
+  const accuracy       = resolved.length > 0 ? Math.round((confirmedCount / resolved.length) * 100) : null
+  const vcounts = {
+    TRUE_FRAUD:              outcomes.filter(o => o.verdict === 'TRUE_FRAUD').length,
+    FIRST_PARTY_FRAUD:       outcomes.filter(o => o.verdict === 'FIRST_PARTY_FRAUD').length,
+    CONSUMER_DISPUTE:        outcomes.filter(o => o.verdict === 'CONSUMER_DISPUTE').length,
+    AUTHORIZED_PUSH_PAYMENT: outcomes.filter(o => o.verdict === 'AUTHORIZED_PUSH_PAYMENT').length,
+  }
+  const leadingVerdict = Object.entries(vcounts).sort((a, b) => b[1] - a[1])[0]
+  const leadingLabel   = leadingVerdict[1] > 0
+    ? (classConfig[leadingVerdict[0]]?.label ?? leadingVerdict[0].split('_').join(' '))
+    : '—'
+
+  // ── Classify (FI mode) ───────────────────────────────────────────────────────
+  const classify = async () => {
+    if (!customerReason.trim()) { setError("Customer's stated reason is required."); return }
+    setLoading(true); setError(null); setResult(null)
+
+    const accountTypeLabel = { debit: 'Debit Card', credit: 'Credit Card', p2p: 'P2P / e-Transfer', ach_eft: 'ACH / EFT', bnpl: 'BNPL (Buy Now Pay Later)', crypto: 'Crypto / Digital Asset' }[accountType] ?? 'Not specified'
+    const daysNote = daysSinceTransaction !== null ? `${daysSinceTransaction} days ago (transaction date: ${transactionDate})` : 'Unknown'
+
+    const prompt = `You are an expert fraud and disputes triage analyst at a financial institution. Classify this incoming dispute claim. You serve credit unions, banks, fintechs, and lenders.
+
+FOUR VERDICT DEFINITIONS:
+- TRUE_FRAUD: A third party used the account/card without the cardholder's knowledge or consent. Genuine victim of unauthorized access or card compromise.
+- FIRST_PARTY_FRAUD: The cardholder made the transaction themselves and is falsely disputing it. Friendly fraud / chargeback abuse.
+- CONSUMER_DISPUTE: Cardholder made the transaction legitimately but has a genuine grievance — non-receipt, item not as described, cancelled subscription, credit not processed, service failure, or misrepresentation.
+- AUTHORIZED_PUSH_PAYMENT: Cardholder deliberately authorized and initiated the payment but was deceived into doing so via social engineering (romance scam, fake invoice, buyer-seller fraud, investment scam, impersonation). They believed it was legitimate. Applies primarily to Zelle, Interac e-Transfer, wire transfers, and P2P payments.
+
+ACCOUNT & TRANSACTION:
+- Account Type: ${accountTypeLabel}
+- Regulatory Framework: ${regFramework ?? 'Unknown'}
+- Payment Network: ${network || 'Not specified'}
+- ${isCrypto ? 'Destination Wallet / Platform' : 'Merchant / Recipient'}: ${merchant || 'Not provided'}
+- Amount: ${amount ? `${amount} ${currency}` : 'Not provided'}
+- Transaction occurred: ${daysNote}
+- Transaction Type: ${transactionType || 'Not provided'}${(isCrypto || detectedCrypto) ? `
+- Crypto / Digital Asset detected: YES
+- Crypto Fraud Scenario: ${cryptoScenario || 'Not specified'}
+- Exchange Regulated: ${exchangeRegulated || 'Unknown'}
+- Wallet Custody: ${walletCustody || 'Unknown'}
+- Customer Contacted Exchange First: ${contactedExchange || 'Unknown'}` : ''}
+
+CLAIM:
+- How flagged: ${flaggedBy || 'Not provided'}
+- Customer's stated reason: ${customerReason}
+
+CARDHOLDER RISK SIGNALS:
+- Prior disputes (12 months): ${priorDisputes || 'Unknown'}
+- Account age: ${accountAge || 'Unknown'}
+${isCardBased ? `- Card in possession when reported: ${cardPossession || 'Unknown'}` : '- Physical card: N/A (non-card payment rail)'}
+
+ACCOUNT INTEGRITY SIGNALS:
+- Recent account changes: ${accountChanges || 'Unknown'}
+- Device / location at time of transaction: ${deviceRecognized || 'Unknown'}
+
+${isCardBased ? `MERCHANT RISK SIGNALS:
+- VFMP listed: ${vfmp || 'Unknown'}
+- Merchant dispute rate: ${merchantDisputeRate || 'Unknown'}
+- MCC risk tier: ${mccRisk || 'Unknown'}` : `MERCHANT SIGNALS: N/A — non-card payment rail.`}
+
+Return ONLY valid JSON, no markdown:
+{
+  "classification": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "label": "True Fraud" | "First-Party Fraud" | "Consumer Dispute" | "Authorized Push Payment",
+  "headline": "One tight sentence summarizing the triage assessment.",
+  "signals": ["Signal 1", "Signal 2", "Signal 3"],
+  "signal_influences": [
+    { "signal": "Specific signal from inputs", "weight": "HIGH" | "MEDIUM" | "LOW", "toward": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT" }
+  ],
+  "ato_suspected": true | false,
+  "ato_note": "Brief ATO note if suspected, empty string otherwise.",
+  "routing": "CARD_CHARGEBACK" | "NACHA_RETURN" | "RECIPIENT_FI" | "PROVIDER_DISPUTE" | "FLAG_INVESTIGATION" | "GOODWILL_FIRST",
+  "routing_label": "Human-readable routing label",
+  "routing_detail": "1–2 sentences on what the agent should do next.",
+  "risk_notes": "Caveats or watch-outs — or empty string if none.",
+  "proceed_to_dispute": true | false
+}`
+
+    try {
+      const response = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1400, messages: [{ role: 'user', content: prompt }] }),
+      })
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      const data = await response.json()
+      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
+      const parsed = JSON.parse(text)
+      setResult(parsed)
+      setOutcomes(prev => [{
+        id: `T-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+        date: new Date().toISOString(),
+        merchant: merchant || '—',
+        amount: amount ? `${amount} ${currency}` : '—',
+        accountType, network: network || '',
+        verdict: parsed.classification, confidence: parsed.confidence,
+        routing: parsed.routing, outcome: 'pending',
+      }, ...prev].slice(0, 100))
+    } catch (e) {
+      setError(`Classification failed: ${e.message}`)
+    } finally {
+      setLoading(false)
     }
   }
 
-  function handleClassify() {
-    if (!triComplaint.trim() || classifying) return
-    setClassifying(true); setClassResult(null)
-    const steps = ['Reading complaint text…', 'Identifying dispute pattern…', 'Matching reason codes…', 'Assessing regulatory framework…']
-    let s = 0
-    const iv = setInterval(() => { setClassProgress(steps[Math.min(s++, steps.length - 1)]) }, 420)
-    setTimeout(() => {
-      clearInterval(iv)
-      const r = runClassification(triComplaint, triAmount, triNetwork)
-      setClassResult(r); setOverrideType(r.type); setClassifying(false)
-    }, 1800)
+  // ── Classify (CE mode) ───────────────────────────────────────────────────────
+  const classifyCE = async () => {
+    if (!ceComplaint.trim()) { setError("Customer's stated reason is required."); return }
+    setLoading(true); setError(null); setResult(null)
+
+    const daysNote = ceDaysSince !== null ? `${ceDaysSince} days ago (${ceTxDate})` : 'Unknown'
+    const sarNote  = ceSarRequired
+      ? `⚠ SAR/STR THRESHOLD MET — ${ceSarFlagUS ? `FinCEN SAR required ($${ceAmountNum.toLocaleString()} USD ≥ $5,000)` : ''}${ceSarFlagUS && ceStrFlagCA ? ' + ' : ''}${ceStrFlagCA ? `FINTRAC STR required ($${ceAmountNum.toLocaleString()} CAD ≥ $10,000)` : ''}`
+      : 'Below SAR/STR threshold'
+
+    const prompt = `You are a senior fraud analyst at a crypto exchange / digital asset platform. Triage this incoming fraud or dispute claim. You operate under FinCEN (US) and/or FINTRAC (Canada) obligations as a Money Services Business.
+
+FOUR VERDICT DEFINITIONS:
+- TRUE_FRAUD: Unauthorized third-party access — ATO, SIM-swap, credential phishing, API key theft. Customer did NOT authorize the transaction.
+- FIRST_PARTY_FRAUD: Customer authorized transactions themselves but is falsely claiming fraud — typically after a losing trade, price drop, or buyer's remorse.
+- CONSUMER_DISPUTE: Customer authorized the transaction but has a legitimate grievance — trade execution error, withdrawal delay, incorrect fee, locked account, asset not credited, platform malfunction.
+- AUTHORIZED_PUSH_PAYMENT: Customer was socially engineered into sending crypto voluntarily — pig butchering, romance scam, fake exchange impersonation. Customer believed the transfer was legitimate.
+
+EXCHANGE ACCOUNT:
+- Account Type: ${ceAccountType || 'Not specified'}
+- KYC Level: ${ceKycLevel || 'Unknown'}
+- Prior Claims (12 months): ${cePriorClaims || 'Unknown'}
+- Flagged by: ${ceFlaggedBy || 'Not specified'}
+
+TRANSACTION:
+- Asset: ${ceAsset || 'Not specified'}
+- Blockchain: ${ceChain || 'Not specified'}
+- Transaction Type: ${ceTxType || 'Not specified'}
+- Amount: ${ceAmount ? `${ceAmount} ${ceCurrency}` : 'Not specified'}
+- SAR/STR Status: ${sarNote}
+- Transaction occurred: ${daysNote}
+- Destination type: ${ceDestinationType || 'Unknown'}
+${ceDestinationAddress ? `- Destination: ${ceDestinationAddress}` : ''}
+${ceReceivingExchange ? `- Receiving exchange: ${ceReceivingExchange}` : ''}
+
+COMPROMISE SIGNALS:
+- Suspected compromise vector: ${ceCompromiseVector || 'Unknown'}
+- Recent account changes: ${ceRecentAcctChanges || 'Unknown'}
+- Device / location: ${ceDeviceNew || 'Unknown'}
+- Blockchain trace: ${ceBlockchainTrace || 'Unknown'}
+
+CUSTOMER STATEMENT:
+${ceComplaint}
+
+REGULATORY: ${ceRegLabel}
+${ceSarRequired ? '⚠ SAR/STR filing obligation triggered' : 'No automatic threshold triggered'}
+
+Return ONLY valid JSON, no markdown:
+{
+  "classification": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT",
+  "confidence": "HIGH" | "MEDIUM" | "LOW",
+  "label": "True Fraud" | "First-Party Fraud" | "Consumer Dispute" | "Authorized Push Payment",
+  "headline": "One tight sentence summarizing the triage assessment.",
+  "signals": ["Signal 1", "Signal 2", "Signal 3"],
+  "signal_influences": [{ "signal": "...", "weight": "HIGH"|"MEDIUM"|"LOW", "toward": "..." }],
+  "ato_suspected": true | false,
+  "ato_note": "ATO note or empty string.",
+  "sar_note": "${ceSarRequired ? 'SAR/STR filing required.' : ''}",
+  "routing": "ACCOUNT_FREEZE" | "EXCHANGE_CONTACT" | "LEA_REFERRAL" | "INTERNAL_REVIEW" | "FLAG_INVESTIGATION",
+  "routing_label": "Human-readable routing label",
+  "routing_detail": "2–3 sentences on exact next steps.",
+  "risk_notes": "Watch-outs or empty string.",
+  "proceed_to_dispute": true | false
+}`
+
+    try {
+      const response = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }),
+      })
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      const data = await response.json()
+      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
+      const parsed = JSON.parse(text)
+      setResult(parsed)
+      setOutcomes(prev => [{
+        id: `T-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+        date: new Date().toISOString(),
+        merchant: ceReceivingExchange || ceDestinationAddress || '—',
+        amount: ceAmount ? `${ceAmount} ${ceCurrency}` : '—',
+        accountType: 'crypto_exchange', network: ceChain || ceAsset || '',
+        verdict: parsed.classification, confidence: parsed.confidence,
+        routing: parsed.routing, outcome: 'pending',
+      }, ...prev].slice(0, 100))
+    } catch (e) {
+      setError(`Classification failed: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function handleHandoff() {
-    const finalType = overrideType || classResult.type
-    onHandoff({
-      caseId, classification: finalType,
-      confidence: classResult.confidence + '%',
-      headline: classResult.headline,
-      network: triNetwork, amount: triAmount, merchant: triMerchant,
-      transactionDate: triDate, complaint: triComplaint, notes: analystNotes,
+  // ── CE action plan ───────────────────────────────────────────────────────────
+  const generateCEActionPlan = async () => {
+    if (!result) return
+    setCeActionPlanLoading(true); setCeActionPlanError(null); setCeActionPlan(null)
+    const prompt = `You are a senior fraud operations analyst at a crypto exchange. Based on this triage classification, generate a complete operational action plan.
+
+INCIDENT: ${result.classification} — ${result.label}
+Headline: ${result.headline}
+Routing: ${result.routing} — ${result.routing_label}
+Asset: ${ceAsset || 'Not specified'}${ceChain ? ' on ' + ceChain : ''}
+Amount: ${ceAmount ? ceAmount + ' ' + ceCurrency : 'Not specified'}
+Destination: ${ceDestinationAddress || 'Not specified'}
+Receiving Exchange: ${ceReceivingExchange || 'Unknown'}
+Compromise Vector: ${ceCompromiseVector || 'Unknown'}
+Jurisdiction: ${ceCountry === 'us' ? 'United States (FinCEN/BSA)' : ceCountry === 'ca' ? 'Canada (FINTRAC/PCMLTFA)' : 'US + Canada'}
+SAR Status: ${ceSarRequired ? '⚠ THRESHOLD MET — filing obligation triggered' : 'Below automatic threshold'}
+Customer: ${ceComplaint}
+
+Return ONLY valid JSON:
+{
+  "immediate_actions": ["..."],
+  "investigation_steps": ["..."],
+  "evidence_required": { "internal": ["..."], "external": ["..."], "blockchain": ["..."] },
+  "sar_required": true | false,
+  "sar_note": "...",
+  "lea_referral_recommended": true | false,
+  "lea_note": "...",
+  "exchange_contact_required": true | false,
+  "exchange_note": "...",
+  "recovery_outlook": "HIGH" | "MODERATE" | "LOW" | "VERY_LOW",
+  "recovery_note": "...",
+  "customer_letter": { "subject": "...", "body": "..." }
+}`
+    try {
+      const response = await fetch('/api/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] }),
+      })
+      if (!response.ok) throw new Error(`API error: ${response.status}`)
+      const data = await response.json()
+      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
+      setCeActionPlan(JSON.parse(text))
+    } catch (e) {
+      setCeActionPlanError(`Action plan failed: ${e.message}`)
+    } finally {
+      setCeActionPlanLoading(false)
+    }
+  }
+
+  const markOutcome = (id, val) =>
+    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, outcome: val } : o))
+
+  const exportReport = () => {
+    if (!result) return
+    const caseId = outcomes[0]?.id ?? '—'
+    const lines = [
+      `TRIAGE REPORT — ${caseId}`,
+      `Generated: ${new Date().toLocaleString()}`,
+      '',
+      `VERDICT: ${cfg?.label ?? result.classification}`,
+      `Confidence: ${result.confidence}`,
+      `Headline: ${result.headline}`,
+      '',
+      `ROUTING: ${result.routing_label}`,
+      `Next Steps: ${result.routing_detail}`,
+      '',
+      'KEY SIGNALS',
+      ...(result.signals?.map(s => `  → ${s}`) ?? []),
+      result.ato_suspected ? `\nATO SUSPECTED: ${result.ato_note}` : '',
+      result.risk_notes ? `\nWATCH FOR: ${result.risk_notes}` : '',
+      `\nFPF RISK SCORE: ${fpfRiskScore}/100`,
+    ].filter(l => l !== '').join('\n')
+    navigator.clipboard.writeText(lines).then(() => {
+      setExportCopied(true)
+      setTimeout(() => setExportCopied(false), 2000)
     })
+  }
+
+  const handleProceedToDisputeDesk = () => {
+    if (!result) return
+    const caseId = outcomes[0]?.id ?? `T-${Date.now().toString(36).toUpperCase().slice(-5)}`
+    if (isCE) {
+      onHandoff({
+        caseId,
+        classification: result.classification,
+        confidence: result.confidence,
+        headline: result.headline,
+        network: ceAsset ? `${ceAsset}${ceChain ? ` (${ceChain})` : ''}` : '',
+        amount: ceAmount,
+        merchant: ceReceivingExchange || ceDestinationAddress || '',
+        transactionDate: ceTxDate,
+        complaint: ceComplaint.slice(0, 800),
+        notes: '',
+      })
+    } else {
+      onHandoff({
+        caseId,
+        classification: result.classification,
+        confidence: result.confidence,
+        headline: result.headline,
+        network,
+        amount,
+        merchant,
+        transactionDate,
+        complaint: customerReason.slice(0, 800),
+        notes: '',
+      })
+    }
     setHandedOff(true)
   }
 
-  const canClassify = triComplaint.trim().length > 20
-  const canHandoff  = !handedOff && classResult && triAmount && triMerchant
-  const PRI = { urgent: { text:'#991B1B' }, standard: { text:'#92400E' }, routine: { text:'#166534' } }
-
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <style>{`
+        .tri-section-rule { border: none; border-top: 1px solid #D4CCBC; margin: 28px 0; }
+        .tri-sub-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #A89B88; margin-bottom: 12px; }
+      `}</style>
 
-      {/* ── Masthead ── */}
-      <div className="border-b-2 border-black pb-6 mb-10 sm:pb-8 sm:mb-14">
-        <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>ISSUE Nº 001 — TRIAGE</div>
-        <div className="mono-font text-stone-400 mb-4" style={{ fontSize:'9px', letterSpacing:'0.3em' }}>
-          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
+      {/* ── Masthead ─────────────────────────────────────────────────────────── */}
+      <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
+        <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+          <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 001 — TRIAGE</div>
+          <div className="mono-font text-xs tracking-widest text-stone-600 sm:hidden">TRIAGE</div>
+          <div className="mono-font text-xs tracking-widest text-stone-600">
+            {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+          </div>
         </div>
-        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,88px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
-          Dispute<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Triage</span>
+        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 8vw, 96px)', letterSpacing: '-0.03em' }}>
+          <span style={{ fontWeight: 700 }}>Tri</span><span style={{ fontStyle: 'italic', fontWeight: 500 }}>age</span>
         </h1>
-        <p className="display-font text-stone-700 mt-4 max-w-2xl" style={{ fontSize:'clamp(15px,2vw,17px)', lineHeight:1.6 }}>
-          First-touch complaint intake. Log the dispute, classify the transaction, determine the regulatory framework, and advance to the Dispute Desk.
+        <p className="display-font text-stone-700 mt-3 sm:mt-4 max-w-2xl" style={{ fontSize: 'clamp(15px, 2vw, 17px)', lineHeight: '1.55' }}>
+          {isCE
+            ? 'Crypto exchange fraud triage. Four verdicts. FinCEN + FINTRAC aware. Built for exchange fraud analysts handling ATO, pig butchering, stablecoin fraud, and consumer disputes on digital asset platforms.'
+            : 'Classify incoming dispute claims before anything is filed. Four verdicts. Covers card, ACH, P2P, BNPL, and FI-held crypto — routed by payment rail and regulatory framework: Reg E, Reg Z, NACHA, or provider.'}
         </p>
+        {/* Platform mode toggle */}
+        <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
+          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
+            <button key={m.id} onClick={() => { setPlatformMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
+              className="mono-font text-xs tracking-widest px-4 py-2 transition-all"
+              style={{ background: platformMode === m.id ? '#1A1814' : 'transparent', color: platformMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Step 01 — Case Intake ── */}
-      <div>
-        <div className="flex items-baseline gap-3 mb-2">
-          <span className="mono-font text-xs text-stone-500">01</span>
-          <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Case Intake</h2>
-        </div>
-        <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
-          Log the complaint details. Case ID is auto-generated — edit if your institution uses its own format.
-        </p>
+      {/* ── Two-column layout ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="input-label">Case ID</label>
-            <input type="text" value={caseId} onChange={e => setCaseId(e.target.value)} className="input-field mono-font" style={{ fontSize:'12px' }} />
-          </div>
-          <div>
-            <label className="input-label">Card Network</label>
-            <div className="flex gap-0">
-              {['visa','mastercard'].map(n => (
-                <button key={n} onClick={() => setTriNetwork(n)} className={'network-btn ' + (triNetwork === n ? 'active' : 'inactive')}>
-                  {n === 'visa' ? 'VISA' : 'MC'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="input-label">Dispute Amount</label>
-            <div className="flex gap-2">
-              <input type="text" value={triAmount} onChange={e => setTriAmount(e.target.value)} placeholder="0.00" className="input-field flex-1" />
-              <select value={triCurrency} onChange={e => setTriCurrency(e.target.value)} className="input-field mono-font" style={{ width:'72px', fontSize:'11px' }}>
-                {['USD','GBP','EUR','CAD','AUD'].map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="input-label">Merchant / Payee Name</label>
-            <input type="text" value={triMerchant} onChange={e => setTriMerchant(e.target.value)} placeholder="e.g. Amazon, Apple, Shell" className="input-field" />
-          </div>
-          <div>
-            <label className="input-label">Transaction Date</label>
-            <input type="date" value={triDate} onChange={e => setTriDate(e.target.value)} className="input-field" />
-          </div>
-        </div>
-
+        {/* ══ LEFT: Inputs ══════════════════════════════════════════════════════ */}
         <div>
-          <label className="input-label">
-            Customer Complaint / Dispute Narrative
-            <span className="mono-font text-[9px] text-stone-400 ml-2 normal-case tracking-normal">Paste verbatim from CRM, email, or branch notes</span>
-          </label>
-          <textarea
-            value={triComplaint}
-            onChange={e => setTriComplaint(e.target.value)}
-            placeholder={'e.g. "I did not make this purchase at Amazon on the 14th. My card was in my possession the whole time and I have never shopped at this merchant. Please investigate and refund the $247.50 charge."'}
-            className="input-field"
-            rows={6}
-            style={{ resize:'vertical', lineHeight:'1.6', fontSize:'14px' }}
-          />
-          <div className="flex items-center justify-between mt-1">
-            <p className="display-font text-[11px] text-stone-400 italic">Minimum 20 characters to enable classification</p>
-            <span className="mono-font text-[9px] text-stone-400">{triComplaint.length} chars</span>
-          </div>
-        </div>
-      </div>
 
-      {/* ── Step 02 — Classification ── */}
-      <div className="section-divider" />
-      <div>
-        <div className="flex items-baseline gap-3 mb-2">
-          <span className="mono-font text-xs text-stone-500">02</span>
-          <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Classification</h2>
-        </div>
-        <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
-          Analyse the complaint text to identify dispute type, recommended reason code, priority, and regulatory framework.
-        </p>
+        {/* ════════ CRYPTO EXCHANGE MODE ════════ */}
+        {isCE && (
+          <>
+            <div className="flex items-baseline gap-3 mb-5">
+              <span className="mono-font text-xs text-stone-400">01</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Account &amp; Transaction</h2>
+            </div>
 
-        <button
-          onClick={handleClassify}
-          disabled={!canClassify || classifying}
-          className="mono-font text-xs tracking-widest px-6 py-3 border border-stone-900 transition-all"
-          style={{ background: canClassify && !classifying ? '#1A1814' : '#E8E0D4', color: canClassify && !classifying ? '#F5F1EA' : '#9A9086', cursor: canClassify && !classifying ? 'pointer' : 'not-allowed' }}
-        >
-          {classifying ? classProgress || 'ANALYSING…' : classResult ? 'RE-CLASSIFY' : 'CLASSIFY DISPUTE'}
-        </button>
+            <div className="mb-4">
+              <label className="input-label">Jurisdiction</label>
+              <select value={ceCountry} onChange={e => setCeCountry(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                <option value="both">Both — US (FinCEN) + Canada (FINTRAC)</option>
+                <option value="us">United States — FinCEN / BSA</option>
+                <option value="ca">Canada — FINTRAC / PCMLTFA</option>
+              </select>
+              {ceRegLabel && (
+                <div className="flex items-start gap-3 py-2">
+                  <span className="mono-font text-xs px-2 py-1 shrink-0" style={{ background: '#064E3B', color: '#6EE7B7' }}>{ceRegLabel}</span>
+                  <span className="mono-font text-xs text-stone-400 leading-relaxed">{ceRegSubtext}</span>
+                </div>
+              )}
+            </div>
 
-        {classifying && (
-          <div className="flex items-center gap-3 mt-5">
-            <Loader2 className="w-4 h-4 text-stone-600 animate-spin" />
-            <span className="display-font text-stone-600 italic text-sm">{classProgress}</span>
-          </div>
-        )}
-
-        {classResult && !classifying && (
-          <div className="mt-6 border border-stone-300" style={{ background:'#FAF7F1' }}>
-            <div className="px-5 py-4 border-b border-stone-200" style={{ background:'#EEE9E0' }}>
-              <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="space-y-4 mb-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">CLASSIFICATION RESULT</div>
-                  <div className="display-font font-semibold text-stone-900" style={{ fontSize:'20px', letterSpacing:'-0.01em' }}>
-                    {TYPE_LABELS[classResult.type]}
+                  <label className="input-label">Account Type</label>
+                  <select value={ceAccountType} onChange={e => setCeAccountType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select…</option>
+                    <option>Standard retail account</option>
+                    <option>Business / corporate account</option>
+                    <option>API / programmatic access</option>
+                    <option>OTC desk account</option>
+                    <option>Institutional account</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">KYC Level</label>
+                  <select value={ceKycLevel} onChange={e => setCeKycLevel(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option>Tier 1 — email only</option>
+                    <option>Tier 2 — ID verified</option>
+                    <option>Tier 3 — full KYB / EDD</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label">Digital Asset</label>
+                  <select value={ceAsset} onChange={e => setCeAsset(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select asset…</option>
+                    <option>BTC (Bitcoin)</option><option>ETH (Ethereum)</option>
+                    <option>USDT (Tether)</option><option>USDC (USD Coin)</option>
+                    <option>SOL (Solana)</option><option>XRP (Ripple)</option>
+                    <option>BNB (BNB Chain)</option><option>MATIC (Polygon)</option>
+                    <option>Other / Unknown</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Blockchain Network</label>
+                  <select value={ceChain} onChange={e => setCeChain(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select chain…</option>
+                    <option>Bitcoin mainnet</option><option>Ethereum mainnet</option>
+                    <option>Solana</option><option>BNB Chain</option>
+                    <option>Polygon</option><option>Tron (TRC-20)</option>
+                    <option>Avalanche</option><option>Unknown / off-chain</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label">Transaction Type</label>
+                  <select value={ceTxType} onChange={e => setCeTxType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select…</option>
+                    <option>External withdrawal</option><option>Internal transfer</option>
+                    <option>Spot trade / conversion</option>
+                    <option>Fiat deposit → crypto purchase</option>
+                    <option>Fiat off-ramp (crypto → fiat)</option>
+                    <option>Staking / yield withdrawal</option>
+                    <option>API-initiated trade or transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Transaction Date</label>
+                  <input type="date" value={ceTxDate} onChange={e => setCeTxDate(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
+                  {ceDaysSince !== null && <div className="mono-font text-xs text-stone-400 mt-1.5">{ceDaysSince === 0 ? 'Today' : `${ceDaysSince} day${ceDaysSince !== 1 ? 's' : ''} ago`}</div>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label">Amount</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={ceAmount} onChange={e => setCeAmount(e.target.value)} placeholder="0.00" className="input-field" style={{ flex: 2 }} />
+                    <select value={ceCurrency} onChange={e => setCeCurrency(e.target.value)} className="input-field mono-font" style={{ flex: 1, fontSize: '13px' }}>
+                      <option>USD</option><option>CAD</option><option>EUR</option><option>GBP</option><option>BTC</option><option>ETH</option>
+                    </select>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">CONFIDENCE</div>
-                  <div className="display-font font-bold text-stone-900" style={{ fontSize:'28px', lineHeight:1 }}>{classResult.confidence}%</div>
+                <div className="flex items-end">
+                  {ceSarRequired && (
+                    <div className="w-full px-3 py-2.5" style={{ background: '#FEF3C7', border: '1px solid #92400E' }}>
+                      <div className="mono-font text-xs tracking-widest" style={{ color: '#92400E' }}>⚠ SAR / STR THRESHOLD</div>
+                      <div className="mono-font text-xs mt-0.5" style={{ color: '#78350F' }}>
+                        {ceSarFlagUS && 'FinCEN SAR required (≥$5k USD)'}
+                        {ceSarFlagUS && ceStrFlagCA && ' · '}
+                        {ceStrFlagCA && 'FINTRAC STR required (≥$10k CAD)'}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background:'#C8C0B4' }}>
-                <div className="h-full rounded-full" style={{ width: classResult.confidence + '%', background:'#1A1814', transition:'width 0.6s ease' }} />
-              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-stone-200">
-              {[
-                { label:'REASON CODE', value: classResult.recommendedCode },
-                { label:'PRIORITY',    value: classResult.priority.toUpperCase(), style: PRI[classResult.priority] || {} },
-                { label:'FRAMEWORK',   value: classResult.regulatory },
-                { label:'NETWORK',     value: triNetwork === 'mastercard' ? 'MASTERCARD' : 'VISA' },
-              ].map(item => (
-                <div key={item.label} className="px-4 py-3">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{item.label}</div>
-                  <div className="mono-font text-sm font-semibold text-stone-900" style={item.style}>{item.value}</div>
-                </div>
-              ))}
+            <hr className="tri-section-rule" />
+            <div className="flex items-baseline gap-3 mb-5">
+              <span className="mono-font text-xs text-stone-400">02</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Destination &amp; Recovery</h2>
             </div>
-
-            <div className="px-5 py-3 border-t border-stone-200">
-              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">HEADLINE</div>
-              <p className="display-font text-stone-800 text-[15px] italic">"{classResult.headline}"</p>
-            </div>
-
-            <div className="px-5 py-3 border-t border-stone-200">
-              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">CLASSIFICATION SIGNALS</div>
-              {classResult.signals.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 mb-1">
-                  <span className="mono-font text-[10px] text-stone-400 mt-0.5">—</span>
-                  <span className="display-font text-stone-700 text-[13px]">{s}</span>
-                </div>
-              ))}
-            </div>
-
-            {classResult.priority === 'urgent' && (
-              <div className="px-5 py-3 border-t border-red-300" style={{ background:'#FEF2F2' }}>
-                <div className="mono-font text-[9px] tracking-widest text-red-700">
-                  {'⚠ URGENT — ' + triCurrency + ' ' + parseFloat(triAmount || 0).toFixed(2) + ' EXCEEDS $500 · EXPEDITE REVIEW · CHECK SAR OBLIGATION'}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Step 03 — Review & Handoff ── */}
-      {classResult && (
-        <>
-          <div className="section-divider" />
-          <div>
-            <div className="flex items-baseline gap-3 mb-2">
-              <span className="mono-font text-xs text-stone-500">03</span>
-              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing:'-0.01em' }}>Review & Handoff</h2>
-            </div>
-            <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight:'1.5' }}>
-              Confirm or override the classification, add analyst notes, then advance to the Dispute Desk.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div className="space-y-4 mb-5">
               <div>
-                <label className="input-label">Classification (override if needed)</label>
-                <select value={overrideType} onChange={e => setOverrideType(e.target.value)} className="input-field">
-                  {Object.entries(TYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
+                <label className="input-label">Destination Type</label>
+                <select value={ceDestinationType} onChange={e => setCeDestinationType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Unknown</option>
+                  <option>External unhosted wallet (self-custody)</option>
+                  <option>Known regulated exchange</option>
+                  <option>Unknown / suspicious exchange</option>
+                  <option>Internal platform wallet</option>
+                  <option>DeFi protocol / smart contract</option>
                 </select>
-                {overrideType !== classResult.type && (
-                  <p className="mono-font text-[9px] tracking-widest text-amber-700 mt-1">
-                    {'OVERRIDDEN FROM: ' + (TYPE_LABELS[classResult.type] || '').toUpperCase()}
-                  </p>
-                )}
               </div>
-              <div>
-                <label className="input-label">Analyst Notes</label>
-                <textarea value={analystNotes} onChange={e => setAnalystNotes(e.target.value)}
-                  placeholder="Optional context, flags, or instructions for the desk analyst…"
-                  className="input-field" rows={3} style={{ resize:'none', fontSize:'13px' }} />
-              </div>
-            </div>
-
-            <div className="border border-stone-200 mb-6" style={{ background:'#FAF7F1' }}>
-              <div className="px-4 py-2.5 border-b border-stone-200" style={{ background:'#EEE9E0' }}>
-                <span className="mono-font text-[9px] tracking-widest text-stone-600">{'HANDOFF SUMMARY — ' + caseId}</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-stone-200">
-                {[
-                  { label:'TYPE',     value: (TYPE_LABELS[overrideType] || '').split(' ').slice(0,2).join(' ') },
-                  { label:'AMOUNT',   value: triAmount ? triCurrency + ' ' + parseFloat(triAmount).toFixed(2) : '—' },
-                  { label:'MERCHANT', value: triMerchant || '—' },
-                  { label:'CODE',     value: classResult.recommendedCode },
-                ].map(item => (
-                  <div key={item.label} className="px-4 py-3">
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{item.label}</div>
-                    <div className="display-font text-stone-900 text-sm font-semibold">{item.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {handedOff ? (
-              <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background:'#ECFDF5' }}>
-                <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-0.5">HANDED OFF TO DISPUTE DESK</div>
-                  <div className="display-font text-emerald-900 text-sm">Case {caseId} is pre-filled in the Dispute Desk — switch to the Desk tab to continue.</div>
+                  <label className="input-label">Destination Address / Exchange</label>
+                  <input type="text" value={ceDestinationAddress} onChange={e => setCeDestinationAddress(e.target.value)} placeholder="0x... or exchange name" className="input-field mono-font" style={{ fontSize: '12px' }} />
+                </div>
+                <div>
+                  <label className="input-label">Receiving Exchange (if known)</label>
+                  <input type="text" value={ceReceivingExchange} onChange={e => setCeReceivingExchange(e.target.value)} placeholder="e.g. Binance, OKX, Kraken" className="input-field" style={{ fontSize: '14px' }} />
                 </div>
               </div>
-            ) : (
-              <>
-                <button
-                  onClick={handleHandoff}
-                  disabled={!canHandoff}
-                  className="flex items-center gap-3 mono-font text-xs tracking-widest px-6 py-3 border border-stone-900 transition-all"
-                  style={{ background: canHandoff ? '#1A1814' : '#E8E0D4', color: canHandoff ? '#F5F1EA' : '#9A9086', cursor: canHandoff ? 'pointer' : 'not-allowed' }}
-                >
-                  ADVANCE TO DISPUTE DESK
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                {!canHandoff && (
-                  <p className="display-font text-[12px] text-stone-400 italic mt-2">
-                    {!triAmount ? 'Enter dispute amount to enable handoff' : !triMerchant ? 'Enter merchant name to enable handoff' : ''}
-                  </p>
+              <div>
+                <label className="input-label">Blockchain Trace Available</label>
+                <select value={ceBlockchainTrace} onChange={e => setCeBlockchainTrace(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Unknown</option>
+                  <option>Yes — funds still traceable on-chain</option>
+                  <option>Yes — but already moved or mixed</option>
+                  <option>No — off-chain or unknown destination</option>
+                </select>
+              </div>
+            </div>
+
+            <hr className="tri-section-rule" />
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className="mono-font text-xs text-stone-400">03</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Claim &amp; Signals</h2>
+            </div>
+            <p className="display-font text-stone-500 text-[14px] mb-5 ml-7 italic" style={{ lineHeight: '1.5' }}>Fill what you know. Unknowns are treated as neutral.</p>
+
+            <div className="space-y-4 mb-5">
+              <div>
+                <label className="input-label">How Was This Flagged?</label>
+                <select value={ceFlaggedBy} onChange={e => setCeFlaggedBy(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Select…</option>
+                  <option>Customer-reported (app / support ticket)</option>
+                  <option>Customer-reported (email / chat)</option>
+                  <option>Customer-reported (phone / live agent)</option>
+                  <option>Automated fraud system alert</option>
+                  <option>Compliance team flagged (SAR review)</option>
+                  <option>Blockchain analytics alert (Chainalysis / Elliptic)</option>
+                  <option>Law enforcement inquiry</option>
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Suspected Compromise Vector</label>
+                <select value={ceCompromiseVector} onChange={e => setCeCompromiseVector(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Unknown / not determined</option>
+                  <option value="SIM-swap — mobile number ported or hijacked">SIM-swap</option>
+                  <option value="Phishing — fake exchange website or email">Phishing — fake exchange or email</option>
+                  <option value="Credential stuffing — reused password from data breach">Credential stuffing / password breach</option>
+                  <option value="API key theft — programmatic unauthorized access">API key theft</option>
+                  <option value="Social engineering — fake support agent or impersonation">Social engineering / fake support</option>
+                  <option value="Investment / pig butchering scam — customer voluntarily sent funds">Investment scam / pig butchering</option>
+                  <option value="Malware / device compromise">Malware / device compromise</option>
+                  <option value="Insider threat — potential internal actor">Insider threat</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">Recent Account Changes</label>
+                  <select value={ceRecentAcctChanges} onChange={e => setCeRecentAcctChanges(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option value="Yes — email, phone, 2FA, or API keys changed recently">Yes — email / phone / 2FA / API changed</option>
+                    <option value="No recent account changes detected">No recent changes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Device / Location</label>
+                  <select value={ceDeviceNew} onChange={e => setCeDeviceNew(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option value="New or unrecognized device / IP flagged">New or unrecognized device / IP</option>
+                    <option value="Known device and location">Known device and location</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Prior Claims (12 months)</label>
+                  <select value={cePriorClaims} onChange={e => setCePriorClaims(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option>None</option><option>1</option><option>2–3</option><option>4+</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="input-label">Customer's Stated Reason <span style={{ color: '#B45309' }}>*</span></label>
+                <textarea value={ceComplaint} onChange={e => setCeComplaint(e.target.value)}
+                  placeholder="What is the customer saying happened? Include any details about how they believe the fraud occurred…"
+                  rows={5} className="input-field" style={{ resize: 'vertical' }} />
+              </div>
+            </div>
+
+            <div>
+              <label className="input-label">Date Incident Reported <span className="mono-font text-[10px] text-stone-400 normal-case tracking-normal">(optional — enables SAR deadline countdown)</span></label>
+              <div className="flex items-center gap-3 flex-wrap">
+                <input type="date" value={ceSarDeadlineDate} onChange={e => setCeSarDeadlineDate(e.target.value)}
+                  className="input-field mono-font" style={{ fontSize: '13px', maxWidth: '200px' }} />
+                {ceSarDeadline && (
+                  <div className={`mono-font text-xs px-2 py-1 ${ceSarDaysLeft !== null && ceSarDaysLeft <= 7 ? 'bg-red-900 text-red-50' : ceSarDaysLeft !== null && ceSarDaysLeft <= 14 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
+                    SAR deadline: {ceSarDeadline} · {ceSarDaysLeft !== null ? `${ceSarDaysLeft}d remaining` : ''}
+                  </div>
                 )}
-              </>
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <button onClick={classifyCE} disabled={loading || !ceComplaint.trim()}
+                className="w-full py-4 mono-font text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                style={{ background: loading || !ceComplaint.trim() ? '#D4CCBC' : '#1A1814', color: loading || !ceComplaint.trim() ? '#9A9086' : '#F5F1EA', cursor: loading || !ceComplaint.trim() ? 'not-allowed' : 'pointer', border: 'none' }}>
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /><span>CLASSIFYING CLAIM</span></> : <><Bitcoin className="w-4 h-4" /><span>CLASSIFY EXCHANGE CLAIM</span><ArrowRight className="w-4 h-4" /></>}
+              </button>
+              {error && <div className="mt-4 border border-red-700 bg-red-50 p-4 flex gap-3 items-start"><AlertCircle className="w-5 h-5 text-red-700 shrink-0 mt-0.5" /><div className="display-font text-sm text-red-900">{error}</div></div>}
+            </div>
+          </>
+        )}
+
+        {/* ════════ FI MODE ════════ */}
+        {!isCE && (
+          <>
+            <div className="flex items-baseline gap-3 mb-5">
+              <span className="mono-font text-xs text-stone-400">01</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Transaction Details</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="input-label">Account Type</label>
+                <select value={accountType} onChange={e => setAccountType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Select type…</option>
+                  <option value="debit">Debit Card</option>
+                  <option value="credit">Credit Card</option>
+                  <option value="p2p">P2P / e-Transfer</option>
+                  <option value="ach_eft">ACH / EFT</option>
+                  <option value="bnpl">BNPL (Buy Now Pay Later)</option>
+                  <option value="crypto">Crypto / Digital Asset (FI-held)</option>
+                </select>
+              </div>
+
+              {regLabel && (
+                <div className="flex items-start gap-3 py-2">
+                  <span className="mono-font text-xs px-2 py-1 shrink-0" style={{ background: regColor.bg, color: regColor.text }}>{regLabel}</span>
+                  <span className="mono-font text-xs text-stone-400 leading-relaxed">{regSubtext}</span>
+                </div>
+              )}
+
+              {showNetworkSel && (
+                <div>
+                  <label className="input-label">Payment Network</label>
+                  <select value={network} onChange={e => setNetwork(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select network…</option>
+                    {isCrypto ? (
+                      <><option>Bitcoin (BTC)</option><option>Ethereum (ETH)</option><option>Solana (SOL)</option><option>Polygon (MATIC)</option><option>USDT / USDC (Stablecoin)</option><option>Other / Unknown chain</option></>
+                    ) : (
+                      <><option>Visa</option><option>Mastercard</option><option>American Express</option><option>Interac</option><option>Other</option></>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {detectedCrypto && (
+                <div className="flex items-start gap-2 p-3" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
+                  <Bitcoin className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#065F46' }} />
+                  <div>
+                    <span className="mono-font text-xs tracking-widest" style={{ color: '#064E3B' }}>CRYPTO MERCHANT DETECTED — </span>
+                    <span className="mono-font text-xs" style={{ color: '#065F46' }}>{merchant} is a known exchange. Switch account type to Crypto to unlock all crypto signals.</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label">{isCrypto ? 'Destination Wallet / Platform' : 'Merchant / Recipient'}</label>
+                  <input type="text" value={merchant} onChange={e => setMerchant(e.target.value)}
+                    placeholder={isCrypto ? 'e.g. 0x1a2b… or Uniswap' : 'e.g. TechGadget Co.'} className="input-field"
+                    style={isCrypto ? { fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' } : {}} />
+                </div>
+                <div>
+                  <label className="input-label">Amount</label>
+                  <div className="flex gap-2">
+                    <input type="text" value={amount} onChange={e => setAmount(e.target.value)} placeholder="284.00" className="input-field" style={{ flex: 2 }} />
+                    <select value={currency} onChange={e => setCurrency(e.target.value)} className="input-field mono-font" style={{ flex: 1, fontSize: '13px' }}>
+                      {isCrypto ? <><option>CAD</option><option>USD</option><option>BTC</option><option>ETH</option><option>USDC</option><option>USDT</option></> : <><option>CAD</option><option>USD</option><option>EUR</option><option>GBP</option></>}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label">Transaction Date</label>
+                  <input type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
+                  {daysSinceTransaction !== null && <div className="mono-font text-xs text-stone-400 mt-1.5">{daysSinceTransaction === 0 ? 'Today' : `${daysSinceTransaction} day${daysSinceTransaction !== 1 ? 's' : ''} ago`}</div>}
+                </div>
+                <div>
+                  <label className="input-label">Transaction Type</label>
+                  <select value={transactionType} onChange={e => setTransactionType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Select type…</option>
+                    {accountType && TX_TYPES[accountType] ? TX_TYPES[accountType].map(t => <option key={t}>{t}</option>) : (
+                      <><option>Card-Present (In-person)</option><option>Card-Not-Present (Online)</option><option>Recurring / Subscription</option><option>ATM Withdrawal</option><option>ACH / EFT Transfer</option><option>Wire Transfer</option><option>Zelle</option><option>Interac e-Transfer</option></>
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <hr className="tri-section-rule" />
+            <div className="flex items-baseline gap-3 mb-5">
+              <span className="mono-font text-xs text-stone-400">02</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Claim &amp; Context</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="input-label">How Was This Flagged?</label>
+                <select value={flaggedBy} onChange={e => setFlaggedBy(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Select…</option>
+                  <option>Customer-reported (inbound call)</option>
+                  <option>Customer-reported (app / self-serve)</option>
+                  <option>Customer-reported (email / chat)</option>
+                  <option>System alert (fraud detection)</option>
+                  <option>Proactive outreach (bank contacted customer first)</option>
+                  <option>Chargeback / representment queue</option>
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Customer's Stated Reason <span style={{ color: '#B45309' }}>*</span></label>
+                <textarea value={customerReason} onChange={e => setCustomerReason(e.target.value)}
+                  placeholder="What is the customer saying happened? Paste or summarize their complaint…"
+                  rows={5} className="input-field" style={{ resize: 'vertical' }} />
+              </div>
+            </div>
+
+            <hr className="tri-section-rule" />
+            <div className="flex items-baseline gap-3 mb-2">
+              <span className="mono-font text-xs text-stone-400">03</span>
+              <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Risk Signals</h2>
+            </div>
+            <p className="display-font text-stone-500 text-[14px] mb-5 ml-7 italic" style={{ lineHeight: '1.5' }}>Fill what you know. Unknowns are treated as neutral.</p>
+
+            <div className="mb-5">
+              <div className="tri-sub-label">Cardholder</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">Prior Disputes (12 months)</label>
+                  <select value={priorDisputes} onChange={e => setPriorDisputes(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option><option>None</option><option>1–2</option><option>3–5</option><option>5+</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Account Age</label>
+                  <select value={accountAge} onChange={e => setAccountAge(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option><option>Under 6 months</option><option>6–12 months</option><option>1–3 years</option><option>3+ years</option>
+                  </select>
+                </div>
+                {isCardBased && (
+                  <div className="sm:col-span-2">
+                    <label className="input-label">Card in Possession When Reported</label>
+                    <select value={cardPossession} onChange={e => setCardPossession(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option><option>Yes — card in hand</option><option>No — card lost or stolen</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <div className="tri-sub-label">Account Integrity</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">Recent Account Changes</label>
+                  <select value={accountChanges} onChange={e => setAccountChanges(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option value="Yes — login, password or contact details changed recently">Yes — login or contact details changed</option>
+                    <option value="No — no recent changes detected">No changes detected</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Device / Location</label>
+                  <select value={deviceRecognized} onChange={e => setDeviceRecognized(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                    <option value="">Unknown</option>
+                    <option value="New or unrecognized device / location flagged">New or unrecognized device</option>
+                    <option value="Known device and location">Known device and location</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {isCardBased && (
+              <div>
+                <div className="tri-sub-label">Merchant</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="input-label">VFMP Listed</label>
+                    <select value={vfmp} onChange={e => setVfmp(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Yes — VFMP listed">Yes</option>
+                      <option value="No — not VFMP listed">No</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Merchant Dispute Rate</label>
+                    <select value={merchantDisputeRate} onChange={e => setMerchantDisputeRate(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Low (under 1%)">Low (&lt;1%)</option>
+                      <option value="Medium (1–2%)">Medium</option>
+                      <option value="High (over 2%)">High (&gt;2%)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">MCC Risk Tier</label>
+                    <select value={mccRisk} onChange={e => setMccRisk(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Low risk MCC">Low</option>
+                      <option value="Medium risk MCC">Medium</option>
+                      <option value="High risk MCC (travel, digital goods, gambling)">High</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             )}
+
+            {(isCrypto || detectedCrypto) && (
+              <div className="mt-5">
+                <div className="tri-sub-label flex items-center gap-2">
+                  <Bitcoin className="w-3 h-3" style={{ color: '#065F46' }} />
+                  <span>Crypto / Digital Asset Signals</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="input-label">Crypto Fraud Scenario</label>
+                    <select value={cryptoScenario} onChange={e => setCryptoScenario(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Select scenario…</option>
+                      <option value="Card used to buy crypto (authorized scam)">Card used to buy crypto (authorized scam)</option>
+                      <option value="Pig butchering / investment scam">Pig butchering / investment scam</option>
+                      <option value="Wallet / exchange hack (unauthorized access)">Wallet / exchange hack (unauthorized access)</option>
+                      <option value="NFT / digital asset fraud">NFT / digital asset fraud</option>
+                      <option value="Stablecoin transfer fraud (USDC/USDT used as wire substitute)">Stablecoin fraud (USDC / USDT wire substitute)</option>
+                      <option value="FI-held crypto — unauthorized withdrawal from integrated wallet">FI-held crypto — unauthorized withdrawal</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Exchange Regulated?</label>
+                    <select value={exchangeRegulated} onChange={e => setExchangeRegulated(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Yes — registered / licensed exchange">Yes — licensed exchange</option>
+                      <option value="No — unregulated or offshore">No — unregulated / offshore</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Wallet Custody</label>
+                    <select value={walletCustody} onChange={e => setWalletCustody(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Custodial (exchange holds keys)">Custodial (exchange holds keys)</option>
+                      <option value="Self-custody (customer holds keys)">Self-custody (customer holds keys)</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="input-label">Customer Contacted Exchange?</label>
+                    <select value={contactedExchange} onChange={e => setContactedExchange(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                      <option value="">Unknown</option>
+                      <option value="Yes — exchange contacted, case open">Yes — case open with exchange</option>
+                      <option value="Yes — exchange declined to help">Yes — exchange declined</option>
+                      <option value="No — customer came to FI first">No — came to FI first</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-8">
+              <button onClick={classify} disabled={loading || !customerReason.trim()}
+                className="w-full py-4 mono-font text-xs tracking-widest transition-all flex items-center justify-center gap-3"
+                style={{ background: loading || !customerReason.trim() ? '#D4CCBC' : '#1A1814', color: loading || !customerReason.trim() ? '#9A9086' : '#F5F1EA', cursor: loading || !customerReason.trim() ? 'not-allowed' : 'pointer', border: 'none' }}>
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /><span>CLASSIFYING CLAIM</span></> : <><span>CLASSIFY CLAIM</span><ArrowRight className="w-4 h-4" /></>}
+              </button>
+              {error && <div className="mt-4 border border-red-700 bg-red-50 p-4 flex gap-3 items-start"><AlertCircle className="w-5 h-5 text-red-700 shrink-0 mt-0.5" /><div className="display-font text-sm text-red-900">{error}</div></div>}
+            </div>
+          </>
+        )}
+        </div>
+
+        {/* ══ RIGHT: Output ══════════════════════════════════════════════════════ */}
+        <div>
+          <div className="flex items-baseline gap-3 mb-5">
+            <span className="mono-font text-xs text-stone-400">04</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Classification</h2>
           </div>
-        </>
+
+          {!result && !loading && (
+            <div className="border border-dashed border-stone-300 p-12 text-center" style={{ background: '#FAF7F1' }}>
+              <Shield className="w-8 h-8 text-stone-300 mx-auto mb-3" />
+              <p className="display-font text-stone-400 italic text-[15px]">Triage result will appear here after classification.</p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="border border-stone-200 p-12 text-center" style={{ background: '#FAF7F1' }}>
+              <Loader2 className="w-8 h-8 text-stone-600 mx-auto mb-3 animate-spin" />
+              <p className="display-font text-stone-600 italic">Weighing signals and classifying claim…</p>
+            </div>
+          )}
+
+          {result && cfg && (
+            <div className="space-y-4">
+
+              {!isCE && regLabel && (
+                <div className="flex items-center gap-2">
+                  <span className="mono-font text-xs px-2 py-0.5" style={{ background: regColor.bg, color: regColor.text }}>{regLabel}</span>
+                  <span className="mono-font text-xs text-stone-400 uppercase tracking-wider">framework</span>
+                </div>
+              )}
+
+              {isCE && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="mono-font text-xs px-2 py-0.5" style={{ background: '#064E3B', color: '#6EE7B7' }}>{ceRegLabel}</span>
+                    <span className="mono-font text-xs text-stone-400 uppercase tracking-wider">jurisdiction</span>
+                  </div>
+                  {ceSarRequired && (
+                    <div className="flex items-center gap-2 px-3 py-2" style={{ background: '#FEF3C7', border: '1px solid #D97706' }}>
+                      <span className="mono-font text-xs tracking-widest" style={{ color: '#92400E' }}>⚠ SAR/STR FILING REQUIRED — document this case before closing</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Verdict card */}
+              <div className="p-6" style={{ background: cfg.bg }}>
+                <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
+                  <div className="mono-font text-xs tracking-widest" style={{ color: cfg.badgeText, opacity: 0.8 }}>TRIAGE VERDICT</div>
+                  <div className="mono-font text-xs px-2 py-1" style={{ background: cfg.badge, color: cfg.badgeText }}>{result.confidence} CONFIDENCE</div>
+                </div>
+                <div className="display-font font-bold mb-3" style={{ fontSize: 'clamp(26px, 3.5vw, 38px)', color: cfg.text, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{cfg.label}</div>
+                <p className="display-font italic" style={{ color: cfg.text, fontSize: '15px', lineHeight: '1.55', opacity: 0.85 }}>{result.headline}</p>
+              </div>
+
+              {result.ato_suspected && (
+                <div className="border border-red-800 p-5" style={{ background: '#FFF1F2' }}>
+                  <div className="flex items-center gap-2 mono-font text-xs tracking-widest text-red-900 mb-2">
+                    <Lock className="w-3.5 h-3.5 shrink-0" /><span>ACCOUNT TAKEOVER SUSPECTED</span>
+                  </div>
+                  <p className="display-font text-stone-900 text-[14px] leading-relaxed mb-3">{result.ato_note}</p>
+                  <div className="mono-font text-xs text-red-800 tracking-wide">→ Escalate to security team in parallel. Block card and flag account for identity verification before or alongside dispute filing.</div>
+                </div>
+              )}
+
+              {provisionalCreditApplies && (
+                <div className="border p-4" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
+                  <div className="mono-font text-xs tracking-widest mb-2" style={{ color: '#1E3A8A' }}>REG E — PROVISIONAL CREDIT</div>
+                  <p className="display-font text-stone-900 text-[14px] leading-relaxed">
+                    This Reg E dispute must be resolved within <strong>10 business days</strong> — or provisional credit must be issued. Investigation may extend to <strong>45 business days</strong> (90 days for POS, international, or new accounts) with provisional credit posted.
+                  </p>
+                </div>
+              )}
+
+              <div className="border border-stone-200 p-5" style={{ background: '#FAF7F1' }}>
+                <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">KEY SIGNALS</div>
+                <div className="space-y-2.5">
+                  {result.signals?.map((signal, i) => (
+                    <div key={i} className="display-font text-stone-800 text-[15px] flex gap-2 items-start leading-snug">
+                      <span className="text-stone-400 shrink-0 mt-0.5">→</span><span>{signal}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {result.signal_influences?.length > 0 && (
+                <div className="border border-stone-200 p-5" style={{ background: '#FAF7F1' }}>
+                  <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">WHAT DROVE THIS VERDICT</div>
+                  <div className="space-y-2.5">
+                    {result.signal_influences.map((inf, i) => {
+                      const ws = weightStyle(inf.weight)
+                      const towardCfg = classConfig[inf.toward]
+                      return (
+                        <div key={i} className="flex items-center gap-2 flex-wrap">
+                          <span className="mono-font text-xs px-1.5 py-0.5 shrink-0" style={{ background: ws.bg, color: ws.text }}>{inf.weight}</span>
+                          <span className="display-font text-stone-700 text-[13px] flex-1 min-w-0">{inf.signal}</span>
+                          {towardCfg && <span className="mono-font shrink-0 px-1.5 py-0.5" style={{ fontSize: '9px', letterSpacing: '0.08em', background: towardCfg.bg, color: towardCfg.badgeText }}>→ {towardCfg.label}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="p-5" style={{ borderLeft: `4px solid ${cfg.borderColor}`, background: '#FAF7F1' }}>
+                <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">ROUTING RECOMMENDATION</div>
+                <div className="display-font font-semibold text-stone-900 mb-2" style={{ fontSize: '17px', letterSpacing: '-0.01em' }}>{result.routing_label}</div>
+                <p className="display-font text-stone-700 text-[15px] leading-relaxed">{result.routing_detail}</p>
+              </div>
+
+              {result.risk_notes && (
+                <div className="border border-amber-200 bg-amber-50 p-4">
+                  <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ WATCH FOR</div>
+                  <p className="display-font text-stone-800 text-[15px] leading-relaxed">{result.risk_notes}</p>
+                </div>
+              )}
+
+              {(() => {
+                const fpfColor = fpfRiskScore >= 70 ? '#991B1B' : fpfRiskScore >= 45 ? '#92400E' : '#065F46'
+                const fpfBg    = fpfRiskScore >= 70 ? '#FEE2E2' : fpfRiskScore >= 45 ? '#FEF3C7' : '#ECFDF5'
+                const fpfLabel = fpfRiskScore >= 70 ? 'HIGH — Investigate further' : fpfRiskScore >= 45 ? 'MODERATE — Review carefully' : 'LOW — Claim appears genuine'
+                return (
+                  <div className="border p-4" style={{ background: fpfBg, borderColor: fpfColor + '40' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="mono-font text-xs tracking-widest" style={{ color: fpfColor }}>FIRST-PARTY FRAUD RISK</span>
+                      <span className="mono-font text-sm font-bold" style={{ color: fpfColor }}>{fpfRiskScore}/100</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full mb-2" style={{ background: '#E7E5E4' }}>
+                      <div className="h-2 rounded-full transition-all duration-500" style={{ width: `${fpfRiskScore}%`, background: fpfColor }} />
+                    </div>
+                    <div className="mono-font text-xs" style={{ color: fpfColor }}>{fpfLabel}</div>
+                  </div>
+                )
+              })()}
+
+              <button onClick={exportReport}
+                className="w-full flex items-center justify-center gap-2 py-3 border transition-colors"
+                style={{ borderColor: '#D4CCBC', background: '#FAF7F1', cursor: 'pointer' }}>
+                {exportCopied
+                  ? <><Check className="w-4 h-4 text-emerald-600" /><span className="mono-font text-xs tracking-widest text-emerald-600">COPIED TO CLIPBOARD</span></>
+                  : <><Copy className="w-4 h-4 text-stone-500" /><span className="mono-font text-xs tracking-widest text-stone-600">EXPORT TRIAGE REPORT</span></>}
+              </button>
+
+              {isCE && ceSarRequired && ceSarDeadline && (
+                <div className={`flex items-center gap-3 px-3 py-2.5 mono-font text-xs ${ceSarDaysLeft !== null && ceSarDaysLeft <= 7 ? 'bg-red-900 text-red-50' : ceSarDaysLeft !== null && ceSarDaysLeft <= 14 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
+                  <span>⚠ SAR/STR DEADLINE:</span>
+                  <span className="font-bold">{ceSarDeadline}</span>
+                  {ceSarDaysLeft !== null && <span>{ceSarDaysLeft > 0 ? `${ceSarDaysLeft} DAYS REMAINING` : ceSarDaysLeft === 0 ? 'DUE TODAY' : `${Math.abs(ceSarDaysLeft)} DAYS OVERDUE`}</span>}
+                </div>
+              )}
+
+              {isCE && !ceActionPlan && !ceActionPlanLoading && (
+                <button onClick={generateCEActionPlan}
+                  className="w-full flex items-center justify-center gap-2 py-4 mono-font text-xs tracking-widest transition-all"
+                  style={{ background: '#1A1814', color: '#F5F1EA', border: 'none', cursor: 'pointer' }}>
+                  <Shield className="w-4 h-4" /><span>GENERATE FULL ACTION PLAN</span><ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+              {isCE && ceActionPlanLoading && (
+                <div className="border border-stone-300 p-8 text-center" style={{ background: '#FAF7F1' }}>
+                  <Loader2 className="w-6 h-6 text-stone-600 mx-auto mb-2 animate-spin" />
+                  <p className="display-font text-stone-600 italic text-sm">Building operational action plan…</p>
+                </div>
+              )}
+              {isCE && ceActionPlanError && (
+                <div className="border border-red-700 bg-red-50 p-4 flex gap-3 items-start">
+                  <AlertCircle className="w-4 h-4 text-red-700 shrink-0 mt-0.5" />
+                  <div className="display-font text-sm text-red-900">{ceActionPlanError}</div>
+                </div>
+              )}
+
+              {isCE && ceActionPlan && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="mono-font text-xs tracking-widest text-stone-500">FULL ACTION PLAN</div>
+                    <button onClick={() => {
+                      const t = [`CE ACTION PLAN — ${result.classification?.replace(/_/g,' ')}`, `Recovery: ${ceActionPlan.recovery_outlook}`, '', 'IMMEDIATE ACTIONS:', ...(ceActionPlan.immediate_actions||[]).map((a,i) => `${i+1}. ${a}`), '', 'INVESTIGATION:', ...(ceActionPlan.investigation_steps||[]).map((a,i) => `${i+1}. ${a}`), ceActionPlan.sar_required ? '\nSAR: ' + ceActionPlan.sar_note : '', ceActionPlan.lea_referral_recommended ? '\nLEA: ' + ceActionPlan.lea_note : '', '', 'RECOVERY: ' + ceActionPlan.recovery_note].filter(Boolean).join('\n')
+                      navigator.clipboard.writeText(t)
+                      setCeActionPlanCopied(true); setTimeout(() => setCeActionPlanCopied(false), 2000)
+                    }} className="mono-font text-xs flex items-center gap-1.5 text-stone-600 hover:text-stone-900 transition-colors" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                      {ceActionPlanCopied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY ALL</>}
+                    </button>
+                  </div>
+
+                  <div className="border-l-4 border-red-700 bg-red-50 p-5">
+                    <div className="mono-font text-xs tracking-widest text-red-900 mb-3">IMMEDIATE ACTIONS — DO NOW</div>
+                    <div className="space-y-2">
+                      {ceActionPlan.immediate_actions?.map((a, i) => (
+                        <div key={i} className="display-font text-stone-900 text-[14px] flex gap-2 items-start leading-snug">
+                          <span className="mono-font text-[11px] text-red-700 shrink-0 mt-0.5 font-bold">{i+1}.</span><span>{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border border-stone-300 p-5" style={{ background: '#FAF7F1' }}>
+                    <div className="mono-font text-xs tracking-widest text-stone-600 mb-3">INVESTIGATION STEPS — 24–48 HOURS</div>
+                    <div className="space-y-2">
+                      {ceActionPlan.investigation_steps?.map((s, i) => (
+                        <div key={i} className="display-font text-stone-800 text-[14px] flex gap-2 items-start leading-snug">
+                          <span className="mono-font text-[11px] text-stone-500 shrink-0 mt-0.5">{i+1}.</span><span>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">EVIDENCE PACKAGE</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[{ key: 'internal', label: 'INTERNAL' }, { key: 'external', label: 'EXTERNAL' }, { key: 'blockchain', label: 'BLOCKCHAIN' }].map(({ key, label }) => (
+                        <div key={key} className="border border-stone-200 p-4" style={{ background: '#FAF7F1' }}>
+                          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">{label}</div>
+                          <div className="space-y-2">
+                            {(ceActionPlan.evidence_required?.[key] || []).map((item, i) => (
+                              <div key={i} className="display-font text-stone-800 text-[13px] flex gap-2 items-start leading-snug">
+                                <span className="shrink-0 mt-0.5 text-stone-400">→</span><span>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {ceActionPlan.sar_required && (
+                    <div className="border-l-4 border-amber-700 bg-amber-50 p-5">
+                      <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ SAR / STR FILING REQUIRED</div>
+                      <p className="display-font text-stone-900 text-[14px] leading-relaxed">{ceActionPlan.sar_note}</p>
+                    </div>
+                  )}
+
+                  {ceActionPlan.lea_referral_recommended && (
+                    <div className="border border-stone-900 p-5" style={{ background: '#1A1814' }}>
+                      <div className="mono-font text-xs tracking-widest text-stone-400 mb-2">LAW ENFORCEMENT REFERRAL</div>
+                      <p className="display-font text-stone-100 text-[14px] leading-relaxed">{ceActionPlan.lea_note}</p>
+                    </div>
+                  )}
+
+                  {ceActionPlan.exchange_contact_required && (
+                    <div className="border border-stone-400 p-5" style={{ background: '#FAF7F1' }}>
+                      <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">RECEIVING EXCHANGE — CONTACT NOW</div>
+                      <p className="display-font text-stone-800 text-[14px] leading-relaxed">{ceActionPlan.exchange_note}</p>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const ol = ceActionPlan.recovery_outlook
+                    const olStyle = ol === 'HIGH' ? { bg: '#064e3b', text: '#6EE7B7' } : ol === 'MODERATE' ? { bg: '#78350f', text: '#FDE68A' } : ol === 'LOW' ? { bg: '#7f1d1d', text: '#FCA5A5' } : { bg: '#1c1917', text: '#A8A29E' }
+                    return (
+                      <div className="p-5 border border-stone-200" style={{ background: '#FAF7F1' }}>
+                        <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">RECOVERY OUTLOOK</div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="mono-font text-xs px-2 py-1" style={{ background: olStyle.bg, color: olStyle.text }}>{ol}</span>
+                          <span className="mono-font text-xs text-stone-400">{ol === 'HIGH' ? '60–80%' : ol === 'MODERATE' ? '35–60%' : ol === 'LOW' ? '15–35%' : '<15%'}</span>
+                        </div>
+                        <p className="display-font text-stone-700 text-[14px] leading-relaxed">{ceActionPlan.recovery_note}</p>
+                      </div>
+                    )
+                  })()}
+
+                  {ceActionPlan.customer_letter && (
+                    <div className="border border-stone-900">
+                      <div className="bg-stone-900 px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <div className="mono-font text-xs tracking-widest text-stone-400 mb-0.5">CUSTOMER LETTER</div>
+                          <div className="display-font text-stone-100 font-semibold text-[15px]">{ceActionPlan.customer_letter.subject}</div>
+                        </div>
+                        <button onClick={() => {
+                          navigator.clipboard.writeText(`Subject: ${ceActionPlan.customer_letter.subject}\n\nDear Customer,\n\n${ceActionPlan.customer_letter.body}\n\nSincerely,\nCompliance & Fraud Operations Team`)
+                          setCeActionPlanCopied(true); setTimeout(() => setCeActionPlanCopied(false), 2000)
+                        }} className="mono-font text-xs flex items-center gap-1.5 text-stone-400 hover:text-stone-200 transition-colors" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                          {ceActionPlanCopied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
+                        </button>
+                      </div>
+                      <div className="bg-white p-5 space-y-3">
+                        <p className="display-font text-stone-500 text-sm italic">Dear Customer,</p>
+                        {ceActionPlan.customer_letter.body?.split('\n\n').map((para, i) => (
+                          <p key={i} className="display-font text-stone-900 text-[15px] leading-relaxed">{para}</p>
+                        ))}
+                        <p className="display-font text-stone-500 text-sm italic pt-2">Sincerely,<br />Compliance &amp; Fraud Operations Team</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={() => setCeActionPlan(null)} className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                    ↺ REGENERATE ACTION PLAN
+                  </button>
+                </div>
+              )}
+
+              {/* ── Send to Dispute Desk ── */}
+              {handedOff ? (
+                <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
+                  <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0" />
+                  <div>
+                    <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-0.5">HANDED OFF TO DISPUTE DESK</div>
+                    <div className="display-font text-emerald-900 text-sm">Case {outcomes[0]?.id} is pre-filled in the Dispute Desk — switch to the Desk tab to continue.</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="border" style={{ borderColor: result.proceed_to_dispute ? '#065F46' : '#D4CCBC' }}>
+                  <button onClick={handleProceedToDisputeDesk}
+                    className="w-full flex items-center justify-between p-5 transition-colors"
+                    style={{ background: result.proceed_to_dispute ? '#1A1814' : '#FAF7F1', cursor: 'pointer', border: 'none' }}>
+                    <div className="text-left">
+                      <div className="mono-font text-xs tracking-widest mb-1" style={{ color: result.proceed_to_dispute ? '#6B5F4D' : '#A89B88' }}>
+                        {result.proceed_to_dispute ? 'RECOMMENDED NEXT STEP' : 'OPTIONAL — SEND TO DESK'}
+                      </div>
+                      <div className="display-font font-semibold text-lg" style={{ color: result.proceed_to_dispute ? '#F5F1EA' : '#1A1814', letterSpacing: '-0.01em' }}>
+                        {isCE ? 'Log in Dispute Desk →' : 'Open in Dispute Desk →'}
+                      </div>
+                      <div className="mono-font text-xs mt-1" style={{ color: result.proceed_to_dispute ? '#6B5F4D' : '#A89B88' }}>
+                        Merchant, amount, date &amp; complaint pre-filled
+                      </div>
+                    </div>
+                    <ExternalLink className="w-5 h-5 shrink-0" style={{ color: result.proceed_to_dispute ? '#6B5F4D' : '#D4CCBC' }} />
+                  </button>
+                  {!result.proceed_to_dispute && (
+                    <div className="px-5 pb-3 mono-font text-xs" style={{ color: '#A89B88' }}>
+                      Note: AI did not recommend filing — review signals before proceeding
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Section 05: Outcome Log ──────────────────────────────────────────── */}
+      {outcomes.length > 0 && (
+        <div className="mt-12 sm:mt-16">
+          <hr className="tri-section-rule" style={{ margin: '0 0 28px 0' }} />
+          <div className="flex items-baseline gap-3 mb-6 flex-wrap">
+            <span className="mono-font text-xs text-stone-400">05</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Outcome Log</h2>
+            <span className="mono-font text-xs text-stone-400 ml-auto">{outcomes.length} CASE{outcomes.length !== 1 ? 'S' : ''} CLASSIFIED</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {[
+              { label: 'TOTAL',           value: outcomes.length,                           sub: 'classified' },
+              { label: 'ACCURACY',        value: accuracy !== null ? `${accuracy}%` : '—',  sub: `${resolved.length} resolved` },
+              { label: 'LEADING VERDICT', value: leadingLabel,                              sub: leadingVerdict[1] > 0 ? `${leadingVerdict[1]} case${leadingVerdict[1] !== 1 ? 's' : ''}` : '' },
+            ].map(s => (
+              <div key={s.label} className="border border-stone-200 p-4" style={{ background: '#FAF7F1' }}>
+                <div className="mono-font text-xs tracking-widest text-stone-400 mb-1">{s.label}</div>
+                <div className="display-font font-semibold text-stone-900" style={{ fontSize: '22px', letterSpacing: '-0.02em' }}>{s.value}</div>
+                <div className="mono-font text-xs text-stone-400 mt-0.5">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: '600px' }}>
+                <div className="grid px-4 py-2 border-b border-stone-200" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr' }}>
+                  {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'VERDICT / OUTCOME'].map(h => (
+                    <span key={h} className="mono-font text-xs tracking-widest text-stone-400">{h}</span>
+                  ))}
+                </div>
+                <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                  {outcomes.map(o => {
+                    const vc = classConfig[o.verdict]
+                    if (!vc) return null
+                    return (
+                      <div key={o.id} className="grid px-4 py-3 border-b border-stone-100 items-center" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr' }}>
+                        <span className="mono-font text-xs text-stone-400">{o.id}</span>
+                        <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                        <span className="display-font text-sm text-stone-700 truncate pr-3">{o.merchant}</span>
+                        <span className="mono-font text-xs text-stone-600">{o.amount}</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
+                          {o.outcome === 'pending' ? (
+                            <div className="flex gap-1">
+                              <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
+                              <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
+                            </div>
+                          ) : (
+                            <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
+                              {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <button onClick={() => { if (window.confirm('Clear all outcome history?')) setOutcomes([]) }}
+              className="mono-font text-xs tracking-widest text-stone-400 hover:text-stone-600 transition-colors"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              CLEAR LOG
+            </button>
+          </div>
+        </div>
       )}
+
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      <div className="mt-12 sm:mt-16 pt-6 flex flex-col sm:flex-row sm:items-baseline justify-between text-stone-500 gap-2" style={{ borderTop: '1px solid #D4CCBC' }}>
+        <div className="mono-font text-xs tracking-widest">BUILT BY ADEOTI FASHOKUN — RISK &amp; TRUST OPERATIONS</div>
+        <div className="display-font italic text-sm">"Classify before you file. The routing matters."</div>
+      </div>
     </div>
   )
 }
+
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
