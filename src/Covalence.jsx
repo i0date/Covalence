@@ -247,13 +247,17 @@ const GLOBAL_CSS = `
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   @media(max-width:767px) {
     .desktop-only     { display:none !important; }
-    /* nav scrollable on mobile */
-    .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; }
-    .cov-nav-inner button { flex-shrink:0; padding:14px 12px !important; }
+    /* nav: shrink logo, reduce gap, scroll nav buttons */
+    .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 12px !important; }
+    .cov-nav-inner button { flex-shrink:0; padding:14px 10px !important; font-size:8px !important; }
+    .cov-nav-logo     { padding-right:12px !important; margin-right:0 !important; }
+    .cov-nav-logo div { font-size:10px !important; letter-spacing:0.15em !important; }
     /* home stats: 2-col on mobile */
     .home-stats-grid  { grid-template-columns:repeat(2,1fr) !important; }
     /* single-col fallback for fixed grids */
     .mob-1col         { grid-template-columns:1fr !important; }
+    /* platform toggles: no wrap */
+    .platform-toggle-btn { white-space:nowrap !important; padding:10px 14px !important; }
   }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `
@@ -288,7 +292,7 @@ export default function Covalence() {
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
           <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
-            <div style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
+            <div className="cov-nav-logo" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
             </div>
             <div style={{ display:'flex', alignItems:'center' }}>
@@ -1040,7 +1044,7 @@ Return ONLY valid JSON:
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
             <button key={m.id} onClick={() => { setPlatformMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
-              className="mono-font text-xs tracking-widest px-4 py-2 transition-all"
+              className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
               style={{ background: platformMode === m.id ? '#1A1814' : 'transparent', color: platformMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
               {m.label}
             </button>
@@ -2840,8 +2844,8 @@ Return ONLY valid JSON:
               : 'Build your representment case, fight chargebacks with evidence, and monitor your chargeback ratio against Visa and Mastercard network thresholds.'}
           </p>
           <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
-            <button onClick={() => setPlatformMode('fi')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
-            <button onClick={() => setPlatformMode('merchant')} className={'mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
+            <button onClick={() => setPlatformMode('fi')} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
+            <button onClick={() => setPlatformMode('merchant')} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
           </div>
         </div>
 
