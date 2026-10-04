@@ -4330,7 +4330,7 @@ Return ONLY valid JSON:
 
               {/* Filter / search bar */}
               <div className="mb-3 flex items-center gap-2 flex-wrap">
-                <div className="flex border border-stone-200 overflow-hidden" style={{ borderRadius: 0 }}>
+                <div className="flex border border-stone-200 overflow-x-auto" style={{ borderRadius: 0, WebkitOverflowScrolling: 'touch' }}>
                   {[
                     { id: 'all',         label: 'ALL' },
                     { id: 'in_progress', label: 'IN PROGRESS' },
@@ -4341,7 +4341,7 @@ Return ONLY valid JSON:
                     <button
                       key={tab.id}
                       onClick={() => setTrackerFilter(tab.id)}
-                      className={'mono-font text-[10px] tracking-widest px-3 py-1.5 transition-colors ' + (trackerFilter === tab.id ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-500 hover:bg-stone-100')}
+                      className={'mono-font text-[10px] tracking-widest px-3 py-1.5 transition-colors shrink-0 ' + (trackerFilter === tab.id ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-500 hover:bg-stone-100')}
                       title={tab.id === 'fundable' ? 'DFA grade A or B — cases eligible for dispute funding assessment' : undefined}
                     >{tab.label}</button>
                   ))}
@@ -4544,6 +4544,13 @@ Return ONLY valid JSON:
                                       {o.trackingRef && <> · {o.trackingRef}</>}
                                     </p>
                                   )}
+                                  {/* SAR flag — FI mode, fraud cases above threshold */}
+                                  {o.mode !== 'merchant' && (() => {
+                                    const amtNum = parseFloat((o.amount||'').replace(/[^0-9.]/g,''))
+                                    const isFraudLike = (o.classification||'').includes('FRAUD') || (o.reasonCode||'').match(/10\.[0-9]|4853|UA/)
+                                    if (!isFraudLike || !(amtNum >= settings.sarThreshold)) return null
+                                    return <p className="mono-font text-[10px] text-red-700 mt-0.5 font-bold">⚠ SAR REVIEW</p>
+                                  })()}
                                 </div>
                                 {/* DFA grade badge — FI only; merchant rows show winProb badge in reason cell */}
                                 {o.mode !== 'merchant' ? (() => {
@@ -4679,7 +4686,7 @@ Return ONLY valid JSON:
                             {case360Id === o.id && (
                               <div className="px-4 py-3 border-t border-stone-200" style={{ background: '#F5F1EA' }}>
                                 <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CASE 360 — {o.id}</div>
-                                <div className="grid gap-x-6 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+                                <div className="grid gap-x-6 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                                   {[
                                     ['MERCHANT',    o.merchant],
                                     ['AMOUNT',      o.amount],
@@ -5595,7 +5602,7 @@ function DfaView({ dfaQueue, setDfaQueue }) {
           </p>
 
           {/* Metrics grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
             {[
               { label:"PORTFOLIO VALUE",      value:`$${totalValue.toLocaleString()}`,                sub:`${activeScored.length} active receivables`                              },
               { label:"EXPECTED RECOVERY",    value:`$${Math.round(totalExpected).toLocaleString()}`, sub:`${Math.round(totalValue>0?totalExpected/totalValue*100:0)}% of face value` },
@@ -5704,10 +5711,10 @@ function DfaView({ dfaQueue, setDfaQueue }) {
                   return (
                     <div key={b.label} className="border border-stone-200 p-3" style={{ background: '#FAF7F1' }}>
                       <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{b.label}</div>
-                      <div className="display-font font-semibold text-stone-900 mb-0.5" style={{ fontSize: '18px', letterSpacing: '-0.02em' }}>
+                      <div className="display-font font-semibold text-stone-900 mb-0.5" style={{ fontSize: 'clamp(14px,4vw,18px)', letterSpacing: '-0.02em' }}>
                         ${Math.round(b.expected).toLocaleString()}
                       </div>
-                      <div className="mono-font text-[10px] text-stone-400 mb-2">{b.claims.length} claim{b.claims.length !== 1 ? 's' : ''} · ${Math.round(b.value).toLocaleString()} face</div>
+                      <div className="mono-font text-[10px] text-stone-400 mb-2">{b.claims.length} claim{b.claims.length !== 1 ? 's' : ''}<br/>${Math.round(b.value).toLocaleString()} face</div>
                       <div style={{ height: '4px', background: '#D4CCBC', borderRadius: '2px' }}>
                         <div style={{ height: '100%', width: `${barW}%`, background: '#064e3b', borderRadius: '2px', transition: 'width 0.4s' }} />
                       </div>
@@ -5746,8 +5753,8 @@ function DfaView({ dfaQueue, setDfaQueue }) {
           return (
             <div className="mt-2 mb-6">
               <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CONCENTRATION BY MERCHANT / SOURCE (TOP {rows.length})</div>
-              <div className="border border-stone-200 overflow-hidden">
-                <table className="w-full">
+              <div className="border border-stone-200 overflow-x-auto">
+                <table className="w-full" style={{ minWidth: '480px' }}>
                   <thead>
                     <tr style={{ background: '#EEE9E0' }}>
                       {['MERCHANT / SOURCE','CLAIMS','FACE VALUE','EXP. RECOVERY','SHARE'].map(h=>(
