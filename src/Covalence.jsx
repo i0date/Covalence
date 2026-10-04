@@ -245,7 +245,16 @@ const GLOBAL_CSS = `
   input[type=range] { accent-color:#1A1814; }
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
-  @media(max-width:767px) { .desktop-only { display:none !important; } }
+  @media(max-width:767px) {
+    .desktop-only     { display:none !important; }
+    /* nav scrollable on mobile */
+    .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; }
+    .cov-nav-inner button { flex-shrink:0; padding:14px 12px !important; }
+    /* home stats: 2-col on mobile */
+    .home-stats-grid  { grid-template-columns:repeat(2,1fr) !important; }
+    /* single-col fallback for fixed grids */
+    .mob-1col         { grid-template-columns:1fr !important; }
+  }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `
 
@@ -278,7 +287,7 @@ export default function Covalence() {
 
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
-          <div style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
+          <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
             <div style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0 }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
             </div>
@@ -380,7 +389,7 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
         </div>
       )}
 
-      <div className="mb-8" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
+      <div className="mb-8 home-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
         {stats.map(s => (
           <div key={s.label} className="border border-stone-300 px-5 py-5" style={{ background:'#FAF7F1' }}>
             <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.15em' }}>{s.label}</div>
@@ -418,7 +427,7 @@ function HomeView({ outcomes, settings, setActiveSection, platformMode }) {
                   background: o.status === 'won' ? '#064E3B' : o.status === 'lost' ? '#7F1D1D' : o.status === 'pending' ? '#E7E2D9' : '#92400E',
                   color: o.status === 'pending' ? '#4B4540' : '#F9FAFB',
                 }}>{o.status.toUpperCase()}</span>
-                <span className="mono-font text-stone-400" style={{ fontSize:'10px' }}>
+                <span className="mono-font text-stone-400 desktop-only" style={{ fontSize:'10px' }}>
                   {new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                 </span>
               </div>
@@ -4321,7 +4330,7 @@ Return ONLY valid JSON:
                               /* ── Edit mode ─────────────────────────────────── */
                               <div className="px-4 py-3 space-y-3" style={{ background: '#FDF9F3' }}>
                                 <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">EDITING {o.id}</div>
-                                <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                                <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                   <div>
                                     <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">MERCHANT</label>
                                     <input
@@ -4640,7 +4649,7 @@ Return ONLY valid JSON:
 
               {/* CBR inputs */}
               <div className="border border-stone-300 p-4 mb-6" style={{ background: '#EEE9E0' }}>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="input-label">DISPUTES THIS MONTH</label>
                     <input type="number" value={mchCbDisputes !== '' ? mchCbDisputes : String(autoMchCount)} onChange={e => setMchCbDisputes(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
