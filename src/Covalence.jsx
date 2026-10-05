@@ -1047,8 +1047,7 @@ Return ONLY valid JSON:
       {/* ── Masthead ─────────────────────────────────────────────────────────── */}
       <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-          <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 001 — TRIAGE</div>
-          <div className="mono-font text-xs tracking-widest text-stone-600 sm:hidden">TRIAGE</div>
+          <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 001 — TRIAGE</div>
           <div className="mono-font text-xs tracking-widest text-stone-600">
             {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
           </div>
@@ -2062,6 +2061,11 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, platformMode,
   // ── 3DS / authentication ──────────────────────────────────────────────────
   const [threeDSStatus, setThreeDSStatus]                   = useState('unknown') // 'not_attempted' | 'attempted_failed' | 'attempted_passed' | 'unknown'
 
+  // ── FI DFA signals — captured at intake, passed to DFA when scoring ───────
+  const [fiAvsMismatch, setFiAvsMismatch]                   = useState(false)
+  const [fiIsVFMP, setFiIsVFMP]                             = useState(false)
+  const [fiPriorClaims, setFiPriorClaims]                   = useState(0)
+
   // ── Pre-arb response drafter ──────────────────────────────────────────────
   const [preArbDraft, setPreArbDraft]                       = useState(null)
   const [preArbLoading, setPreArbLoading]                   = useState(false)
@@ -2349,6 +2353,9 @@ Return ONLY a valid JSON object:
         threeDSStatus: threeDSStatus,
         confidence: parsed.confidence,
         category: parsed.category,
+        avsMismatch: fiAvsMismatch,
+        isVFMP: fiIsVFMP,
+        priorClaims: fiPriorClaims,
       }, ...prev])
     } catch (e) {
       setError(`Analysis failed: ${e.message}`)
@@ -2934,7 +2941,7 @@ Return ONLY valid JSON:
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600 hidden sm:block">ISSUE Nº 002 — THE DISPUTE DESK</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 002 — THE DISPUTE DESK</div>
             <div className="mono-font text-xs tracking-widest text-stone-600">
               {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
             </div>
@@ -3123,6 +3130,43 @@ Return ONLY valid JSON:
                       SAR deadline: {fiSarDeadline} · {fiSarDaysLeft !== null ? `${fiSarDaysLeft}d remaining` : ''}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* DFA Signal Capture */}
+              <div className="border border-stone-300 p-4" style={{ background:'#F0EDE6' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">DFA SIGNALS <span className="normal-case tracking-normal font-normal opacity-60">— improves funding grade accuracy</span></div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">AVS MISMATCH</label>
+                    <div className="flex gap-0">
+                      {[{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
+                        <button key={l} onClick={() => setFiAvsMismatch(v)}
+                          className="mono-font text-[10px] tracking-widest px-3 py-1.5 transition-all"
+                          style={{ background: fiAvsMismatch===v?'#1A1814':'transparent', color: fiAvsMismatch===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">VFMP ENROLLED</label>
+                    <div className="flex gap-0">
+                      {[{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
+                        <button key={l} onClick={() => setFiIsVFMP(v)}
+                          className="mono-font text-[10px] tracking-widest px-3 py-1.5 transition-all"
+                          style={{ background: fiIsVFMP===v?'#1A1814':'transparent', color: fiIsVFMP===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">PRIOR CLAIMS ON ACCOUNT</label>
+                    <input type="number" min="0" max="99" value={fiPriorClaims}
+                      onChange={e => setFiPriorClaims(parseInt(e.target.value)||0)}
+                      className="cov-input mono-font" style={{ fontSize:'13px', maxWidth:'80px' }} />
+                  </div>
                 </div>
               </div>
 
@@ -4409,7 +4453,7 @@ Return ONLY valid JSON:
               {/* Case table */}
               <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
                 <div className="overflow-x-auto">
-                  <div style={{ minWidth: '700px' }}>
+                  <div style={{ minWidth: '820px' }}>
                     {/* Header */}
                     {/* ── Deadline dashboard ── */}
                     {(() => {
@@ -4685,11 +4729,11 @@ Return ONLY valid JSON:
                                         code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
                                         filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
                                         windowDays: 45,
-                                        avsMismatch: false, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
+                                        avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
                                         deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
-                                        pinVerified: false, isVFMP: false,
+                                        pinVerified: false, isVFMP: !!o.isVFMP,
                                         strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
-                                        merchantCBR: 0.5, priorClaims: 0,
+                                        merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
                                         note: `From Dispute Desk: ${o.merchant || ''}`,
                                         source: 'desk',
                                       }])}
