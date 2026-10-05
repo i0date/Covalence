@@ -2062,9 +2062,10 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, platformMode,
   const [threeDSStatus, setThreeDSStatus]                   = useState('unknown') // 'not_attempted' | 'attempted_failed' | 'attempted_passed' | 'unknown'
 
   // ── FI DFA signals — captured at intake, passed to DFA when scoring ───────
-  const [fiAvsMismatch, setFiAvsMismatch]                   = useState(false)
-  const [fiIsVFMP, setFiIsVFMP]                             = useState(false)
-  const [fiPriorClaims, setFiPriorClaims]                   = useState(0)
+  // null = unknown (agent doesn't have info), false = no, true = yes
+  const [fiAvsMismatch, setFiAvsMismatch]                   = useState(null)
+  const [fiIsVFMP, setFiIsVFMP]                             = useState(null)
+  const [fiPriorClaims, setFiPriorClaims]                   = useState('')
 
   // ── Pre-arb response drafter ──────────────────────────────────────────────
   const [preArbDraft, setPreArbDraft]                       = useState(null)
@@ -2353,9 +2354,9 @@ Return ONLY a valid JSON object:
         threeDSStatus: threeDSStatus,
         confidence: parsed.confidence,
         category: parsed.category,
-        avsMismatch: fiAvsMismatch,
-        isVFMP: fiIsVFMP,
-        priorClaims: fiPriorClaims,
+        avsMismatch: fiAvsMismatch === true ? true : fiAvsMismatch === false ? false : null,
+        isVFMP: fiIsVFMP === true ? true : fiIsVFMP === false ? false : null,
+        priorClaims: fiPriorClaims !== '' ? parseInt(fiPriorClaims) || 0 : null,
       }, ...prev])
     } catch (e) {
       setError(`Analysis failed: ${e.message}`)
@@ -3140,7 +3141,7 @@ Return ONLY valid JSON:
                   <div>
                     <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">AVS MISMATCH</label>
                     <div className="flex gap-0">
-                      {[{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
+                      {[{v:null,l:'—'},{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
                         <button key={l} onClick={() => setFiAvsMismatch(v)}
                           className="mono-font text-[10px] tracking-widest px-3 py-1.5 transition-all"
                           style={{ background: fiAvsMismatch===v?'#1A1814':'transparent', color: fiAvsMismatch===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
@@ -3148,11 +3149,12 @@ Return ONLY valid JSON:
                         </button>
                       ))}
                     </div>
+                    {fiAvsMismatch===null && <div className="mono-font text-[9px] text-stone-400 mt-1">unknown — won't affect grade</div>}
                   </div>
                   <div>
                     <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">VFMP ENROLLED</label>
                     <div className="flex gap-0">
-                      {[{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
+                      {[{v:null,l:'—'},{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
                         <button key={l} onClick={() => setFiIsVFMP(v)}
                           className="mono-font text-[10px] tracking-widest px-3 py-1.5 transition-all"
                           style={{ background: fiIsVFMP===v?'#1A1814':'transparent', color: fiIsVFMP===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
@@ -3160,12 +3162,14 @@ Return ONLY valid JSON:
                         </button>
                       ))}
                     </div>
+                    {fiIsVFMP===null && <div className="mono-font text-[9px] text-stone-400 mt-1">unknown — won't affect grade</div>}
                   </div>
                   <div>
                     <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">PRIOR CLAIMS ON ACCOUNT</label>
-                    <input type="number" min="0" max="99" value={fiPriorClaims}
-                      onChange={e => setFiPriorClaims(parseInt(e.target.value)||0)}
+                    <input type="number" min="0" max="99" value={fiPriorClaims} placeholder="—"
+                      onChange={e => setFiPriorClaims(e.target.value)}
                       className="cov-input mono-font" style={{ fontSize:'13px', maxWidth:'80px' }} />
+                    <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank if unknown</div>
                   </div>
                 </div>
               </div>
