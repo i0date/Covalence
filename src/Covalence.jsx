@@ -800,11 +800,17 @@ Return ONLY valid JSON, no markdown:
 }`
 
     try {
-      const response = await fetch('/api/triage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1400, messages: [{ role: 'user', content: prompt }] }),
-      })
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      let response
+      try {
+        response = await fetch('/api/triage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1400, messages: [{ role: 'user', content: prompt }] }),
+          signal: controller.signal,
+        })
+      } finally { clearTimeout(timeoutId) }
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
       const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()

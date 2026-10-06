@@ -12,15 +12,25 @@ module.exports = async function handler(req, res) {
 
   const { model, max_tokens, messages } = req.body
 
-  const upstream = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model, max_tokens, messages }),
-  })
+  const ctrl = new AbortController()
+  const tid = setTimeout(() => ctrl.abort(), 25000)
+  let upstream
+  try {
+    upstream = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model, max_tokens, messages }),
+      signal: ctrl.signal,
+    })
+  } catch (e) {
+    clearTimeout(tid)
+    return res.status(504).json({ error: 'Triage API timed out — please try again' })
+  }
+  clearTimeout(tid)
 
   const data = await upstream.json()
   if (!upstream.ok) return res.status(upstream.status).json({ error: data.error?.message ?? 'Anthropic API error' })
