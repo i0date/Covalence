@@ -1363,7 +1363,7 @@ Return ONLY valid JSON:
                   <span className="mono-font text-xs text-stone-400 leading-relaxed">{regSubtext}</span>
                 </div>
               )}
-              {(regFramework === 'PROVIDER' || accountType === 'ach_eft') && onGoToDuo && (
+              {!isCardBased && accountType && onGoToDuo && (
                 <div className="flex items-center justify-between px-4 py-3" style={{ background:'#ECFDF5', border:'1px solid #6EE7B7' }}>
                   <div>
                     <div className="mono-font text-[9px] tracking-widest text-emerald-900 mb-0.5">CROSS-INSTITUTIONAL CASE</div>
@@ -1758,7 +1758,7 @@ Return ONLY valid JSON:
                 )
               })()}
 
-              {(regFramework === 'PROVIDER' || accountType === 'ach_eft') && onGoToDuo && (
+              {!isCardBased && accountType && onGoToDuo && (
                 <button onClick={onGoToDuo}
                   style={{ width:'100%', padding:'20px 24px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
                   <div>
