@@ -537,7 +537,9 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   const [error, setError]       = useState(null)
   const [exportCopied, setExportCopied] = useState(false)
   const [handedOff, setHandedOff]       = useState(false)
-  const [triageSearch, setTriageSearch] = useState('')
+  const [triageSearch,    setTriageSearch]    = useState('')
+  const [triageEditId,    setTriageEditId]    = useState(null)
+  const [triageEditDraft, setTriageEditDraft] = useState({})
 
   // ── Platform mode: 'fi' = Financial Institution, 'ce' = Crypto Exchange ──────
   const [platformMode, setPlatformMode] = useState('fi')
@@ -2015,9 +2017,9 @@ Return ONLY valid JSON:
           <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
             <div className="overflow-x-auto">
               <div style={{ minWidth: '600px' }}>
-                <div className="grid px-4 py-2 border-b border-stone-200" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr' }}>
-                  {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'VERDICT / OUTCOME'].map(h => (
-                    <span key={h} className="mono-font text-xs tracking-widest text-stone-400">{h}</span>
+                <div className="grid px-4 py-2 border-b border-stone-200" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr 80px' }}>
+                  {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'VERDICT / OUTCOME', ''].map((h, i) => (
+                    <span key={i} className="mono-font text-xs tracking-widest text-stone-400">{h}</span>
                   ))}
                 </div>
                 <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
@@ -2031,29 +2033,69 @@ Return ONLY valid JSON:
                   }).map(o => {
                     const vc = classConfig[o.verdict]
                     if (!vc) return null
+                    const isEditing = triageEditId === o.id
                     return (
-                      <div key={o.id} className="grid px-4 py-3 border-b border-stone-100 items-center" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr' }}>
-                        <span className="mono-font text-xs text-stone-400">{o.id}</span>
-                        <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                        <span className="display-font text-sm text-stone-700 truncate pr-3">{o.merchant}</span>
-                        <span className="mono-font text-xs text-stone-600">{o.amount}</span>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
-                          {o.outcome === 'pending' ? (
-                            <div className="flex gap-1 flex-wrap">
-                              <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
-                              <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
-                              <button onClick={() => reloadCase(o)} className="mono-font text-xs px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                      <div key={o.id} className="border-b border-stone-100">
+                        {isEditing ? (
+                          <div className="px-4 py-3 bg-stone-50">
+                            <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                              <div>
+                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">MERCHANT / PAYEE</div>
+                                <input className="cov-input mono-font w-full" style={{ fontSize:'12px' }}
+                                  value={triageEditDraft.merchant || ''}
+                                  onChange={e => setTriageEditDraft(d => ({ ...d, merchant: e.target.value }))} />
+                              </div>
+                              <div>
+                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">AMOUNT</div>
+                                <input className="cov-input mono-font w-full" style={{ fontSize:'12px' }}
+                                  value={triageEditDraft.amount || ''}
+                                  onChange={e => setTriageEditDraft(d => ({ ...d, amount: e.target.value }))} />
+                              </div>
                             </div>
-                          ) : (
-                            <div className="flex gap-1 items-center flex-wrap">
-                              <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
-                                {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
-                              </span>
-                              <button onClick={() => reloadCase(o)} className="mono-font text-xs px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                            <div className="flex gap-2">
+                              <button onClick={() => {
+                                setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, ...triageEditDraft } : x))
+                                setTriageEditId(null)
+                              }} className="mono-font text-[10px] px-2 py-1 bg-stone-800 text-stone-100" style={{ border:'none', cursor:'pointer' }}>SAVE</button>
+                              <button onClick={() => setTriageEditId(null)} className="mono-font text-[10px] px-2 py-1 border border-stone-300 text-stone-500" style={{ background:'none', cursor:'pointer' }}>CANCEL</button>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr 80px' }}>
+                            <span className="mono-font text-xs text-stone-400">{o.id}</span>
+                            <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            <span className="display-font text-sm text-stone-700 truncate pr-3">{o.merchant}</span>
+                            <span className="mono-font text-xs text-stone-600">{o.amount}</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
+                              {o.outcome === 'pending' ? (
+                                <div className="flex gap-1 flex-wrap">
+                                  <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
+                                  <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
+                                  <button onClick={() => reloadCase(o)} className="mono-font text-xs px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                                </div>
+                              ) : (
+                                <div className="flex gap-1 items-center flex-wrap">
+                                  <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
+                                    {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
+                                  </span>
+                                  <button onClick={() => reloadCase(o)} className="mono-font text-xs px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              {onSendToDuo && (
+                                <button onClick={() => onSendToDuo({ ...o, source:'triage' })}
+                                  className="mono-font text-[10px] px-2 py-0.5"
+                                  style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                  title="Open in Duo Mode">→ DUO</button>
+                              )}
+                              <button onClick={() => { setTriageEditId(o.id); setTriageEditDraft({ merchant: o.merchant, amount: o.amount }) }}
+                                className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors"
+                                style={{ background:'none', cursor:'pointer' }} title="Edit case details">✎</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
