@@ -324,7 +324,7 @@ export default function Covalence() {
           <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode} />
         )}
         {activeSection === 'triage'   && (
-          <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} />
+          <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
         )}
         {activeSection === 'desk'     && (
           <DeskView
@@ -493,7 +493,7 @@ const TX_TYPES = {
 const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
 const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
 
-function TriageView({ onHandoff, onGoToDuo }) {
+function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
@@ -1758,13 +1758,22 @@ Return ONLY valid JSON:
                 )
               })()}
 
-              {!isCardBased && accountType && onGoToDuo && (
-                <button onClick={onGoToDuo}
+              {!isCardBased && accountType && (onGoToDuo || onSendToDuo) && (
+                <button onClick={() => {
+                  const claim = { source:'triage', accountType, regFramework, routing_label: result?.routing_label, routing: result?.routing, classification: result?.classification, risk_level: result?.risk_level }
+                  onSendToDuo ? onSendToDuo(claim) : onGoToDuo()
+                }}
                   style={{ width:'100%', padding:'20px 24px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
                   <div>
-                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>CROSS-INSTITUTIONAL CASE DETECTED</div>
+                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>
+                      {accountType === 'crypto' ? 'CRYPTO / EXCHANGE CASE DETECTED' : 'CROSS-INSTITUTIONAL CASE DETECTED'}
+                    </div>
                     <div className="display-font font-bold" style={{ fontSize:'18px', letterSpacing:'-0.01em' }}>Coordinate in Duo Mode →</div>
-                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>Share this case with the receiving institution · Build a shared record · Work toward recovery</div>
+                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>
+                      {accountType === 'crypto'
+                        ? 'Contact the exchange directly · Share claim details · Coordinate on asset recovery or account action'
+                        : 'Share this case with the receiving institution · Build a shared record · Work toward recovery'}
+                    </div>
                   </div>
                 </button>
               )}
@@ -6506,8 +6515,20 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       {duoHandoff && (
         <div className="flex gap-3 border border-emerald-700 bg-emerald-50 p-4 mb-6" style={{ maxWidth:'460px' }}>
           <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-          <div className="mono-font text-[10px] tracking-widest text-emerald-900">
-            CASE PRE-FILLED FROM DESK{duoHandoff.id ? ` — ${duoHandoff.id}` : ''}{duoHandoff.merchant ? ` · ${duoHandoff.merchant}` : ''}
+          <div>
+            <div className="mono-font text-[10px] tracking-widest text-emerald-900">
+              {duoHandoff.source === 'triage'
+                ? (duoHandoff.accountType === 'crypto' ? 'CRYPTO / EXCHANGE CASE — FROM TRIAGE' : 'CROSS-INSTITUTIONAL CASE — FROM TRIAGE')
+                : `CASE PRE-FILLED FROM DESK${duoHandoff.id ? ` — ${duoHandoff.id}` : ''}${duoHandoff.merchant ? ` · ${duoHandoff.merchant}` : ''}`}
+            </div>
+            {duoHandoff.source === 'triage' && duoHandoff.accountType === 'crypto' && (
+              <div className="mono-font text-[9px] text-emerald-700 mt-1 leading-relaxed">
+                The counterparty in this session is likely an exchange or digital asset platform. Enter their name below — many exchanges have dedicated fraud/compliance contacts.
+              </div>
+            )}
+            {duoHandoff.routing_label && (
+              <div className="mono-font text-[9px] text-emerald-700 mt-1">ROUTING: {duoHandoff.routing_label}</div>
+            )}
           </div>
         </div>
       )}
