@@ -387,7 +387,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
           The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
         </h1>
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-          Three tools, one workflow — triage incoming disputes, manage the desk, and score portfolios for funding.
+          Four tools, one workflow — triage incoming disputes, manage the desk, score portfolios for funding, and coordinate cross-institutional cases in real time.
         </p>
       </div>
 
@@ -428,7 +428,40 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         <button onClick={() => setActiveSection('dfa')} className="cov-btn" style={{ background:'#2D3748' }}>
           <BarChart2 style={{ width:'16px', height:'16px' }} />SCORE IN DFA
         </button>
+        <button onClick={() => setActiveSection('duo')} className="cov-btn" style={{ background:'#064E3B' }}>
+          <Send style={{ width:'16px', height:'16px' }} />004 DUO
+        </button>
       </div>
+
+      {/* ── Duo Mode callout ── */}
+      {(() => {
+        const duoSessions = (() => { try { return JSON.parse(localStorage.getItem('duo_my_sessions') || '[]') } catch { return [] } })()
+        const openDuo = duoSessions.filter(s => s.lastStatus !== 'closed')
+        return (
+          <div className="mb-10" style={{ background:'#1A1814', padding:'24px 28px', display:'flex', flexWrap:'wrap', gap:'20px', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={{ flex:1, minWidth:'200px' }}>
+              <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.15em' }}>ISSUE Nº 004 — DUO</div>
+              <div className="display-font font-bold text-white leading-tight" style={{ fontSize:'clamp(16px,2vw,22px)', letterSpacing:'-0.01em', marginBottom:'6px' }}>
+                Cross-institutional fraud coordination.
+              </div>
+              <p className="display-font text-stone-400" style={{ fontSize:'13px', lineHeight:1.5, maxWidth:'480px' }}>
+                A live coordination session for two institutions working the same case — issuer and acquirer, sending and receiving bank. Both sides see the same claim and build a shared record toward resolution.
+              </p>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'10px', flexShrink:0 }}>
+              {openDuo.length > 0 && (
+                <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em' }}>
+                  {openDuo.length} OPEN SESSION{openDuo.length > 1 ? 'S' : ''}
+                </div>
+              )}
+              <button onClick={() => setActiveSection('duo')}
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                {openDuo.length > 0 ? 'VIEW SESSIONS →' : 'CREATE SESSION →'}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {active.length > 0 ? (
         <div>
