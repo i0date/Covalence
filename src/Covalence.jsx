@@ -4751,7 +4751,7 @@ Return ONLY valid JSON:
                                       title="Send to DFA for funding assessment"
                                     >→DFA</button>
                                   )}
-                                  {o.mode !== 'merchant' && onSendToDuo && (
+                                  {onSendToDuo && (
                                     <button
                                       onClick={() => onSendToDuo(o)}
                                       className="mono-font text-[10px] px-1.5 py-0.5 border transition-colors"
@@ -6415,7 +6415,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <DuoMasthead />
       <p className="display-font text-stone-600 mb-8" style={{ fontSize:'clamp(14px,1.6vw,16px)', lineHeight:1.7, maxWidth:'600px' }}>
-        Use Duo Mode when a fraud case spans two institutions — a P2P transfer, an ACH recall, an account takeover with fund movement. Create a session and share the six-character code with your counterpart at the other institution. Both sides see the same claim. Both sides contribute to a shared thread. No email chains, no version drift.
+        Use Duo Mode when a fraud case crosses an institutional boundary — a wire transfer, an e-transfer, an ACH recall, an account takeover with fund movement elsewhere. Speed matters: the faster both institutions share the same facts, the better the chance of recovery. Create a session, share the six-character code with your counterpart — issuer and acquirer, sending and receiving bank — and work the case together. Same claim, shared thread, no email chains.
       </p>
       {!configured && (
         <div className="flex gap-3 border border-amber-700 bg-amber-50 p-4 mb-8" style={{ maxWidth:'560px' }}>
