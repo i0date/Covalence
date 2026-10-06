@@ -25,14 +25,24 @@ class ErrorBoundary extends React.Component {
 
 // ─── Shared compliance defaults ───────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
+  // Institution profile
+  duoInstitutionName:   '',
+  institutionType:      '',          // bank | credit_union | fintech | mse | exchange
+  jurisdiction:         '',          // us | ca | uk | other
+  regulatoryRegime:     '',          // reg_e | fcac | fca | other
+  // SAR/STR thresholds by payment type
+  sarThreshold:         5000,        // card / general
+  sarThresholdACH:      5000,
+  sarThresholdP2P:      5000,
+  sarThresholdCrypto:   10000,
+  // Filing windows
   smallDollarThreshold: 50,
-  sarThreshold:         5000,
   fraudWindowDays:      120,
   consumerWindowDays:   120,
   absoluteCapDays:      540,
+  // Operational
   pcMilestones:         [10, 45, 90],
   trackerWindowDays:    60,
-  duoInstitutionName:   '',
 }
 
 // ─── Business-day helpers ─────────────────────────────────────────────────────
@@ -716,7 +726,21 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     const accountTypeLabel = { debit: 'Debit Card', credit: 'Credit Card', p2p: 'P2P / e-Transfer', ach_eft: 'ACH / EFT', bnpl: 'BNPL (Buy Now Pay Later)', crypto: 'Crypto / Digital Asset' }[accountType] ?? 'Not specified'
     const daysNote = daysSinceTransaction !== null ? `${daysSinceTransaction} days ago (transaction date: ${transactionDate})` : 'Unknown'
 
-    const prompt = `You are an expert fraud and disputes triage analyst at a financial institution. Classify this incoming dispute claim. You serve credit unions, banks, fintechs, and lenders.
+    const instType = { bank:'Bank', credit_union:'Credit Union', fintech:'Fintech / Neo-bank', mse:'Money Service Business', exchange:'Crypto Exchange' }[settings.institutionType] || 'Financial Institution'
+    const jur = { us:'United States (FinCEN / Reg E)', ca:'Canada (FINTRAC / FCAC)', uk:'United Kingdom (FCA)', other:'Other jurisdiction' }[settings.jurisdiction] || 'jurisdiction not specified'
+    const regime = { reg_e:'Reg E (EFTA)', fcac:'FCAC (Canada)', fca:'FCA (UK)', other:'mixed / other' }[settings.regulatoryRegime] || 'not specified'
+    const sarByType = accountType === 'ach_eft' ? (settings.sarThresholdACH || 5000)
+                    : accountType === 'p2p'     ? (settings.sarThresholdP2P || 5000)
+                    : accountType === 'crypto'  ? (settings.sarThresholdCrypto || 10000)
+                    : (settings.sarThreshold || 5000)
+    const prompt = `You are an expert fraud and disputes triage analyst at a ${instType}. Classify this incoming dispute claim.
+
+INSTITUTION CONTEXT:
+- Institution type: ${instType}
+- Jurisdiction: ${jur}
+- Consumer protection regime: ${regime}
+- SAR/STR threshold for this payment type: $${sarByType.toLocaleString()}
+- Small-dollar write-off threshold: $${settings.smallDollarThreshold || 50}
 
 FOUR VERDICT DEFINITIONS:
 - TRUE_FRAUD: A third party used the account/card without the cardholder's knowledge or consent. Genuine victim of unauthorized access or card compromise.
@@ -1638,6 +1662,18 @@ Return ONLY valid JSON:
 
           {result && cfg && (
             <div className="space-y-4">
+
+              {/* ── Analysis complete divider ── */}
+              <div style={{ display:'flex', alignItems:'center', gap:'16px', padding:'14px 20px', background:'#1A1814', marginBottom:'4px' }}>
+                <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#34D399', flexShrink:0 }} />
+                <div>
+                  <div className="mono-font text-[9px] tracking-[0.2em] text-stone-400">ANALYSIS COMPLETE</div>
+                  <div className="mono-font text-[11px] tracking-widest text-stone-200">{result.verdict?.replace(/_/g,' ')} · {result.risk_level || ''}</div>
+                </div>
+                <button onClick={() => { setResult(null); setError(null); window.scrollTo({ top:0, behavior:'smooth' }) }}
+                  className="mono-font ml-auto text-[9px] tracking-widest text-stone-500 hover:text-stone-300 transition-colors"
+                  style={{ background:'none', border:'none', cursor:'pointer' }}>↑ BACK TO FORM</button>
+              </div>
 
               {!isCE && regLabel && (
                 <div className="flex items-center gap-2">
@@ -6418,6 +6454,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [copied,        setCopied]       = useState(false)
   const [lastSync,      setLastSync]     = useState(null)
   const [notifySent,    setNotifySent]   = useState(false)
+  const [recovering,    setRecovering]   = useState(false)
+  const [recoverQuery,  setRecoverQuery] = useState('')
+  const [recoverResults,setRecoverResults] = useState(null)
+  const [recoverLoading,setRecoverLoading] = useState(false)
   const pollRef   = useRef(null)
   const threadRef = useRef(null)
   const configured = !!(SUPA_URL && SUPA_KEY)
@@ -6447,6 +6487,20 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const updateLocalStatus = (id, status) => {
     const next = mySessions.map(s => s.id === id ? { ...s, lastStatus: status } : s)
     setMySessions(next); saveMyDuoSessions(next)
+  }
+
+  const recoverSessions = async () => {
+    if (!recoverQuery.trim() || !configured) return
+    setRecoverLoading(true); setRecoverResults(null)
+    try {
+      const q = encodeURIComponent(recoverQuery.trim())
+      const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?or=(institution_a.ilike.*${q}*,institution_b.ilike.*${q}*)&order=created_at.desc&limit=10`, {
+        headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
+      })
+      const data = await r.json()
+      setRecoverResults(Array.isArray(data) ? data : [])
+    } catch { setRecoverResults([]) }
+    setRecoverLoading(false)
   }
 
   const openSession = async (saved) => {
@@ -6589,6 +6643,51 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
           {error && <div className="mono-font text-[10px] tracking-wide text-red-700 border border-red-200 bg-red-50 p-3 mt-3" style={{ maxWidth:'480px' }}>{error}</div>}
           {loading && <div className="mono-font text-[10px] tracking-widest text-stone-400 mt-3">LOADING…</div>}
+        </div>
+      )}
+
+      {/* ── Session recovery ── */}
+      {configured && (
+        <div style={{ marginTop:'40px', paddingTop:'32px', borderTop:'1px solid #E8E3DA', maxWidth:'560px' }}>
+          <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">RECOVER SESSIONS</div>
+          <p className="display-font text-stone-500 text-[13px] mb-4">Switched computers or cleared your browser? Find sessions by institution name.</p>
+          <div style={{ display:'flex', gap:'8px' }}>
+            <input className="cov-input mono-font flex-1" style={{ fontSize:'13px' }}
+              placeholder="Enter your institution name…"
+              value={recoverQuery} onChange={e => setRecoverQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && recoverSessions()} />
+            <button onClick={recoverSessions} disabled={recoverLoading}
+              className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
+              {recoverLoading ? '…' : 'SEARCH'}
+            </button>
+          </div>
+          {recoverResults !== null && (
+            <div className="mt-3">
+              {recoverResults.length === 0
+                ? <div className="mono-font text-[10px] tracking-widest text-stone-400 mt-2">No sessions found.</div>
+                : <div style={{ display:'grid', gap:'2px' }}>
+                    {recoverResults.map(s => {
+                      const st = DUO_STATUS[s.status || 'active'] || DUO_STATUS.active
+                      const already = mySessions.some(x => x.id === s.id)
+                      return (
+                        <div key={s.id} style={{ padding:'12px 16px', background:'#FFFFFF', border:'1px solid #D4CCBC', display:'flex', alignItems:'center', gap:'16px' }}>
+                          <div className="mono-font font-bold tracking-widest text-stone-900" style={{ fontSize:'14px', minWidth:'52px' }}>{s.id}</div>
+                          <div className="display-font text-stone-600 text-[13px] flex-1">{s.institution_a} · {s.institution_b}</div>
+                          <div className="mono-font text-[9px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg }}>{st.label}</div>
+                          <button onClick={() => {
+                            const entry = { id: s.id, myInstitution: s.institution_a, lastStatus: s.status }
+                            if (!already) { const next = [...mySessions, entry]; setMySessions(next); saveMyDuoSessions(next) }
+                            openSession(entry)
+                          }} className="mono-font shrink-0" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                            {already ? 'OPEN →' : 'RECOVER →'}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+              }
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -6788,44 +6887,82 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function SettingsView({ settings, setSettings }) {
   const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }))
-  const FIELDS = [
-    { key:'smallDollarThreshold', label:'Small-Dollar Write-Off Threshold ($)' },
-    { key:'sarThreshold',         label:'SAR Flag Threshold ($)' },
-    { key:'fraudWindowDays',      label:'Fraud Filing Window (days)' },
-    { key:'consumerWindowDays',   label:'Consumer Filing Window (days)' },
-    { key:'absoluteCapDays',      label:'Absolute Filing Cap (days)' },
-    { key:'trackerWindowDays',    label:'Tracker Window (days)' },
-  ]
+  const Section = ({ label }) => (
+    <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'20px', marginTop:'4px' }}>
+      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-5">{label}</div>
+    </div>
+  )
+  const Select = ({ label, field, options, hint }) => (
+    <div>
+      <label className="cov-label">{label}</label>
+      <select value={settings[field] || ''} onChange={e => set(field, e.target.value)}
+        className="cov-input mono-font" style={{ fontSize:'13px', maxWidth:'320px', cursor:'pointer' }}>
+        <option value="">— Select —</option>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+      {hint && <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">{hint}</div>}
+    </div>
+  )
+  const Num = ({ label, field, hint }) => (
+    <div>
+      <label className="cov-label">{label}</label>
+      <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]}
+        onChange={e => set(field, Number(e.target.value))}
+        className="cov-input mono-font" style={{ fontSize:'14px', maxWidth:'220px' }} />
+      {hint && <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">{hint}</div>}
+    </div>
+  )
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
+      <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em' }}>
           Settings
         </h1>
         <p className="display-font text-stone-600 mt-3" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.5 }}>
-          Compliance thresholds and operational defaults applied across all tools.
+          Institution profile, compliance thresholds, and operational defaults — applied across all tools and fed into the AI triage engine.
         </p>
       </div>
-      <div style={{ maxWidth:'480px', display:'grid', gap:'24px' }}>
+      <div style={{ maxWidth:'500px', display:'grid', gap:'22px' }}>
+
+        {/* ── Institution Profile ── */}
+        <Section label="INSTITUTION PROFILE" />
         <div>
-          <label className="cov-label">DUO — YOUR INSTITUTION NAME</label>
+          <label className="cov-label">INSTITUTION NAME</label>
           <input type="text" value={settings.duoInstitutionName || ''}
             onChange={e => set('duoInstitutionName', e.target.value)}
             placeholder="First Community Credit Union"
             className="cov-input mono-font" style={{ fontSize:'14px' }} />
-          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Pre-fills your institution name when creating or joining Duo sessions.</div>
+          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Used in Duo/Trio sessions and AI triage context.</div>
         </div>
-        <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'16px' }}>
-          <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">COMPLIANCE THRESHOLDS</div>
-        </div>
-        {FIELDS.map(({ key, label }) => (
-          <div key={key}>
-            <label className="cov-label">{label}</label>
-            <input type="number" value={settings[key]}
-              onChange={e => set(key, Number(e.target.value))}
-              className="cov-input mono-font" style={{ fontSize:'14px', maxWidth:'320px' }} />
-          </div>
-        ))}
+        <Select label="INSTITUTION TYPE" field="institutionType" options={[
+          ['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],
+          ['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],
+        ]} hint="Informs AI analysis — credit unions have different chargeback obligations than banks." />
+        <Select label="JURISDICTION" field="jurisdiction" options={[
+          ['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other'],
+        ]} hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules." />
+        <Select label="CONSUMER PROTECTION REGIME" field="regulatoryRegime" options={[
+          ['reg_e','Reg E (US — EFTA)'],['fcac','FCAC (Canada)'],['fca','FCA (UK)'],['other','Other / Mixed'],
+        ]} hint="Used to calibrate filing windows and dispute eligibility rules in Triage." />
+
+        {/* ── SAR / STR Thresholds ── */}
+        <Section label="SAR / STR THRESHOLDS BY PAYMENT TYPE" />
+        <Num label="CARD / GENERAL ($)" field="sarThreshold" hint="Applies to debit and credit card fraud cases." />
+        <Num label="ACH / EFT ($)" field="sarThresholdACH" hint="Applies to ACH / EFT / bank transfer fraud." />
+        <Num label="P2P / E-TRANSFER ($)" field="sarThresholdP2P" hint="Applies to Zelle, Interac e-Transfer, wire fraud." />
+        <Num label="CRYPTO / DIGITAL ASSET ($)" field="sarThresholdCrypto" hint="Higher default reflects FinCEN/FINTRAC guidance for virtual asset MSBs." />
+
+        {/* ── Filing Windows ── */}
+        <Section label="FILING WINDOWS" />
+        <Num label="SMALL-DOLLAR WRITE-OFF THRESHOLD ($)" field="smallDollarThreshold" hint="Cases below this amount may be courtesy-credited directly." />
+        <Num label="FRAUD FILING WINDOW (days)" field="fraudWindowDays" />
+        <Num label="CONSUMER DISPUTE WINDOW (days)" field="consumerWindowDays" />
+        <Num label="ABSOLUTE CAP (days)" field="absoluteCapDays" />
+
+        {/* ── Operational ── */}
+        <Section label="OPERATIONAL DEFAULTS" />
+        <Num label="TRACKER WINDOW (days)" field="trackerWindowDays" />
+
         <div style={{ display:'flex', gap:'12px', paddingTop:'8px' }}>
           <button onClick={() => setSettings({ ...DEFAULT_SETTINGS })}
             className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', border:'1px solid #A09585', color:'#6B5F4D', background:'transparent', cursor:'pointer' }}>
