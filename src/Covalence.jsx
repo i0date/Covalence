@@ -283,6 +283,7 @@ export default function Covalence() {
     { id:'desk',     label:'002  DISPUTE DESK' },
     { id:'dfa',      label:'003  DFA' },
     { id:'settings', label:'SETTINGS' },
+    { id:'duo',      label:'004  DUO' },
   ]
 
   return (
@@ -337,6 +338,9 @@ export default function Covalence() {
         )}
         {activeSection === 'settings' && (
           <SettingsView settings={settings} setSettings={setSettings} />
+        )}
+        {activeSection === 'duo' && (
+          <DuoView />
         )}
       </div>
     </ErrorBoundary>
@@ -6203,6 +6207,351 @@ function DfaView({ dfaQueue, setDfaQueue }) {
         </div>
     </div>
   )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 004 DUO VIEW — multi-institutional real-time collaboration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SUPA_URL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_URL || '') : ''
+const SUPA_KEY = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_ANON_KEY || '') : ''
+
+function genDuoCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return code
+}
+
+function supaHeaders() {
+  return {
+    'apikey': SUPA_KEY,
+    'Authorization': `Bearer ${SUPA_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation',
+  }
+}
+
+async function duoGet(id) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}&select=*`, { headers: supaHeaders() })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  return data[0] || null
+}
+
+async function duoCreate(session) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions`, {
+    method: 'POST', headers: supaHeaders(), body: JSON.stringify(session),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function duoPatch(id, updates) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}`, {
+    method: 'PATCH', headers: supaHeaders(),
+    body: JSON.stringify({ ...updates, updated_at: new Date().toISOString() }),
+  })
+  if (!r.ok) throw new Error(await r.text())
+  const data = await r.json()
+  return Array.isArray(data) ? data[0] : data
+}
+
+function DuoView() {
+  const [phase,         setPhase]         = useState('landing')
+  const [myRole,        setMyRole]        = useState(null)
+  const [session,       setSession]       = useState(null)
+  const [myInstitution, setMyInstitution] = useState('')
+  const [claimJson,     setClaimJson]     = useState('')
+  const [joinCode,      setJoinCode]      = useState('')
+  const [myNotes,       setMyNotes]       = useState('')
+  const [saving,        setSaving]        = useState(false)
+  const [loading,       setLoading]       = useState(false)
+  const [error,         setError]         = useState('')
+  const [copied,        setCopied]        = useState(false)
+  const [lastSync,      setLastSync]      = useState(null)
+  const pollRef = useRef(null)
+  const configured = !!(SUPA_URL && SUPA_KEY)
+
+  useEffect(() => {
+    if (phase !== 'session' || !session) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const fresh = await duoGet(session.id)
+        if (fresh) { setSession(fresh); setLastSync(new Date()) }
+      } catch {}
+    }, 5000)
+    return () => clearInterval(pollRef.current)
+  }, [phase, session && session.id])
+
+  const handleCreate = async () => {
+    if (!myInstitution.trim()) { setError('Enter your institution name.'); return }
+    if (!configured) { setError('Supabase not configured — add env vars to Vercel.'); return }
+    setLoading(true); setError('')
+    try {
+      let claim = null
+      if (claimJson.trim()) {
+        try { claim = JSON.parse(claimJson) } catch { setError('Invalid JSON in claim field.'); setLoading(false); return }
+      }
+      const id = genDuoCode()
+      const created = await duoCreate({ id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '', notes_b: '', status: 'active' })
+      setSession(created || { id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '', notes_b: '', status: 'active' })
+      setMyRole('a'); setMyNotes(''); setLastSync(new Date()); setPhase('session')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const handleJoin = async () => {
+    if (!myInstitution.trim()) { setError('Enter your institution name.'); return }
+    if (!joinCode.trim()) { setError('Enter the session code.'); return }
+    if (!configured) { setError('Supabase not configured.'); return }
+    setLoading(true); setError('')
+    try {
+      const sess = await duoGet(joinCode.toUpperCase().trim())
+      if (!sess) { setError('Session not found. Check the code and try again.'); setLoading(false); return }
+      if (sess.institution_b && sess.institution_b !== myInstitution.trim()) {
+        setError('Both institution slots are filled. Contact the session creator.'); setLoading(false); return
+      }
+      const updated = await duoPatch(sess.id, { institution_b: myInstitution.trim() })
+      const final = updated || { ...sess, institution_b: myInstitution.trim() }
+      setSession(final); setMyRole('b'); setMyNotes(final.notes_b || ''); setLastSync(new Date()); setPhase('session')
+    } catch (e) { setError(e.message) }
+    setLoading(false)
+  }
+
+  const handleSaveNotes = async () => {
+    if (!session) return
+    setSaving(true); setError('')
+    try {
+      const field = myRole === 'a' ? 'notes_a' : 'notes_b'
+      const updated = await duoPatch(session.id, { [field]: myNotes })
+      if (updated) { setSession(updated); setLastSync(new Date()) }
+    } catch (e) { setError(e.message) }
+    setSaving(false)
+  }
+
+  const handleCopyCode = () => {
+    if (!session) return
+    navigator.clipboard.writeText(session.id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
+  const theirNotes       = session ? (myRole === 'a' ? session.notes_b : session.notes_a) : ''
+  const theirInstitution = session ? (myRole === 'a' ? session.institution_b : session.institution_a) : ''
+  const myName           = session ? (myRole === 'a' ? session.institution_a : session.institution_b) : ''
+
+  const DuoHeader = ({ sub }) => (
+    <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
+      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 004 — DUO</div>
+      <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(36px,5vw,64px)', letterSpacing:'-0.03em' }}>{sub || 'Duo Mode'}</h1>
+    </div>
+  )
+
+  // NOT CONFIGURED
+  if (!configured) return (
+    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <DuoHeader />
+      <div className="flex gap-3 border border-amber-700 bg-amber-50 p-5" style={{ maxWidth:'560px' }}>
+        <AlertTriangle className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
+        <div>
+          <div className="mono-font text-[10px] tracking-widest text-amber-900 mb-2">SUPABASE NOT CONFIGURED</div>
+          <p className="display-font text-stone-800 text-[13px] leading-relaxed">
+            Add <code className="mono-font bg-amber-100 px-1">VITE_SUPABASE_URL</code> and{' '}
+            <code className="mono-font bg-amber-100 px-1">VITE_SUPABASE_ANON_KEY</code> to your Vercel environment variables, then redeploy.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+
+  // LANDING
+  if (phase === 'landing') return (
+    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <DuoHeader />
+      <p className="display-font text-stone-600 mb-10" style={{ fontSize:'clamp(14px,1.8vw,17px)', lineHeight:1.6, maxWidth:'580px' }}>
+        When two institutions share a fraud case — two credit unions, or an acquirer and a merchant — Duo Mode creates a live shared session where both sides see the claim and leave coordinated notes in real time.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ maxWidth:'680px' }}>
+        <button onClick={() => { setPhase('creating'); setError('') }}
+          style={{ textAlign:'left', padding:'28px 24px', background:'#1A1814', border:'none', cursor:'pointer' }}>
+          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">ORIGINATING INSTITUTION</div>
+          <div className="display-font font-bold text-white text-xl mb-2">Create Session</div>
+          <div className="display-font text-stone-400 text-[13px] leading-relaxed">Start a shared session. Share the 6-character code with the other party.</div>
+        </button>
+        <button onClick={() => { setPhase('joining'); setError('') }}
+          style={{ textAlign:'left', padding:'28px 24px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer' }}>
+          <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">RESPONDING INSTITUTION</div>
+          <div className="display-font font-bold text-stone-900 text-xl mb-2">Join Session</div>
+          <div className="display-font text-stone-600 text-[13px] leading-relaxed">Enter the code from the originating institution to connect.</div>
+        </button>
+      </div>
+    </div>
+  )
+
+  // CREATING
+  if (phase === 'creating') return (
+    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <DuoHeader sub="Create Session" />
+      <div style={{ maxWidth:'480px', display:'grid', gap:'20px' }}>
+        <div>
+          <label className="cov-label">YOUR INSTITUTION NAME</label>
+          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+            placeholder="First Community Credit Union" style={{ fontSize:'14px' }} />
+        </div>
+        <div>
+          <label className="cov-label">CLAIM DATA <span className="normal-case tracking-normal font-normal text-stone-400 text-[11px]">optional — paste JSON</span></label>
+          <textarea className="cov-input mono-font" rows={5} value={claimJson} onChange={e => setClaimJson(e.target.value)}
+            placeholder={'{"caseId":"COV-001","amount":"420.00","reasonCode":"10.4",...}'}
+            style={{ fontSize:'11px', resize:'vertical', width:'100%' }} />
+        </div>
+        {error && <div className="mono-font text-[10px] tracking-wide text-red-700 border border-red-200 bg-red-50 p-3">{error}</div>}
+        <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
+          <button onClick={handleCreate} disabled={loading}
+            className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 20px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:loading?'not-allowed':'pointer', opacity:loading?0.6:1 }}>
+            {loading ? 'CREATING…' : 'CREATE SESSION →'}
+          </button>
+          <button onClick={() => setPhase('landing')}
+            className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 16px', background:'transparent', border:'1px solid #A09585', color:'#6B5F4D', cursor:'pointer' }}>
+            BACK
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // JOINING
+  if (phase === 'joining') return (
+    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <DuoHeader sub="Join Session" />
+      <div style={{ maxWidth:'400px', display:'grid', gap:'20px' }}>
+        <div>
+          <label className="cov-label">SESSION CODE</label>
+          <input className="cov-input mono-font" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="ABC123" maxLength={6}
+            style={{ fontSize:'28px', letterSpacing:'0.25em', textTransform:'uppercase', maxWidth:'220px' }} />
+        </div>
+        <div>
+          <label className="cov-label">YOUR INSTITUTION NAME</label>
+          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+            placeholder="Riverside Federal Credit Union" style={{ fontSize:'14px' }} />
+        </div>
+        {error && <div className="mono-font text-[10px] tracking-wide text-red-700 border border-red-200 bg-red-50 p-3">{error}</div>}
+        <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
+          <button onClick={handleJoin} disabled={loading}
+            className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 20px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:loading?'not-allowed':'pointer', opacity:loading?0.6:1 }}>
+            {loading ? 'CONNECTING…' : 'JOIN SESSION →'}
+          </button>
+          <button onClick={() => setPhase('landing')}
+            className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 16px', background:'transparent', border:'1px solid #A09585', color:'#6B5F4D', cursor:'pointer' }}>
+            BACK
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // SESSION
+  if (phase === 'session' && session) {
+    const claim = session.claim || {}
+    const claimEntries = Object.entries(claim)
+    return (
+      <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+        {/* Session header */}
+        <div className="mb-6 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', flexWrap:'wrap', gap:'16px', alignItems:'flex-end', justifyContent:'space-between' }}>
+          <div>
+            <div className="mono-font text-xs tracking-widest text-stone-600 mb-1">ISSUE Nº 004 — DUO · LIVE SESSION</div>
+            <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(22px,3.5vw,40px)', letterSpacing:'-0.02em' }}>
+              {session.institution_a}
+              {session.institution_b
+                ? <> <span style={{ color:'#B0A89A' }}>×</span> {session.institution_b}</>
+                : <span className="display-font font-normal text-stone-400 text-[60%]"> × awaiting other party</span>}
+            </h1>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
+            <div style={{ textAlign:'right' }}>
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-0.5">SESSION CODE</div>
+              <div className="mono-font font-bold text-stone-900 tracking-[0.2em]" style={{ fontSize:'22px' }}>{session.id}</div>
+            </div>
+            <button onClick={handleCopyCode} title="Copy session code"
+              style={{ padding:'8px 10px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer' }}>
+              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-stone-500" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Claim panel */}
+          <div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">CLAIM DETAILS</div>
+            {claimEntries.length === 0 ? (
+              <div className="border border-stone-200 bg-stone-50 p-5">
+                <p className="mono-font text-[10px] tracking-wide text-stone-400">No claim data attached. The originating institution did not include claim JSON when creating this session.</p>
+              </div>
+            ) : (
+              <div style={{ border:'1px solid #D4CCBC', background:'#FFFFFF', overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <tbody>
+                    {claimEntries.map(([k, v]) => (
+                      <tr key={k} style={{ borderBottom:'1px solid #EDE8E0' }}>
+                        <td className="mono-font px-3 py-2 text-stone-500" style={{ fontSize:'10px', letterSpacing:'0.06em', whiteSpace:'nowrap', width:'38%', verticalAlign:'top' }}>{k}</td>
+                        <td className="mono-font px-3 py-2 text-stone-900" style={{ fontSize:'11px', wordBreak:'break-word' }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Notes panel */}
+          <div style={{ display:'grid', gap:'24px' }}>
+            {/* My notes */}
+            <div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-2">
+                YOUR NOTES — <span style={{ color:'#1A1814', fontWeight:600 }}>{myName}</span>
+              </div>
+              <textarea value={myNotes} onChange={e => setMyNotes(e.target.value)} rows={7}
+                style={{ width:'100%', resize:'vertical', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.65, padding:'12px', border:'1px solid #C8C0B0', background:'#FFFFFF', boxSizing:'border-box', outline:'none' }}
+                placeholder="Add your observations, investigation findings, or proposed resolution…" />
+              {error && <div className="mono-font text-[10px] tracking-wide text-red-700 mt-1">{error}</div>}
+              <button onClick={handleSaveNotes} disabled={saving}
+                className="mono-font mt-2" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 18px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1 }}>
+                {saving ? 'SAVING…' : 'SAVE NOTES'}
+              </button>
+            </div>
+
+            {/* Their notes */}
+            <div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-2">
+                {theirInstitution
+                  ? <>NOTES — <span style={{ color:'#1A1814', fontWeight:600 }}>{theirInstitution}</span></>
+                  : 'AWAITING OTHER INSTITUTION'}
+              </div>
+              {theirNotes ? (
+                <div style={{ border:'1px solid #D4CCBC', background:'#F9F7F3', padding:'16px', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.65, whiteSpace:'pre-wrap', color:'#2D2922' }}>
+                  {theirNotes}
+                </div>
+              ) : (
+                <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'16px' }}>
+                  <p className="mono-font text-[10px] tracking-wide text-stone-400">
+                    {theirInstitution ? 'No notes submitted yet. Refreshing every 5 seconds.' : 'Share the session code above to invite the other institution.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Sync indicator */}
+            <div className="mono-font text-[9px] tracking-widest text-stone-400">
+              AUTO-SYNC ACTIVE{lastSync ? ` — LAST UPDATED ${lastSync.toLocaleTimeString()}` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
