@@ -1059,16 +1059,8 @@ Return ONLY valid JSON:
       <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
           <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 001 — TRIAGE</div>
-          <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-            <div className="mono-font text-xs tracking-widest text-stone-600">
-              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
-            </div>
-            {onGoToDuo && (
-              <button onClick={onGoToDuo} className="mono-font"
-                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                004 DUO →
-              </button>
-            )}
+          <div className="mono-font text-xs tracking-widest text-stone-600">
+            {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
           </div>
         </div>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 8vw, 96px)', letterSpacing: '-0.03em' }}>
@@ -1369,6 +1361,18 @@ Return ONLY valid JSON:
                 <div className="flex items-start gap-3 py-2">
                   <span className="mono-font text-xs px-2 py-1 shrink-0" style={{ background: regColor.bg, color: regColor.text }}>{regLabel}</span>
                   <span className="mono-font text-xs text-stone-400 leading-relaxed">{regSubtext}</span>
+                </div>
+              )}
+              {regFramework === 'PROVIDER' && onGoToDuo && (
+                <div className="flex items-center justify-between px-4 py-3" style={{ background:'#ECFDF5', border:'1px solid #6EE7B7' }}>
+                  <div>
+                    <div className="mono-font text-[9px] tracking-widest text-emerald-900 mb-0.5">CROSS-INSTITUTIONAL CASE</div>
+                    <div className="display-font text-emerald-900 text-[13px]">Coordinate with the receiving institution in Duo Mode.</div>
+                  </div>
+                  <button onClick={onGoToDuo} className="mono-font shrink-0 ml-4"
+                    style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                    OPEN 004 DUO →
+                  </button>
                 </div>
               )}
 
@@ -2974,16 +2978,8 @@ Return ONLY valid JSON:
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 002 — THE DISPUTE DESK</div>
-            <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-              <div className="mono-font text-xs tracking-widest text-stone-600">
-                {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
-              </div>
-              {onGoToDuo && (
-                <button onClick={onGoToDuo} className="mono-font"
-                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                  004 DUO →
-                </button>
-              )}
+            <div className="mono-font text-xs tracking-widest text-stone-600">
+              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
             </div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 7vw, 88px)', letterSpacing: '-0.03em' }}>
