@@ -6415,7 +6415,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <DuoMasthead />
       <p className="display-font text-stone-600 mb-8" style={{ fontSize:'clamp(14px,1.6vw,16px)', lineHeight:1.7, maxWidth:'600px' }}>
-        Use Duo Mode when a fraud case crosses an institutional boundary — a wire transfer, an e-transfer, an ACH recall, an account takeover with fund movement elsewhere. Speed matters: the faster both institutions share the same facts, the better the chance of recovery. Create a session, share the six-character code with your counterpart — issuer and acquirer, sending and receiving bank — and work the case together. Same claim, shared thread, no email chains.
+        A live coordination session for two institutions working the same case — issuer and acquirer, sending and receiving bank. Both sides see the same claim and build a shared record toward resolution.
+      </p>
+      <p className="display-font text-stone-600 mb-8" style={{ fontSize:'clamp(14px,1.6vw,16px)', lineHeight:1.7, maxWidth:'600px' }}>
+        Use it when fraud crosses an institutional boundary: a wire transfer, an e-transfer, an ACH recall, an account takeover where funds landed elsewhere. Create a session, share the six-character code with your counterpart, and work toward recovery together.
       </p>
       {!configured && (
         <div className="flex gap-3 border border-amber-700 bg-amber-50 p-4 mb-8" style={{ maxWidth:'560px' }}>
@@ -6541,6 +6544,9 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
             )}
             <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
               <div>
+                {notifySent && (
+                  <div className="mono-font text-[9px] tracking-widest text-emerald-700 border border-emerald-300 bg-emerald-50 px-2 py-1">INVITE SENT</div>
+                )}
                 <div className="mono-font text-[9px] tracking-widest text-stone-400 text-right">SESSION</div>
                 <div className="mono-font font-bold text-stone-900 tracking-[0.2em]" style={{ fontSize:'18px' }}>{session.id}</div>
               </div>
