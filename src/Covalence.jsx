@@ -1363,7 +1363,7 @@ Return ONLY valid JSON:
                   <span className="mono-font text-xs text-stone-400 leading-relaxed">{regSubtext}</span>
                 </div>
               )}
-              {regFramework === 'PROVIDER' && onGoToDuo && (
+              {(regFramework === 'PROVIDER' || accountType === 'ach_eft') && onGoToDuo && (
                 <div className="flex items-center justify-between px-4 py-3" style={{ background:'#ECFDF5', border:'1px solid #6EE7B7' }}>
                   <div>
                     <div className="mono-font text-[9px] tracking-widest text-emerald-900 mb-0.5">CROSS-INSTITUTIONAL CASE</div>
@@ -1757,6 +1757,17 @@ Return ONLY valid JSON:
                   </div>
                 )
               })()}
+
+              {(regFramework === 'PROVIDER' || accountType === 'ach_eft') && onGoToDuo && (
+                <button onClick={onGoToDuo}
+                  style={{ width:'100%', padding:'20px 24px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
+                  <div>
+                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>CROSS-INSTITUTIONAL CASE DETECTED</div>
+                    <div className="display-font font-bold" style={{ fontSize:'18px', letterSpacing:'-0.01em' }}>Coordinate in Duo Mode →</div>
+                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>Share this case with the receiving institution · Build a shared record · Work toward recovery</div>
+                  </div>
+                </button>
+              )}
 
               <button onClick={exportReport}
                 className="w-full flex items-center justify-center gap-2 py-3 border transition-colors"
@@ -4760,35 +4771,37 @@ Return ONLY valid JSON:
                                     <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">PC</button>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1 justify-end">
-                                  {o.mode !== 'merchant' && onScoreInDfa && (
-                                    <button
-                                      onClick={() => onScoreInDfa([{
-                                        ...o,
-                                        code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
-                                        filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
-                                        windowDays: 45,
-                                        avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
-                                        deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
-                                        pinVerified: false, isVFMP: !!o.isVFMP,
-                                        strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
-                                        merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
-                                        note: `From Dispute Desk: ${o.merchant || ''}`,
-                                        source: 'desk',
-                                      }])}
-                                      className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
-                                      title="Send to DFA for funding assessment"
-                                    >→DFA</button>
-                                  )}
-                                  {onSendToDuo && (
-                                    <button
-                                      onClick={() => onSendToDuo(o)}
-                                      className="mono-font text-[10px] px-1.5 py-0.5 border transition-colors"
-                                      style={{ borderColor:'#065F46', color:'#065F46' }}
-                                      title="Open in Duo Mode — share this case with another institution"
-                                    >→DUO</button>
-                                  )}
-                                  <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
+                                <div className="flex items-start gap-2 justify-end">
+                                  <div className="flex flex-col items-end gap-1.5">
+                                    {o.mode !== 'merchant' && onScoreInDfa && (
+                                      <button
+                                        onClick={() => onScoreInDfa([{
+                                          ...o,
+                                          code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
+                                          filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
+                                          windowDays: 45,
+                                          avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
+                                          deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
+                                          pinVerified: false, isVFMP: !!o.isVFMP,
+                                          strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
+                                          merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
+                                          note: `From Dispute Desk: ${o.merchant || ''}`,
+                                          source: 'desk',
+                                        }])}
+                                        className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                        title="Send to DFA for funding assessment"
+                                      >→DFA</button>
+                                    )}
+                                    {onSendToDuo && (
+                                      <button
+                                        onClick={() => onSendToDuo(o)}
+                                        className="mono-font text-[10px] px-2 py-1 transition-colors"
+                                        style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                        title="Open in Duo Mode — coordinate with receiving institution"
+                                      >→ DUO</button>
+                                    )}
+                                  </div>
+                                  <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
                             )}
