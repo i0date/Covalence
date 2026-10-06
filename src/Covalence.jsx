@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   absoluteCapDays:      540,
   pcMilestones:         [10, 45, 90],
   trackerWindowDays:    60,
+  duoInstitutionName:   '',
 }
 
 // ─── Business-day helpers ─────────────────────────────────────────────────────
@@ -283,8 +284,8 @@ export default function Covalence() {
     { id:'triage',   label:'001  TRIAGE' },
     { id:'desk',     label:'002  DISPUTE DESK' },
     { id:'dfa',      label:'003  DFA' },
-    { id:'settings', label:'SETTINGS' },
     { id:'duo',      label:'004  DUO' },
+    { id:'settings', label:'SETTINGS' },
   ]
 
   return (
@@ -323,7 +324,7 @@ export default function Covalence() {
           <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode} />
         )}
         {activeSection === 'triage'   && (
-          <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} />
+          <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} />
         )}
         {activeSection === 'desk'     && (
           <DeskView
@@ -332,11 +333,12 @@ export default function Covalence() {
             triageHandoff={triageHandoff} setTriageHandoff={setTriageHandoff}
             onScoreInDfa={(cases) => { setDfaQueue(cases); setActiveSection('dfa') }}
             onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }}
+            onGoToDuo={() => setActiveSection('duo')}
             platformMode={platformMode} setPlatformMode={setPlatformMode}
           />
         )}
         {activeSection === 'dfa'      && (
-          <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} />
+          <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} />
         )}
         {activeSection === 'settings' && (
           <SettingsView settings={settings} setSettings={setSettings} />
@@ -521,7 +523,7 @@ const TX_TYPES = {
 const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
 const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
 
-function TriageView({ onHandoff }) {
+function TriageView({ onHandoff, onGoToDuo }) {
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
@@ -1087,8 +1089,16 @@ Return ONLY valid JSON:
       <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
         <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
           <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 001 — TRIAGE</div>
-          <div className="mono-font text-xs tracking-widest text-stone-600">
-            {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+          <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+            <div className="mono-font text-xs tracking-widest text-stone-600">
+              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+            </div>
+            {onGoToDuo && (
+              <button onClick={onGoToDuo} className="mono-font"
+                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                004 DUO →
+              </button>
+            )}
           </div>
         </div>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 8vw, 96px)', letterSpacing: '-0.03em' }}>
@@ -2068,7 +2078,7 @@ Return ONLY valid JSON:
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, platformMode, setPlatformMode }) {
+function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode }) {
   const [network, setNetwork]                               = useState('visa')
   const [complaint, setComplaint]                           = useState('')
   const [merchant, setMerchant]                             = useState('')
@@ -2982,8 +2992,16 @@ Return ONLY valid JSON:
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 002 — THE DISPUTE DESK</div>
-            <div className="mono-font text-xs tracking-widest text-stone-600">
-              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+            <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+              <div className="mono-font text-xs tracking-widest text-stone-600">
+                {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+              </div>
+              {onGoToDuo && (
+                <button onClick={onGoToDuo} className="mono-font"
+                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                  004 DUO →
+                </button>
+              )}
             </div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 7vw, 88px)', letterSpacing: '-0.03em' }}>
@@ -5472,7 +5490,7 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 // ═══════════════════════════════════════════════════════════════════════════════
 // 003 DFA VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function DfaView({ dfaQueue, setDfaQueue }) {
+function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
   const [selected, setSelected]             = useState(null)
   const [sortCol, setSortCol]               = useState("fundability")
   const [sortDir, setSortDir]               = useState("desc")
@@ -5670,7 +5688,15 @@ function DfaView({ dfaQueue, setDfaQueue }) {
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 003 — DFA</div>
-            <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+              <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
+              {onGoToDuo && (
+                <button onClick={onGoToDuo} className="mono-font"
+                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                  004 DUO →
+                </button>
+              )}
+            </div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
             The Dispute<br /><span style={{ fontStyle:"italic", fontWeight:500 }}>Funding Assessor</span>
@@ -6306,7 +6332,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [myRole,        setMyRole]       = useState(null)
   const [session,       setSession]      = useState(null)
   const [mySessions,    setMySessions]   = useState(loadMyDuoSessions)
-  const [myInstitution, setMyInstitution]= useState('')
+  const [myInstitution, setMyInstitution]= useState(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}').duoInstitutionName || '' } catch { return '' } })
   const [joinCode,      setJoinCode]     = useState('')
   const [newEntry,      setNewEntry]     = useState('')
   const [saving,        setSaving]       = useState(false)
@@ -6691,6 +6717,17 @@ function SettingsView({ settings, setSettings }) {
         </p>
       </div>
       <div style={{ maxWidth:'480px', display:'grid', gap:'24px' }}>
+        <div>
+          <label className="cov-label">DUO — YOUR INSTITUTION NAME</label>
+          <input type="text" value={settings.duoInstitutionName || ''}
+            onChange={e => set('duoInstitutionName', e.target.value)}
+            placeholder="First Community Credit Union"
+            className="cov-input mono-font" style={{ fontSize:'14px' }} />
+          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Pre-fills your institution name when creating or joining Duo sessions.</div>
+        </div>
+        <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'16px' }}>
+          <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">COMPLIANCE THRESHOLDS</div>
+        </div>
         {FIELDS.map(({ key, label }) => (
           <div key={key}>
             <label className="cov-label">{label}</label>
