@@ -435,36 +435,6 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </button>
       </div>
 
-      {/* ── Duo Mode callout ── */}
-      {(() => {
-        const duoSessions = (() => { try { return JSON.parse(localStorage.getItem('duo_my_sessions') || '[]') } catch { return [] } })()
-        const openDuo = duoSessions.filter(s => s.lastStatus !== 'closed')
-        return (
-          <div className="mb-10" style={{ background:'#1A1814', padding:'24px 28px', display:'flex', flexWrap:'wrap', gap:'20px', alignItems:'center', justifyContent:'space-between' }}>
-            <div style={{ flex:1, minWidth:'200px' }}>
-              <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.15em' }}>ISSUE Nº 004 — DUO</div>
-              <div className="display-font font-bold text-white leading-tight" style={{ fontSize:'clamp(16px,2vw,22px)', letterSpacing:'-0.01em', marginBottom:'6px' }}>
-                Cross-institutional fraud coordination.
-              </div>
-              <p className="display-font text-stone-400" style={{ fontSize:'13px', lineHeight:1.5, maxWidth:'480px' }}>
-                A live coordination session for two institutions working the same case — issuer and acquirer, sending and receiving bank. Both sides see the same claim and build a shared record toward resolution.
-              </p>
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'10px', flexShrink:0 }}>
-              {openDuo.length > 0 && (
-                <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em' }}>
-                  {openDuo.length} OPEN SESSION{openDuo.length > 1 ? 'S' : ''}
-                </div>
-              )}
-              <button onClick={() => setActiveSection('duo')}
-                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                {openDuo.length > 0 ? 'VIEW SESSIONS →' : 'CREATE SESSION →'}
-              </button>
-            </div>
-          </div>
-        )
-      })()}
-
       {active.length > 0 ? (
         <div>
           <div className="mono-font text-stone-400 mb-3" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>RECENT CASES</div>
@@ -1745,6 +1715,18 @@ Return ONLY valid JSON:
                 <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">ROUTING RECOMMENDATION</div>
                 <div className="display-font font-semibold text-stone-900 mb-2" style={{ fontSize: '17px', letterSpacing: '-0.01em' }}>{result.routing_label}</div>
                 <p className="display-font text-stone-700 text-[15px] leading-relaxed">{result.routing_detail}</p>
+                {['RECIPIENT_FI','NACHA_RETURN','PROVIDER_DISPUTE'].includes(result.routing) && onGoToDuo && (
+                  <div className="mt-4 pt-4" style={{ borderTop:'1px solid #D4CCBC' }}>
+                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">CROSS-INSTITUTIONAL CASE</div>
+                    <p className="display-font text-stone-600 text-[13px] leading-relaxed mb-3">
+                      This case involves another institution. Open a Duo session to coordinate directly — share the claim, build a shared record, and work toward recovery together.
+                    </p>
+                    <button onClick={onGoToDuo} className="mono-font"
+                      style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'7px 16px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                      OPEN IN 004 DUO →
+                    </button>
+                  </div>
+                )}
               </div>
 
               {result.risk_notes && (
@@ -5688,15 +5670,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 003 — DFA</div>
-            <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-              <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
-              {onGoToDuo && (
-                <button onClick={onGoToDuo} className="mono-font"
-                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                  004 DUO →
-                </button>
-              )}
-            </div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
             The Dispute<br /><span style={{ fontStyle:"italic", fontWeight:500 }}>Funding Assessor</span>
