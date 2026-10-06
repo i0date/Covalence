@@ -726,13 +726,14 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     const accountTypeLabel = { debit: 'Debit Card', credit: 'Credit Card', p2p: 'P2P / e-Transfer', ach_eft: 'ACH / EFT', bnpl: 'BNPL (Buy Now Pay Later)', crypto: 'Crypto / Digital Asset' }[accountType] ?? 'Not specified'
     const daysNote = daysSinceTransaction !== null ? `${daysSinceTransaction} days ago (transaction date: ${transactionDate})` : 'Unknown'
 
-    const instType = { bank:'Bank', credit_union:'Credit Union', fintech:'Fintech / Neo-bank', mse:'Money Service Business', exchange:'Crypto Exchange' }[settings.institutionType] || 'Financial Institution'
-    const jur = { us:'United States (FinCEN / Reg E)', ca:'Canada (FINTRAC / FCAC)', uk:'United Kingdom (FCA)', other:'Other jurisdiction' }[settings.jurisdiction] || 'jurisdiction not specified'
-    const regime = { reg_e:'Reg E (EFTA)', fcac:'FCAC (Canada)', fca:'FCA (UK)', other:'mixed / other' }[settings.regulatoryRegime] || 'not specified'
-    const sarByType = accountType === 'ach_eft' ? (settings.sarThresholdACH || 5000)
-                    : accountType === 'p2p'     ? (settings.sarThresholdP2P || 5000)
-                    : accountType === 'crypto'  ? (settings.sarThresholdCrypto || 10000)
-                    : (settings.sarThreshold || 5000)
+    const _s = (() => { try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } } })()
+    const instType = { bank:'Bank', credit_union:'Credit Union', fintech:'Fintech / Neo-bank', mse:'Money Service Business', exchange:'Crypto Exchange' }[_s.institutionType] || 'Financial Institution'
+    const jur = { us:'United States (FinCEN / Reg E)', ca:'Canada (FINTRAC / FCAC)', uk:'United Kingdom (FCA)', other:'Other jurisdiction' }[_s.jurisdiction] || 'jurisdiction not specified'
+    const regime = { reg_e:'Reg E (EFTA)', fcac:'FCAC (Canada)', fca:'FCA (UK)', other:'mixed / other' }[_s.regulatoryRegime] || 'not specified'
+    const sarByType = accountType === 'ach_eft' ? (_s.sarThresholdACH || 5000)
+                    : accountType === 'p2p'     ? (_s.sarThresholdP2P || 5000)
+                    : accountType === 'crypto'  ? (_s.sarThresholdCrypto || 10000)
+                    : (_s.sarThreshold || 5000)
     const prompt = `You are an expert fraud and disputes triage analyst at a ${instType}. Classify this incoming dispute claim.
 
 INSTITUTION CONTEXT:
@@ -740,7 +741,7 @@ INSTITUTION CONTEXT:
 - Jurisdiction: ${jur}
 - Consumer protection regime: ${regime}
 - SAR/STR threshold for this payment type: $${sarByType.toLocaleString()}
-- Small-dollar write-off threshold: $${settings.smallDollarThreshold || 50}
+- Small-dollar write-off threshold: $${_s.smallDollarThreshold || 50}
 
 FOUR VERDICT DEFINITIONS:
 - TRUE_FRAUD: A third party used the account/card without the cardholder's knowledge or consent. Genuine victim of unauthorized access or card compromise.
