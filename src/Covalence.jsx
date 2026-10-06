@@ -285,6 +285,7 @@ export default function Covalence() {
     { id:'desk',     label:'002  DISPUTE DESK' },
     { id:'dfa',      label:'003  DFA' },
     { id:'duo',      label:'004  DUO' },
+    { id:'trio',     label:'005  TRIO' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -346,6 +347,7 @@ export default function Covalence() {
         {activeSection === 'duo' && (
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
         )}
+        {activeSection === 'trio' && <TrioView />}
       </div>
     </ErrorBoundary>
   )
@@ -6272,6 +6274,47 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 005 TRIO VIEW — fraud incident command
+// ═══════════════════════════════════════════════════════════════════════════════
+function TrioView() {
+  return (
+    <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+      <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
+        <div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 005 — TRIO</div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
+            <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.6, maxWidth:'560px' }}>
+            Fraud Incident Command. When a fraud wave hits — a mass ATO, a P2P scam campaign, a crypto platform exploit — Trio coordinates the issuing institution, the receiving institution, and the network or platform. One shared incident record. Escalation paths for every party. Built for speed.
+          </p>
+        </div>
+        <div className="mono-font text-xs tracking-widest text-stone-600">
+          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px', border:'1px dashed #D4CCBC', background:'#FAF7F1', textAlign:'center' }}>
+        <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400 mb-4">COMING NEXT</div>
+        <div className="display-font font-bold text-stone-900" style={{ fontSize:'clamp(22px,3vw,32px)', letterSpacing:'-0.02em', marginBottom:'16px' }}>
+          Trio Mode is under construction.
+        </div>
+        <p className="display-font text-stone-500" style={{ fontSize:'14px', lineHeight:1.7, maxWidth:'440px' }}>
+          Three-party fraud incident coordination — issuer, receiver, and platform — with a shared incident log, escalation triggers, and customer communication status.
+        </p>
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <div className="mono-font text-[9px] tracking-widest text-stone-400">THREE PARTIES · ONE INCIDENT RECORD · REAL-TIME STATUS</div>
+          <div style={{ display:'flex', gap:'16px', flexWrap:'wrap', justifyContent:'center' }}>
+            {['ISSUING FI','RECEIVING FI / PLATFORM','CUSTOMER COMMS'].map(label => (
+              <div key={label} className="mono-font text-[9px] tracking-widest px-3 py-1.5" style={{ border:'1px solid #D4CCBC', color:'#78716C' }}>{label}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 004 DUO VIEW — multi-institutional real-time collaboration
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -6332,6 +6375,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [error,         setError]        = useState('')
   const [copied,        setCopied]       = useState(false)
   const [lastSync,      setLastSync]     = useState(null)
+  const [notifySent,    setNotifySent]   = useState(false)
   const pollRef   = useRef(null)
   const threadRef = useRef(null)
   const configured = !!(SUPA_URL && SUPA_KEY)
