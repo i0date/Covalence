@@ -6526,9 +6526,38 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [recoverQuery,  setRecoverQuery] = useState('')
   const [recoverResults,setRecoverResults] = useState(null)
   const [recoverLoading,setRecoverLoading] = useState(false)
+  // External link state
+  const [linkType,      setLinkType]      = useState('standard') // 'standard' | 'crypto'
+  const [linkPayload,   setLinkPayload]   = useState({ case_ref:'', report_type:'', incident_date:'', amount:'', currency:'USD', nature:'', summary:'', asset_type:'BTC', wallet_addresses:'', transaction_ids:'', chain_analytics_link:'' })
+  const [linkToken,     setLinkToken]     = useState('')
+  const [linkCopied,    setLinkCopied]    = useState(false)
+  const [linkLoading,   setLinkLoading]   = useState(false)
   const pollRef   = useRef(null)
   const threadRef = useRef(null)
   const configured = !!(SUPA_URL && SUPA_KEY)
+
+  async function createCaseLink() {
+    if (!configured) { setError('Supabase not configured.'); return }
+    setLinkLoading(true); setError('')
+    try {
+      const payload = linkType === 'crypto'
+        ? { ...linkPayload, wallet_addresses: linkPayload.wallet_addresses.split('\n').map(s => s.trim()).filter(Boolean), transaction_ids: linkPayload.transaction_ids.split('\n').map(s => s.trim()).filter(Boolean) }
+        : { case_ref: linkPayload.case_ref, report_type: linkPayload.report_type, incident_date: linkPayload.incident_date, amount: linkPayload.amount, currency: linkPayload.currency, nature: linkPayload.nature, summary: linkPayload.summary }
+      const r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links`, {
+        method: 'POST',
+        headers: { ...supaH(), 'Prefer': 'return=representation' },
+        body: JSON.stringify({ case_type: linkType, sender_institution: myInstitution.trim(), payload })
+      })
+      if (!r.ok) throw new Error(await r.text())
+      const d = await r.json()
+      const row = Array.isArray(d) ? d[0] : d
+      setLinkToken(row.token)
+      setPhase('link-ready')
+    } catch (e) { setError(e.message) }
+    setLinkLoading(false)
+  }
+
+  function getCaseLinkUrl(token) { return `${window.location.origin}/?case=${token}` }
 
   useEffect(() => {
     if (duoHandoff && phase === 'dashboard') { setPhase('creating') }
@@ -6691,6 +6720,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginBottom:'40px' }}>
         <BtnPrimary onClick={() => { setError(''); setMyInstitution(''); setPhase('creating') }}>CREATE SESSION</BtnPrimary>
         <BtnSecondary onClick={() => { setError(''); setMyInstitution(''); setJoinCode(''); setPhase('joining') }}>JOIN SESSION</BtnSecondary>
+        <button onClick={() => { setError(''); setPhase('link-setup') }} className="mono-font"
+          style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 16px', background:'transparent', border:'1px solid #B45309', color:'#92400E', cursor:'pointer' }}>
+          SEND EXTERNAL LINK
+        </button>
       </div>
       {mySessions.length > 0 && (
         <div>
@@ -6940,6 +6973,152 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── LINK SETUP ────────────────────────────────────────────────────────────────
+  if (phase === 'link-setup') {
+    const lp = linkPayload
+    const setLp = (k, v) => setLinkPayload(p => ({ ...p, [k]: v }))
+    const Field = ({ label, k, placeholder, type }) => (
+      <div>
+        <label className="cov-label">{label}</label>
+        <input className="cov-input mono-font" value={lp[k]} onChange={e => setLp(k, e.target.value)}
+          placeholder={placeholder} type={type || 'text'} style={{ fontSize:'13px' }} />
+      </div>
+    )
+    return (
+      <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+        <DuoMasthead sub="SEND EXTERNAL LINK" />
+        <p className="display-font text-stone-600 mb-6" style={{ fontSize:'15px', lineHeight:1.7, maxWidth:'560px' }}>
+          Generate a secure, expiring case link to send to a financial institution that isn't on Covalence. They'll identify themselves to access it and can submit a structured response — including a freeze confirmation if applicable.
+        </p>
+
+        {/* Case type toggle */}
+        <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
+          {[['standard','STANDARD CASE'],['crypto','CRYPTO / DIGITAL ASSET']].map(([val, label]) => (
+            <button key={val} onClick={() => setLinkType(val)} className="mono-font"
+              style={{ flex:1, padding:'10px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ maxWidth:'560px', display:'grid', gap:'18px' }}>
+          <div>
+            <label className="cov-label">YOUR INSTITUTION NAME</label>
+            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+              placeholder="First Community Credit Union" style={{ fontSize:'13px' }} />
+          </div>
+          <Field label="CASE REFERENCE" k="case_ref" placeholder="TXN-2024-00142" />
+          <Field label="REPORT TYPE" k="report_type" placeholder="Wire Fraud / ACH Recall / Account Takeover" />
+          <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
+          <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px' }}>
+            <Field label="AMOUNT" k="amount" placeholder="5200.00" />
+            <Field label="CURRENCY" k="currency" placeholder="USD" />
+          </div>
+          <Field label="NATURE OF REPORT" k="nature" placeholder="Authorized push payment fraud / pig butchering / etc." />
+          <div>
+            <label className="cov-label">SUMMARY</label>
+            <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
+              rows={3} placeholder="Brief factual summary of what occurred — no customer PII."
+              style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
+          </div>
+
+          {linkType === 'crypto' && (
+            <>
+              <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">CRYPTO / DIGITAL ASSET DETAILS</div>
+              </div>
+              <Field label="ASSET TYPE" k="asset_type" placeholder="BTC / ETH / USDT / etc." />
+              <div>
+                <label className="cov-label">WALLET ADDRESS(ES) — one per line</label>
+                <textarea className="cov-input mono-font" value={lp.wallet_addresses} onChange={e => setLp('wallet_addresses', e.target.value)}
+                  rows={3} placeholder={"bc1q...\nbc1q..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+              </div>
+              <div>
+                <label className="cov-label">TRANSACTION ID(S) — one per line</label>
+                <textarea className="cov-input mono-font" value={lp.transaction_ids} onChange={e => setLp('transaction_ids', e.target.value)}
+                  rows={3} placeholder={"a1b2c3d4...\ne5f6g7h8..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+              </div>
+              <Field label="CHAIN ANALYTICS LINK (optional)" k="chain_analytics_link" placeholder="https://platform.chainalysis.com/..." />
+            </>
+          )}
+
+          {error && <div className="mono-font text-[10px] tracking-wide text-red-700 border border-red-200 bg-red-50 p-3">{error}</div>}
+
+          <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginTop:'8px' }}>
+            <BtnPrimary onClick={createCaseLink} disabled={linkLoading || !myInstitution.trim()}>
+              {linkLoading ? 'GENERATING…' : 'GENERATE LINK →'}
+            </BtnPrimary>
+            <BtnSecondary onClick={() => { setError(''); setPhase('dashboard') }}>BACK</BtnSecondary>
+          </div>
+
+          <div className="mono-font text-[10px] text-stone-400 leading-relaxed" style={{ maxWidth:'480px' }}>
+            The link expires in 30 days. Every time it is opened, the visitor's name, email, institution, and timestamp are logged. No customer PII is included in the link payload.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── LINK READY ────────────────────────────────────────────────────────────────
+  if (phase === 'link-ready') {
+    const url = getCaseLinkUrl(linkToken)
+    return (
+      <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+        <DuoMasthead sub="LINK READY" />
+        <div style={{ maxWidth:'580px' }}>
+          <p className="display-font text-stone-600 mb-8" style={{ fontSize:'15px', lineHeight:1.7 }}>
+            Your case link is live. Share it directly with the compliance or fraud team at the receiving institution. It expires in 30 days.
+          </p>
+
+          {/* The link */}
+          <div style={{ border:'1px solid #C8C0B0', background:'#FFFFFF', padding:'20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
+            <div className="mono-font text-stone-900 break-all" style={{ fontSize:'13px', lineHeight:1.6, marginBottom:'16px' }}>{url}</div>
+            <div style={{ display:'flex', gap:'8px' }}>
+              <button onClick={() => { navigator.clipboard.writeText(url); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500) }}
+                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                {linkCopied ? '✓ COPIED' : 'COPY LINK'}
+              </button>
+              <a href={`mailto:?subject=Case%20for%20your%20attention&body=Please%20review%20the%20following%20case%3A%0A%0A${encodeURIComponent(url)}%0A%0AThis%20link%20expires%20in%2030%20days.`}
+                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
+                OPEN IN EMAIL
+              </a>
+            </div>
+          </div>
+
+          {/* What happens next */}
+          <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
+            {[
+              'The receiving institution opens the link and sees your institution name and case type — the details are blurred until they identify themselves.',
+              'They enter their name, email, institution, and role. This is logged to your audit trail.',
+              'They see the full case and submit a structured response — disposition, internal reference, and freeze confirmation if applicable.',
+              'Their response appears in your Supabase dashboard under case_link_responses, filterable by token.',
+            ].map((t, i) => (
+              <div key={i} style={{ display:'flex', gap:'12px', marginBottom:'12px' }}>
+                <div className="mono-font text-[9px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
+                <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{t}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Incentive note */}
+          <div style={{ background:'#1A1814', padding:'16px 20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
+            <p className="display-font" style={{ fontSize:'13px', color:'#C8C0B0', lineHeight:1.6 }}>
+              Receiving institutions that join Covalence can respond directly inside their own dashboard, run live Duo sessions with you, and track all their cross-institutional cases in one place. They'll see the prompt when they access this link.
+            </p>
+          </div>
+
+          <div style={{ display:'flex', gap:'10px' }}>
+            <BtnPrimary onClick={() => { setPhase('link-setup'); setLinkToken('') }}>SEND ANOTHER</BtnPrimary>
+            <BtnSecondary onClick={() => setPhase('dashboard')}>BACK TO DUO</BtnSecondary>
           </div>
         </div>
       </div>
