@@ -275,9 +275,68 @@ const GLOBAL_CSS = `
 `
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// LOGIN GATE — identity capture on first visit
+// ═══════════════════════════════════════════════════════════════════════════════
+function LoginGate({ onLogin }) {
+  const [name,    setName]    = useState('')
+  const [email,   setEmail]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err,     setErr]     = useState('')
+
+  async function handleEnter(e) {
+    e.preventDefault()
+    if (!name.trim() || !email.trim()) { setErr('Both fields required.'); return }
+    setLoading(true); setErr('')
+    const entry = { name: name.trim(), email: email.trim(), entered_at: new Date().toISOString(), user_agent: navigator.userAgent }
+    // Log to Supabase access_log (non-blocking — gate opens regardless)
+    const _url = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_URL || '') : ''
+    const _key = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_ANON_KEY || '') : ''
+    if (_url && _key) {
+      fetch(`${_url}/rest/v1/access_log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: _key, Authorization: `Bearer ${_key}`, Prefer: 'return=minimal' },
+        body: JSON.stringify(entry),
+      }).catch(() => {})
+    }
+    const userData = { name: entry.name, email: entry.email, at: entry.entered_at }
+    localStorage.setItem('cov_user', JSON.stringify(userData))
+    setLoading(false)
+    onLogin(userData)
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#1A1814', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
+      <div style={{ width:'100%', maxWidth:'400px' }}>
+        <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
+        <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>Welcome</div>
+        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>Enter your name and email to continue.</div>
+        <form onSubmit={handleEnter}>
+          <div style={{ marginBottom:'16px' }}>
+            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>NAME</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoFocus
+              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
+          </div>
+          <div style={{ marginBottom:'24px' }}>
+            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>EMAIL</div>
+            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com"
+              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
+          </div>
+          {err && <div style={{ fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' }}>{err}</div>}
+          <button type="submit" disabled={loading}
+            style={{ width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:loading ? 'not-allowed' : 'pointer' }}>
+            {loading ? 'ENTERING...' : 'ENTER →'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ROOT — Covalence
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Covalence() {
+  const [covUser,       setCovUser]       = useState(() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })
   const [activeSection, setActiveSection] = useState('home')
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
   const [settings,      setSettings]      = useState(loadSettings)
@@ -298,6 +357,8 @@ export default function Covalence() {
     { id:'trio',     label:'005  TRIO' },
     { id:'settings', label:'SETTINGS' },
   ]
+
+  if (!covUser) return <LoginGate onLogin={setCovUser} />
 
   return (
     <ErrorBoundary>
