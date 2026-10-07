@@ -6501,12 +6501,15 @@ function loadMyDuoSessions() { try { return JSON.parse(localStorage.getItem('duo
 function saveMyDuoSessions(arr) { localStorage.setItem('duo_my_sessions', JSON.stringify(arr)) }
 
 const DUO_STATUS = {
-  active:        { label:'OPEN',          color:'#57534E', bg:'#F5F1EA' },
-  in_discussion: { label:'IN DISCUSSION', color:'#1E40AF', bg:'#EFF6FF' },
-  agreed:        { label:'AGREED',        color:'#065F46', bg:'#ECFDF5' },
-  closed:        { label:'CLOSED',        color:'#F5F1EA', bg:'#1A1814' },
+  active:           { label:'OPEN',             color:'#57534E', bg:'#F5F1EA' },
+  in_discussion:    { label:'IN DISCUSSION',    color:'#1E40AF', bg:'#EFF6FF' },
+  agreed:           { label:'AGREED',           color:'#065F46', bg:'#ECFDF5' },
+  freeze_requested: { label:'FREEZE REQUESTED', color:'#92400E', bg:'#FEF3C7' },
+  freeze_confirmed: { label:'FREEZE CONFIRMED', color:'#065F46', bg:'#ECFDF5' },
+  closed:           { label:'CLOSED',           color:'#F5F1EA', bg:'#1A1814' },
 }
-const DUO_STATUS_ORDER = ['active','in_discussion','agreed','closed']
+const DUO_STATUS_ORDER         = ['active','in_discussion','agreed','closed']
+const DUO_STATUS_ORDER_CRYPTO  = ['active','freeze_requested','freeze_confirmed','closed']
 
 function DuoView({ duoHandoff, setDuoHandoff }) {
   const [phase,         setPhase]        = useState('dashboard')
@@ -6526,6 +6529,8 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [recoverQuery,  setRecoverQuery] = useState('')
   const [recoverResults,setRecoverResults] = useState(null)
   const [recoverLoading,setRecoverLoading] = useState(false)
+  // Crypto session fields (for crypto handoffs)
+  const [cryptoFields,  setCryptoFields]  = useState({ asset_type:'', wallet_addresses:'', transaction_ids:'', amount_crypto:'', amount_usd:'' })
   // External link state
   const [linkType,      setLinkType]      = useState('standard') // 'standard' | 'crypto'
   const [linkPayload,   setLinkPayload]   = useState({ case_ref:'', report_type:'', incident_date:'', amount:'', currency:'USD', nature:'', summary:'', asset_type:'BTC', wallet_addresses:'', transaction_ids:'', chain_analytics_link:'' })
@@ -6618,6 +6623,14 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       let claim = null
       if (duoHandoff) {
         claim = { caseId: duoHandoff.id, merchant: duoHandoff.merchant, amount: duoHandoff.amount, reasonCode: duoHandoff.reasonCode, date: duoHandoff.date, status: duoHandoff.status, classification: duoHandoff.classification }
+        if (duoHandoff.accountType === 'crypto') {
+          claim.accountType = 'crypto'
+          if (cryptoFields.asset_type)       claim.asset_type        = cryptoFields.asset_type
+          if (cryptoFields.amount_crypto)    claim.amount_crypto      = cryptoFields.amount_crypto
+          if (cryptoFields.amount_usd)       claim.amount_usd         = cryptoFields.amount_usd
+          if (cryptoFields.wallet_addresses) claim.wallet_addresses   = cryptoFields.wallet_addresses.split('\n').map(s => s.trim()).filter(Boolean)
+          if (cryptoFields.transaction_ids)  claim.transaction_ids    = cryptoFields.transaction_ids.split('\n').map(s => s.trim()).filter(Boolean)
+        }
       }
       const id = genDuoCode()
       const created = await duoCreate({ id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '[]', notes_b: '[]', status: 'active' })
@@ -6818,12 +6831,54 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
         </div>
       )}
-      <div style={{ maxWidth:'420px', display:'grid', gap:'20px' }}>
+      <div style={{ maxWidth:'480px', display:'grid', gap:'20px' }}>
         <div>
           <label className="cov-label">YOUR INSTITUTION NAME</label>
           <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
             placeholder="First Community Credit Union" style={{ fontSize:'14px' }} />
         </div>
+
+        {/* Crypto-specific fields — only shown for crypto handoffs */}
+        {duoHandoff?.accountType === 'crypto' && (
+          <>
+            <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'16px' }}>
+              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CRYPTO / DIGITAL ASSET DETAILS</div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+              <div>
+                <label className="cov-label">ASSET TYPE</label>
+                <input className="cov-input mono-font" value={cryptoFields.asset_type}
+                  onChange={e => setCryptoFields(f => ({ ...f, asset_type: e.target.value }))}
+                  placeholder="BTC / ETH / USDT" style={{ fontSize:'13px' }} />
+              </div>
+              <div>
+                <label className="cov-label">AMOUNT (CRYPTO)</label>
+                <input className="cov-input mono-font" value={cryptoFields.amount_crypto}
+                  onChange={e => setCryptoFields(f => ({ ...f, amount_crypto: e.target.value }))}
+                  placeholder="0.234" style={{ fontSize:'13px' }} />
+              </div>
+            </div>
+            <div>
+              <label className="cov-label">AMOUNT (USD EQUIVALENT)</label>
+              <input className="cov-input mono-font" value={cryptoFields.amount_usd}
+                onChange={e => setCryptoFields(f => ({ ...f, amount_usd: e.target.value }))}
+                placeholder="8400.00" style={{ fontSize:'13px' }} />
+            </div>
+            <div>
+              <label className="cov-label">WALLET ADDRESS(ES) — one per line</label>
+              <textarea className="cov-input mono-font" value={cryptoFields.wallet_addresses}
+                onChange={e => setCryptoFields(f => ({ ...f, wallet_addresses: e.target.value }))}
+                rows={3} placeholder={"bc1q...\nbc1q..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+            </div>
+            <div>
+              <label className="cov-label">TRANSACTION ID(S) — one per line</label>
+              <textarea className="cov-input mono-font" value={cryptoFields.transaction_ids}
+                onChange={e => setCryptoFields(f => ({ ...f, transaction_ids: e.target.value }))}
+                rows={3} placeholder={"a1b2c3d4...\ne5f6g7h8..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+            </div>
+          </>
+        )}
+
         <ErrBox />
         <div style={{ display:'flex', gap:'10px', flexWrap:'wrap' }}>
           <BtnPrimary onClick={handleCreate} disabled={loading}>{loading ? 'CREATING…' : 'CREATE SESSION →'}</BtnPrimary>
@@ -6862,11 +6917,15 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     const claim        = session.claim || {}
     const thread       = buildThread(session)
     const myName       = myRole === 'a' ? session.institution_a : session.institution_b
+    const isCryptoClaim = claim.accountType === 'crypto'
+    const statusOrder  = isCryptoClaim ? DUO_STATUS_ORDER_CRYPTO : DUO_STATUS_ORDER
     const st           = DUO_STATUS[session.status] || DUO_STATUS.active
-    const stIdx        = DUO_STATUS_ORDER.indexOf(session.status)
-    const nextSt       = stIdx < DUO_STATUS_ORDER.length - 1 ? DUO_STATUS_ORDER[stIdx + 1] : null
+    const stIdx        = statusOrder.indexOf(session.status)
+    const nextSt       = stIdx < statusOrder.length - 1 ? statusOrder[stIdx + 1] : null
     const nextStCfg    = nextSt ? DUO_STATUS[nextSt] : null
-    const claimEntries = Object.entries(claim).filter(([k]) => ['caseId','merchant','amount','reasonCode','date','status','classification'].includes(k))
+    const STANDARD_KEYS = ['caseId','merchant','amount','reasonCode','date','status','classification']
+    const CRYPTO_KEYS   = ['caseId','asset_type','amount_crypto','amount_usd','classification']
+    const claimEntries  = Object.entries(claim).filter(([k]) => (isCryptoClaim ? CRYPTO_KEYS : STANDARD_KEYS).includes(k))
 
     return (
       <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -6913,7 +6972,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           {/* Claim panel */}
           <div>
             <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">CLAIM</div>
-            {claimEntries.length === 0 ? (
+            {claimEntries.length === 0 && !isCryptoClaim ? (
               <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'20px' }}>
                 <p className="mono-font text-[10px] tracking-wide text-stone-400 leading-relaxed">
                   No claim attached to this session.<br/>
@@ -6922,16 +6981,72 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
               </div>
             ) : (
               <div style={{ border:'1px solid #D4CCBC', background:'#FFFFFF' }}>
+                {isCryptoClaim && (
+                  <div style={{ padding:'8px 12px', background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
+                    <span className="mono-font text-[9px] tracking-widest" style={{ color:'#C9A86C' }}>⬡ CRYPTO / DIGITAL ASSET CASE</span>
+                  </div>
+                )}
                 <table style={{ width:'100%', borderCollapse:'collapse' }}>
                   <tbody>
                     {claimEntries.map(([k, v]) => (
                       <tr key={k} style={{ borderBottom:'1px solid #EDE8E0' }}>
-                        <td className="mono-font px-3 py-2.5 text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.06em', whiteSpace:'nowrap', width:'40%', verticalAlign:'top', textTransform:'uppercase' }}>{k}</td>
+                        <td className="mono-font px-3 py-2.5 text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.06em', whiteSpace:'nowrap', width:'40%', verticalAlign:'top', textTransform:'uppercase' }}>{k.replace(/_/g,' ')}</td>
                         <td className="mono-font px-3 py-2.5 text-stone-900" style={{ fontSize:'11px' }}>{String(v)}</td>
                       </tr>
                     ))}
+                    {/* Crypto: wallet addresses with copy */}
+                    {isCryptoClaim && Array.isArray(claim.wallet_addresses) && claim.wallet_addresses.length > 0 && (
+                      <tr style={{ borderBottom:'1px solid #EDE8E0', background:'#FAFAF8' }}>
+                        <td className="mono-font px-3 py-2.5 text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.06em', verticalAlign:'top' }}>WALLET ADDRESS</td>
+                        <td className="px-3 py-2.5" style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                          {claim.wallet_addresses.map((addr, i) => (
+                            <div key={i} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                              <code className="mono-font" style={{ fontSize:'10px', color:'#1A1814', background:'#F0EBE3', padding:'2px 6px', wordBreak:'break-all', flex:1 }}>{addr}</code>
+                              <button onClick={() => navigator.clipboard.writeText(addr)}
+                                className="mono-font shrink-0" style={{ fontSize:'8px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    )}
+                    {/* Crypto: txids with copy */}
+                    {isCryptoClaim && Array.isArray(claim.transaction_ids) && claim.transaction_ids.length > 0 && (
+                      <tr style={{ background:'#FAFAF8' }}>
+                        <td className="mono-font px-3 py-2.5 text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.06em', verticalAlign:'top' }}>TXID</td>
+                        <td className="px-3 py-2.5" style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                          {claim.transaction_ids.map((txid, i) => (
+                            <div key={i} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                              <code className="mono-font" style={{ fontSize:'10px', color:'#1A1814', background:'#F0EBE3', padding:'2px 6px', wordBreak:'break-all', flex:1 }}>{txid}</code>
+                              <button onClick={() => navigator.clipboard.writeText(txid)}
+                                className="mono-font shrink-0" style={{ fontSize:'8px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
+                {/* Crypto: freeze action strip */}
+                {isCryptoClaim && session.status !== 'closed' && (
+                  <div style={{ padding:'10px 12px', borderTop:'1px solid #EDE8E0', display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap' }}>
+                    <span className="mono-font text-[9px] tracking-widest text-stone-400">ASSET ACTION:</span>
+                    {session.status !== 'freeze_requested' && session.status !== 'freeze_confirmed' && (
+                      <button onClick={() => handleStatusChange('freeze_requested')} className="mono-font"
+                        style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#FEF3C7', border:'1px solid #D97706', color:'#92400E', cursor:'pointer' }}>
+                        REQUEST FREEZE
+                      </button>
+                    )}
+                    {session.status === 'freeze_requested' && (
+                      <button onClick={() => handleStatusChange('freeze_confirmed')} className="mono-font"
+                        style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#ECFDF5', border:'1px solid #065F46', color:'#065F46', cursor:'pointer' }}>
+                        CONFIRM FREEZE
+                      </button>
+                    )}
+                    {session.status === 'freeze_confirmed' && (
+                      <span className="mono-font text-[9px] tracking-widest" style={{ color:'#065F46' }}>✓ FREEZE CONFIRMED — log reference in thread</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
