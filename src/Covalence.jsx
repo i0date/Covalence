@@ -366,7 +366,7 @@ export default function Covalence() {
         <style>{GLOBAL_CSS}</style>
 
         {/* ── Top nav ── */}
-        <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
+        <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflow:'hidden' }}>
           <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
             <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
@@ -385,8 +385,8 @@ export default function Covalence() {
                 </button>
               ))}
             </div>
-            {platformMode === 'merchant' && (
-              <span className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#F59E0B', marginLeft:'auto', padding:'14px 0' }}>MERCHANT MODE</span>
+            {platformMode === 'merchant' && activeSection === 'desk' && (
+              <span className="mono-font desktop-only" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#F59E0B', marginLeft:'auto', padding:'14px 0', flexShrink:0 }}>MERCHANT MODE</span>
             )}
           </div>
         </div>
