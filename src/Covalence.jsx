@@ -7150,39 +7150,40 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
             <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
               placeholder="First Community Credit Union" style={{ fontSize:'13px' }} />
           </div>
-          <Field label="CASE REFERENCE" k="case_ref" placeholder="TXN-2024-00142" />
-          <Field label="REPORT TYPE" k="report_type"
-            placeholder={linkType === 'crypto' ? 'Investment scam / pig butchering / unauthorized transfer' : 'Wire Fraud / ACH Recall / Account Takeover'} />
-          <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
-
-          {/* Standard only: fiat amount */}
-          {linkType === 'standard' && (
-            <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px' }}>
-              <Field label="AMOUNT" k="amount" placeholder="5200.00" />
-              <Field label="CURRENCY" k="currency" placeholder="USD" />
-            </div>
-          )}
-
-          <Field label="NATURE OF REPORT" k="nature"
-            placeholder={linkType === 'crypto' ? 'Authorized push payment fraud / pig butchering / etc.' : 'Authorized push payment fraud / account takeover / etc.'} />
-          <div>
-            <label className="cov-label">SUMMARY</label>
-            <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
-              rows={3} placeholder="Brief factual summary of what occurred — no customer PII."
-              style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
-          </div>
-
-          {/* Crypto only: asset + wallet + txid fields */}
-          {linkType === 'crypto' && (
+          {linkType === 'standard' ? (
             <>
-              <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px' }}>
-                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">DIGITAL ASSET DETAILS</div>
+              <Field label="CASE REFERENCE" k="case_ref" placeholder="TXN-2024-00142" />
+              <Field label="REPORT TYPE" k="report_type" placeholder="Wire Fraud / ACH Recall / Account Takeover" />
+              <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px' }}>
+                <Field label="AMOUNT" k="amount" placeholder="5200.00" />
+                <Field label="CURRENCY" k="currency" placeholder="USD" />
               </div>
+              <Field label="NATURE OF REPORT" k="nature" placeholder="Authorized push payment fraud / account takeover / etc." />
+              <div>
+                <label className="cov-label">SUMMARY</label>
+                <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
+                  rows={3} placeholder="Brief factual summary of what occurred — no customer PII."
+                  style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
+              </div>
+            </>
+          ) : (
+            <>
+              <Field label="CASE REFERENCE" k="case_ref" placeholder="CRYPTO-2024-00142" />
+              <Field label="REPORT TYPE" k="report_type" placeholder="Investment scam / pig butchering / unauthorized transfer" />
+              <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
                 <Field label="ASSET TYPE" k="asset_type" placeholder="BTC / ETH / USDT" />
                 <Field label="AMOUNT (CRYPTO)" k="amount" placeholder="0.234" />
               </div>
               <Field label="AMOUNT (USD EQUIVALENT)" k="amount_usd" placeholder="8400.00" />
+              <Field label="NATURE OF REPORT" k="nature" placeholder="Authorized push payment fraud / pig butchering / romance scam" />
+              <div>
+                <label className="cov-label">SUMMARY</label>
+                <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
+                  rows={3} placeholder="Brief factual summary — no customer PII."
+                  style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
+              </div>
               <div>
                 <label className="cov-label">WALLET ADDRESS(ES) — one per line</label>
                 <textarea className="cov-input mono-font" value={lp.wallet_addresses} onChange={e => setLp('wallet_addresses', e.target.value)}
