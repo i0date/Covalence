@@ -6542,7 +6542,30 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [linkToken,     setLinkToken]     = useState('')
   const [linkCopied,    setLinkCopied]    = useState(false)
   const [linkLoading,   setLinkLoading]   = useState(false)
+  const [linkResponses, setLinkResponses] = useState([])
+  const [linkAccessLog, setLinkAccessLog] = useState([])
+  const [linkRespSync,  setLinkRespSync]  = useState(null)
+  const [accessLogOpen, setAccessLogOpen] = useState(false)
   const pollRef   = useRef(null)
+  const linkPollRef = useRef(null)
+
+  useEffect(() => {
+    if (phase !== 'link-ready' || !linkToken || !configured) { clearInterval(linkPollRef.current); return }
+    const load = async () => {
+      try {
+        const [resp, access] = await Promise.all([
+          fetch(`${SUPA_URL}/rest/v1/case_link_responses?token=eq.${linkToken}&order=responded_at.desc`, { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }).then(r => r.json()),
+          fetch(`${SUPA_URL}/rest/v1/case_link_access_log?token=eq.${linkToken}&order=accessed_at.desc`, { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }).then(r => r.json()),
+        ])
+        setLinkResponses(Array.isArray(resp) ? resp : [])
+        setLinkAccessLog(Array.isArray(access) ? access : [])
+        setLinkRespSync(new Date())
+      } catch {}
+    }
+    load()
+    linkPollRef.current = setInterval(load, 15000)
+    return () => clearInterval(linkPollRef.current)
+  }, [phase, linkToken])
   const threadRef = useRef(null)
   const configured = !!(SUPA_URL && SUPA_KEY)
 
@@ -7250,13 +7273,123 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
               'The receiving institution opens the link and sees your institution name and case type — the details are blurred until they identify themselves.',
               'They enter their name, email, institution, and role. This is logged to your audit trail.',
               'They see the full case and submit a structured response — disposition, internal reference, and freeze confirmation if applicable.',
-              'Their response appears in your Supabase dashboard under case_link_responses, filterable by token.',
+              'Their response appears live in the Responses panel below — auto-refreshing every 15 seconds.',
             ].map((t, i) => (
               <div key={i} style={{ display:'flex', gap:'12px', marginBottom:'12px' }}>
                 <div className="mono-font text-[9px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
                 <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{t}</div>
               </div>
             ))}
+          </div>
+
+          {/* ACCESS LOG */}
+          <div style={{ border:'1px solid #E8E3DA', marginBottom:'16px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'#F9F7F3', cursor:'pointer', userSelect:'none' }}
+              onClick={() => setAccessLogOpen(v => !v)}>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-500">ACCESS LOG</div>
+                <div className="mono-font text-[9px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
+                  {linkAccessLog.length} {linkAccessLog.length === 1 ? 'VIEW' : 'VIEWS'}
+                </div>
+              </div>
+              <div className="mono-font text-[9px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+            </div>
+            {accessLogOpen && (
+              <div style={{ padding:'0 16px 12px' }}>
+                {linkAccessLog.length === 0
+                  ? <div className="mono-font text-[10px] text-stone-400 py-3">No views yet — share the link to get started.</div>
+                  : linkAccessLog.map((a, i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'10px 0', borderBottom: i < linkAccessLog.length - 1 ? '1px solid #F0EBE3' : 'none' }}>
+                      <div>
+                        <div className="display-font font-semibold text-stone-900" style={{ fontSize:'13px' }}>{a.accessor_name || '—'}</div>
+                        <div className="mono-font text-[10px] text-stone-500 mt-0.5">{[a.accessor_institution, a.accessor_role].filter(Boolean).join(' · ')}</div>
+                        {a.accessor_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{a.accessor_email}</div>}
+                      </div>
+                      <div className="mono-font text-[9px] text-stone-400 text-right shrink-0 ml-4">
+                        {a.accessed_at ? new Date(a.accessed_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+
+          {/* LIVE RESPONSES */}
+          <div style={{ border:'1px solid #C8C0B0', marginBottom:'24px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'#F5F1EA', borderBottom:'1px solid #E8E3DA' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-700">RESPONSES</div>
+                <div className="mono-font text-[9px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
+                  {linkResponses.length} {linkResponses.length === 1 ? 'RESPONSE' : 'RESPONSES'}
+                </div>
+              </div>
+              <div className="mono-font text-[9px] text-stone-400">
+                {linkRespSync ? `SYNCED ${new Date(linkRespSync).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}` : 'SYNCING…'}
+              </div>
+            </div>
+            <div style={{ padding: linkResponses.length > 0 ? '0' : '20px 16px' }}>
+              {linkResponses.length === 0 ? (
+                <div style={{ textAlign:'center' }}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
+                  <div className="display-font text-stone-500" style={{ fontSize:'13px', lineHeight:1.6 }}>
+                    Responses submitted via the case link will appear here automatically.
+                  </div>
+                </div>
+              ) : linkResponses.map((r, i) => {
+                const dispColor = {
+                  acknowledged:{ bg:'#EFF6FF', color:'#1E40AF' },
+                  investigating:{ bg:'#FEF3C7', color:'#92400E' },
+                  frozen:       { bg:'#ECFDF5', color:'#065F46' },
+                  resolved:     { bg:'#F0FDF4', color:'#166534' },
+                  declined:     { bg:'#FEF2F2', color:'#991B1B' },
+                }[r.disposition] || { bg:'#F5F5F5', color:'#374151' }
+                return (
+                  <div key={i} style={{ padding:'16px', borderBottom: i < linkResponses.length - 1 ? '1px solid #E8E3DA' : 'none' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', marginBottom:'10px' }}>
+                      <div>
+                        <div className="display-font font-bold text-stone-900" style={{ fontSize:'14px' }}>{r.respondent_name || 'Unknown'}</div>
+                        <div className="mono-font text-[10px] text-stone-500 mt-0.5">
+                          {[r.respondent_institution, r.respondent_role].filter(Boolean).join(' · ')}
+                        </div>
+                        {r.respondent_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{r.respondent_email}</div>}
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', shrink:0 }}>
+                        <div className="mono-font text-[9px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
+                          {(r.disposition || 'UNKNOWN').toUpperCase()}
+                        </div>
+                        {r.freeze_confirmed && (
+                          <div className="mono-font text-[9px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
+                            ✓ FREEZE CONFIRMED
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {r.internal_case_ref && (
+                      <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
+                        <div className="mono-font text-[11px] text-stone-700">{r.internal_case_ref}</div>
+                      </div>
+                    )}
+                    {r.freeze_reference && (
+                      <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
+                        <div className="mono-font text-[11px] text-stone-700">{r.freeze_reference}</div>
+                      </div>
+                    )}
+                    {r.notes && (
+                      <div style={{ background:'#F9F7F3', border:'1px solid #E8E3DA', padding:'10px 12px', marginTop:'8px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                        <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{r.notes}</div>
+                      </div>
+                    )}
+                    <div className="mono-font text-[9px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
+                      {r.responded_at ? new Date(r.responded_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* Incentive note */}
@@ -7268,7 +7401,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
 
           <div style={{ display:'flex', gap:'10px' }}>
-            <BtnPrimary onClick={() => { setPhase('link-setup'); setLinkToken('') }}>SEND ANOTHER</BtnPrimary>
+            <BtnPrimary onClick={() => { setPhase('link-setup'); setLinkToken(''); setLinkResponses([]); setLinkAccessLog([]) }}>SEND ANOTHER</BtnPrimary>
             <BtnSecondary onClick={() => setPhase('dashboard')}>BACK TO DUO</BtnSecondary>
           </div>
         </div>
