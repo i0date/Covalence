@@ -1827,15 +1827,24 @@ Return ONLY valid JSON:
                 <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">ROUTING RECOMMENDATION</div>
                 <div className="display-font font-semibold text-stone-900 mb-2" style={{ fontSize: '17px', letterSpacing: '-0.01em' }}>{result.routing_label}</div>
                 <p className="display-font text-stone-700 text-[15px] leading-relaxed">{result.routing_detail}</p>
-                {['RECIPIENT_FI','NACHA_RETURN','PROVIDER_DISPUTE'].includes(result.routing) && onGoToDuo && (
+                {(['RECIPIENT_FI','NACHA_RETURN','PROVIDER_DISPUTE'].includes(result.routing) || isCE || accountType === 'crypto') && onGoToDuo && (
                   <div className="mt-4 pt-4" style={{ borderTop:'1px solid #D4CCBC' }}>
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">CROSS-INSTITUTIONAL CASE</div>
+                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">
+                      {isCE ? 'EXCHANGE-TO-EXCHANGE COORDINATION' : accountType === 'crypto' ? 'CRYPTO / CROSS-INSTITUTIONAL CASE' : 'CROSS-INSTITUTIONAL CASE'}
+                    </div>
                     <p className="display-font text-stone-600 text-[13px] leading-relaxed mb-3">
-                      This case involves another institution. Open a Duo session to coordinate directly — share the claim, build a shared record, and work toward recovery together.
+                      {isCE
+                        ? 'Contact the receiving exchange directly via Duo. Share wallet addresses, txids, and asset details — and coordinate on a freeze or account action.'
+                        : accountType === 'crypto'
+                          ? 'This crypto case involves another institution or exchange. Open a Duo session to coordinate on asset recovery, freeze requests, and shared documentation.'
+                          : 'This case involves another institution. Open a Duo session to coordinate directly — share the claim, build a shared record, and work toward recovery together.'}
                     </p>
-                    <button onClick={onGoToDuo} className="mono-font"
-                      style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'7px 16px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                      OPEN IN 004 DUO →
+                    <button onClick={() => {
+                      const claim = { source:'triage', accountType: isCE ? 'crypto_exchange' : accountType, regFramework, routing_label: result?.routing_label, routing: result?.routing, classification: result?.classification, risk_level: result?.risk_level }
+                      onSendToDuo ? onSendToDuo(claim) : onGoToDuo()
+                    }} className="mono-font"
+                      style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'9px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                      {isCE ? 'COORDINATE WITH RECEIVING EXCHANGE →' : 'OPEN IN 004 DUO →'}
                     </button>
                   </div>
                 )}
@@ -1866,22 +1875,16 @@ Return ONLY valid JSON:
                 )
               })()}
 
-              {!isCardBased && accountType && (onGoToDuo || onSendToDuo) && (
+              {((!isCardBased && accountType && !['RECIPIENT_FI','NACHA_RETURN','PROVIDER_DISPUTE'].includes(result?.routing) && accountType !== 'crypto') || false) && (onGoToDuo || onSendToDuo) && (
                 <button onClick={() => {
                   const claim = { source:'triage', accountType, regFramework, routing_label: result?.routing_label, routing: result?.routing, classification: result?.classification, risk_level: result?.risk_level }
                   onSendToDuo ? onSendToDuo(claim) : onGoToDuo()
                 }}
                   style={{ width:'100%', padding:'20px 24px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
                   <div>
-                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>
-                      {accountType === 'crypto' ? 'CRYPTO / EXCHANGE CASE DETECTED' : 'CROSS-INSTITUTIONAL CASE DETECTED'}
-                    </div>
+                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>CROSS-INSTITUTIONAL CASE DETECTED</div>
                     <div className="display-font font-bold" style={{ fontSize:'18px', letterSpacing:'-0.01em' }}>Coordinate in Duo Mode →</div>
-                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>
-                      {accountType === 'crypto'
-                        ? 'Contact the exchange directly · Share claim details · Coordinate on asset recovery or account action'
-                        : 'Share this case with the receiving institution · Build a shared record · Work toward recovery'}
-                    </div>
+                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>Share this case with the receiving institution · Build a shared record · Work toward recovery</div>
                   </div>
                 </button>
               )}
@@ -2056,8 +2059,8 @@ Return ONLY valid JSON:
                     className="w-full flex items-center justify-between p-5 transition-colors"
                     style={{ background: result.proceed_to_dispute ? '#1A1814' : '#FAF7F1', cursor: 'pointer', border: 'none' }}>
                     <div className="text-left">
-                      <div className="mono-font text-xs tracking-widest mb-1" style={{ color: result.proceed_to_dispute ? '#6B5F4D' : '#A89B88' }}>
-                        {result.proceed_to_dispute ? 'RECOMMENDED NEXT STEP' : 'OPTIONAL — SEND TO DESK'}
+                      <div className="mono-font text-xs tracking-widest mb-1" style={{ color: result.proceed_to_dispute && !isCE && accountType !== 'crypto' ? '#6B5F4D' : '#A89B88' }}>
+                        {result.proceed_to_dispute && !isCE && accountType !== 'crypto' ? 'RECOMMENDED NEXT STEP' : 'OPTIONAL — LOG TO DESK'}
                       </div>
                       <div className="display-font font-semibold text-lg" style={{ color: result.proceed_to_dispute ? '#F5F1EA' : '#1A1814', letterSpacing: '-0.01em' }}>
                         {isCE ? 'Log in Dispute Desk →' : 'Open in Dispute Desk →'}
@@ -6529,6 +6532,8 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [recoverQuery,  setRecoverQuery] = useState('')
   const [recoverResults,setRecoverResults] = useState(null)
   const [recoverLoading,setRecoverLoading] = useState(false)
+  // Session type for Duo (standard or crypto exchange)
+  const [sessionType,   setSessionType]   = useState('standard')
   // Crypto session fields (for crypto handoffs)
   const [cryptoFields,  setCryptoFields]  = useState({ asset_type:'', wallet_addresses:'', transaction_ids:'', amount_crypto:'', amount_usd:'' })
   // External link state
@@ -6565,7 +6570,11 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   function getCaseLinkUrl(token) { return `${window.location.origin}/?case=${token}` }
 
   useEffect(() => {
-    if (duoHandoff && phase === 'dashboard') { setPhase('creating') }
+    if (duoHandoff && phase === 'dashboard') {
+      if (duoHandoff.accountType === 'crypto' || duoHandoff.accountType === 'crypto_exchange') setSessionType('crypto')
+      else setSessionType('standard')
+      setPhase('creating')
+    }
   }, [duoHandoff])
 
   useEffect(() => {
@@ -6620,11 +6629,11 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     if (!configured) { setError('Supabase not configured — add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to Vercel, then redeploy.'); return }
     setLoading(true); setError('')
     try {
-      let claim = null
+      let claim = { accountType: sessionType === 'crypto' ? 'crypto_exchange' : 'standard' }
       if (duoHandoff) {
-        claim = { caseId: duoHandoff.id, merchant: duoHandoff.merchant, amount: duoHandoff.amount, reasonCode: duoHandoff.reasonCode, date: duoHandoff.date, status: duoHandoff.status, classification: duoHandoff.classification }
-        if (duoHandoff.accountType === 'crypto') {
-          claim.accountType = 'crypto'
+        claim = { ...claim, caseId: duoHandoff.id, merchant: duoHandoff.merchant, amount: duoHandoff.amount, reasonCode: duoHandoff.reasonCode, date: duoHandoff.date, status: duoHandoff.status, classification: duoHandoff.classification }
+        if (sessionType === 'crypto') {
+          claim.accountType = 'crypto_exchange'
           if (cryptoFields.asset_type)       claim.asset_type        = cryptoFields.asset_type
           if (cryptoFields.amount_crypto)    claim.amount_crypto      = cryptoFields.amount_crypto
           if (cryptoFields.amount_usd)       claim.amount_usd         = cryptoFields.amount_usd
@@ -6832,14 +6841,27 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         </div>
       )}
       <div style={{ maxWidth:'480px', display:'grid', gap:'20px' }}>
+        {/* Session type toggle */}
+        <div>
+          <label className="cov-label">SESSION TYPE</label>
+          <div style={{ display:'flex', gap:'2px' }}>
+            {[['standard','STANDARD'],['crypto','CRYPTO / EXCHANGE']].map(([val, label]) => (
+              <button key={val} onClick={() => setSessionType(val)} className="mono-font"
+                style={{ flex:1, padding:'9px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: sessionType === val ? '#1A1814' : 'transparent', color: sessionType === val ? '#F5F1EA' : '#6B5F4D' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="cov-label">YOUR INSTITUTION NAME</label>
           <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
             placeholder="First Community Credit Union" style={{ fontSize:'14px' }} />
         </div>
 
-        {/* Crypto-specific fields — only shown for crypto handoffs */}
-        {duoHandoff?.accountType === 'crypto' && (
+        {/* Crypto-specific fields — shown when session type is crypto */}
+        {sessionType === 'crypto' && (
           <>
             <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'16px' }}>
               <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CRYPTO / DIGITAL ASSET DETAILS</div>
@@ -6917,7 +6939,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     const claim        = session.claim || {}
     const thread       = buildThread(session)
     const myName       = myRole === 'a' ? session.institution_a : session.institution_b
-    const isCryptoClaim = claim.accountType === 'crypto'
+    const isCryptoClaim = claim.accountType === 'crypto' || claim.accountType === 'crypto_exchange'
     const statusOrder  = isCryptoClaim ? DUO_STATUS_ORDER_CRYPTO : DUO_STATUS_ORDER
     const st           = DUO_STATUS[session.status] || DUO_STATUS.active
     const stIdx        = statusOrder.indexOf(session.status)
@@ -6961,8 +6983,8 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
               <button onClick={handleCopy} style={{ padding:'6px 8px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer' }}>
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-stone-500" />}
               </button>
-              <button onClick={() => setPhase('dashboard')} style={{ padding:'6px 8px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer' }} title="Back to sessions">
-                <X className="w-3.5 h-3.5 text-stone-500" />
+              <button onClick={() => setPhase('dashboard')} className="mono-font" style={{ padding:'6px 12px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', fontSize:'9px', letterSpacing:'0.1em', color:'#6B5F4D' }}>
+                <X className="w-3 h-3" />SESSIONS
               </button>
             </div>
           </div>
