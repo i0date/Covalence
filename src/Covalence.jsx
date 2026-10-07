@@ -7120,10 +7120,11 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   if (phase === 'link-setup') {
     const lp = linkPayload
     const setLp = (k, v) => setLinkPayload(p => ({ ...p, [k]: v }))
-    const Field = ({ label, k, placeholder, type }) => (
-      <div>
+    // Inline helper — NOT a React component, called as a function to avoid remount-on-rerender
+    const F = (label, k, placeholder, type) => (
+      <div key={k}>
         <label className="cov-label">{label}</label>
-        <input className="cov-input mono-font" value={lp[k]} onChange={e => setLp(k, e.target.value)}
+        <input className="cov-input mono-font" value={lp[k] || ''} onChange={e => setLp(k, e.target.value)}
           placeholder={placeholder} type={type || 'text'} style={{ fontSize:'13px' }} />
       </div>
     )
@@ -7152,49 +7153,49 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
           {linkType === 'standard' ? (
             <>
-              <Field label="CASE REFERENCE" k="case_ref" placeholder="TXN-2024-00142" />
-              <Field label="REPORT TYPE" k="report_type" placeholder="Wire Fraud / ACH Recall / Account Takeover" />
-              <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
+              {F('CASE REFERENCE', 'case_ref', 'TXN-2024-00142')}
+              {F('REPORT TYPE', 'report_type', 'Wire Fraud / ACH Recall / Account Takeover')}
+              {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px' }}>
-                <Field label="AMOUNT" k="amount" placeholder="5200.00" />
-                <Field label="CURRENCY" k="currency" placeholder="USD" />
+                {F('AMOUNT', 'amount', '5200.00')}
+                {F('CURRENCY', 'currency', 'USD')}
               </div>
-              <Field label="NATURE OF REPORT" k="nature" placeholder="Authorized push payment fraud / account takeover / etc." />
+              {F('NATURE OF REPORT', 'nature', 'Authorized push payment fraud / account takeover / etc.')}
               <div>
                 <label className="cov-label">SUMMARY</label>
-                <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
+                <textarea className="cov-input mono-font" value={lp.summary || ''} onChange={e => setLp('summary', e.target.value)}
                   rows={3} placeholder="Brief factual summary of what occurred — no customer PII."
                   style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
               </div>
             </>
           ) : (
             <>
-              <Field label="CASE REFERENCE" k="case_ref" placeholder="CRYPTO-2024-00142" />
-              <Field label="REPORT TYPE" k="report_type" placeholder="Investment scam / pig butchering / unauthorized transfer" />
-              <Field label="INCIDENT DATE" k="incident_date" placeholder="2024-01-15" type="date" />
+              {F('CASE REFERENCE', 'case_ref', 'CRYPTO-2024-00142')}
+              {F('REPORT TYPE', 'report_type', 'Investment scam / pig butchering / unauthorized transfer')}
+              {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-                <Field label="ASSET TYPE" k="asset_type" placeholder="BTC / ETH / USDT" />
-                <Field label="AMOUNT (CRYPTO)" k="amount" placeholder="0.234" />
+                {F('ASSET TYPE', 'asset_type', 'BTC / ETH / USDT')}
+                {F('AMOUNT (CRYPTO)', 'amount', '0.234')}
               </div>
-              <Field label="AMOUNT (USD EQUIVALENT)" k="amount_usd" placeholder="8400.00" />
-              <Field label="NATURE OF REPORT" k="nature" placeholder="Authorized push payment fraud / pig butchering / romance scam" />
+              {F('AMOUNT (USD EQUIVALENT)', 'amount_usd', '8400.00')}
+              {F('NATURE OF REPORT', 'nature', 'Authorized push payment fraud / pig butchering / romance scam')}
               <div>
                 <label className="cov-label">SUMMARY</label>
-                <textarea className="cov-input mono-font" value={lp.summary} onChange={e => setLp('summary', e.target.value)}
+                <textarea className="cov-input mono-font" value={lp.summary || ''} onChange={e => setLp('summary', e.target.value)}
                   rows={3} placeholder="Brief factual summary — no customer PII."
                   style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
               </div>
               <div>
                 <label className="cov-label">WALLET ADDRESS(ES) — one per line</label>
-                <textarea className="cov-input mono-font" value={lp.wallet_addresses} onChange={e => setLp('wallet_addresses', e.target.value)}
+                <textarea className="cov-input mono-font" value={lp.wallet_addresses || ''} onChange={e => setLp('wallet_addresses', e.target.value)}
                   rows={3} placeholder={"bc1q...\nbc1q..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
               </div>
               <div>
                 <label className="cov-label">TRANSACTION ID(S) — one per line</label>
-                <textarea className="cov-input mono-font" value={lp.transaction_ids} onChange={e => setLp('transaction_ids', e.target.value)}
+                <textarea className="cov-input mono-font" value={lp.transaction_ids || ''} onChange={e => setLp('transaction_ids', e.target.value)}
                   rows={3} placeholder={"a1b2c3d4...\ne5f6g7h8..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
               </div>
-              <Field label="CHAIN ANALYTICS LINK (optional)" k="chain_analytics_link" placeholder="https://platform.chainalysis.com/..." />
+              {F('CHAIN ANALYTICS LINK (optional)', 'chain_analytics_link', 'https://platform.chainalysis.com/...')}
             </>
           )}
 
