@@ -649,12 +649,15 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     localStorage.setItem('triage_outcomes', JSON.stringify(outcomes))
   }, [outcomes])
 
-  // ── Reset transaction type when account type changes ─────────────────────────
+  // ── Reset transaction type + network when account type changes ───────────────
   useEffect(() => {
     if (accountType && transactionType) {
       const validTypes = TX_TYPES[accountType] ?? []
       if (!validTypes.includes(transactionType)) setTransactionType('')
     }
+    // Clear network if it's no longer valid for the new account type
+    if (accountType === 'credit' && network === 'Interac') setNetwork('')
+    if (accountType === 'debit' && ['Visa','Mastercard','American Express'].includes(network)) setNetwork('')
   }, [accountType])
 
   // ── Computed values ──────────────────────────────────────────────────────────
@@ -1515,8 +1518,10 @@ Return ONLY valid JSON:
                     <option value="">Select network…</option>
                     {isCrypto ? (
                       <><option>Bitcoin (BTC)</option><option>Ethereum (ETH)</option><option>Solana (SOL)</option><option>Polygon (MATIC)</option><option>USDT / USDC (Stablecoin)</option><option>Other / Unknown chain</option></>
+                    ) : accountType === 'credit' ? (
+                      <><option>Visa</option><option>Mastercard</option><option>American Express</option><option>Other</option></>
                     ) : (
-                      <><option>Visa</option><option>Mastercard</option><option>American Express</option><option>Interac</option><option>Other</option></>
+                      <><option>Visa (Debit)</option><option>Mastercard (Debit)</option><option>Interac</option><option>Other</option></>
                     )}
                   </select>
                 </div>
