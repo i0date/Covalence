@@ -5262,7 +5262,7 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 160px 80px' }}>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 1fr 80px' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
@@ -5316,9 +5316,11 @@ Return ONLY valid JSON:
                                   {o.status === 'pending' && (
                                     <>
                                       <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
+                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">WD</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'resolved')} className="mono-font text-[10px] px-1.5 py-0.5 border border-teal-600 text-teal-700 hover:bg-teal-50 transition-colors">RESOLVED</button>
                                     </>
                                   )}
                                   {o.status === 'filed' && (
@@ -5397,6 +5399,19 @@ Return ONLY valid JSON:
                                   {/* PC button — FI only (Reg E is issuer obligation) */}
                                   {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
                                     <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">PC</button>
+                                  )}
+                                  {/* Next response due — inline date setter for active cases */}
+                                  {!['won','lost','withdrawn','resolved'].includes(o.status) && (
+                                    <label className="flex items-center gap-1 cursor-pointer" title="Set next response due date">
+                                      <span className="mono-font text-[9px] text-stone-400 tracking-wide shrink-0">NEXT RESP</span>
+                                      <input
+                                        type="date"
+                                        value={o.nextRespDate || ''}
+                                        onChange={e => setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, nextRespDate: e.target.value } : x))}
+                                        className="mono-font text-[9px] text-stone-600 border-0 border-b border-stone-300 bg-transparent outline-none cursor-pointer"
+                                        style={{ width: '88px', padding: '0 2px', fontSize: '9px' }}
+                                      />
+                                    </label>
                                   )}
                                 </div>
                                 <div className="flex items-start gap-2 justify-end">
