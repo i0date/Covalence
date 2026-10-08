@@ -2232,6 +2232,20 @@ Return ONLY valid JSON:
 
 
 
+// ─── NACHA ACH Return Code Reference ─────────────────────────────────────────
+const NACHA_RETURN_CODES = [
+  { code: 'R01', title: 'Insufficient Funds',                               type: 'Bank Return',  deadline: '2 BD',  fraud: false, notes: 'Most common return. Eligible for re-presentment (up to 2×). Not necessarily fraud — verify with consumer before disputing.' },
+  { code: 'R02', title: 'Account Closed',                                   type: 'Bank Return',  deadline: '2 BD',  fraud: false, notes: 'Account closed before settlement. Re-presentment not permitted. Obtain new payment method from consumer.' },
+  { code: 'R03', title: 'No Account / Unable to Locate Account',            type: 'Bank Return',  deadline: '2 BD',  fraud: true,  notes: 'Account number does not correspond to an individual or does not exist. Potential origination fraud — verify beneficiary details before re-presenting.' },
+  { code: 'R04', title: 'Invalid Account Number Structure',                  type: 'Bank Return',  deadline: '2 BD',  fraud: false, notes: 'Account number fails check-digit validation. Likely data entry error — do not re-present until corrected.' },
+  { code: 'R05', title: 'Unauthorized Debit to Consumer Account (Corporate SEC)', type: 'Consumer Return', deadline: '60 CD', fraud: true,  notes: 'High-risk fraud indicator. Consumer claims debit was unauthorized using corporate (CCD/CTX) entry format. File within 60 calendar days. Reg E investigation required for debit accounts.' },
+  { code: 'R07', title: 'Authorization Revoked by Customer',                type: 'Consumer Return', deadline: '60 CD', fraud: false, notes: 'Consumer had authorized the debit but has since revoked it. Must stop future entries. Reg E provisional credit applies for debit cards. File within 60 calendar days.' },
+  { code: 'R10', title: 'Customer Advises Not Authorized',                  type: 'Consumer Return', deadline: '60 CD', fraud: true,  notes: 'Most common fraud-related ACH return. Consumer states they never authorized the debit. File within 60 calendar days. Reg E investigation and provisional credit rules apply.' },
+  { code: 'R11', title: 'Customer Advises Entry Not in Accordance with Terms', type: 'Consumer Return', deadline: '60 CD', fraud: false, notes: 'Debit occurred but not per agreed amount, date, or frequency. Different from R07 — authorization existed but was violated. File within 60 calendar days.' },
+  { code: 'R29', title: 'Corporate Customer Advises Not Authorized',        type: 'Corporate Return', deadline: '2 BD',  fraud: true,  notes: 'Corporate equivalent of R10. Used for CCD and CTX entries only. Company advises they did not authorize the debit entry. 2 business day return window.' },
+  { code: 'R20', title: 'Non-Transaction Account',                          type: 'Bank Return',  deadline: '2 BD',  fraud: false, notes: 'Account type does not permit ACH debits (e.g., savings/money market with transaction limits). Re-present to a valid DDA.' },
+]
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2310,6 +2324,40 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [mchRepDeadline, setMchRepDeadline]                 = useState('')
   const [mchSubmitDate, setMchSubmitDate]                   = useState('')
   const [mchTrackingRef, setMchTrackingRef]                 = useState('')
+
+  // ── Case status lifecycle tracker ─────────────────────────────────────────
+  const CASE_STATUS_STAGES = [
+    { id: 'filed',            label: 'Filed',               short: 'Filed'     },
+    { id: 'investigating',    label: 'Under Investigation',  short: 'Investig.' },
+    { id: 'pc_issued',        label: 'PC Issued',            short: 'PC Issued' },
+    { id: 'network_response', label: 'Network Response',     short: 'Net. Resp.'},
+    { id: 'resolved',         label: 'Resolved / Closed',    short: 'Resolved'  },
+  ]
+  const [caseStatusKey, setCaseStatusKey]         = useState(null)
+  const [caseStatusStage, setCaseStatusStageRaw]  = useState(null)
+  const [caseStatusHistory, setCaseStatusHistory] = useState({})
+  const setCaseStatusStage = (newStage) => {
+    setCaseStatusStageRaw(newStage)
+    const now = new Date().toISOString()
+    setCaseStatusHistory(prev => {
+      const next = { ...prev, [newStage]: prev[newStage] || now }
+      if (caseStatusKey) {
+        try { localStorage.setItem('desk_cs_hist_' + caseStatusKey, JSON.stringify(next)) } catch {}
+      }
+      return next
+    })
+    if (caseStatusKey) {
+      try { localStorage.setItem('desk_cs_stage_' + caseStatusKey, newStage) } catch {}
+    }
+  }
+
+  // ── Chargeback cycle deadline tracker ────────────────────────────────────
+  const [cbFiledDate, setCbFiledDate]   = useState('')
+  const [cbCycleStage, setCbCycleStage] = useState('1cb')
+
+  // ── Fight-or-Accept net value calculator ──────────────────────────────────
+  const [fightHourlyRate, setFightHourlyRate] = useState('75')
+  const [fightHours, setFightHours]           = useState('2')
 
   // ── Deadline push notifications ─────────────────────────────────────────────
   useEffect(() => {
@@ -2969,6 +3017,29 @@ Return ONLY valid JSON:
     URL.revokeObjectURL(url)
   }
 
+  // ── Load case status from localStorage when result arrives ───────────────
+  useEffect(() => {
+    if (!result) { setCaseStatusStageRaw(null); setCaseStatusHistory({}); setCaseStatusKey(null); return }
+    const key = [merchant || 'unknown', transactionDate || 'nodate', amount || '0', network].join('|').replace(/\s+/g, '_')
+    setCaseStatusKey(key)
+    try {
+      const savedStage = localStorage.getItem('desk_cs_stage_' + key)
+      const savedHist  = JSON.parse(localStorage.getItem('desk_cs_hist_' + key) || '{}')
+      const initStage  = savedStage || 'filed'
+      const initHist   = savedHist?.filed ? savedHist : { filed: new Date().toISOString() }
+      setCaseStatusStageRaw(initStage)
+      setCaseStatusHistory(initHist)
+      if (!savedStage) {
+        try { localStorage.setItem('desk_cs_stage_' + key, initStage) } catch {}
+        try { localStorage.setItem('desk_cs_hist_' + key, JSON.stringify(initHist)) } catch {}
+      }
+    } catch {
+      setCaseStatusStageRaw('filed')
+      setCaseStatusHistory({ filed: new Date().toISOString() })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result])
+
   // ── FI SAR deadline (30 days from detection date, FinCEN / FINTRAC) ────────
   const fiSarDeadlineRaw = sarDiscoveryDate
     ? new Date(new Date(sarDiscoveryDate).getTime() + 30 * 86400000)
@@ -2986,6 +3057,47 @@ Return ONLY valid JSON:
   const regEInvDue = (cardType === 'debit' && result)
     ? addBusinessDays(regEBaseDate, 45).toLocaleDateString('en-CA')
     : null
+
+  // ── Chargeback cycle deadline computation ────────────────────────────────
+  const cbDeadlines = React.useMemo(() => {
+    if (!cbFiledDate) return null
+    const filed   = new Date(cbFiledDate)
+    const addDays = (d, n) => new Date(d.getTime() + n * 86400000)
+    const fmt     = d => d.toLocaleDateString('en-CA')
+    const today   = new Date()
+    const dLeft   = d => Math.ceil((d - today) / 86400000)
+    const chip = (label, date, days, note) => ({ label, date, days, note })
+    if (network === 'visa') {
+      if (cbCycleStage === '1cb')    { const d = addDays(filed, 30); return [chip('Merchant Representment Deadline', fmt(d), dLeft(d), 'Visa: merchant has 30 calendar days to respond to your chargeback')] }
+      if (cbCycleStage === '2cb')    { const d = addDays(filed, 30); return [chip('Pre-Arbitration Filing Deadline', fmt(d), dLeft(d), 'Visa: 30 calendar days from merchant representment to file Pre-Arb')] }
+      if (cbCycleStage === 'prearb') { const d = addDays(filed, 30); return [chip('Arbitration Filing Deadline', fmt(d), dLeft(d), 'Visa: 30 calendar days from Pre-Arb filing to escalate to arbitration')] }
+    } else if (network === 'mastercard') {
+      if (cbCycleStage === '1cb')    { const d = addDays(filed, 45); return [chip('Merchant Response Deadline', fmt(d), dLeft(d), 'MC: merchant has 45 calendar days to respond to first chargeback')] }
+      if (cbCycleStage === '2cb')    { const d = addDays(filed, 30); return [chip('Pre-Arbitration Filing Deadline', fmt(d), dLeft(d), 'MC: 30 calendar days from second presentment to file Pre-Arb')] }
+      if (cbCycleStage === 'prearb') { const d = addDays(filed, 30); return [chip('Arbitration Filing Deadline', fmt(d), dLeft(d), 'MC: 30 calendar days from Pre-Arb to file for arbitration')] }
+    }
+    return null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cbFiledDate, cbCycleStage, network])
+
+  // ── Fight-or-Accept net value computation ────────────────────────────────
+  const fightCalc = React.useMemo(() => {
+    const amt = parseFloat(isPartialDispute ? disputedAmount : amount) || 0
+    if (!amt || !result) return null
+    // Estimate win probability from AI result confidence + rebuttal risk
+    let winProb = result.confidence === 'high' ? 0.72 : result.confidence === 'medium' ? 0.50 : 0.28
+    if (rebuttal?.win_risk === 'LOW')    winProb = Math.min(0.88, winProb + 0.10)
+    if (rebuttal?.win_risk === 'HIGH')   winProb = Math.max(0.15, winProb - 0.20)
+    if (rebuttal?.win_risk === 'MEDIUM') winProb = Math.max(0.30, winProb - 0.08)
+    const rate       = parseFloat(fightHourlyRate) || 75
+    const hours      = parseFloat(fightHours) || 2
+    const staffCost  = rate * hours
+    const netFee     = 15 // network processing fee estimate
+    const expectedRec = amt * winProb
+    const netValue    = expectedRec - staffCost - netFee
+    return { winProb: Math.round(winProb * 100), staffCost, expectedRec, netFee, netValue, recommendation: netValue > 0 ? 'FIGHT' : 'ACCEPT' }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amount, disputedAmount, isPartialDispute, result, rebuttal, fightHourlyRate, fightHours])
 
   const isFraud     = result?.category === 'fraud' || result?.category === 'mc_fraud'
   let filingWindow  = null
@@ -3216,7 +3328,18 @@ Return ONLY valid JSON:
                     >
                       MASTERCARD
                     </button>
+                    <button
+                      onClick={() => setNetwork('ach')}
+                      className={`network-btn ${network === 'ach' ? 'active' : 'inactive'}`}
+                    >
+                      ACH / EFT
+                    </button>
                   </div>
+                  {network === 'ach' && (
+                    <div className="mt-1.5 mono-font text-[10px] text-amber-800 tracking-wide">
+                      NACHA rules apply — see return code reference in analysis panel
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="input-label">Card Type</label>
@@ -3340,6 +3463,31 @@ Return ONLY valid JSON:
                 </div>
               </div>
 
+              {/* Chargeback cycle stage + filed date — for deadline tracking */}
+              <div className="border border-stone-300 p-4" style={{ background: '#F0EDE6' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">CHARGEBACK CYCLE <span className="normal-case tracking-normal font-normal opacity-60">— enables cycle deadline tracking</span></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">CURRENT STAGE</label>
+                    <div className="flex flex-wrap gap-0">
+                      {[{v:'1cb',l:'1st CB'},{v:'2cb',l:'2nd Pres.'},{v:'prearb',l:'Pre-Arb'},{v:'arb',l:'Arb'}].map(({v,l}) => (
+                        <button key={v} onClick={() => setCbCycleStage(v)}
+                          className="mono-font text-[9px] tracking-wide px-2.5 py-1.5 transition-all"
+                          style={{ background: cbCycleStage===v?'#1A1814':'transparent', color: cbCycleStage===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">DATE FILED / RECEIVED</label>
+                    <input type="date" value={cbFiledDate} onChange={e => setCbFiledDate(e.target.value)}
+                      className="cov-input mono-font" style={{ fontSize: '12px' }} />
+                    <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank to skip deadline tracking</div>
+                  </div>
+                </div>
+              </div>
+
               {/* DFA Signal Capture */}
               <div className="border border-stone-300 p-4" style={{ background:'#F0EDE6' }}>
                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">DFA SIGNALS <span className="normal-case tracking-normal font-normal opacity-60">— improves funding grade accuracy</span></div>
@@ -3443,11 +3591,50 @@ Return ONLY valid JSON:
 
                 {/* Network badge */}
                 <div className="mono-font text-xs tracking-widest text-stone-500 flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-white ${network === 'visa' ? 'bg-blue-800' : 'bg-red-900'}`}>
-                    {network === 'visa' ? 'VISA' : 'MASTERCARD'}
+                  <span className={`px-2 py-0.5 text-white ${network === 'visa' ? 'bg-blue-800' : network === 'mastercard' ? 'bg-red-900' : 'bg-teal-800'}`}>
+                    {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH / EFT'}
                   </span>
-                  <span>REASON CODE ANALYSIS</span>
+                  <span>{network === 'ach' ? 'NACHA RETURN CODE REFERENCE' : 'REASON CODE ANALYSIS'}</span>
                 </div>
+
+                {/* Case status lifecycle tracker */}
+                {caseStatusStage && (
+                  <div className="border border-stone-300 bg-stone-50 p-4">
+                    <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">CASE STATUS</div>
+                    <div className="flex items-stretch overflow-x-auto">
+                      {CASE_STATUS_STAGES.map((stage, idx) => {
+                        const stageIds = CASE_STATUS_STAGES.map(s => s.id)
+                        const currentIdx = stageIds.indexOf(caseStatusStage)
+                        const thisIdx    = idx
+                        const isDone     = thisIdx < currentIdx
+                        const isActive   = stage.id === caseStatusStage
+                        const ts         = caseStatusHistory[stage.id]
+                        return (
+                          <button
+                            key={stage.id}
+                            onClick={() => setCaseStatusStage(stage.id)}
+                            title={ts ? `Entered: ${new Date(ts).toLocaleDateString()}` : 'Click to set this stage'}
+                            className="flex-1 min-w-0 flex flex-col items-center text-center px-1 py-2 transition-all border-r last:border-r-0 border-stone-200"
+                            style={{ background: isActive ? '#1A1814' : isDone ? '#E8E4DC' : 'transparent', cursor: 'pointer' }}
+                          >
+                            <div className={`mono-font text-[8px] tracking-wide leading-tight ${isActive ? 'text-stone-100' : isDone ? 'text-stone-600' : 'text-stone-400'}`}>
+                              {stage.short}
+                            </div>
+                            {isDone && <div className="text-emerald-600 text-[10px] mt-0.5">✓</div>}
+                            {isActive && <div className="text-amber-400 text-[10px] mt-0.5">●</div>}
+                            {!isDone && !isActive && <div className="text-stone-300 text-[10px] mt-0.5">○</div>}
+                            {ts && isActive && (
+                              <div className="mono-font text-[7px] text-stone-400 mt-0.5 leading-none">
+                                {new Date(ts).toLocaleDateString('en-CA')}
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="mono-font text-[9px] text-stone-400 mt-2">Click any stage to advance the case status — persisted per case</div>
+                  </div>
+                )}
 
                 {/* Reason code card */}
                 <div className="border-2 border-stone-900 bg-stone-50 p-6">
@@ -3471,11 +3658,42 @@ Return ONLY valid JSON:
                   <p className="display-font text-stone-700 leading-relaxed text-[15px]">{result.rationale}</p>
                 </div>
 
+                {/* NACHA Return Code Reference — ACH/EFT only */}
+                {network === 'ach' && (
+                  <div className="border border-teal-800 bg-teal-50 p-5 space-y-4">
+                    <div className="mono-font text-xs tracking-widest text-teal-900">NACHA ACH RETURN CODE REFERENCE</div>
+                    <p className="display-font text-stone-700 text-[14px] leading-relaxed">
+                      Select the return code that matches this dispute. NACHA return windows are strict — late returns may be rejected by the RDFI. For consumer disputes (R05, R07, R10, R11), Reg E applies for debit accounts.
+                    </p>
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {NACHA_RETURN_CODES.map(rc => (
+                        <div key={rc.code} className="border border-teal-200 bg-white p-3">
+                          <div className="flex items-start gap-3 mb-1 flex-wrap">
+                            <span className="mono-font text-sm font-bold text-teal-900 shrink-0">{rc.code}</span>
+                            <span className="display-font text-stone-900 text-[14px] font-semibold leading-snug">{rc.title}</span>
+                            <div className="ml-auto flex gap-1.5 shrink-0 flex-wrap justify-end">
+                              <span className="mono-font text-[9px] px-1.5 py-0.5 bg-stone-200 text-stone-700">{rc.type}</span>
+                              <span className={`mono-font text-[9px] px-1.5 py-0.5 ${rc.deadline.includes('60') ? 'bg-amber-800 text-amber-50' : 'bg-stone-700 text-stone-50'}`}>
+                                DEADLINE: {rc.deadline}
+                              </span>
+                              {rc.fraud && <span className="mono-font text-[9px] px-1.5 py-0.5 bg-red-800 text-red-50">FRAUD INDICATOR</span>}
+                            </div>
+                          </div>
+                          <p className="display-font text-stone-600 text-[13px] leading-relaxed ml-10">{rc.notes}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mono-font text-[10px] text-teal-800 italic">
+                      BD = Business Days from settlement date · CD = Calendar Days from transaction date · Always verify your institution's ODFI agreement for specific return windows.
+                    </div>
+                  </div>
+                )}
+
                 {/* Dispute summary */}
                 <div className="border border-stone-900 bg-white p-6">
                   <div className="flex items-baseline justify-between mb-4">
                     <div className="mono-font text-xs tracking-widest text-stone-600">
-                      DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : 'MASTERCARD'}
+                      DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH / NACHA'}
                     </div>
                     <button onClick={copySummary} className="mono-font text-xs flex items-center gap-1.5 text-stone-700 hover:text-stone-900 transition-colors">
                       {copied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
@@ -3546,6 +3764,29 @@ Return ONLY valid JSON:
                     <p className="mono-font text-[10px] text-stone-500 italic pt-1">
                       Note: these dates are calculated from today (date of analysis). Adjust if claim was received on a different date.
                     </p>
+                  </div>
+                )}
+
+                {/* Chargeback cycle deadlines */}
+                {cbDeadlines && cbDeadlines.length > 0 && (
+                  <div className="border-l-4 border-stone-800 bg-stone-50 p-5 space-y-3">
+                    <div className="mono-font text-xs tracking-widest text-stone-700">CHARGEBACK CYCLE DEADLINES</div>
+                    <div className="flex flex-wrap gap-3">
+                      {cbDeadlines.map((dl, i) => (
+                        <div key={i} className={`px-3 py-2 ${dl.days !== null && dl.days <= 5 ? 'bg-red-900 text-red-50' : dl.days !== null && dl.days <= 15 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
+                          <div className="mono-font text-[9px] tracking-widest opacity-70 mb-0.5">{dl.label.toUpperCase()}</div>
+                          <div className="mono-font text-sm font-bold">{dl.date}</div>
+                          {dl.days !== null && (
+                            <div className="mono-font text-[10px] opacity-80">
+                              {dl.days > 0 ? `${dl.days} days remaining` : dl.days === 0 ? 'DUE TODAY' : `${Math.abs(dl.days)} days OVERDUE`}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {cbDeadlines[0]?.note && (
+                      <div className="mono-font text-[10px] text-stone-500 italic">{cbDeadlines[0].note}</div>
+                    )}
                   </div>
                 )}
 
@@ -4233,6 +4474,88 @@ Return ONLY valid JSON:
                 </div>
               )}
             </div>
+
+        {/* ── Fight-or-Accept Calculator ── */}
+            {platformMode === 'fi' && (
+            <>
+            <div className="section-divider" />
+            <div>
+              <div className="flex items-baseline gap-3 mb-2">
+                <span className="mono-font text-xs text-stone-500">07</span>
+                <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Fight-or-Accept Calculator</h2>
+              </div>
+              <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
+                Calculate whether fighting this chargeback is worth the cost — accounting for staff time, network fees, and estimated win probability.
+              </p>
+
+              {!result && (
+                <div className="border border-dashed border-stone-300 p-10 text-center" style={{ background: '#FAF7F1' }}>
+                  <p className="display-font text-stone-400 italic text-[14px]">Run an analysis first to compute fight-or-accept value.</p>
+                </div>
+              )}
+
+              {result && (
+                <div className="space-y-4">
+                  {/* Inputs */}
+                  <div className="border border-stone-300 p-5 grid grid-cols-2 gap-5" style={{ background: '#F0EDE6' }}>
+                    <div>
+                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">STAFF HOURLY RATE ($/hr)</label>
+                      <input
+                        type="number" min="0" max="500" step="5"
+                        value={fightHourlyRate} onChange={e => setFightHourlyRate(e.target.value)}
+                        className="cov-input mono-font" style={{ fontSize: '14px', maxWidth: '100px' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">ESTIMATED HOURS TO FIGHT</label>
+                      <input
+                        type="number" min="0" max="20" step="0.5"
+                        value={fightHours} onChange={e => setFightHours(e.target.value)}
+                        className="cov-input mono-font" style={{ fontSize: '14px', maxWidth: '80px' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Results */}
+                  {fightCalc && (
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-0 border border-stone-900">
+                      <div className="p-4 border-r border-stone-200 bg-stone-50">
+                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROBABILITY</div>
+                        <div className="display-font font-bold text-3xl text-stone-900">{fightCalc.winProb}%</div>
+                        <div className="mono-font text-[10px] text-stone-400 mt-1">
+                          {result.confidence?.toUpperCase()} confidence{rebuttal?.win_risk ? ` · merchant ${rebuttal.win_risk.toLowerCase()} defense` : ''}
+                        </div>
+                      </div>
+                      <div className="p-4 border-r border-stone-200 bg-stone-50">
+                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXPECTED RECOVERY</div>
+                        <div className="display-font font-bold text-3xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
+                        <div className="mono-font text-[10px] text-stone-400 mt-1">amount × win prob</div>
+                      </div>
+                      <div className="p-4 border-r border-stone-200 bg-stone-50">
+                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">TOTAL COST TO FIGHT</div>
+                        <div className="display-font font-bold text-3xl text-stone-900">${(fightCalc.staffCost + fightCalc.netFee).toFixed(2)}</div>
+                        <div className="mono-font text-[10px] text-stone-400 mt-1">${fightCalc.staffCost.toFixed(0)} staff + ~${fightCalc.netFee} network fee</div>
+                      </div>
+                      <div className={`p-4 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
+                        <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
+                        <div className={`display-font font-bold text-3xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'}`}>
+                          {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
+                        </div>
+                        <div className={`mono-font text-sm font-bold mt-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>
+                          → {fightCalc.recommendation}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mono-font text-[10px] text-stone-400 italic">
+                    Win probability is estimated from AI analysis confidence and merchant defense strength. Adjust staff rate and hours for your institution's actual cost profile. Network fee estimate (~$15) is illustrative.
+                  </div>
+                </div>
+              )}
+            </div>
+            </>
+            )}
 
         {/* ── Step 05 — Customer Communication ── */}
             <div className="section-divider" />
