@@ -690,6 +690,37 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     return Math.max(0, Math.min(100, Math.round(s)))
   }, [priorDisputes, accountAge, cardPossession, flaggedBy, daysSinceTransaction, accountChanges, deviceRecognized, merchantDisputeRate, vfmp, mccRisk])
 
+  // ── Velocity / duplicate detection (Task 12) ──────────────────────────────
+  const velocityWarning = useMemo(() => {
+    if (!merchant && !amount) return null
+    const window14  = new Date(Date.now() - 14 * 86400000)
+    const window7   = new Date(Date.now() - 7  * 86400000)
+    const recentAll = outcomes.filter(o => new Date(o.date) > window14)
+    // Same merchant in last 14 days
+    const sameMerchant = merchant
+      ? recentAll.filter(o => (o.merchant || '').toLowerCase() === merchant.toLowerCase())
+      : []
+    // Same amount (exact string match) in last 7 days
+    const amtStr = amount ? `${amount} ${currency}` : null
+    const sameAmt = amtStr
+      ? outcomes.filter(o => new Date(o.date) > window7 && o.amount === amtStr)
+      : []
+    // Same account type in last 7 days (velocity by channel)
+    const sameType = accountType
+      ? outcomes.filter(o => new Date(o.date) > window7 && o.accountType === accountType)
+      : []
+    const warnings = []
+    if (sameMerchant.length >= 2)
+      warnings.push({ level: 'HIGH', text: `${sameMerchant.length} claims against "${merchant}" in the last 14 days — possible merchant-level fraud pattern or repeat dispute abuse.` })
+    else if (sameMerchant.length === 1)
+      warnings.push({ level: 'MEDIUM', text: `1 prior claim against "${merchant}" in the last 14 days — check for repeat dispute pattern.` })
+    if (sameAmt.length >= 2)
+      warnings.push({ level: 'HIGH', text: `${sameAmt.length} claims for exactly ${amtStr} in the last 7 days — possible split-transaction fraud or duplicate submission.` })
+    if (sameType.length >= 5)
+      warnings.push({ level: 'MEDIUM', text: `${sameType.length} ${accountType} claims in the last 7 days — elevated channel velocity. Review for coordinated fraud.` })
+    return warnings.length > 0 ? warnings : null
+  }, [merchant, amount, currency, accountType, outcomes])
+
   const regFramework =
     accountType === 'debit' || accountType === 'ach_eft' ? 'REG_E' :
     accountType === 'credit'                             ? 'REG_Z' :
@@ -845,6 +876,8 @@ ${isCardBased ? `MERCHANT RISK SIGNALS:
 Return ONLY valid JSON, no markdown:
 {
   "classification": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT",
+  "fraud_sub_type": "For TRUE_FRAUD pick one: LOST_STOLEN | CNP_FRAUD | COUNTERFEIT_SKIMMING | ATO_CARD_COMPROMISE | NRI_NEVER_RECEIVED | SYNTHETIC_IDENTITY | UNKNOWN_THIRD_PARTY. For FIRST_PARTY_FRAUD: FRIENDLY_FRAUD | CHARGEBACK_ABUSE | RETURN_ABUSE. For CONSUMER_DISPUTE: NOT_AS_DESCRIBED | NON_RECEIPT | CANCELLED_SUBSCRIPTION | CREDIT_NOT_PROCESSED | SERVICE_FAILURE | BILLING_ERROR. For AUTHORIZED_PUSH_PAYMENT: ROMANCE_SCAM | INVESTMENT_SCAM | FAKE_INVOICE_FRAUD | IMPERSONATION_SCAM | BUYER_SELLER_FRAUD | GRANDPARENT_SCAM | OTHER_APP_SCAM.",
+  "fraud_sub_label": "Human-readable label for fraud_sub_type, e.g. 'Card-Not-Present Fraud' or 'Romance Scam'.",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
   "label": "True Fraud" | "First-Party Fraud" | "Consumer Dispute" | "Authorized Push Payment",
   "headline": "One tight sentence summarizing the triage assessment.",
@@ -854,6 +887,8 @@ Return ONLY valid JSON, no markdown:
   ],
   "ato_suspected": true | false,
   "ato_note": "Brief ATO note if suspected, empty string otherwise.",
+  "provisional_credit_rec": "ISSUE_IMMEDIATELY" | "ISSUE_CONDITIONALLY" | "HOLD_PENDING_INVESTIGATION" | "NOT_APPLICABLE",
+  "provisional_credit_note": "1–2 sentence explanation of the PC recommendation and any conditions, timeline, or caveats.",
   "routing": "CARD_CHARGEBACK" | "NACHA_RETURN" | "RECIPIENT_FI" | "PROVIDER_DISPUTE" | "FLAG_INVESTIGATION" | "GOODWILL_FIRST",
   "routing_label": "Human-readable routing label",
   "routing_detail": "1–2 sentences on what the agent should do next.",
@@ -869,7 +904,7 @@ Return ONLY valid JSON, no markdown:
         response = await fetch('/api/triage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1400, messages: [{ role: 'user', content: prompt }] }),
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1800, messages: [{ role: 'user', content: prompt }] }),
           signal: controller.signal,
         })
       } finally { clearTimeout(timeoutId) }
@@ -886,6 +921,7 @@ Return ONLY valid JSON, no markdown:
         accountType, network: network || '',
         verdict: parsed.classification, confidence: parsed.confidence,
         routing: parsed.routing, outcome: 'pending',
+        fraud_sub_type: parsed.fraud_sub_type || '',
       }, ...prev].slice(0, 100))
     } catch (e) {
       setError(`Classification failed: ${e.message}`)
@@ -1764,10 +1800,32 @@ Return ONLY valid JSON:
                 </div>
               )}
 
+              {/* Velocity / duplicate warning (Task 12) */}
+              {velocityWarning && (
+                <div className="space-y-2">
+                  {velocityWarning.map((w, i) => (
+                    <div key={i} className="flex items-start gap-3 px-4 py-3" style={{ background: w.level === 'HIGH' ? '#FEF2F2' : '#FFFBEB', border: `1px solid ${w.level === 'HIGH' ? '#FCA5A5' : '#FCD34D'}` }}>
+                      <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${w.level === 'HIGH' ? 'text-red-700' : 'text-amber-700'}`} />
+                      <div>
+                        <span className={`mono-font text-[9px] tracking-widest font-bold ${w.level === 'HIGH' ? 'text-red-800' : 'text-amber-800'}`}>VELOCITY SIGNAL — {w.level} &nbsp;</span>
+                        <span className="display-font text-stone-800 text-[13px] leading-snug">{w.text}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Verdict card */}
               <div className="p-6" style={{ background: cfg.bg }}>
-                <div className="flex items-start justify-between mb-4 flex-wrap gap-2">
-                  <div className="mono-font text-xs tracking-widest" style={{ color: cfg.badgeText, opacity: 0.8 }}>TRIAGE VERDICT</div>
+                <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="mono-font text-xs tracking-widest" style={{ color: cfg.badgeText, opacity: 0.8 }}>TRIAGE VERDICT</div>
+                    {result.fraud_sub_label && (
+                      <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background: cfg.badge, color: cfg.badgeText, opacity: 0.9 }}>
+                        {result.fraud_sub_label.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                   <div className="mono-font text-xs px-2 py-1" style={{ background: cfg.badge, color: cfg.badgeText }}>{result.confidence} CONFIDENCE</div>
                 </div>
                 <div className="display-font font-bold mb-3" style={{ fontSize: 'clamp(26px, 3.5vw, 38px)', color: cfg.text, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{cfg.label}</div>
@@ -1784,7 +1842,26 @@ Return ONLY valid JSON:
                 </div>
               )}
 
-              {provisionalCreditApplies && (
+              {/* Provisional Credit Recommendation (Task 11) */}
+              {result.provisional_credit_rec && result.provisional_credit_rec !== 'NOT_APPLICABLE' && (
+                <div className="border p-5" style={{
+                  borderColor: result.provisional_credit_rec === 'ISSUE_IMMEDIATELY' ? '#059669' : result.provisional_credit_rec === 'ISSUE_CONDITIONALLY' ? '#1D4ED8' : '#D97706',
+                  background:  result.provisional_credit_rec === 'ISSUE_IMMEDIATELY' ? '#ECFDF5' : result.provisional_credit_rec === 'ISSUE_CONDITIONALLY' ? '#EFF6FF' : '#FFFBEB',
+                }}>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <div className="mono-font text-xs tracking-widest" style={{
+                      color: result.provisional_credit_rec === 'ISSUE_IMMEDIATELY' ? '#065F46' : result.provisional_credit_rec === 'ISSUE_CONDITIONALLY' ? '#1E3A8A' : '#92400E'
+                    }}>
+                      {result.provisional_credit_rec === 'ISSUE_IMMEDIATELY'   && '✓ PROVISIONAL CREDIT — ISSUE IMMEDIATELY'}
+                      {result.provisional_credit_rec === 'ISSUE_CONDITIONALLY' && '⚠ PROVISIONAL CREDIT — ISSUE CONDITIONALLY'}
+                      {result.provisional_credit_rec === 'HOLD_PENDING_INVESTIGATION' && '⊘ PROVISIONAL CREDIT — HOLD PENDING INVESTIGATION'}
+                    </div>
+                  </div>
+                  <p className="display-font text-stone-900 text-[14px] leading-relaxed">{result.provisional_credit_note}</p>
+                </div>
+              )}
+
+              {provisionalCreditApplies && !result.provisional_credit_rec && (
                 <div className="border p-4" style={{ borderColor: '#1D4ED8', background: '#EFF6FF' }}>
                   <div className="mono-font text-xs tracking-widest mb-2" style={{ color: '#1E3A8A' }}>REG E — PROVISIONAL CREDIT</div>
                   <p className="display-font text-stone-900 text-[14px] leading-relaxed">
