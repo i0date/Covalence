@@ -3082,7 +3082,9 @@ Return ONLY valid JSON:
 
   // ── Fight-or-Accept net value computation ────────────────────────────────
   const fightCalc = React.useMemo(() => {
-    const amt = parseFloat(isPartialDispute ? disputedAmount : amount) || 0
+    // Inline partial-dispute check to avoid TDZ (isPartialDispute declared later)
+    const _partial = disputedAmount && parseFloat(disputedAmount) > 0 && disputedAmount !== amount
+    const amt = parseFloat(_partial ? disputedAmount : amount) || 0
     if (!amt || !result) return null
     // Estimate win probability from AI result confidence + rebuttal risk
     let winProb = result.confidence === 'high' ? 0.72 : result.confidence === 'medium' ? 0.50 : 0.28
@@ -3097,7 +3099,7 @@ Return ONLY valid JSON:
     const netValue    = expectedRec - staffCost - netFee
     return { winProb: Math.round(winProb * 100), staffCost, expectedRec, netFee, netValue, recommendation: netValue > 0 ? 'FIGHT' : 'ACCEPT' }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, disputedAmount, isPartialDispute, result, rebuttal, fightHourlyRate, fightHours])
+  }, [amount, disputedAmount, result, rebuttal, fightHourlyRate, fightHours])
 
   const isFraud     = result?.category === 'fraud' || result?.category === 'mc_fraud'
   let filingWindow  = null
