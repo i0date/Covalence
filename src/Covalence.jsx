@@ -3542,31 +3542,6 @@ Return ONLY valid JSON:
                 </div>
               </div>
 
-              {/* Chargeback cycle stage + filed date — for deadline tracking */}
-              <div className="border border-stone-300 p-4" style={{ background: '#F0EDE6' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">CHARGEBACK CYCLE <span className="normal-case tracking-normal font-normal opacity-60">— enables cycle deadline tracking</span></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">CURRENT STAGE</label>
-                    <div className="flex flex-wrap gap-0">
-                      {[{v:'1cb',l:'1st CB'},{v:'2cb',l:'2nd Pres.'},{v:'prearb',l:'Pre-Arb'},{v:'arb',l:'Arb'}].map(({v,l}) => (
-                        <button key={v} onClick={() => setCbCycleStage(v)}
-                          className="mono-font text-[9px] tracking-wide px-2.5 py-1.5 transition-all"
-                          style={{ background: cbCycleStage===v?'#1A1814':'transparent', color: cbCycleStage===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">DATE FILED / RECEIVED</label>
-                    <input type="date" value={cbFiledDate} onChange={e => setCbFiledDate(e.target.value)}
-                      className="cov-input mono-font" style={{ fontSize: '12px' }} />
-                    <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank to skip deadline tracking</div>
-                  </div>
-                </div>
-              </div>
-
               {/* DFA Signal Capture */}
               <div className="border border-stone-300 p-4" style={{ background:'#F0EDE6' }}>
                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">DFA SIGNALS <span className="normal-case tracking-normal font-normal opacity-60">— improves funding grade accuracy</span></div>
@@ -3846,25 +3821,55 @@ Return ONLY valid JSON:
                   </div>
                 )}
 
-                {/* Chargeback cycle deadlines */}
-                {cbDeadlines && cbDeadlines.length > 0 && (
-                  <div className="border-l-4 border-stone-800 bg-stone-50 p-5 space-y-3">
-                    <div className="mono-font text-xs tracking-widest text-stone-700">CHARGEBACK CYCLE DEADLINES</div>
-                    <div className="flex flex-wrap gap-3">
-                      {cbDeadlines.map((dl, i) => (
-                        <div key={i} className={`px-3 py-2 ${dl.days !== null && dl.days <= 5 ? 'bg-red-900 text-red-50' : dl.days !== null && dl.days <= 15 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
-                          <div className="mono-font text-[9px] tracking-widest opacity-70 mb-0.5">{dl.label.toUpperCase()}</div>
-                          <div className="mono-font text-sm font-bold">{dl.date}</div>
-                          {dl.days !== null && (
-                            <div className="mono-font text-[10px] opacity-80">
-                              {dl.days > 0 ? `${dl.days} days remaining` : dl.days === 0 ? 'DUE TODAY' : `${Math.abs(dl.days)} days OVERDUE`}
-                            </div>
-                          )}
+                {/* Chargeback cycle deadline tracker — for cases already in flight */}
+                {network !== 'ach' && (
+                  <div className="border border-stone-300 p-5 space-y-4" style={{ background: '#FAF7F1' }}>
+                    <div className="mono-font text-xs tracking-widest text-stone-600">CHARGEBACK CYCLE DEADLINE TRACKER</div>
+                    <p className="display-font text-stone-500 text-[13px] leading-snug">
+                      Once you've filed this dispute with the network, enter the stage and filing date below to track the response window.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">CURRENT CYCLE STAGE</label>
+                        <div className="flex flex-wrap gap-0">
+                          {[{v:'1cb',l:'1st CB'},{v:'2cb',l:'2nd Pres.'},{v:'prearb',l:'Pre-Arb'},{v:'arb',l:'Arb'}].map(({v,l}) => (
+                            <button key={v} onClick={() => setCbCycleStage(v)}
+                              className="mono-font text-[9px] tracking-wide px-2.5 py-1.5 transition-all"
+                              style={{ background: cbCycleStage===v?'#1A1814':'transparent', color: cbCycleStage===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
+                              {l}
+                            </button>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                      <div>
+                        <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">DATE FILED WITH NETWORK</label>
+                        <input type="date" value={cbFiledDate} onChange={e => setCbFiledDate(e.target.value)}
+                          className="cov-input mono-font" style={{ fontSize: '12px' }} />
+                        <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank until you've filed</div>
+                      </div>
                     </div>
-                    {cbDeadlines[0]?.note && (
-                      <div className="mono-font text-[10px] text-stone-500 italic">{cbDeadlines[0].note}</div>
+                    {cbDeadlines && cbDeadlines.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap gap-3">
+                          {cbDeadlines.map((dl, i) => (
+                            <div key={i} className={`px-3 py-2 ${dl.days !== null && dl.days <= 5 ? 'bg-red-900 text-red-50' : dl.days !== null && dl.days <= 15 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
+                              <div className="mono-font text-[9px] tracking-widest opacity-70 mb-0.5">{dl.label.toUpperCase()}</div>
+                              <div className="mono-font text-sm font-bold">{dl.date}</div>
+                              {dl.days !== null && (
+                                <div className="mono-font text-[10px] opacity-80">
+                                  {dl.days > 0 ? `${dl.days} days remaining` : dl.days === 0 ? 'DUE TODAY' : `${Math.abs(dl.days)} OVERDUE`}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {cbDeadlines[0]?.note && (
+                          <div className="mono-font text-[10px] text-stone-500 italic">{cbDeadlines[0].note}</div>
+                        )}
+                      </div>
+                    )}
+                    {!cbFiledDate && (
+                      <div className="mono-font text-[10px] text-stone-400 italic">Enter a filing date above to calculate the next response deadline.</div>
                     )}
                   </div>
                 )}
