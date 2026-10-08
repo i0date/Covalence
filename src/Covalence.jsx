@@ -448,6 +448,10 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
     const d = daysUntil(addBusinessDays(o.provCreditDate, 45)); return d !== null && d >= 0 && d <= 7
   })
 
+  const nextRespDue = active.filter(o => o.nextRespDate && !['won','lost','withdrawn','resolved'].includes(o.status)).map(o => ({
+    ...o, daysLeft: Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
+  })).filter(o => o.daysLeft <= 7).sort((a,b) => a.daysLeft - b.daysLeft)
+
   const stats = [
     { label:'OPEN CASES',  value: (pending.length + inProg.length).toString(), sub:'last 60 days' },
     { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—',       sub: resolved.length + ' resolved' },
@@ -480,6 +484,19 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
               </div>
             )
           })}
+        </div>
+      )}
+
+      {nextRespDue.length > 0 && (
+        <div className="mb-5 border border-blue-600 px-4 py-3" style={{ background:'#EFF6FF' }}>
+          <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A8A' }}>
+            📅 {nextRespDue.length} NEXT RESPONSE DUE WITHIN 7 DAYS
+          </div>
+          {nextRespDue.map(o => (
+            <div key={o.id} className="mono-font" style={{ fontSize:'11px', color: o.daysLeft < 0 ? '#B91C1C' : o.daysLeft <= 3 ? '#92400E' : '#1E40AF' }}>
+              {o.id} — {o.merchant} — {o.daysLeft < 0 ? `⚠ OVERDUE ${Math.abs(o.daysLeft)}d` : o.daysLeft === 0 ? 'DUE TODAY' : `in ${o.daysLeft}d`} · {new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+            </div>
+          ))}
         </div>
       )}
 
@@ -917,7 +934,7 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
       const parsed = JSON.parse(text)
       setResult(parsed)
       setOutcomes(prev => [{
-        id: `T-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+        id: `COV-${Date.now().toString(36).toUpperCase().slice(-6)}`,
         date: new Date().toISOString(),
         merchant: merchant || '—',
         amount: amount ? `${amount} ${currency}` : '—',
@@ -1010,7 +1027,7 @@ Return ONLY valid JSON, no markdown:
       const parsed = JSON.parse(text)
       setResult(parsed)
       setOutcomes(prev => [{
-        id: `T-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+        id: `COV-${Date.now().toString(36).toUpperCase().slice(-6)}`,
         date: new Date().toISOString(),
         merchant: ceReceivingExchange || ceDestinationAddress || '—',
         amount: ceAmount ? `${ceAmount} ${ceCurrency}` : '—',
@@ -2442,6 +2459,7 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [disputedAmount, setDisputedAmount]                 = useState('')     // partial dispute amount (optional)
   const [cardType, setCardType]                             = useState('credit') // 'credit' | 'debit'
   const [sarDiscoveryDate, setSarDiscoveryDate]             = useState('')     // FI: date fraud was detected (for SAR deadline)
+  const [sarDraftOpen, setSarDraftOpen]                     = useState(false)
   const [editingRow, setEditingRow]                         = useState(null)   // id of row being edited
   const [case360Id, setCase360Id]                           = useState(null)   // id of case with 360 panel open
   const [editDraft, setEditDraft]                           = useState({})     // draft field values
@@ -2764,7 +2782,7 @@ Return ONLY a valid JSON object:
       setResult(parsed)
       // Save to outcome log with behavioral signals for DFA
       setOutcomes(prev => [{
-        id: 'DD-' + Date.now().toString(36).toUpperCase().slice(-5),
+        id: 'COV-' + Date.now().toString(36).toUpperCase().slice(-6),
         date: new Date().toISOString(),
         merchant: merchant || '—',
         amount: amount ? amount + ' ' + currency : '—',
@@ -3845,6 +3863,64 @@ Return ONLY valid JSON:
                         ↑ Enter the date fraud was detected in the intake form above to track the 30-day SAR filing deadline.
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* SAR/STR draft memo */}
+                {isFraud && effectiveAmtNum >= settings.sarThreshold && (
+                  <div className="border-l-4 border-red-800 bg-red-50 px-5 py-3">
+                    <button onClick={() => setSarDraftOpen(v => !v)} className="mono-font flex items-center gap-2 text-red-900 hover:text-red-700"
+                      style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                      <FileText className="w-3.5 h-3.5" />
+                      {sarDraftOpen ? '▾ HIDE SAR / STR MEMO DRAFT' : '▸ DRAFT SAR / STR MEMO'}
+                    </button>
+                    {sarDraftOpen && (() => {
+                      const sarDate = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+                      const draftLines = [
+                        'SUSPICIOUS ACTIVITY REPORT — INTERNAL FILING MEMO',
+                        `Date Prepared: ${sarDate}`,
+                        'Filing Institution: [YOUR INSTITUTION NAME]',
+                        'Prepared By: [ANALYST NAME / BSA OFFICER]',
+                        '',
+                        'CASE SUMMARY',
+                        `Subject: ${merchant || '[MERCHANT / SUBJECT NAME]'}`,
+                        `Transaction Date: ${transactionDate || '[DATE]'}`,
+                        `Amount: ${amount ? `${amount} ${currency}` : '[AMOUNT]'}`,
+                        `Account Type: ${cardType || '[CARD TYPE]'}`,
+                        result && result.recommended_reason_code ? `Chargeback Code: ${result.recommended_reason_code} — ${result.reason_code_title || ''}` : '',
+                        '',
+                        'DESCRIPTION OF SUSPICIOUS ACTIVITY',
+                        (result && result.risk_notes) || `The cardholder reported unauthorized activity totaling ${amount ? `${amount} ${currency}` : '[AMOUNT]'} at ${merchant || '[MERCHANT]'}. This transaction meets the threshold for SAR/STR review.`,
+                        '',
+                        'TYPOLOGY',
+                        (result && result.fraud_sub_label) ? `Fraud Sub-Type: ${result.fraud_sub_label}` : 'Fraud Sub-Type: [SPECIFY]',
+                        (result && result.ato_suspected) ? 'Account takeover suspected. Review for unusual login activity, credential changes, new device additions.' : '[Describe transaction pattern]',
+                        '',
+                        'SUPPORTING DOCUMENTS',
+                        '☐ Dispute intake form',
+                        '☐ Transaction records',
+                        '☐ Cardholder statement',
+                        '☐ Prior dispute history',
+                        '',
+                        'FILING OBLIGATION',
+                        `FinCEN SAR: ${amount && parseFloat(amount) >= 5000 ? `Required — $${parseFloat(amount).toLocaleString()} meets $5,000 threshold` : 'Review — below $5,000 threshold'}`,
+                        `FINTRAC STR: ${currency === 'CAD' && amount && parseFloat(amount) >= 10000 ? `Required — $${parseFloat(amount).toLocaleString()} CAD meets $10,000 threshold` : 'Review if CAD transaction ≥ $10,000'}`,
+                        sarDiscoveryDate ? `SAR Deadline: ${fiSarDeadline} (30 days from discovery date)` : 'SAR Deadline: 30 days from date fraud detected (enter detection date above)',
+                        '',
+                        'DISPOSITION',
+                        '[Analyst: recommend file / decline / escalate to BSA officer]',
+                      ].filter(l => l !== null).join('\n')
+                      return (
+                        <div className="mt-3">
+                          <textarea readOnly value={draftLines} rows={18}
+                            style={{ width:'100%', fontSize:'11px', fontFamily:'monospace', lineHeight:1.55, padding:'12px', background:'#FFF5F5', border:'1px solid #FCA5A5', color:'#1C1917', resize:'vertical', boxSizing:'border-box' }} />
+                          <button onClick={() => navigator.clipboard.writeText(draftLines)} className="mono-font"
+                            style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 12px', marginTop:'6px', border:'1px solid #B91C1C', color:'#B91C1C', background:'none', cursor:'pointer' }}>
+                            COPY TO CLIPBOARD
+                          </button>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
 
@@ -6162,6 +6238,52 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+// ─── DFA Crypto Claim Scoring ────────────────────────────────────────────────────────
+const CRYPTO_CLAIM_TYPES = {
+  unauthorized_access:  { label: 'Account Compromise / Unauthorized Access', baseWin: 0.58 },
+  unauthorized_transfer:{ label: 'Unauthorized Transfer',                     baseWin: 0.62 },
+  exchange_error:       { label: 'Exchange / Platform Error',                 baseWin: 0.60 },
+  phishing:             { label: 'Phishing / Credential Theft',               baseWin: 0.45 },
+  scam_investment:      { label: 'Investment / Pig-Butchering Scam',          baseWin: 0.18 },
+  scam_romance:         { label: 'Romance / Social Engineering Scam',         baseWin: 0.14 },
+  scam_impersonation:   { label: 'Impersonation / Support Scam',              baseWin: 0.22 },
+  wallet_theft:         { label: 'Wallet Theft / Malware',                    baseWin: 0.38 },
+  other:                { label: 'Other',                                      baseWin: 0.30 },
+}
+const CRYPTO_EXCHANGES = {
+  regulated_us:    { label: 'US-regulated (Coinbase, Gemini, Kraken…)',  mod: +0.12 },
+  regulated_ca:    { label: 'Canada-regulated (Bitbuy, Newton, NDAX…)', mod: +0.10 },
+  regulated_other: { label: 'Other regulated jurisdiction',                    mod: +0.07 },
+  unregulated:     { label: 'Unregulated / offshore',                          mod: -0.10 },
+  dex:             { label: 'Decentralized / DEX / non-custodial',             mod: -0.20 },
+  unknown:         { label: 'Unknown',                                          mod:  0    },
+}
+function scoreCryptoClaim(c) {
+  const typeInfo = CRYPTO_CLAIM_TYPES[c.claimType] || CRYPTO_CLAIM_TYPES.other
+  let p = typeInfo.baseWin
+  const exchInfo = CRYPTO_EXCHANGES[c.exchangeType] || CRYPTO_EXCHANGES.unknown
+  p += exchInfo.mod
+  if (c.blockchainTrace) p += 0.08
+  if (c.kycVerified)     p += 0.06
+  if (c.freezeRequested) p += 0.05
+  if (c.policeReport)    p += 0.04
+  if (c.priorClaims > 0) p -= c.priorClaims * 0.08
+  const amt = c.amountUSD || 0
+  const amtScore = amt <= 0 ? 0.50 : amt < 500 ? 0.80 : amt < 5000 ? 0.70 : amt < 25000 ? 0.55 : 0.35
+  const days = c.daysSince || 0
+  const timeScore = days <= 7 ? 1.0 : days <= 30 ? 0.85 : days <= 90 ? 0.65 : days <= 180 ? 0.40 : 0.20
+  p = Math.max(0.05, Math.min(0.90, p))
+  const fundability = Math.round(p * 0.55 * 100 + amtScore * 0.20 * 100 + timeScore * 0.25 * 100)
+  const expectedRecovery = amt * p * timeScore
+  return { recoveryProb: parseFloat(p.toFixed(2)), amtScore, timeScore, fundability, expectedRecovery }
+}
+const CRYPTO_MANUAL_DEFAULTS = {
+  id:'', claimType:'unauthorized_access', exchangeType:'regulated_us',
+  amountUSD:'', daysSince:'0',
+  blockchainTrace:false, kycVerified:false, freezeRequested:false, policeReport:false,
+  priorClaims:'0', note:'',
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 003 DFA VIEW
@@ -6233,6 +6355,15 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
   }, [winRateOverrides])
   const [calibOpen, setCalibOpen] = useState(false)
   const [vintageOpen, setVintageOpen] = useState(false)
+  const [dfaTab, setDfaTab] = useState('card')
+  const [cryptoClaims, setCryptoClaims] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dfa_crypto_claims') || '[]') } catch { return [] }
+  })
+  useEffect(() => { try { localStorage.setItem('dfa_crypto_claims', JSON.stringify(cryptoClaims)) } catch {} }, [cryptoClaims])
+  const [cryptoDraft, setCryptoDraft] = useState({ ...CRYPTO_MANUAL_DEFAULTS })
+  const [showCryptoForm, setShowCryptoForm] = useState(false)
+  const [cryptoSelected, setCryptoSelected] = useState(null)
+  const cryptoCounter = useRef(1)
 
   const fileRef       = useRef(null)
   const manualCounter = useRef(1)
@@ -6372,6 +6503,23 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dfaQueue])
 
+  function addCryptoClaim() {
+    const amt = parseFloat(cryptoDraft.amountUSD)
+    if (isNaN(amt) || amt <= 0) return
+    const id = cryptoDraft.id.trim() || `CRY-${String(cryptoCounter.current).padStart(3,'0')}`
+    cryptoCounter.current++
+    const c = { id, claimType:cryptoDraft.claimType, exchangeType:cryptoDraft.exchangeType, amountUSD:amt,
+      daysSince:parseInt(cryptoDraft.daysSince)||0, blockchainTrace:cryptoDraft.blockchainTrace,
+      kycVerified:cryptoDraft.kycVerified, freezeRequested:cryptoDraft.freezeRequested,
+      policeReport:cryptoDraft.policeReport, priorClaims:parseInt(cryptoDraft.priorClaims)||0, note:cryptoDraft.note }
+    setCryptoClaims(prev => [...prev, { ...c, ...scoreCryptoClaim(c) }])
+    setCryptoDraft({ ...CRYPTO_MANUAL_DEFAULTS }); setShowCryptoForm(false)
+  }
+  const cryptoPortfolioValue    = cryptoClaims.reduce((s,c) => s+(c.amountUSD||0), 0)
+  const cryptoPortfolioExpected = cryptoClaims.reduce((s,c) => s+(c.expectedRecovery||0), 0)
+  const cryptoWeightedScore     = cryptoClaims.length > 0 ? cryptoClaims.reduce((s,c) => s+c.fundability*(c.amountUSD||0), 0) / Math.max(cryptoPortfolioValue,1) : 0
+  const cryptoPortfolioGrade    = grade(Math.round(cryptoWeightedScore))
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 sm:py-12">
         {/* ── Masthead ── */}
@@ -6387,6 +6535,142 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
             Payment disputes as an asset class. Upload a portfolio of Visa or Mastercard claims and the assessor underwrites each receivable — scoring fundability, modelling probability-weighted recovery, and recommending an advance rate. Built for issuers, servicers, and dispute funders.
           </p>
         </div>
+        {/* ── Mode tabs ── */}
+        <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
+          {[['card','CARD CHARGEBACKS'],['crypto','CRYPTO / EXCHANGE']].map(([val,label]) => (
+            <button key={val} onClick={() => setDfaTab(val)} className="mono-font"
+              style={{ flex:1, padding:'9px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer',
+                       background:dfaTab===val?'#1A1814':'transparent', color:dfaTab===val?'#F5F1EA':'#6B5F4D' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── CRYPTO TAB ── */}
+        {dfaTab === 'crypto' && (
+          <div>
+            <div className="border border-stone-300 mb-5 px-5 py-4" style={{ background:'#F9F7F3', maxWidth:'680px' }}>
+              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1.5">ABOUT CRYPTO / EXCHANGE SCORING</div>
+              <p className="display-font text-stone-600 text-[13px] leading-relaxed">Separate model for crypto and digital-asset claims — unauthorized access, phishing, scams, exchange errors. Recovery probability is driven by claim type, platform regulation, blockchain traceability, and time since incident.</p>
+            </div>
+            <div style={{ display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap' }}>
+              <button onClick={() => setShowCryptoForm(v=>!v)} className="mono-font"
+                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px' }}>
+                <Plus className="w-3 h-3" />{showCryptoForm ? 'CANCEL' : 'ADD CLAIM'}
+              </button>
+              {cryptoClaims.length > 0 && (
+                <button onClick={() => { if(window.confirm('Clear all crypto claims?')) setCryptoClaims([]) }} className="mono-font"
+                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
+                  CLEAR ALL
+                </button>
+              )}
+            </div>
+            {showCryptoForm && (
+              <div className="border border-stone-300 mb-5" style={{ background:'#FAF7F1', maxWidth:'680px' }}>
+                <div className="px-4 py-2.5 border-b border-stone-200 mono-font text-[10px] tracking-widest text-stone-500" style={{ background:'#EEE9E0' }}>ADD CRYPTO CLAIM</div>
+                <div className="px-4 py-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">CLAIM ID</label>
+                      <input className="input-field" placeholder="AUTO" value={cryptoDraft.id} onChange={e=>setCryptoDraft(d=>({...d,id:e.target.value}))} /></div>
+                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">AMOUNT (USD)</label>
+                      <input className="input-field" type="number" placeholder="0.00" value={cryptoDraft.amountUSD} onChange={e=>setCryptoDraft(d=>({...d,amountUSD:e.target.value}))} /></div>
+                  </div>
+                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">CLAIM TYPE</label>
+                    <select className="input-field" value={cryptoDraft.claimType} onChange={e=>setCryptoDraft(d=>({...d,claimType:e.target.value}))}>
+                      {Object.entries(CRYPTO_CLAIM_TYPES).map(([k,v]) => <option key={k} value={k}>{v.label} — {Math.round(v.baseWin*100)}% base</option>)}
+                    </select></div>
+                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">EXCHANGE / PLATFORM TYPE</label>
+                    <select className="input-field" value={cryptoDraft.exchangeType} onChange={e=>setCryptoDraft(d=>({...d,exchangeType:e.target.value}))}>
+                      {Object.entries(CRYPTO_EXCHANGES).map(([k,v]) => <option key={k} value={k}>{v.label} ({v.mod>0?'+':''}{Math.round(v.mod*100)}%)</option>)}
+                    </select></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">DAYS SINCE INCIDENT</label>
+                      <input className="input-field" type="number" value={cryptoDraft.daysSince} onChange={e=>setCryptoDraft(d=>({...d,daysSince:e.target.value}))} /></div>
+                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">PRIOR CLAIMS</label>
+                      <input className="input-field" type="number" value={cryptoDraft.priorClaims} onChange={e=>setCryptoDraft(d=>({...d,priorClaims:e.target.value}))} /></div>
+                  </div>
+                  <div>
+                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1.5">EVIDENCE SIGNALS</div>
+                    <div className="flex flex-wrap gap-2">
+                      {[{key:'blockchainTrace',label:'BLOCKCHAIN TRACE'},{key:'kycVerified',label:'KYC VERIFIED'},{key:'freezeRequested',label:'FREEZE REQUESTED'},{key:'policeReport',label:'POLICE REPORT'}].map(({key,label}) => (
+                        <button key={key} type="button" onClick={()=>setCryptoDraft(d=>({...d,[key]:!d[key]}))}
+                          className={`mono-font text-[9px] tracking-wide px-2.5 py-1.5 border transition-colors ${cryptoDraft[key]?'border-stone-900 bg-stone-900 text-stone-50':'border-stone-300 text-stone-500 hover:border-stone-600'}`}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTE (OPTIONAL)</label>
+                    <input className="input-field" placeholder="Context on this claim..." value={cryptoDraft.note} onChange={e=>setCryptoDraft(d=>({...d,note:e.target.value}))} /></div>
+                  <div className="flex gap-2">
+                    <button onClick={addCryptoClaim} disabled={!cryptoDraft.amountUSD||isNaN(parseFloat(cryptoDraft.amountUSD))||parseFloat(cryptoDraft.amountUSD)<=0}
+                      className="mono-font text-[10px] tracking-widest px-4 py-2 bg-stone-900 text-stone-50 disabled:opacity-40 disabled:cursor-not-allowed">SCORE &amp; ADD</button>
+                    <button onClick={()=>{setCryptoDraft({...CRYPTO_MANUAL_DEFAULTS});setShowCryptoForm(false)}}
+                      className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-300 text-stone-500">CANCEL</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {cryptoClaims.length === 0 ? (
+              <div className="border border-dashed border-stone-300 px-6 py-10 text-center" style={{ maxWidth:'680px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-400">NO CRYPTO CLAIMS YET — ADD ONE ABOVE</div>
+              </div>
+            ) : (
+              <div style={{ maxWidth:'780px' }}>
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  {[{label:'TOTAL EXPOSURE',val:`$${cryptoPortfolioValue.toLocaleString()}`,sub:`${cryptoClaims.length} claim${cryptoClaims.length!==1?'s':''}`},
+                    {label:'EXPECTED RECOVERY',val:`$${Math.round(cryptoPortfolioExpected).toLocaleString()}`,sub:`${cryptoPortfolioValue>0?Math.round(cryptoPortfolioExpected/cryptoPortfolioValue*100):0}% of face`},
+                    {label:'PORTFOLIO GRADE',val:cryptoPortfolioGrade.label,sub:`avg score ${Math.round(cryptoWeightedScore)}`}].map(s => (
+                    <div key={s.label} className="border border-stone-200 px-4 py-4" style={{background:'#FAF7F1'}}>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{s.label}</div>
+                      <div className="display-font font-semibold text-stone-900" style={{fontSize:'26px',lineHeight:1}}>{s.val}</div>
+                      <div className="mono-font text-[10px] text-stone-400 mt-1">{s.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  {cryptoClaims.map(c => {
+                    const g = grade(c.fundability); const isSel = cryptoSelected===c.id
+                    return (
+                      <div key={c.id} className="border border-stone-200" style={{background:'#FAF7F1'}}>
+                        <div onClick={()=>setCryptoSelected(isSel?null:c.id)}
+                          className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors">
+                          <span className={`mono-font text-xs font-bold px-2 py-0.5 shrink-0 ${g.bg} ${g.text}`}>{g.label}</span>
+                          <span className="mono-font text-[9px] text-stone-400 shrink-0">{c.id}</span>
+                          <span className="display-font text-stone-700 flex-1 text-[13px] truncate">{(CRYPTO_CLAIM_TYPES[c.claimType]||{label:'?'}).label}</span>
+                          <span className="mono-font text-[11px] text-stone-600 shrink-0">${(c.amountUSD||0).toLocaleString()}</span>
+                          <span className="mono-font text-[10px] text-stone-400 shrink-0">{Math.round(c.recoveryProb*100)}% win</span>
+                          <ChevronDown className={`w-3 h-3 text-stone-400 shrink-0 transition-transform ${isSel?'rotate-180':''}`} />
+                        </div>
+                        {isSel && (
+                          <div className="border-t border-stone-200 px-4 py-4 space-y-3">
+                            <div className="grid grid-cols-3 gap-3">
+                              {[{label:'WIN PROB',val:`${Math.round(c.recoveryProb*100)}%`,w:'55%'},{label:'TIME SCORE',val:`${Math.round(c.timeScore*100)}%`,w:'25%'},{label:'AMT SCORE',val:`${Math.round(c.amtScore*100)}%`,w:'20%'}].map(m=>(
+                                <div key={m.label}><div className="mono-font text-[9px] text-stone-400 mb-1">{m.label} ({m.w})</div>
+                                  <div className="display-font font-semibold text-stone-900" style={{fontSize:'20px'}}>{m.val}</div></div>
+                              ))}
+                            </div>
+                            <div className="mono-font text-[9px] text-stone-500 space-y-0.5">
+                              <div>Exchange: {(CRYPTO_EXCHANGES[c.exchangeType]||{label:'?'}).label}</div>
+                              <div>Days since incident: {c.daysSince} · Prior claims: {c.priorClaims}</div>
+                              {[c.blockchainTrace&&'✓ Blockchain trace',c.kycVerified&&'✓ KYC verified',c.freezeRequested&&'✓ Freeze requested',c.policeReport&&'✓ Police report'].filter(Boolean).map((s,i)=><div key={i} className="text-emerald-700">{s}</div>)}
+                            </div>
+                            {c.note && <p className="display-font text-stone-600 text-[13px] italic border-l-2 border-stone-200 pl-3">{c.note}</p>}
+                            <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
+                              <span className="mono-font text-[9px] text-stone-500">Expected recovery: <strong className="text-emerald-800">${Math.round(c.expectedRecovery).toLocaleString()}</strong></span>
+                              <button onClick={()=>{setCryptoClaims(prev=>prev.filter(x=>x.id!==c.id));setCryptoSelected(null)}}
+                                className="mono-font text-[9px] px-2 py-1 border border-red-300 text-red-600 hover:bg-red-50 transition-colors" style={{background:'none',cursor:'pointer'}}>REMOVE</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {dfaTab === 'card' && <React.Fragment>
         {/* ── Step 01 — Portfolio Upload ── */}
         <div>
           <div className="flex items-baseline gap-3 mb-4">
@@ -7085,6 +7369,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
             Win-rate baselines approximate Visa issuer dispute outcome data and carry model uncertainty. Advance rates and portfolio grade reflect expected value — actual recovery depends on evidence quality, merchant behaviour at representment, and network rule changes. Annualized returns assume resolution within the modelled window. Not legal or financial advice.
           </p>
         </div>
+        </React.Fragment>}
     </div>
   )
 }
@@ -7216,6 +7501,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [accessLogOpen, setAccessLogOpen] = useState(false)
   const pollRef   = useRef(null)
   const linkPollRef = useRef(null)
+  const [duoFilter, setDuoFilter]           = useState('')
+  const [duoStatusFilter, setDuoStatusFilter] = useState('all')
+  const [closureNote, setClosureNote]       = useState('')
+  const [closurePromptId, setClosurePromptId] = useState(null)
 
   useEffect(() => {
     if (phase !== 'link-ready' || !linkToken || !configured) { clearInterval(linkPollRef.current); return }
@@ -7375,11 +7664,19 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     setSaving(false)
   }
 
-  const handleStatusChange = async (status) => {
+  const handleStatusChange = async (status, note) => {
     if (!session) return; setSaving(true)
     try {
       const updated = await duoPatch(session.id, { status })
-      if (updated) { setSession(updated); setLastSync(new Date()); updateLocalStatus(session.id, status) }
+      if (updated) {
+        setSession(updated); setLastSync(new Date()); updateLocalStatus(session.id, status)
+        try {
+          const auditKey = `duo_audit_${session.id}`
+          const existing = JSON.parse(localStorage.getItem(auditKey) || '[]')
+          const myInst = myRole === 'a' ? session.institution_a : session.institution_b
+          localStorage.setItem(auditKey, JSON.stringify([{ ts: new Date().toISOString(), status, institution: myInst, note: note || '' }, ...existing]))
+        } catch {}
+      }
     } catch (e) { setError(e.message) }
     setSaving(false)
   }
@@ -7440,9 +7737,24 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       </div>
       {mySessions.length > 0 && (
         <div>
-          <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">YOUR SESSIONS</div>
+          <div style={{ display:'flex', gap:'8px', alignItems:'center', marginBottom:'12px', flexWrap:'wrap' }}>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 shrink-0">YOUR SESSIONS</div>
+            <input value={duoFilter} onChange={e => setDuoFilter(e.target.value)}
+              placeholder="Search institution or code…"
+              className="mono-font" style={{ fontSize:'11px', padding:'5px 10px', border:'1px solid #D4CCBC', background:'#FFFFFF', outline:'none', flex:1, minWidth:'140px', maxWidth:'260px' }} />
+            <select value={duoStatusFilter} onChange={e => setDuoStatusFilter(e.target.value)}
+              className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.08em', padding:'5px 8px', border:'1px solid #D4CCBC', background:'#FFFFFF', cursor:'pointer', outline:'none' }}>
+              <option value="all">ALL STATUSES</option>
+              {Object.entries(DUO_STATUS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
           <div style={{ display:'grid', gap:'2px', maxWidth:'680px' }}>
-            {mySessions.map(saved => {
+            {mySessions.filter(saved => {
+              const q = duoFilter.toLowerCase().trim()
+              const matchText = !q || saved.id.toLowerCase().includes(q) || (saved.myInstitution||'').toLowerCase().includes(q)
+              const matchStatus = duoStatusFilter === 'all' || saved.lastStatus === duoStatusFilter
+              return matchText && matchStatus
+            }).map(saved => {
               const st = DUO_STATUS[saved.lastStatus || 'active'] || DUO_STATUS.active
               return (
                 <button key={saved.id} onClick={() => openSession(saved)}
@@ -7657,10 +7969,16 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
             </h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
-            {nextSt && nextStCfg && (
+            {nextSt && nextStCfg && nextSt !== 'closed' && (
               <button onClick={() => handleStatusChange(nextSt)} className="mono-font"
                 style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:`1px solid ${nextStCfg.color}`, color: nextStCfg.color, cursor:'pointer' }}>
                 MARK {nextStCfg.label}
+              </button>
+            )}
+            {nextSt === 'closed' && (
+              <button onClick={() => setClosurePromptId(session.id)} className="mono-font"
+                style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:'1px solid #1A1814', color:'#1A1814', cursor:'pointer' }}>
+                CLOSE SESSION
               </button>
             )}
             <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
@@ -7680,6 +7998,33 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
             </div>
           </div>
         </div>
+
+        {closurePromptId === session.id && (
+          <div className="mb-6 border border-stone-800 bg-stone-50 px-4 py-3" style={{ maxWidth:'520px' }}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-600 mb-2">CLOSURE SUMMARY (OPTIONAL)</div>
+            <textarea value={closureNote} onChange={e => setClosureNote(e.target.value)} rows={3}
+              placeholder="Outcome, agreed amount, reference numbers, next steps..."
+              style={{ width:'100%', fontSize:'13px', fontFamily:'Georgia,serif', lineHeight:1.5, padding:'8px', border:'1px solid #C8C0B0', background:'#FAF7F1', resize:'none', boxSizing:'border-box' }} />
+            <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
+              <button onClick={async () => {
+                await handleStatusChange('closed', closureNote)
+                if (closureNote.trim()) {
+                  const field = myRole === 'a' ? 'notes_a' : 'notes_b'
+                  const existing = parseThread(session[field])
+                  const next = [...existing, { text: `[CLOSURE] ${closureNote.trim()}`, ts: new Date().toISOString() }]
+                  try { await duoPatch(session.id, { [field]: JSON.stringify(next) }) } catch {}
+                }
+                setClosurePromptId(null); setClosureNote('')
+              }} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'6px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                CONFIRM CLOSE
+              </button>
+              <button onClick={() => { setClosurePromptId(null); setClosureNote('') }}
+                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'6px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Claim panel */}
@@ -7801,6 +8146,326 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      {/* Task 16: Session history / audit trail */}
+      {(() => {
+        try {
+          const auditLog = JSON.parse(localStorage.getItem(`duo_audit_${session.id}`) || '[]')
+          if (!auditLog.length) return null
+          return (
+            <div className="mt-6 pt-6" style={{ borderTop:'1px solid #E8E3DA' }}>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">SESSION HISTORY</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px', maxWidth:'480px' }}>
+                {auditLog.map((entry, i) => {
+                  const stCfg = DUO_STATUS[entry.status] || DUO_STATUS.active
+                  return (
+                    <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'12px', padding:'8px 12px', background:'#FFFFFF', border:'1px solid #E8E3DA' }}>
+                      <div className="mono-font text-[9px] tracking-widest px-1.5 py-0.5 shrink-0" style={{ color:stCfg.color, background:stCfg.bg }}>{stCfg.label}</div>
+                      <div style={{ flex:1 }}>
+                        <div className="mono-font text-[9px] text-stone-400">{new Date(entry.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · {entry.institution || 'Unknown'}</div>
+                        {entry.note && <div className="display-font text-stone-700 text-[12px] mt-0.5 italic">{entry.note}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        } catch { return null }
+      })()}
+      </div>
+    )
+  }
+
+  // ── LINK SETUP ────────────────────────────────────────────────────────────────
+  if (phase === 'link-setup') {
+    const lp = linkPayload
+    const setLp = (k, v) => setLinkPayload(p => ({ ...p, [k]: v }))
+    // Inline helper — NOT a React component, called as a function to avoid remount-on-rerender
+    const F = (label, k, placeholder, type) => (
+      <div key={k}>
+        <label className="cov-label">{label}</label>
+        <input className="cov-input mono-font" value={lp[k] || ''} onChange={e => setLp(k, e.target.value)}
+          placeholder={placeholder} type={type || 'text'} style={{ fontSize:'13px' }} />
+      </div>
+    )
+    return (
+      <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+        <DuoMasthead sub="SEND EXTERNAL LINK" />
+        <p className="display-font text-stone-600 mb-6" style={{ fontSize:'15px', lineHeight:1.7, maxWidth:'560px' }}>
+          Generate a secure, expiring case link to send to a financial institution that isn't on Covalence. They'll identify themselves to access it and can submit a structured response — including a freeze confirmation if applicable.
+        </p>
+
+        {/* Case type toggle */}
+        <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
+          {[['standard','STANDARD CASE'],['crypto','CRYPTO / DIGITAL ASSET']].map(([val, label]) => (
+            <button key={val} onClick={() => setLinkType(val)} className="mono-font"
+              style={{ flex:1, padding:'10px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ maxWidth:'560px', display:'grid', gap:'18px' }}>
+          <div>
+            <label className="cov-label">YOUR INSTITUTION NAME</label>
+            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+              placeholder="First Community Credit Union" style={{ fontSize:'13px' }} />
+          </div>
+          {linkType === 'standard' ? (
+            <>
+              {F('CASE REFERENCE', 'case_ref', 'TXN-2024-00142')}
+              {F('REPORT TYPE', 'report_type', 'Wire Fraud / ACH Recall / Account Takeover')}
+              {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px' }}>
+                {F('AMOUNT', 'amount', '5200.00')}
+                {F('CURRENCY', 'currency', 'USD')}
+              </div>
+
+              {/* Transaction identifiers — lets the receiving FI find the account */}
+              <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px', marginTop:'4px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
+                <div style={{ display:'grid', gap:'14px' }}>
+                  <div>
+                    {F('RECEIVING ACCOUNT NUMBER', 'receiving_account', '****1234 or full account number')}
+                    <div className="mono-font text-[9px] text-stone-400 mt-1 leading-relaxed">
+                      Account at the receiving institution where funds landed. Use full number or last 4 — the receiving FI cannot look up the case without this.
+                    </div>
+                  </div>
+                  {F('RECEIVING ACCOUNT HOLDER NAME', 'receiving_account_name', 'Name on the account at the receiving institution')}
+                  <div>
+                    {F('TRANSACTION REFERENCE', 'transaction_ref', 'ACH trace no. / wire IMAD / Fedwire ref')}
+                    <div className="mono-font text-[9px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
+                  </div>
+                  {F('YOUR ACCOUNT (last 4, optional)', 'sending_account_last4', '****5678')}
+                </div>
+              </div>
+
+              {F('NATURE OF REPORT', 'nature', 'Authorized push payment fraud / account takeover / etc.')}
+              <div>
+                <label className="cov-label">SUMMARY</label>
+                <textarea className="cov-input mono-font" value={lp.summary || ''} onChange={e => setLp('summary', e.target.value)}
+                  rows={3} placeholder="Brief factual summary of what occurred."
+                  style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
+              </div>
+            </>
+          ) : (
+            <>
+              {F('CASE REFERENCE', 'case_ref', 'CRYPTO-2024-00142')}
+              {F('REPORT TYPE', 'report_type', 'Investment scam / pig butchering / unauthorized transfer')}
+              {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
+              <div>
+                {F('SOURCE INSTITUTION (optional)', 'source_institution', 'Name of the bank or fintech the victim used to send funds')}
+                <div className="mono-font text-[9px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+                {F('ASSET TYPE', 'asset_type', 'BTC / ETH / USDT')}
+                {F('AMOUNT (CRYPTO)', 'amount', '0.234')}
+              </div>
+              {F('AMOUNT (USD EQUIVALENT)', 'amount_usd', '8400.00')}
+              {F('NATURE OF REPORT', 'nature', 'Authorized push payment fraud / pig butchering / romance scam')}
+              <div>
+                <label className="cov-label">SUMMARY</label>
+                <textarea className="cov-input mono-font" value={lp.summary || ''} onChange={e => setLp('summary', e.target.value)}
+                  rows={3} placeholder="Brief factual summary — no customer PII."
+                  style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
+              </div>
+              <div>
+                <label className="cov-label">WALLET ADDRESS(ES) — one per line</label>
+                <textarea className="cov-input mono-font" value={lp.wallet_addresses || ''} onChange={e => setLp('wallet_addresses', e.target.value)}
+                  rows={3} placeholder={"bc1q...\nbc1q..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+              </div>
+              <div>
+                <label className="cov-label">TRANSACTION ID(S) — one per line</label>
+                <textarea className="cov-input mono-font" value={lp.transaction_ids || ''} onChange={e => setLp('transaction_ids', e.target.value)}
+                  rows={3} placeholder={"a1b2c3d4...\ne5f6g7h8..."} style={{ fontSize:'12px', resize:'vertical', lineHeight:1.6 }} />
+              </div>
+              {F('CHAIN ANALYTICS LINK (optional)', 'chain_analytics_link', 'https://platform.chainalysis.com/...')}
+            </>
+          )}
+
+          {error && <div className="mono-font text-[10px] tracking-wide text-red-700 border border-red-200 bg-red-50 p-3">{error}</div>}
+
+          <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginTop:'8px' }}>
+            <BtnPrimary onClick={createCaseLink} disabled={linkLoading || !myInstitution.trim()}>
+              {linkLoading ? 'GENERATING…' : 'GENERATE LINK →'}
+            </BtnPrimary>
+            <BtnSecondary onClick={() => { setError(''); setPhase('dashboard') }}>BACK</BtnSecondary>
+          </div>
+
+          <div className="mono-font text-[10px] text-stone-400 leading-relaxed" style={{ maxWidth:'480px' }}>
+            The link expires in 30 days. Every access is logged with name, email, institution, and timestamp. Account-level identifiers (account number, transaction reference) are included in the payload to allow the receiving institution to look up the case — share only what your institution's data-sharing agreements permit.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── LINK READY ────────────────────────────────────────────────────────────────
+  if (phase === 'link-ready') {
+    const url = getCaseLinkUrl(linkToken)
+    return (
+      <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+        <DuoMasthead sub="LINK READY" />
+        <div style={{ maxWidth:'580px' }}>
+          <p className="display-font text-stone-600 mb-8" style={{ fontSize:'15px', lineHeight:1.7 }}>
+            Your case link is live. Share it directly with the compliance or fraud team at the receiving institution. It expires in 30 days.
+          </p>
+
+          {/* The link */}
+          <div style={{ border:'1px solid #C8C0B0', background:'#FFFFFF', padding:'20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
+            <div className="mono-font text-stone-900 break-all" style={{ fontSize:'13px', lineHeight:1.6, marginBottom:'16px' }}>{url}</div>
+            <div style={{ display:'flex', gap:'8px' }}>
+              <button onClick={() => { navigator.clipboard.writeText(url); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500) }}
+                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                {linkCopied ? '✓ COPIED' : 'COPY LINK'}
+              </button>
+              <a href={`mailto:?subject=Case%20for%20your%20attention&body=Please%20review%20the%20following%20case%3A%0A%0A${encodeURIComponent(url)}%0A%0AThis%20link%20expires%20in%2030%20days.`}
+                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
+                OPEN IN EMAIL
+              </a>
+            </div>
+          </div>
+
+          {/* What happens next */}
+          <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
+            {[
+              'The receiving institution opens the link and sees your institution name and case type — the details are blurred until they identify themselves.',
+              'They enter their name, email, institution, and role. This is logged to your audit trail.',
+              'They see the full case and submit a structured response — disposition, internal reference, and freeze confirmation if applicable.',
+              'Their response appears live in the Responses panel below — auto-refreshing every 15 seconds.',
+            ].map((t, i) => (
+              <div key={i} style={{ display:'flex', gap:'12px', marginBottom:'12px' }}>
+                <div className="mono-font text-[9px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
+                <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{t}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ACCESS LOG */}
+          <div style={{ border:'1px solid #E8E3DA', marginBottom:'16px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'#F9F7F3', cursor:'pointer', userSelect:'none' }}
+              onClick={() => setAccessLogOpen(v => !v)}>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-500">ACCESS LOG</div>
+                <div className="mono-font text-[9px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
+                  {linkAccessLog.length} {linkAccessLog.length === 1 ? 'VIEW' : 'VIEWS'}
+                </div>
+              </div>
+              <div className="mono-font text-[9px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+            </div>
+            {accessLogOpen && (
+              <div style={{ padding:'0 16px 12px' }}>
+                {linkAccessLog.length === 0
+                  ? <div className="mono-font text-[10px] text-stone-400 py-3">No views yet — share the link to get started.</div>
+                  : linkAccessLog.map((a, i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', padding:'10px 0', borderBottom: i < linkAccessLog.length - 1 ? '1px solid #F0EBE3' : 'none' }}>
+                      <div>
+                        <div className="display-font font-semibold text-stone-900" style={{ fontSize:'13px' }}>{a.accessor_name || '—'}</div>
+                        <div className="mono-font text-[10px] text-stone-500 mt-0.5">{[a.accessor_institution, a.accessor_role].filter(Boolean).join(' · ')}</div>
+                        {a.accessor_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{a.accessor_email}</div>}
+                      </div>
+                      <div className="mono-font text-[9px] text-stone-400 text-right shrink-0 ml-4">
+                        {a.accessed_at ? new Date(a.accessed_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+
+          {/* LIVE RESPONSES */}
+          <div style={{ border:'1px solid #C8C0B0', marginBottom:'24px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'#F5F1EA', borderBottom:'1px solid #E8E3DA' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-700">RESPONSES</div>
+                <div className="mono-font text-[9px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
+                  {linkResponses.length} {linkResponses.length === 1 ? 'RESPONSE' : 'RESPONSES'}
+                </div>
+              </div>
+              <div className="mono-font text-[9px] text-stone-400">
+                {linkRespSync ? `SYNCED ${new Date(linkRespSync).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}` : 'SYNCING…'}
+              </div>
+            </div>
+            <div style={{ padding: linkResponses.length > 0 ? '0' : '20px 16px' }}>
+              {linkResponses.length === 0 ? (
+                <div style={{ textAlign:'center' }}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
+                  <div className="display-font text-stone-500" style={{ fontSize:'13px', lineHeight:1.6 }}>
+                    Responses submitted via the case link will appear here automatically.
+                  </div>
+                </div>
+              ) : linkResponses.map((r, i) => {
+                const dispColor = {
+                  acknowledged:{ bg:'#EFF6FF', color:'#1E40AF' },
+                  investigating:{ bg:'#FEF3C7', color:'#92400E' },
+                  frozen:       { bg:'#ECFDF5', color:'#065F46' },
+                  resolved:     { bg:'#F0FDF4', color:'#166534' },
+                  declined:     { bg:'#FEF2F2', color:'#991B1B' },
+                }[r.disposition] || { bg:'#F5F5F5', color:'#374151' }
+                return (
+                  <div key={i} style={{ padding:'16px', borderBottom: i < linkResponses.length - 1 ? '1px solid #E8E3DA' : 'none' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', marginBottom:'10px' }}>
+                      <div>
+                        <div className="display-font font-bold text-stone-900" style={{ fontSize:'14px' }}>{r.respondent_name || 'Unknown'}</div>
+                        <div className="mono-font text-[10px] text-stone-500 mt-0.5">
+                          {[r.respondent_institution, r.respondent_role].filter(Boolean).join(' · ')}
+                        </div>
+                        {r.respondent_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{r.respondent_email}</div>}
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', shrink:0 }}>
+                        <div className="mono-font text-[9px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
+                          {(r.disposition || 'UNKNOWN').toUpperCase()}
+                        </div>
+                        {r.freeze_confirmed && (
+                          <div className="mono-font text-[9px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
+                            ✓ FREEZE CONFIRMED
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {r.internal_case_ref && (
+                      <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
+                        <div className="mono-font text-[11px] text-stone-700">{r.internal_case_ref}</div>
+                      </div>
+                    )}
+                    {r.freeze_reference && (
+                      <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
+                        <div className="mono-font text-[11px] text-stone-700">{r.freeze_reference}</div>
+                      </div>
+                    )}
+                    {r.notes && (
+                      <div style={{ background:'#F9F7F3', border:'1px solid #E8E3DA', padding:'10px 12px', marginTop:'8px' }}>
+                        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                        <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{r.notes}</div>
+                      </div>
+                    )}
+                    <div className="mono-font text-[9px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
+                      {r.responded_at ? new Date(r.responded_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Incentive note */}
+          <div style={{ background:'#1A1814', padding:'16px 20px', marginBottom:'24px' }}>
+            <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
+            <p className="display-font" style={{ fontSize:'13px', color:'#C8C0B0', lineHeight:1.6 }}>
+              Receiving institutions that join Covalence can respond directly inside their own dashboard, run live Duo sessions with you, and track all their cross-institutional cases in one place. They'll see the prompt when they access this link.
+            </p>
+          </div>
+
+          <div style={{ display:'flex', gap:'10px' }}>
+            <BtnPrimary onClick={() => { setPhase('link-setup'); setLinkToken(''); setLinkResponses([]); setLinkAccessLog([]) }}>SEND ANOTHER</BtnPrimary>
+            <BtnSecondary onClick={() => setPhase('dashboard')}>BACK TO DUO</BtnSecondary>
           </div>
         </div>
       </div>
