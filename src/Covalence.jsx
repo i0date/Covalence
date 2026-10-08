@@ -5278,6 +5278,20 @@ Return ONLY valid JSON:
 // ─── Alias so DFA internals resolve correctly ────────────────────────
 const BASE_WIN_RATES = DFA_BASE_WIN
 
+// ─── Cycle stage labels + modifier ───────────────────────────────────
+const CYCLE_STAGE_LABELS = {
+  '1cb':    '1st Chargeback',
+  '2cb':    '2nd Presentment / Representment',
+  'prearb': 'Pre-Arbitration',
+  'arb':    'Arbitration',
+}
+function computeStageModifier(stage) {
+  if (stage === '2cb')    return { probMod:+0.08, timeMulti:1.00, feeRisk:false, feeNote:'' }
+  if (stage === 'prearb') return { probMod:-0.05, timeMulti:0.90, feeRisk:true,  feeNote:'Pre-arb filing fee risk — Visa $500 / MC $500+' }
+  if (stage === 'arb')    return { probMod:-0.15, timeMulti:0.75, feeRisk:true,  feeNote:'Arbitration fee risk: up to $1,100 (MC) or $500 (Visa) if lost — assess carefully on claims under $2k' }
+  return { probMod:0, timeMulti:1.00, feeRisk:false, feeNote:'' }
+}
+
 const CODE_LABELS = {
   // Visa Fraud
   "10.1": "EMV Counterfeit Fraud",       "10.2": "EMV Lost/Stolen Fraud",
@@ -5342,8 +5356,9 @@ const CLAIMS_DATA = [
 ]
 
 // ─── Scoring model ────────────────────────────────────────────────────────────
-function computeRecoveryProb(c) {
-  let p = BASE_WIN_RATES[c.code] != null ? BASE_WIN_RATES[c.code] : 0.50
+function computeRecoveryProb(c, winRateOverrides) {
+  const rates = { ...BASE_WIN_RATES, ...(winRateOverrides || {}) }
+  let p = rates[c.code] != null ? rates[c.code] : 0.50
   const code = String(c.code)
 
   // Authorization codes (11.x, 4808, 4812, 4847) — largely mechanical, few signal adjustments
@@ -5396,20 +5411,25 @@ function computeAmountScore(a) {
   return 0.70
 }
 
-function scoreClaim(c) {
-  const recoveryProb     = computeRecoveryProb(c)
-  const timeScore        = computeTimeScore(c)
+function scoreClaim(c, winRateOverrides) {
+  const stageMod         = computeStageModifier(c.cycleStage)
+  const baseProb         = computeRecoveryProb(c, winRateOverrides)
+  const recoveryProb     = parseFloat(Math.max(0.05, Math.min(0.96, baseProb + stageMod.probMod)).toFixed(2))
+  const timeScore        = parseFloat(Math.min(1, computeTimeScore(c) * stageMod.timeMulti).toFixed(2))
   const amountScore      = computeAmountScore(c.amount)
-  const fundability      = Math.round((recoveryProb * 0.55 + timeScore * 0.25 + amountScore * 0.20) * 100)
+  // MC arbitration-fee penalty on low-value claims at late stages
+  const isMC             = detectNetwork(c.code) === 'Mastercard'
+  const feeRiskPenalty   = stageMod.feeRisk && isMC && c.amount < 1500 ? 6 : stageMod.feeRisk && c.amount < 600 ? 4 : 0
+  const fundability      = Math.max(0, Math.round((recoveryProb * 0.55 + timeScore * 0.25 + amountScore * 0.20) * 100) - feeRiskPenalty)
   const expectedRecovery = c.amount * recoveryProb * timeScore
-  return { recoveryProb, timeScore, amountScore, fundability, expectedRecovery }
+  return { recoveryProb, timeScore, amountScore, fundability, expectedRecovery, stageMod, feeRiskPenalty }
 }
 
 const SCORED_SAMPLE = CLAIMS_DATA.map(c => ({ ...c, codeLabel: CODE_LABELS[c.code] || `Code ${c.code}`, ...scoreClaim(c) }))
 
 // ─── CSV utilities ────────────────────────────────────────────────────────────
-const TEMPLATE_HEADERS = ["id","code","amount","filed_days_ago","window_days","avs_mismatch","no_3ds","delivery_confirmed","merchant_acknowledged","pin_verified","vfmp_enrolled","strong_docs","merchant_cbr","prior_claims","note"]
-const TEMPLATE_EXAMPLE = ["DSP-021","10.4","750","15","120","yes","yes","no","no","no","no","no","1.1","0","CNP fraud — AVS mismatch on shipping address"]
+const TEMPLATE_HEADERS = ["id","code","amount","filed_days_ago","window_days","cycle_stage","issuer","avs_mismatch","no_3ds","delivery_confirmed","merchant_acknowledged","pin_verified","vfmp_enrolled","strong_docs","merchant_cbr","prior_claims","note"]
+const TEMPLATE_EXAMPLE = ["DSP-021","10.4","750","15","120","1cb","Chase","yes","yes","no","no","no","no","no","1.1","0","CNP fraud — AVS mismatch on shipping address"]
 
 function parseBool(v) { return v ? ["yes","true","1","y"].includes(v.toLowerCase().trim()) : false }
 function parseCSVLine(line) {
@@ -5434,10 +5454,12 @@ function parseCSVText(text) {
     if (!code) { errors.push(`Row ${i+1}: missing reason code — skipped`); continue }
     const amount = parseFloat(row.amount)
     if (isNaN(amount)||amount<=0) { errors.push(`Row ${i+1}: invalid amount "${row.amount}" — skipped`); continue }
+    const cycleStage = ['1cb','2cb','prearb','arb'].includes(row.cycle_stage) ? row.cycle_stage : '1cb'
     const c = {
       id: row.id||`UPL-${String(i).padStart(3,"0")}`, code, codeLabel: CODE_LABELS[code]||`Code ${code}`,
       amount, filedDaysAgo: parseInt(row.filed_days_ago||"0",10)||0,
       windowDays: parseInt(row.window_days||"120",10)||120,
+      cycleStage, issuer: row.issuer||'',
       avsMismatch: parseBool(row.avs_mismatch), no3DS: parseBool(row.no_3ds),
       deliveryConf: parseBool(row.delivery_confirmed), merchantAck: parseBool(row.merchant_acknowledged),
       pinVerified: parseBool(row.pin_verified), isVFMP: parseBool(row.vfmp_enrolled),
@@ -5517,6 +5539,7 @@ function portfolioRiskFlags(claims, totalValue) {
 // ─── Manual claim defaults ────────────────────────────────────────────────────
 const MANUAL_DEFAULTS = {
   id:"", code:"10.4", amount:"", filedDaysAgo:"0", windowDays:"120",
+  cycleStage:"1cb", issuer:"",
   avsMismatch:false, no3DS:false, deliveryConf:false, merchantAck:false,
   pinVerified:false, isVFMP:false, strongDocs:false,
   merchantCBR:"0.8", priorClaims:"0", note:"",
@@ -5546,8 +5569,16 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
             {sc.source === "uploaded" && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-blue-800 text-blue-100">CSV</span>}
             {sc.source === "manual"   && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-violet-800 text-violet-100">MANUAL</span>}
             <span className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-600 text-stone-400">{network.toUpperCase()}</span>
+            {sc.cycleStage && sc.cycleStage !== '1cb' && (
+              <span className={`mono-font text-[8px] px-1.5 py-0.5 border ${sc.cycleStage==='2cb'?'border-emerald-600 text-emerald-300':sc.cycleStage==='arb'?'border-red-600 text-red-300':'border-amber-600 text-amber-300'}`}>
+                {CYCLE_STAGE_LABELS[sc.cycleStage]?.toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="display-font text-stone-300 text-[13px]">{sc.code} — {sc.codeLabel}</div>
+          {sc.issuer && <div className="mono-font text-[9px] text-stone-400 mt-0.5">ISSUER: {sc.issuer}</div>}
+          {sc.stageMod?.feeRisk && <div className="mono-font text-[9px] text-amber-400 mt-1">⚠ {sc.stageMod.feeNote}</div>}
+          {sc.feeRiskPenalty > 0 && <div className="mono-font text-[9px] text-amber-400">−{sc.feeRiskPenalty} pts fee-risk penalty applied to fundability score</div>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className={`mono-font text-sm font-bold px-2 py-0.5 ${g.bg} ${g.text}`}>{g.label}</span>
@@ -5590,6 +5621,12 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
                 <ScoreBar value={m.raw} color={m.color} />
               </div>
             ))}
+            {sc.cycleStage && sc.cycleStage !== '1cb' && sc.stageMod && (
+              <div className={`mono-font text-[9px] px-2.5 py-1.5 border ${sc.cycleStage==='2cb'?'border-emerald-300 bg-emerald-50 text-emerald-800':sc.cycleStage==='arb'?'border-red-300 bg-red-50 text-red-800':'border-amber-300 bg-amber-50 text-amber-800'}`}>
+                CYCLE STAGE ({CYCLE_STAGE_LABELS[sc.cycleStage]}): prob {sc.stageMod.probMod > 0 ? '+' : ''}{Math.round(sc.stageMod.probMod*100)}% · time ×{sc.stageMod.timeMulti}
+                {sc.feeRiskPenalty > 0 ? ` · −${sc.feeRiskPenalty}pt fee-risk penalty` : ''}
+              </div>
+            )}
           </div>
         </div>
 
@@ -5698,6 +5735,17 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
   useEffect(() => {
     try { localStorage.setItem('dfa_holding_days', String(holdingDays)) } catch {}
   }, [holdingDays])
+
+  // Win rate overrides (Task 2) — user-tunable per reason code
+  const [winRateOverrides, setWinRateOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dfa_win_overrides') || '{}') } catch { return {} }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('dfa_win_overrides', JSON.stringify(winRateOverrides)) } catch {}
+  }, [winRateOverrides])
+  const [calibOpen, setCalibOpen] = useState(false)
+  const [vintageOpen, setVintageOpen] = useState(false)
+
   const fileRef       = useRef(null)
   const manualCounter = useRef(1)
 
@@ -5733,12 +5781,13 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
     const c = {
       id, code: draft.code, codeLabel: CODE_LABELS[draft.code]||`Code ${draft.code}`,
       amount, filedDaysAgo: parseInt(draft.filedDaysAgo)||0, windowDays: parseInt(draft.windowDays)||120,
+      cycleStage: draft.cycleStage||'1cb', issuer: draft.issuer||'',
       avsMismatch:draft.avsMismatch, no3DS:draft.no3DS, deliveryConf:draft.deliveryConf,
       merchantAck:draft.merchantAck, pinVerified:draft.pinVerified, isVFMP:draft.isVFMP, strongDocs:draft.strongDocs,
       merchantCBR:parseFloat(draft.merchantCBR)||0.5, priorClaims:parseInt(draft.priorClaims)||0,
       note:draft.note, source:"manual",
     }
-    setManualClaims(prev => [...prev, { ...c, ...scoreClaim(c) }])
+    setManualClaims(prev => [...prev, { ...c, ...scoreClaim(c, winRateOverrides) }])
     setDraft({ ...MANUAL_DEFAULTS }); setShowAddForm(false)
   }
 
@@ -5822,8 +5871,10 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         priorClaims: parseInt(o.priorClaims) || 0,
         note: (o.note || `From Dispute Desk: ${o.merchant || ''}`).trim(),
         source: "desk",
+        cycleStage: o.cycleStage || '1cb',
+        issuer: o.issuer || '',
       }
-      return { ...c, ...scoreClaim(c) }
+      return { ...c, ...scoreClaim(c, winRateOverrides) }
     })
     setManualClaims(prev => {
       const existingIds = new Set(prev.map(c => c.id))
@@ -5877,6 +5928,15 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
                   <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">CLAIM ID</label><input className="input-field" placeholder="AUTO" value={draft.id} onChange={e=>setDraft(d=>({...d,id:e.target.value}))} /></div>
                   <div className="col-span-2"><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">REASON CODE</label><select className="input-field" value={draft.code} onChange={e=>setDraft(d=>({...d,code:e.target.value}))}>{Object.entries(CODE_LABELS).map(([k,v]) => <option key={k} value={k}>{k} — {v}</option>)}</select></div>
                   <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">AMOUNT ($)</label><input className="input-field" type="number" placeholder="0.00" value={draft.amount} onChange={e=>setDraft(d=>({...d,amount:e.target.value}))} /></div>
+                  <div className="col-span-2"><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">CYCLE STAGE</label>
+                    <select className="input-field" value={draft.cycleStage} onChange={e=>setDraft(d=>({...d,cycleStage:e.target.value}))}>
+                      {Object.entries(CYCLE_STAGE_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                    </select>
+                    {draft.cycleStage==='2cb' && <div className="mono-font text-[9px] text-emerald-700 mt-1">↑ +8% probability — already survived first chargeback round</div>}
+                    {draft.cycleStage==='prearb' && <div className="mono-font text-[9px] text-amber-700 mt-1">⚠ Pre-arb fee risk — Visa $500 / MC $500 filing fee if lost</div>}
+                    {draft.cycleStage==='arb' && <div className="mono-font text-[9px] text-red-700 mt-1">⚠ Arbitration fee risk up to $1,100 (MC) — only fund if high-confidence</div>}
+                  </div>
+                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">ISSUER</label><input className="input-field" placeholder="Chase / BofA / CU..." value={draft.issuer} onChange={e=>setDraft(d=>({...d,issuer:e.target.value}))} /></div>
                   <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">FILED DAYS AGO</label><input className="input-field" type="number" value={draft.filedDaysAgo} onChange={e=>setDraft(d=>({...d,filedDaysAgo:e.target.value}))} /></div>
                   <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">WINDOW (DAYS)</label><input className="input-field" type="number" value={draft.windowDays} onChange={e=>setDraft(d=>({...d,windowDays:e.target.value}))} /></div>
                   <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">MERCHANT CBR</label><input className="input-field" type="number" step="0.1" value={draft.merchantCBR} onChange={e=>setDraft(d=>({...d,merchantCBR:e.target.value}))} /></div>
@@ -6052,6 +6112,126 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
               <div className="mt-2 mono-font text-[9px] text-stone-400">
                 Timeline based on filing window remaining per claim (windowDays − daysAgo). Actual resolution may vary by network and issuer response.
               </div>
+            </div>
+          )
+        })()}
+
+        {/* ── Win Rate Calibration (Task 2) ── */}
+        {activeScored.length > 0 && (() => {
+          const codesInPortfolio = [...new Set(activeScored.map(c => c.code))].sort()
+          const hasOverrides = Object.keys(winRateOverrides).length > 0
+          return (
+            <div className="mt-2 mb-6 border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <button className="w-full flex items-center justify-between px-4 py-3" style={{ borderBottom: calibOpen ? '1px solid #E8E3DA' : 'none' }}
+                onClick={() => setCalibOpen(v => !v)}>
+                <div className="flex items-center gap-3">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500">MODEL CALIBRATION — WIN RATE OVERRIDES</div>
+                  {hasOverrides && <div className="mono-font text-[9px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>{Object.keys(winRateOverrides).length} OVERRIDE{Object.keys(winRateOverrides).length > 1 ? 'S' : ''} ACTIVE</div>}
+                </div>
+                <div className="mono-font text-[9px] text-stone-400">{calibOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+              </button>
+              {calibOpen && (
+                <div className="px-4 py-4">
+                  <p className="display-font text-stone-500 text-[13px] mb-4" style={{ lineHeight:1.6 }}>
+                    Override the default base win rates for reason codes present in this portfolio. Your institution's historical performance may differ from model defaults. Overrides are saved locally and applied to all future scoring sessions.
+                  </p>
+                  <div style={{ display:'grid', gap:'10px' }}>
+                    {codesInPortfolio.map(code => {
+                      const defaultRate = DFA_BASE_WIN[code] ?? 0.50
+                      const override    = winRateOverrides[code]
+                      const current     = override !== undefined ? override : defaultRate
+                      return (
+                        <div key={code} style={{ display:'grid', gridTemplateColumns:'200px 1fr 60px 80px', alignItems:'center', gap:'12px' }}>
+                          <div>
+                            <div className="mono-font text-[10px] text-stone-700">{code}</div>
+                            <div className="mono-font text-[9px] text-stone-400">{CODE_LABELS[code] || code}</div>
+                          </div>
+                          <input type="range" min="0.05" max="0.96" step="0.01"
+                            value={current}
+                            onChange={e => setWinRateOverrides(prev => ({ ...prev, [code]: parseFloat(e.target.value) }))} />
+                          <div className="mono-font text-[11px] text-stone-700 text-right">{Math.round(current * 100)}%</div>
+                          <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
+                            {override !== undefined && (
+                              <button onClick={() => setWinRateOverrides(prev => { const n = {...prev}; delete n[code]; return n })}
+                                className="mono-font text-[9px] text-stone-400 hover:text-stone-700">RESET</button>
+                            )}
+                            {override === undefined && <div className="mono-font text-[9px] text-stone-300">DEFAULT</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {hasOverrides && (
+                    <button onClick={() => setWinRateOverrides({})}
+                      className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 mt-4 border border-stone-300 px-3 py-1.5">
+                      RESET ALL TO DEFAULTS
+                    </button>
+                  )}
+                  <div className="mono-font text-[9px] text-stone-400 mt-3">
+                    Default rates are based on published network win-rate research and Covalence model training data. Adjust based on your actual representment outcomes over the last 12 months for best accuracy.
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* ── Vintage Analysis (Task 5) ── */}
+        {activeScored.length > 1 && (() => {
+          const buckets = [
+            { label:'Filed ≤7d ago',    key:'w0', min:0,  max:7   },
+            { label:'8–14 days ago',    key:'w1', min:8,  max:14  },
+            { label:'15–30 days ago',   key:'w2', min:15, max:30  },
+            { label:'31–60 days ago',   key:'w3', min:31, max:60  },
+            { label:'61–90 days ago',   key:'w4', min:61, max:90  },
+            { label:'91+ days ago',     key:'w5', min:91, max:9999},
+          ]
+          const filled = buckets.map(b => {
+            const cs = activeScored.filter(c => c.filedDaysAgo >= b.min && c.filedDaysAgo <= b.max)
+            return { ...b, count:cs.length, value:cs.reduce((s,c)=>s+c.amount,0) }
+          }).filter(b => b.count > 0)
+          if (filled.length < 2) return null
+          const maxCount = Math.max(...filled.map(b => b.count), 1)
+          // Vintage concentration risk: >60% in one bucket
+          const totalClaims = activeScored.length
+          const topBucket = filled.reduce((a,b) => a.count > b.count ? a : b)
+          const vintageConc = topBucket.count / totalClaims
+          return (
+            <div className="mt-2 mb-6 border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <button className="w-full flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: vintageOpen ? '1px solid #E8E3DA' : 'none' }}
+                onClick={() => setVintageOpen(v => !v)}>
+                <div className="flex items-center gap-3">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500">VINTAGE ANALYSIS — FILING DATE DISTRIBUTION</div>
+                  {vintageConc > 0.60 && <div className="mono-font text-[9px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>⚠ VINTAGE CONCENTRATION</div>}
+                </div>
+                <div className="mono-font text-[9px] text-stone-400">{vintageOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+              </button>
+              {vintageOpen && (
+                <div className="px-4 py-4">
+                  {vintageConc > 0.60 && (
+                    <div className="mono-font text-[10px] text-amber-800 mb-4 border border-amber-300 bg-amber-50 px-3 py-2">
+                      ⚠ {Math.round(vintageConc*100)}% of claims were filed within the same time window ("{topBucket.label}"). A clustered portfolio may indicate cherry-picking or a single-event batch rather than a rolling receivables stream. Request filing date documentation from the servicer.
+                    </div>
+                  )}
+                  <div style={{ display:'grid', gap:'8px' }}>
+                    {filled.map(b => {
+                      const barW = Math.round(b.count / maxCount * 100)
+                      return (
+                        <div key={b.key} style={{ display:'grid', gridTemplateColumns:'140px 1fr 40px 100px', alignItems:'center', gap:'10px' }}>
+                          <div className="mono-font text-[10px] text-stone-600">{b.label}</div>
+                          <div style={{ height:'8px', background:'#E8E3DA', borderRadius:'2px' }}>
+                            <div style={{ height:'100%', width:`${barW}%`, background: b.count/totalClaims > 0.60 ? '#92400e' : '#44403c', borderRadius:'2px', transition:'width 0.3s' }} />
+                          </div>
+                          <div className="mono-font text-[10px] text-stone-700 text-right">{b.count}</div>
+                          <div className="mono-font text-[9px] text-stone-400 text-right">${Math.round(b.value).toLocaleString()}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mono-font text-[9px] text-stone-400 mt-3">A healthy rolling portfolio shows claims spread across multiple buckets. Funders typically prefer to see no single vintage accounting for more than 50% of face value.</div>
+                </div>
+              )}
             </div>
           )
         })()}
