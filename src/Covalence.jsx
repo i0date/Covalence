@@ -2309,6 +2309,94 @@ Return ONLY valid JSON:
 
 
 
+// ─── Evidence Package — per reason code ──────────────────────────────────────
+// Returns { systems, cardholder, merchant } arrays of { text, impact } items
+// impact: 'required' | 'strengthens' | 'weakens' | 'context'
+function getEvidencePackage(reasonCode, category) {
+  const code = (reasonCode || '').toString().trim()
+  const cat  = (category  || '').toString().toLowerCase()
+
+  // Helper shorthands
+  const req  = (text) => ({ text, impact: 'required'    })
+  const str  = (text) => ({ text, impact: 'strengthens' })
+  const ctx  = (text) => ({ text, impact: 'context'     })
+  const wkn  = (text) => ({ text, impact: 'weakens'     })
+
+  // ── Common fraud base ─────────────────────────────────────────────────────
+  const fraudSystems    = [req('Transaction log with amount, date, timestamp, and MCC'), req('Authorization record — approval code, terminal ID, entry mode'), str('Device fingerprint / IP address at time of authorization'), str('Velocity report — other transactions on same card that day'), ctx('Card status history (active / blocked / reported stolen)')]
+  const fraudCardholder = [req('Cardholder written statement — what happened, when discovered'), str('Confirmation cardholder did NOT authorize the transaction'), ctx('Date and method of fraud report (phone, online, branch)')]
+  const fraudMerchant   = [wkn('Delivery confirmation / signed receipt — if present, weakens fraud claim'), wkn('Prior undisputed transactions at same merchant (CE 3.0 risk)'), ctx('Merchant dispute rate / VFMP status')]
+
+  // ── Visa Fraud — 10.4 CNP ────────────────────────────────────────────────
+  if (code.startsWith('10.4')) return {
+    systems:    [...fraudSystems, str('AVS result (mismatch strengthens claim)'), str('CVV2 result (mismatch strengthens claim)'), str('3DS authentication result — if attempted')],
+    cardholder: [...fraudCardholder, req('Confirmation cardholder did not place the order or recognize the merchant')],
+    merchant:   [...fraudMerchant, wkn('Compelling Evidence 3.0 — device/IP match from prior orders (CE3.0 can defeat 10.4 — check before filing)'), wkn('Delivery confirmation with signature')],
+  }
+  // ── Visa Fraud — 10.1 Lost / Stolen / 10.2 Not in Possession ─────────────
+  if (code.startsWith('10.1') || code.startsWith('10.2')) return {
+    systems:    [...fraudSystems, str('Chip / mag-stripe read indicator — mag-stripe on chip-capable card strengthens claim'), str('PIN verification result'), ctx('Last legitimate cardholder transaction — location comparison')],
+    cardholder: [...fraudCardholder, str('Police / theft report number and date'), ctx('Date card was lost or stolen if known')],
+    merchant:   [wkn('Signed receipt — if signed, weakens claim'), wkn('PIN entry record — if correct PIN used, investigate ATO')],
+  }
+  // ── Visa 10.5 Visa Fraud Monitoring Program ───────────────────────────────
+  if (code.startsWith('10.5')) return {
+    systems:    [...fraudSystems, req('VFMP enrollment confirmation for merchant')],
+    cardholder: fraudCardholder,
+    merchant:   fraudMerchant,
+  }
+  // ── Visa 13.1 Merchandise / Service Not Received ─────────────────────────
+  if (code.startsWith('13.1')) return {
+    systems:    [req('Transaction record and authorization details'), ctx('Expected delivery date from order records')],
+    cardholder: [req('Cardholder statement — what was ordered, when, not received'), str('Communication with merchant (emails, chat, screenshots)'), str('Expected delivery date'), ctx('Shipping address confirmation')],
+    merchant:   [wkn('Carrier tracking confirmation with delivery to correct address'), wkn('Signed proof of delivery'), ctx('Order details and customer communication records')],
+  }
+  // ── Visa 13.2 Cancelled Recurring / 13.3 Not as Described ────────────────
+  if (code.startsWith('13.2')) return {
+    systems:    [req('Transaction history showing recurring charges'), ctx('Dispute filing date — must be after cancellation')],
+    cardholder: [req('Proof of cancellation — email confirmation, screenshot, reference number'), req('Date cancellation was requested'), str('Merchant acknowledgment of cancellation')],
+    merchant:   [wkn('Proof subscription was not cancelled'), wkn('Terms agreed to by cardholder at signup')],
+  }
+  if (code.startsWith('13.3')) return {
+    systems:    [req('Transaction log'), ctx('Merchant website / product description at time of purchase if available')],
+    cardholder: [req('Written description of how item/service differed from what was advertised'), str('Photos or documentation of the item received'), str('Screenshots of the merchant listing or advertisement'), ctx('Communication with merchant regarding the discrepancy')],
+    merchant:   [wkn('Original product description / listing'), wkn('Proof item matched description')],
+  }
+  // ── Visa 13.6 Credit Not Processed ───────────────────────────────────────
+  if (code.startsWith('13.6')) return {
+    systems:    [req('Transaction record'), ctx('Credit history — confirm no credit was posted')],
+    cardholder: [req('Proof credit or refund was promised — email, return receipt, written confirmation'), str('Date return was made or credit was agreed'), ctx('Item return tracking if applicable')],
+    merchant:   [wkn('Proof credit was issued'), wkn('Merchant refund policy at time of purchase')],
+  }
+  // ── Mastercard 4853 Cardholder Dispute ────────────────────────────────────
+  if (code.startsWith('4853')) return {
+    systems:    [req('Transaction record'), ctx('Merchant category and prior dispute history')],
+    cardholder: [req('Cardholder written description of the dispute'), str('Evidence merchant was contacted (30-day rule)'), str('Documentation of the original agreement or order'), ctx('Relevant communications with merchant')],
+    merchant:   [wkn('Proof of delivery or service rendered'), wkn('Signed agreement or terms accepted by cardholder')],
+  }
+  // ── Mastercard 4837 No Cardholder Authorization ───────────────────────────
+  if (code.startsWith('4837')) return {
+    systems:    [...fraudSystems, str('Chip or PIN indicator'), str('AVS / CVV2 results')],
+    cardholder: [...fraudCardholder],
+    merchant:   [...fraudMerchant, wkn('Valid cardholder signature on receipt')],
+  }
+  // ── Mastercard 4863 Cardholder Does Not Recognize ────────────────────────
+  if (code.startsWith('4863')) return {
+    systems:    [...fraudSystems, str('Merchant DBA vs legal name — discrepancy supports cardholder')],
+    cardholder: [req('Cardholder statement they do not recognize the merchant'), str('Explanation of what DBA name appeared on statement')],
+    merchant:   [wkn('Evidence cardholder made the transaction'), ctx('Merchant DBA / trade name records')],
+  }
+  // ── Generic fraud fallback ────────────────────────────────────────────────
+  if (cat.includes('fraud')) return { systems: fraudSystems, cardholder: fraudCardholder, merchant: fraudMerchant }
+
+  // ── Generic consumer dispute fallback ─────────────────────────────────────
+  return {
+    systems:    [req('Transaction log with authorization details'), ctx('Prior transaction history with this merchant')],
+    cardholder: [req('Cardholder written statement describing the dispute'), str('Supporting documentation — receipts, emails, screenshots'), str('Evidence merchant was contacted before filing')],
+    merchant:   [wkn('Proof of delivery or service'), wkn('Signed receipt or agreement'), ctx('Merchant refund / dispute policy')],
+  }
+}
+
 // ─── NACHA ACH Return Code Reference ─────────────────────────────────────────
 const NACHA_RETURN_CODES = [
   { code: 'R01', title: 'Insufficient Funds',                               type: 'Bank Return',  deadline: '2 BD',  fraud: false, notes: 'Most common return. Eligible for re-presentment (up to 2×). Not necessarily fraud — verify with consumer before disputing.' },
@@ -3049,7 +3137,7 @@ Return ONLY valid JSON:
 
   const startEdit = (o) => { // pre-populate draft from outcome row
     setEditingRow(o.id)
-    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: o.notes || '', submitDate: o.submitDate || '', trackingRef: o.trackingRef || '' })
+    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: o.notes || '', submitDate: o.submitDate || '', trackingRef: o.trackingRef || '', nextRespDate: o.nextRespDate || '' })
   }
   const cancelEdit = () => { setEditingRow(null); setEditDraft({}) }
   const saveEdit = (id) => {
@@ -3224,7 +3312,7 @@ Return ONLY valid JSON:
 
   // Outcome tracker: 60-day window only
   // Lifecycle stages: pending → filed → representment → pre_arb → won | lost | withdrawn
-  const LIFECYCLE_IN_PROGRESS = new Set(['filed', 'representment', 'pre_arb'])
+  const LIFECYCLE_IN_PROGRESS = new Set(['filed', 'investigating', 'representment', 'pre_arb'])
   const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
@@ -3234,7 +3322,8 @@ Return ONLY valid JSON:
   const lostCount       = trackerOutcomes.filter(o => o.status === 'lost').length
   const withdrawnCount  = trackerOutcomes.filter(o => o.status === 'withdrawn').length
   const inProgressCount = trackerOutcomes.filter(o => LIFECYCLE_IN_PROGRESS.has(o.status)).length
-  const resolvedCount   = wonCount + lostCount + withdrawnCount
+  const resolvedStatusCount = trackerOutcomes.filter(o => o.status === 'resolved').length
+  const resolvedCount   = wonCount + lostCount + withdrawnCount + resolvedStatusCount
   const winRate         = resolvedCount > 0 ? Math.round((wonCount / resolvedCount) * 100) : null
 
   // Advance a case to the next lifecycle stage
@@ -3411,7 +3500,7 @@ Return ONLY valid JSON:
                       onClick={() => setNetwork('ach')}
                       className={`network-btn ${network === 'ach' ? 'active' : 'inactive'}`}
                     >
-                      ACH / EFT
+                      ACH
                     </button>
                   </div>
                   {network === 'ach' && (
@@ -3646,7 +3735,7 @@ Return ONLY valid JSON:
                 {/* Network badge */}
                 <div className="mono-font text-xs tracking-widest text-stone-500 flex items-center gap-2">
                   <span className={`px-2 py-0.5 text-white ${network === 'visa' ? 'bg-blue-800' : network === 'mastercard' ? 'bg-red-900' : 'bg-teal-800'}`}>
-                    {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH / EFT'}
+                    {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH'}
                   </span>
                   <span>{network === 'ach' ? 'NACHA RETURN CODE REFERENCE' : 'REASON CODE ANALYSIS'}</span>
                 </div>
@@ -4463,7 +4552,7 @@ Return ONLY valid JSON:
             <div className="section-divider" />
             <div>
               <div className="flex items-baseline gap-3 mb-2">
-                <span className="mono-font text-xs text-stone-500">06</span>
+                <span className="mono-font text-xs text-stone-500">04</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Merchant Defense Preview</h2>
               </div>
               <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
@@ -4558,88 +4647,6 @@ Return ONLY valid JSON:
                 </div>
               )}
             </div>
-
-        {/* ── Fight-or-Accept Calculator ── */}
-            {platformMode === 'fi' && (
-            <>
-            <div className="section-divider" />
-            <div>
-              <div className="flex items-baseline gap-3 mb-2">
-                <span className="mono-font text-xs text-stone-500">07</span>
-                <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Fight-or-Accept Calculator</h2>
-              </div>
-              <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
-                Calculate whether fighting this chargeback is worth the cost — accounting for staff time, network fees, and estimated win probability.
-              </p>
-
-              {!result && (
-                <div className="border border-dashed border-stone-300 p-10 text-center" style={{ background: '#FAF7F1' }}>
-                  <p className="display-font text-stone-400 italic text-[14px]">Run an analysis first to compute fight-or-accept value.</p>
-                </div>
-              )}
-
-              {result && (
-                <div className="space-y-4">
-                  {/* Inputs */}
-                  <div className="border border-stone-300 p-5 grid grid-cols-2 gap-5" style={{ background: '#F0EDE6' }}>
-                    <div>
-                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">STAFF HOURLY RATE ($/hr)</label>
-                      <input
-                        type="number" min="0" max="500" step="5"
-                        value={fightHourlyRate} onChange={e => setFightHourlyRate(e.target.value)}
-                        className="cov-input mono-font" style={{ fontSize: '14px', maxWidth: '100px' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">ESTIMATED HOURS TO FIGHT</label>
-                      <input
-                        type="number" min="0" max="20" step="0.5"
-                        value={fightHours} onChange={e => setFightHours(e.target.value)}
-                        className="cov-input mono-font" style={{ fontSize: '14px', maxWidth: '80px' }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Results */}
-                  {fightCalc && (
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-0 border border-stone-900">
-                      <div className="p-4 border-r border-stone-200 bg-stone-50">
-                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROBABILITY</div>
-                        <div className="display-font font-bold text-3xl text-stone-900">{fightCalc.winProb}%</div>
-                        <div className="mono-font text-[10px] text-stone-400 mt-1">
-                          {result.confidence?.toUpperCase()} confidence{rebuttal?.win_risk ? ` · merchant ${rebuttal.win_risk.toLowerCase()} defense` : ''}
-                        </div>
-                      </div>
-                      <div className="p-4 border-r border-stone-200 bg-stone-50">
-                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXPECTED RECOVERY</div>
-                        <div className="display-font font-bold text-3xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
-                        <div className="mono-font text-[10px] text-stone-400 mt-1">amount × win prob</div>
-                      </div>
-                      <div className="p-4 border-r border-stone-200 bg-stone-50">
-                        <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">TOTAL COST TO FIGHT</div>
-                        <div className="display-font font-bold text-3xl text-stone-900">${(fightCalc.staffCost + fightCalc.netFee).toFixed(2)}</div>
-                        <div className="mono-font text-[10px] text-stone-400 mt-1">${fightCalc.staffCost.toFixed(0)} staff + ~${fightCalc.netFee} network fee</div>
-                      </div>
-                      <div className={`p-4 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
-                        <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
-                        <div className={`display-font font-bold text-3xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'}`}>
-                          {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
-                        </div>
-                        <div className={`mono-font text-sm font-bold mt-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>
-                          → {fightCalc.recommendation}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mono-font text-[10px] text-stone-400 italic">
-                    Win probability is estimated from AI analysis confidence and merchant defense strength. Adjust staff rate and hours for your institution's actual cost profile. Network fee estimate (~$15) is illustrative.
-                  </div>
-                </div>
-              )}
-            </div>
-            </>
-            )}
 
         {/* ── Step 05 — Customer Communication ── */}
             <div className="section-divider" />
@@ -4839,13 +4846,68 @@ Return ONLY valid JSON:
                     </div>
                   )}
 
-                  {/* NOT RECOMMENDED — redirect to formal dispute */}
+                  {/* NOT RECOMMENDED — redirect to formal dispute + fight-or-accept calculator */}
                   {!goodwillRec.recommended && (
-                    <div className="px-5 pt-2 pb-5">
+                    <div className="px-5 pt-2 pb-5 space-y-4">
                       <div className="flex items-center gap-2 text-stone-500">
                         <ArrowRight className="w-3.5 h-3.5 flex-shrink-0" />
                         <p className="mono-font text-xs tracking-wide">Proceed with formal chargeback filing — use Steps 01–04 above.</p>
                       </div>
+                      {/* ── Fight-or-Accept cost-benefit ── */}
+                      {platformMode === 'fi' && result && (
+                        <div className="border border-stone-300 mt-2" style={{ background: '#EEE9E0' }}>
+                          <div className="px-4 py-2.5 border-b border-stone-300">
+                            <span className="mono-font text-[9px] tracking-widest text-stone-500">FIGHT-OR-ACCEPT — COST / BENEFIT</span>
+                          </div>
+                          <div className="p-4 grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">STAFF RATE ($/hr)</label>
+                              <input
+                                type="number" min="0" max="500" step="5"
+                                value={fightHourlyRate} onChange={e => setFightHourlyRate(e.target.value)}
+                                className="cov-input mono-font" style={{ fontSize: '13px', maxWidth: '90px' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">HOURS TO FIGHT</label>
+                              <input
+                                type="number" min="0" max="20" step="0.5"
+                                value={fightHours} onChange={e => setFightHours(e.target.value)}
+                                className="cov-input mono-font" style={{ fontSize: '13px', maxWidth: '70px' }}
+                              />
+                            </div>
+                          </div>
+                          {fightCalc && (
+                            <div className="grid grid-cols-4 border-t border-stone-300">
+                              <div className="p-3 border-r border-stone-200">
+                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
+                                <div className="display-font font-bold text-xl text-stone-900">{fightCalc.winProb}%</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal?.win_risk ? ` · ${rebuttal.win_risk.toLowerCase()} mch` : ''}</div>
+                              </div>
+                              <div className="p-3 border-r border-stone-200">
+                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
+                                <div className="display-font font-bold text-xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">amt × win prob</div>
+                              </div>
+                              <div className="p-3 border-r border-stone-200">
+                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">COST TO FIGHT</div>
+                                <div className="display-font font-bold text-xl text-stone-900">${(fightCalc.staffCost + fightCalc.netFee).toFixed(2)}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">${fightCalc.staffCost.toFixed(0)} staff + ~${fightCalc.netFee} fee</div>
+                              </div>
+                              <div className={`p-3 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
+                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
+                                <div className={`display-font font-bold text-xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'}`}>
+                                  {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
+                                </div>
+                                <div className={`mono-font text-xs font-bold mt-0.5 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>→ {fightCalc.recommendation}</div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="px-4 py-2 border-t border-stone-300">
+                            <p className="mono-font text-[9px] text-stone-400 italic">Win prob from AI confidence + merchant defense. Network fee ~$15 est. Adjust for your institution's cost profile.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -4925,9 +4987,9 @@ Return ONLY valid JSON:
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
                   { label: 'TOTAL (60 DAYS)', value: trackerOutcomes.length,                         sub: 'cases analyzed'                            },
-                  { label: 'IN PROGRESS',      value: inProgressCount,                               sub: `filed / representment / pre-arb`          },
-                  { label: 'WIN RATE',         value: winRate !== null ? `${winRate}%` : '—',        sub: `${resolvedCount} resolved`                 },
-                  { label: 'WON / LOST',       value: `${wonCount} / ${lostCount}`,                  sub: `${withdrawnCount} withdrawn`               },
+                  { label: 'IN PROGRESS',      value: inProgressCount,                               sub: `filed / invstg / repmt / pre-arb`         },
+                  { label: 'WIN RATE',         value: winRate !== null ? `${winRate}%` : '—',        sub: `${resolvedCount} closed`                   },
+                  { label: 'WON / LOST',       value: `${wonCount} / ${lostCount}`,                  sub: `${withdrawnCount} wd · ${resolvedStatusCount} resolved` },
                 ].map(s => (
                   <div key={s.label} className="border border-stone-200 p-4" style={{ background: '#FAF7F1' }}>
                     <div className="mono-font text-xs tracking-widest text-stone-400 mb-1">{s.label}</div>
@@ -5176,17 +5238,21 @@ Return ONLY valid JSON:
                                       {o.mode === 'merchant' ? (<>
                                         <option value="pending">Chargeback received — preparing representment</option>
                                         <option value="filed">Representment filed — awaiting acquirer decision</option>
+                                        <option value="investigating">Investigating — under internal review</option>
                                         <option value="representment">Acquirer responded — under review</option>
                                         <option value="won">Won — chargeback reversed</option>
                                         <option value="lost">Lost — chargeback upheld</option>
+                                        <option value="resolved">Resolved — closed without formal outcome</option>
                                         <option value="withdrawn">Withdrawn</option>
                                       </>) : (<>
                                         <option value="pending">Pending — not yet filed</option>
                                         <option value="filed">Filed — submitted to network</option>
+                                        <option value="investigating">Investigating — under internal review</option>
                                         <option value="representment">Representment received — merchant responded</option>
                                         <option value="pre_arb">Pre-arb filed — awaiting decision</option>
                                         <option value="won">Won</option>
                                         <option value="lost">Lost</option>
+                                        <option value="resolved">Resolved — closed without formal outcome</option>
                                         <option value="withdrawn">Withdrawn</option>
                                       </>)}
                                     </select>
@@ -5211,15 +5277,28 @@ Return ONLY valid JSON:
                                     </div>
                                   </div>
                                 )}
-                                <div>
-                                  <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTES</label>
-                                  <input
-                                    className="input-field"
-                                    value={editDraft.notes || ''}
-                                    onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
-                                    placeholder="Optional case notes..."
-                                    style={{ fontSize: '13px', padding: '8px 10px' }}
-                                  />
+                                <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                                  <div>
+                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTES</label>
+                                    <input
+                                      className="input-field"
+                                      value={editDraft.notes || ''}
+                                      onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
+                                      placeholder="Optional case notes..."
+                                      style={{ fontSize: '13px', padding: '8px 10px' }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NEXT RESPONSE DUE</label>
+                                    <input
+                                      type="date"
+                                      className="input-field"
+                                      value={editDraft.nextRespDate || ''}
+                                      onChange={e => setEditDraft(d => ({ ...d, nextRespDate: e.target.value }))}
+                                      style={{ fontSize: '13px', padding: '8px 10px' }}
+                                    />
+                                    <p className="display-font text-[10px] text-stone-400 mt-0.5 italic">Network / acquirer deadline</p>
+                                  </div>
                                 </div>
                                 <div className="flex gap-2 pt-1">
                                   <button onClick={() => saveEdit(o.id)} className="mono-font text-[10px] tracking-widest px-3 py-1.5 bg-stone-900 text-stone-50 hover:bg-stone-700 transition-colors">SAVE</button>
@@ -5259,6 +5338,17 @@ Return ONLY valid JSON:
                                     if (!isFraudLike || !(amtNum >= settings.sarThreshold)) return null
                                     return <p className="mono-font text-[10px] text-red-700 mt-0.5 font-bold">⚠ SAR REVIEW</p>
                                   })()}
+                                  {/* Next response due chip */}
+                                  {o.nextRespDate && (() => {
+                                    const daysLeft = Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
+                                    const urgent = daysLeft <= 3
+                                    const overdue = daysLeft < 0
+                                    return (
+                                      <p className={`mono-font text-[10px] mt-0.5 font-bold ${overdue ? 'text-red-700' : urgent ? 'text-amber-700' : 'text-blue-700'}`}>
+                                        {overdue ? `⚠ NEXT RESP OVERDUE ${Math.abs(daysLeft)}d ago` : `NEXT RESP ${daysLeft === 0 ? 'DUE TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
+                                      </p>
+                                    )
+                                  })()}
                                 </div>
                                 {/* DFA grade badge — FI only; merchant rows show winProb badge in reason cell */}
                                 {o.mode !== 'merchant' ? (() => {
@@ -5280,9 +5370,20 @@ Return ONLY valid JSON:
                                   {o.status === 'filed' && (
                                     <>
                                       <span className="mono-font text-[10px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{o.mode === 'merchant' ? 'REPMT FILED' : 'FILED'}</span>
+                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
                                       <button onClick={() => advanceStage(o.id, 'representment')} title={o.mode === 'merchant' ? 'Acquirer responded to representment' : 'Merchant representment received'} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">{o.mode === 'merchant' ? 'ACQ RESP' : 'REPMT'}</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
+                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
+                                    </>
+                                  )}
+                                  {o.status === 'investigating' && (
+                                    <>
+                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-blue-800 text-blue-50">INVSTG</span>
+                                      <button onClick={() => advanceStage(o.id, 'representment')} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">REPMT</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'resolved')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-100 transition-colors">RESOLVED</button>
                                       <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
                                     </>
                                   )}
@@ -5311,6 +5412,12 @@ Return ONLY valid JSON:
                                       <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
                                       <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
                                     </>
+                                  )}
+                                  {o.status === 'resolved' && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-teal-800 text-teal-50">RESOLVED</span>
+                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark">↩</button>
+                                    </div>
                                   )}
                                   {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (
                                     <div className="flex items-center gap-1 flex-wrap">
