@@ -6538,7 +6538,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   const [cryptoFields,  setCryptoFields]  = useState({ asset_type:'', wallet_addresses:'', transaction_ids:'', amount_crypto:'', amount_usd:'' })
   // External link state
   const [linkType,      setLinkType]      = useState('standard') // 'standard' | 'crypto'
-  const [linkPayload,   setLinkPayload]   = useState({ case_ref:'', report_type:'', incident_date:'', amount:'', currency:'USD', nature:'', summary:'', asset_type:'BTC', wallet_addresses:'', transaction_ids:'', chain_analytics_link:'' })
+  const [linkPayload,   setLinkPayload]   = useState({ case_ref:'', report_type:'', incident_date:'', amount:'', currency:'USD', nature:'', summary:'', receiving_account:'', receiving_account_name:'', transaction_ref:'', sending_account_last4:'', asset_type:'BTC', wallet_addresses:'', transaction_ids:'', chain_analytics_link:'', source_institution:'' })
   const [linkToken,     setLinkToken]     = useState('')
   const [linkCopied,    setLinkCopied]    = useState(false)
   const [linkLoading,   setLinkLoading]   = useState(false)
@@ -7183,11 +7183,31 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
                 {F('AMOUNT', 'amount', '5200.00')}
                 {F('CURRENCY', 'currency', 'USD')}
               </div>
+
+              {/* Transaction identifiers — lets the receiving FI find the account */}
+              <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px', marginTop:'4px' }}>
+                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
+                <div style={{ display:'grid', gap:'14px' }}>
+                  <div>
+                    {F('RECEIVING ACCOUNT NUMBER', 'receiving_account', '****1234 or full account number')}
+                    <div className="mono-font text-[9px] text-stone-400 mt-1 leading-relaxed">
+                      Account at the receiving institution where funds landed. Use full number or last 4 — the receiving FI cannot look up the case without this.
+                    </div>
+                  </div>
+                  {F('RECEIVING ACCOUNT HOLDER NAME', 'receiving_account_name', 'Name on the account at the receiving institution')}
+                  <div>
+                    {F('TRANSACTION REFERENCE', 'transaction_ref', 'ACH trace no. / wire IMAD / Fedwire ref')}
+                    <div className="mono-font text-[9px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
+                  </div>
+                  {F('YOUR ACCOUNT (last 4, optional)', 'sending_account_last4', '****5678')}
+                </div>
+              </div>
+
               {F('NATURE OF REPORT', 'nature', 'Authorized push payment fraud / account takeover / etc.')}
               <div>
                 <label className="cov-label">SUMMARY</label>
                 <textarea className="cov-input mono-font" value={lp.summary || ''} onChange={e => setLp('summary', e.target.value)}
-                  rows={3} placeholder="Brief factual summary of what occurred — no customer PII."
+                  rows={3} placeholder="Brief factual summary of what occurred."
                   style={{ fontSize:'13px', resize:'vertical', lineHeight:1.5 }} />
               </div>
             </>
@@ -7196,6 +7216,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
               {F('CASE REFERENCE', 'case_ref', 'CRYPTO-2024-00142')}
               {F('REPORT TYPE', 'report_type', 'Investment scam / pig butchering / unauthorized transfer')}
               {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
+              <div>
+                {F('SOURCE INSTITUTION (optional)', 'source_institution', 'Name of the bank or fintech the victim used to send funds')}
+                <div className="mono-font text-[9px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
+              </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
                 {F('ASSET TYPE', 'asset_type', 'BTC / ETH / USDT')}
                 {F('AMOUNT (CRYPTO)', 'amount', '0.234')}
@@ -7232,7 +7256,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
 
           <div className="mono-font text-[10px] text-stone-400 leading-relaxed" style={{ maxWidth:'480px' }}>
-            The link expires in 30 days. Every time it is opened, the visitor's name, email, institution, and timestamp are logged. No customer PII is included in the link payload.
+            The link expires in 30 days. Every access is logged with name, email, institution, and timestamp. Account-level identifiers (account number, transaction reference) are included in the payload to allow the receiving institution to look up the case — share only what your institution's data-sharing agreements permit.
           </div>
         </div>
       </div>

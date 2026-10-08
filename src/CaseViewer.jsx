@@ -282,7 +282,54 @@ export default function CaseViewer({ token }) {
                 </tr>
               ))}
 
+              {/* Transaction identifiers — fiat standard cases */}
+              {!isCrypto && (payload.receiving_account || payload.receiving_account_name || payload.transaction_ref) && (
+                <>
+                  <tr>
+                    <td colSpan={2} style={{ padding:'10px 20px 4px', fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.12em', color:'#B0A090', background:'#F9F7F3', borderTop:'1px solid #E8E3DA', borderBottom:'1px solid #E8E3DA' }}>TRANSACTION IDENTIFIERS</td>
+                  </tr>
+                  {payload.receiving_account && (
+                    <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#F9F7F3' }}>
+                      <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top', whiteSpace:'nowrap' }}>RECEIVING ACCOUNT</td>
+                      <td style={{ padding:'12px 20px', display:'flex', alignItems:'center', gap:'10px' }}>
+                        <code style={{ fontFamily:'Courier New,monospace', fontSize:'13px', color:'#1A1814', background:'#EDE8E0', padding:'4px 8px' }}>{payload.receiving_account}</code>
+                        <button onClick={() => navigator.clipboard.writeText(payload.receiving_account)}
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
+                      </td>
+                    </tr>
+                  )}
+                  {payload.receiving_account_name && (
+                    <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#F9F7F3' }}>
+                      <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top', whiteSpace:'nowrap' }}>ACCOUNT HOLDER</td>
+                      <td style={{ padding:'12px 20px', fontFamily:'Georgia,serif', fontSize:'14px', color:'#1A1814' }}>{payload.receiving_account_name}</td>
+                    </tr>
+                  )}
+                  {payload.transaction_ref && (
+                    <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#F9F7F3' }}>
+                      <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top', whiteSpace:'nowrap' }}>TRANSACTION REF</td>
+                      <td style={{ padding:'12px 20px', display:'flex', alignItems:'center', gap:'10px' }}>
+                        <code style={{ fontFamily:'Courier New,monospace', fontSize:'13px', color:'#1A1814', background:'#EDE8E0', padding:'4px 8px' }}>{payload.transaction_ref}</code>
+                        <button onClick={() => navigator.clipboard.writeText(payload.transaction_ref)}
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
+                      </td>
+                    </tr>
+                  )}
+                  {payload.sending_account_last4 && (
+                    <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#F9F7F3' }}>
+                      <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top', whiteSpace:'nowrap' }}>SENDING ACCOUNT</td>
+                      <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'13px', color:'#1A1814' }}>{payload.sending_account_last4} (sending institution)</td>
+                    </tr>
+                  )}
+                </>
+              )}
+
               {/* Crypto-specific fields */}
+              {isCrypto && payload.source_institution && (
+                <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#FAFAF8' }}>
+                  <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top' }}>SOURCE INSTITUTION</td>
+                  <td style={{ padding:'12px 20px', fontFamily:'Georgia,serif', fontSize:'14px', color:'#1A1814' }}>{payload.source_institution}</td>
+                </tr>
+              )}
               {isCrypto && payload.asset_type && (
                 <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#FAFAF8' }}>
                   <td style={{ padding:'12px 20px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.06em', color:'#8C7B6B', verticalAlign:'top' }}>ASSET TYPE</td>
