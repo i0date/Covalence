@@ -873,26 +873,26 @@ ${isCardBased ? `MERCHANT RISK SIGNALS:
 - Merchant dispute rate: ${merchantDisputeRate || 'Unknown'}
 - MCC risk tier: ${mccRisk || 'Unknown'}` : `MERCHANT SIGNALS: N/A — non-card payment rail.`}
 
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON, no markdown. Include ALL fields:
 {
   "classification": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT",
-  "fraud_sub_type": "For TRUE_FRAUD pick one: LOST_STOLEN | CNP_FRAUD | COUNTERFEIT_SKIMMING | ATO_CARD_COMPROMISE | NRI_NEVER_RECEIVED | SYNTHETIC_IDENTITY | UNKNOWN_THIRD_PARTY. For FIRST_PARTY_FRAUD: FRIENDLY_FRAUD | CHARGEBACK_ABUSE | RETURN_ABUSE. For CONSUMER_DISPUTE: NOT_AS_DESCRIBED | NON_RECEIPT | CANCELLED_SUBSCRIPTION | CREDIT_NOT_PROCESSED | SERVICE_FAILURE | BILLING_ERROR. For AUTHORIZED_PUSH_PAYMENT: ROMANCE_SCAM | INVESTMENT_SCAM | FAKE_INVOICE_FRAUD | IMPERSONATION_SCAM | BUYER_SELLER_FRAUD | GRANDPARENT_SCAM | OTHER_APP_SCAM.",
-  "fraud_sub_label": "Human-readable label for fraud_sub_type, e.g. 'Card-Not-Present Fraud' or 'Romance Scam'.",
+  "fraud_sub_type": "LOST_STOLEN | CNP_FRAUD | COUNTERFEIT_SKIMMING | ATO_CARD_COMPROMISE | NRI_NEVER_RECEIVED | SYNTHETIC_IDENTITY | UNKNOWN_THIRD_PARTY | FRIENDLY_FRAUD | CHARGEBACK_ABUSE | RETURN_ABUSE | NOT_AS_DESCRIBED | NON_RECEIPT | CANCELLED_SUBSCRIPTION | CREDIT_NOT_PROCESSED | SERVICE_FAILURE | BILLING_ERROR | ROMANCE_SCAM | INVESTMENT_SCAM | FAKE_INVOICE_FRAUD | IMPERSONATION_SCAM | BUYER_SELLER_FRAUD | GRANDPARENT_SCAM | OTHER_APP_SCAM",
+  "fraud_sub_label": "Short human-readable label, e.g. 'Card-Not-Present Fraud'",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
   "label": "True Fraud" | "First-Party Fraud" | "Consumer Dispute" | "Authorized Push Payment",
-  "headline": "One tight sentence summarizing the triage assessment.",
-  "signals": ["Signal 1", "Signal 2", "Signal 3"],
-  "signal_influences": [
-    { "signal": "Specific signal from inputs", "weight": "HIGH" | "MEDIUM" | "LOW", "toward": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT" }
-  ],
-  "ato_suspected": true | false,
-  "ato_note": "Brief ATO note if suspected, empty string otherwise.",
+  "headline": "One tight sentence summarizing the assessment.",
   "provisional_credit_rec": "ISSUE_IMMEDIATELY" | "ISSUE_CONDITIONALLY" | "HOLD_PENDING_INVESTIGATION" | "NOT_APPLICABLE",
-  "provisional_credit_note": "1–2 sentence explanation of the PC recommendation and any conditions, timeline, or caveats.",
+  "provisional_credit_note": "1–2 sentences on PC recommendation, conditions, and timeline.",
+  "ato_suspected": true | false,
+  "ato_note": "Brief ATO note if suspected, else empty string.",
   "routing": "CARD_CHARGEBACK" | "NACHA_RETURN" | "RECIPIENT_FI" | "PROVIDER_DISPUTE" | "FLAG_INVESTIGATION" | "GOODWILL_FIRST",
   "routing_label": "Human-readable routing label",
   "routing_detail": "1–2 sentences on what the agent should do next.",
-  "risk_notes": "Caveats or watch-outs — or empty string if none.",
+  "signals": ["Signal 1", "Signal 2", "Signal 3"],
+  "signal_influences": [
+    { "signal": "signal text", "weight": "HIGH" | "MEDIUM" | "LOW", "toward": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT" }
+  ],
+  "risk_notes": "Caveats or watch-outs — or empty string.",
   "proceed_to_dispute": true | false
 }`
 
@@ -904,7 +904,7 @@ Return ONLY valid JSON, no markdown:
         response = await fetch('/api/triage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1800, messages: [{ role: 'user', content: prompt }] }),
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2400, messages: [{ role: 'user', content: prompt }] }),
           signal: controller.signal,
         })
       } finally { clearTimeout(timeoutId) }
@@ -1818,17 +1818,15 @@ Return ONLY valid JSON:
               {/* Verdict card */}
               <div className="p-6" style={{ background: cfg.bg }}>
                 <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="mono-font text-xs tracking-widest" style={{ color: cfg.badgeText, opacity: 0.8 }}>TRIAGE VERDICT</div>
-                    {result.fraud_sub_label && (
-                      <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background: cfg.badge, color: cfg.badgeText, opacity: 0.9 }}>
-                        {result.fraud_sub_label.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                  <div className="mono-font text-xs tracking-widest" style={{ color: cfg.badgeText, opacity: 0.8 }}>TRIAGE VERDICT</div>
                   <div className="mono-font text-xs px-2 py-1" style={{ background: cfg.badge, color: cfg.badgeText }}>{result.confidence} CONFIDENCE</div>
                 </div>
                 <div className="display-font font-bold mb-3" style={{ fontSize: 'clamp(26px, 3.5vw, 38px)', color: cfg.text, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{cfg.label}</div>
+                {result.fraud_sub_label && (
+                  <div className="mono-font text-xs tracking-widest px-3 py-1.5 mb-3 w-fit" style={{ background: cfg.badge, color: cfg.badgeText }}>
+                    FRAUD SUB-TYPE — {result.fraud_sub_label.toUpperCase()}
+                  </div>
+                )}
                 <p className="display-font italic" style={{ color: cfg.text, fontSize: '15px', lineHeight: '1.55', opacity: 0.85 }}>{result.headline}</p>
               </div>
 
@@ -3496,18 +3494,7 @@ Return ONLY valid JSON:
                     >
                       MASTERCARD
                     </button>
-                    <button
-                      onClick={() => setNetwork('ach')}
-                      className={`network-btn ${network === 'ach' ? 'active' : 'inactive'}`}
-                    >
-                      ACH
-                    </button>
                   </div>
-                  {network === 'ach' && (
-                    <div className="mt-1.5 mono-font text-[10px] text-amber-800 tracking-wide">
-                      NACHA rules apply — see return code reference in analysis panel
-                    </div>
-                  )}
                 </div>
                 <div>
                   <label className="input-label">Card Type</label>
@@ -3734,10 +3721,10 @@ Return ONLY valid JSON:
 
                 {/* Network badge */}
                 <div className="mono-font text-xs tracking-widest text-stone-500 flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-white ${network === 'visa' ? 'bg-blue-800' : network === 'mastercard' ? 'bg-red-900' : 'bg-teal-800'}`}>
-                    {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH'}
+                  <span className={`px-2 py-0.5 text-white ${network === 'visa' ? 'bg-blue-800' : 'bg-red-900'}`}>
+                    {network === 'visa' ? 'VISA' : 'MASTERCARD'}
                   </span>
-                  <span>{network === 'ach' ? 'NACHA RETURN CODE REFERENCE' : 'REASON CODE ANALYSIS'}</span>
+                  <span>REASON CODE ANALYSIS</span>
                 </div>
 
                 {/* Case status lifecycle tracker */}
@@ -3801,42 +3788,11 @@ Return ONLY valid JSON:
                   <p className="display-font text-stone-700 leading-relaxed text-[15px]">{result.rationale}</p>
                 </div>
 
-                {/* NACHA Return Code Reference — ACH/EFT only */}
-                {network === 'ach' && (
-                  <div className="border border-teal-800 bg-teal-50 p-5 space-y-4">
-                    <div className="mono-font text-xs tracking-widest text-teal-900">NACHA ACH RETURN CODE REFERENCE</div>
-                    <p className="display-font text-stone-700 text-[14px] leading-relaxed">
-                      Select the return code that matches this dispute. NACHA return windows are strict — late returns may be rejected by the RDFI. For consumer disputes (R05, R07, R10, R11), Reg E applies for debit accounts.
-                    </p>
-                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                      {NACHA_RETURN_CODES.map(rc => (
-                        <div key={rc.code} className="border border-teal-200 bg-white p-3">
-                          <div className="flex items-start gap-3 mb-1 flex-wrap">
-                            <span className="mono-font text-sm font-bold text-teal-900 shrink-0">{rc.code}</span>
-                            <span className="display-font text-stone-900 text-[14px] font-semibold leading-snug">{rc.title}</span>
-                            <div className="ml-auto flex gap-1.5 shrink-0 flex-wrap justify-end">
-                              <span className="mono-font text-[9px] px-1.5 py-0.5 bg-stone-200 text-stone-700">{rc.type}</span>
-                              <span className={`mono-font text-[9px] px-1.5 py-0.5 ${rc.deadline.includes('60') ? 'bg-amber-800 text-amber-50' : 'bg-stone-700 text-stone-50'}`}>
-                                DEADLINE: {rc.deadline}
-                              </span>
-                              {rc.fraud && <span className="mono-font text-[9px] px-1.5 py-0.5 bg-red-800 text-red-50">FRAUD INDICATOR</span>}
-                            </div>
-                          </div>
-                          <p className="display-font text-stone-600 text-[13px] leading-relaxed ml-10">{rc.notes}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mono-font text-[10px] text-teal-800 italic">
-                      BD = Business Days from settlement date · CD = Calendar Days from transaction date · Always verify your institution's ODFI agreement for specific return windows.
-                    </div>
-                  </div>
-                )}
-
                 {/* Dispute summary */}
                 <div className="border border-stone-900 bg-white p-6">
                   <div className="flex items-baseline justify-between mb-4">
                     <div className="mono-font text-xs tracking-widest text-stone-600">
-                      DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : network === 'mastercard' ? 'MASTERCARD' : 'ACH / NACHA'}
+                      DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : 'MASTERCARD'}
                     </div>
                     <button onClick={copySummary} className="mono-font text-xs flex items-center gap-1.5 text-stone-700 hover:text-stone-900 transition-colors">
                       {copied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
@@ -3911,8 +3867,7 @@ Return ONLY valid JSON:
                 )}
 
                 {/* Chargeback cycle deadline tracker — for cases already in flight */}
-                {network !== 'ach' && (
-                  <div className="border border-stone-300 p-5 space-y-4" style={{ background: '#FAF7F1' }}>
+                <div className="border border-stone-300 p-5 space-y-4" style={{ background: '#FAF7F1' }}>
                     <div className="mono-font text-xs tracking-widest text-stone-600">CHARGEBACK CYCLE DEADLINE TRACKER</div>
                     <p className="display-font text-stone-500 text-[13px] leading-snug">
                       Once you've filed this dispute with the network, enter the stage and filing date below to track the response window.
@@ -3960,8 +3915,7 @@ Return ONLY valid JSON:
                     {!cbFiledDate && (
                       <div className="mono-font text-[10px] text-stone-400 italic">Enter a filing date above to calculate the next response deadline.</div>
                     )}
-                  </div>
-                )}
+                </div>
 
                 {/* Visa CE3.0 warning — 10.4 Card-Not-Present disputes */}
                 {result?.recommended_reason_code?.startsWith('10.4') && network === 'visa' && (
