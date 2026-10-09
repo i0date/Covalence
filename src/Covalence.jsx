@@ -354,6 +354,7 @@ export default function Covalence() {
     { id:'desk',     label:'002  DISPUTE DESK' },
     { id:'dfa',      label:'003  DFA' },
     { id:'duo',      label:'004  DUO' },
+    { id:'multi',    label:'005  MULTI' },
     { id:'trio',     label:'005  TRIO' },
     { id:'settings', label:'SETTINGS' },
   ]
@@ -418,6 +419,7 @@ export default function Covalence() {
         {activeSection === 'duo' && (
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
         )}
+        {activeSection === 'multi' && <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} />}
         {activeSection === 'trio' && <TrioView />}
       </div>
     </ErrorBoundary>
@@ -442,7 +444,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb'].includes(o.status))
-  const pending  = active.filter(o => o.status === 'pending')
+  const pending  = active.filter(o => o.status === 'pending' || o.status === 'queued')
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
   const urgent   = recent.filter(o => o.mode !== 'merchant' && o.provCreditDate && !['won','lost','withdrawn'].includes(o.status)).filter(o => {
     const d = daysUntil(addBusinessDays(o.provCreditDate, 45)); return d !== null && d >= 0 && d <= 7
@@ -487,18 +489,18 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </div>
       )}
 
-      {nextRespDue.length > 0 && (
-        <div className="mb-5 border border-blue-600 px-4 py-3" style={{ background:'#EFF6FF' }}>
-          <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A8A' }}>
-            📅 {nextRespDue.length} NEXT RESPONSE DUE WITHIN 7 DAYS
-          </div>
-          {nextRespDue.map(o => (
-            <div key={o.id} className="mono-font" style={{ fontSize:'11px', color: o.daysLeft < 0 ? '#B91C1C' : o.daysLeft <= 3 ? '#92400E' : '#1E40AF' }}>
-              {o.id} — {o.merchant} — {o.daysLeft < 0 ? `⚠ OVERDUE ${Math.abs(o.daysLeft)}d` : o.daysLeft === 0 ? 'DUE TODAY' : `in ${o.daysLeft}d`} · {new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-            </div>
-          ))}
+      <div className="mb-5 border border-blue-600 px-4 py-3" style={{ background:'#EFF6FF' }}>
+        <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A8A' }}>
+          UPCOMING DEADLINES — NEXT 7 DAYS
         </div>
-      )}
+        {nextRespDue.length === 0 ? (
+          <div className="mono-font" style={{ fontSize:'11px', color:'#93C5FD' }}>No next-response dates due within 7 days.</div>
+        ) : nextRespDue.map(o => (
+          <div key={o.id} className="mono-font" style={{ fontSize:'11px', color: o.daysLeft < 0 ? '#B91C1C' : o.daysLeft <= 3 ? '#92400E' : '#1E40AF' }}>
+            {o.id} — {o.merchant} — {o.daysLeft < 0 ? `OVERDUE ${Math.abs(o.daysLeft)}d` : o.daysLeft === 0 ? 'DUE TODAY' : `in ${o.daysLeft}d`} · {new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+          </div>
+        ))}
+      </div>
 
       <div className="mb-8 home-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
         {stats.map(s => (
@@ -538,8 +540,8 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
                 <span className="mono-font text-stone-500" style={{ fontSize:'11px' }}>{o.amount}</span>
                 <span className="mono-font" style={{
                   fontSize:'9px', padding:'2px 6px',
-                  background: o.status === 'won' ? '#064E3B' : o.status === 'lost' ? '#7F1D1D' : o.status === 'pending' ? '#E7E2D9' : '#92400E',
-                  color: o.status === 'pending' ? '#4B4540' : '#F9FAFB',
+                  background: o.status === 'won' ? '#064E3B' : o.status === 'lost' ? '#7F1D1D' : o.status === 'pending' ? '#E7E2D9' : o.status === 'queued' ? '#4C1D95' : '#92400E',
+                  color: (o.status === 'pending') ? '#4B4540' : '#F9FAFB',
                 }}>{o.status.toUpperCase()}</span>
                 <span className="mono-font text-stone-400 desktop-only" style={{ fontSize:'10px' }}>
                   {new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
@@ -2542,8 +2544,6 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [cbCycleStage, setCbCycleStage] = useState('1cb')
 
   // ── Fight-or-Accept net value calculator ──────────────────────────────────
-  const [fightHourlyRate, setFightHourlyRate] = useState('75')
-  const [fightHours, setFightHours]           = useState('2')
 
   // ── Deadline push notifications ─────────────────────────────────────────────
   useEffect(() => {
@@ -2789,7 +2789,7 @@ Return ONLY a valid JSON object:
         network: network === 'visa' ? 'VISA' : 'MC',
         reasonCode: parsed.recommended_reason_code,
         reasonTitle: parsed.reason_code_title,
-        status: 'pending',
+        status: 'queued',
         resolvedDate: null,
         threeDSStatus: threeDSStatus,
         confidence: parsed.confidence,
@@ -2977,12 +2977,44 @@ Return ONLY valid JSON:
   // ── Copy cardholder doc list (plain — paste into any channel) ──────────────
   const copyDocRequest = () => {
     if (!result || !evidence) return
-    const items = evidence.cardholder.map((item, i) => `${i + 1}. ${item.text}`).join('\n')
-    const missingSection = result.missing_information?.length > 0
-      ? `\n\nAlso clarify:\n${result.missing_information.map(m => `• ${m}`).join('\n')}`
-      : ''
-    const full = `Documents needed — ${result.recommended_reason_code} (${result.reason_code_title}):\n\n${items}${missingSection}`
-    navigator.clipboard.writeText(full)
+    const rcCode = result.recommended_reason_code || ''
+    const rcTitle = result.reason_code_title || result.recommended_reason_code || ''
+    const requiredItems = evidence.cardholder.filter(i => i.impact === 'required')
+    const supportingItems = evidence.cardholder.filter(i => i.impact !== 'required')
+    const docLines = []
+    if (requiredItems.length > 0) {
+      docLines.push('REQUIRED:')
+      requiredItems.forEach((item, i) => docLines.push(`  ${i + 1}. ${item.text}`))
+    }
+    if (supportingItems.length > 0) {
+      docLines.push('')
+      docLines.push('SUPPORTING (strengthens your case):')
+      supportingItems.forEach((item, i) => docLines.push(`  ${i + 1}. ${item.text}`))
+    }
+    const clarifyLines = result.missing_information?.length > 0
+      ? ['', 'PLEASE ALSO CLARIFY:', ...result.missing_information.map(m => `  - ${m}`)]
+      : []
+    const email = [
+      `Subject: Action Required — Dispute Investigation (${rcCode ? rcCode + ' · ' : ''}${merchant || 'Transaction'})`,
+      '',
+      'Dear Valued Cardholder,',
+      '',
+      `Thank you for contacting us regarding your dispute${merchant ? ` involving ${merchant}` : ''}${amount ? ` for ${amount} ${currency || ''}`.trim() : ''}. We are actively investigating this matter under ${rcTitle ? `dispute reason ${rcTitle}` : 'our dispute procedures'}.`,
+      '',
+      'To complete our investigation and advocate on your behalf, we require the following documentation. Please submit these materials within 10 business days:',
+      '',
+      ...docLines,
+      ...clarifyLines,
+      '',
+      'You may submit these documents by replying to this message, emailing [disputes@yourinstitution.com], or visiting your nearest branch.',
+      '',
+      'If you have already submitted these materials, please disregard this notice. For questions, call the number on the back of your card.',
+      '',
+      'Sincerely,',
+      'Dispute Resolution Team',
+      '[Institution Name]',
+    ].join('\n')
+    navigator.clipboard.writeText(email)
     setDocRequestCopied(true)
     setTimeout(() => setDocRequestCopied(false), 2000)
   }
@@ -3091,7 +3123,7 @@ Return ONLY valid JSON:
         network: network === 'visa' ? 'VISA' : 'MC',
         reasonCode: mchReasonCode || '—',
         reasonTitle: REASON_TITLES[mchCode] || (mchCode ? 'Chargeback — ' + mchCode : 'Merchant chargeback'),
-        status: 'pending',
+        status: 'queued',
         resolvedDate: null,
         mode: 'merchant',
         threeDSStatus: mchThreeDS,
@@ -3266,26 +3298,21 @@ Return ONLY valid JSON:
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cbFiledDate, cbCycleStage, network])
 
-  // ── Fight-or-Accept net value computation ────────────────────────────────
+  // ── Net recovery estimate ────────────────────────────────────────────────
   const fightCalc = React.useMemo(() => {
-    // Inline partial-dispute check to avoid TDZ (isPartialDispute declared later)
     const _partial = disputedAmount && parseFloat(disputedAmount) > 0 && disputedAmount !== amount
     const amt = parseFloat(_partial ? disputedAmount : amount) || 0
     if (!amt || !result) return null
-    // Estimate win probability from AI result confidence + rebuttal risk
     let winProb = result.confidence === 'high' ? 0.72 : result.confidence === 'medium' ? 0.50 : 0.28
     if (rebuttal?.win_risk === 'LOW')    winProb = Math.min(0.88, winProb + 0.10)
     if (rebuttal?.win_risk === 'HIGH')   winProb = Math.max(0.15, winProb - 0.20)
     if (rebuttal?.win_risk === 'MEDIUM') winProb = Math.max(0.30, winProb - 0.08)
-    const rate       = parseFloat(fightHourlyRate) || 75
-    const hours      = parseFloat(fightHours) || 2
-    const staffCost  = rate * hours
-    const netFee     = 15 // network processing fee estimate
-    const expectedRec = amt * winProb
-    const netValue    = expectedRec - staffCost - netFee
-    return { winProb: Math.round(winProb * 100), staffCost, expectedRec, netFee, netValue, recommendation: netValue > 0 ? 'FIGHT' : 'ACCEPT' }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount, disputedAmount, result, rebuttal, fightHourlyRate, fightHours])
+    const netFee       = 25  // network filing fee estimate
+    const expectedRec  = amt * winProb
+    const writeOffRisk = amt * (1 - winProb)
+    const netValue     = expectedRec - netFee
+    return { winProb: Math.round(winProb * 100), expectedRec, netFee, writeOffRisk, netValue, recommendation: netValue > 0 ? 'FIGHT' : 'ACCEPT' }
+  }, [amount, disputedAmount, result, rebuttal])
 
   const isFraud     = result?.category === 'fraud' || result?.category === 'mc_fraud'
   let filingWindow  = null
@@ -3333,7 +3360,7 @@ Return ONLY valid JSON:
 
   // Outcome tracker: 60-day window only
   // Lifecycle stages: pending → filed → representment → pre_arb → won | lost | withdrawn
-  const LIFECYCLE_IN_PROGRESS = new Set(['filed', 'investigating', 'representment', 'pre_arb'])
+  const LIFECYCLE_IN_PROGRESS = new Set(['queued', 'filed', 'investigating', 'representment', 'pre_arb'])
   const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
@@ -3400,7 +3427,8 @@ Return ONLY valid JSON:
 
   const filteredTrackerOutcomes = React.useMemo(() => {
     let list = trackerOutcomes
-    if (trackerFilter === 'in_progress') list = list.filter(o => LIFECYCLE_IN_PROGRESS.has(o.status))
+    if (trackerFilter === 'queued')      list = list.filter(o => o.status === 'queued')
+    else if (trackerFilter === 'in_progress') list = list.filter(o => LIFECYCLE_IN_PROGRESS.has(o.status))
     else if (trackerFilter === 'won')  list = list.filter(o => o.status === 'won')
     else if (trackerFilter === 'lost') list = list.filter(o => o.status === 'lost')
     else if (trackerFilter === 'fundable') list = list.filter(o => {
@@ -4794,7 +4822,7 @@ Return ONLY valid JSON:
                       <span className="mono-font text-xs tracking-widest text-stone-500">DOCUMENTS TO COLLECT FROM CARDHOLDER</span>
                     </div>
                     <button onClick={copyDocRequest} className="mono-font text-xs flex items-center gap-1.5 text-stone-600 hover:text-stone-900 transition-colors">
-                      {docRequestCopied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY LIST</>}
+                      {docRequestCopied ? <><Check className="w-3 h-3" /> EMAIL COPIED</> : <><Copy className="w-3 h-3" /> DRAFT OUTREACH EMAIL</>}
                     </button>
                   </div>
                   <div className="px-5 py-4 space-y-3">
@@ -4888,58 +4916,40 @@ Return ONLY valid JSON:
                         <ArrowRight className="w-3.5 h-3.5 flex-shrink-0" />
                         <p className="mono-font text-xs tracking-wide">Proceed with formal chargeback filing — use Steps 01–04 above.</p>
                       </div>
-                      {/* ── Fight-or-Accept cost-benefit ── */}
+                      {/* ── Net Recovery Estimate ── */}
                       {platformMode === 'fi' && result && (
                         <div className="border border-stone-300 mt-2" style={{ background: '#EEE9E0' }}>
                           <div className="px-4 py-2.5 border-b border-stone-300">
-                            <span className="mono-font text-[9px] tracking-widest text-stone-500">FIGHT-OR-ACCEPT — COST / BENEFIT</span>
-                          </div>
-                          <div className="p-4 grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">STAFF RATE ($/hr)</label>
-                              <input
-                                type="number" min="0" max="500" step="5"
-                                value={fightHourlyRate} onChange={e => setFightHourlyRate(e.target.value)}
-                                className="cov-input mono-font" style={{ fontSize: '13px', maxWidth: '90px' }}
-                              />
-                            </div>
-                            <div>
-                              <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">HOURS TO FIGHT</label>
-                              <input
-                                type="number" min="0" max="20" step="0.5"
-                                value={fightHours} onChange={e => setFightHours(e.target.value)}
-                                className="cov-input mono-font" style={{ fontSize: '13px', maxWidth: '70px' }}
-                              />
-                            </div>
+                            <span className="mono-font text-[9px] tracking-widest text-stone-500">NET RECOVERY ESTIMATE</span>
                           </div>
                           {fightCalc && (
-                            <div className="grid grid-cols-4 border-t border-stone-300">
-                              <div className="p-3 border-r border-stone-200">
+                            <div className="grid grid-cols-4 divide-x divide-stone-200 border-b border-stone-300">
+                              <div className="p-3">
                                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
                                 <div className="display-font font-bold text-xl text-stone-900">{fightCalc.winProb}%</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal?.win_risk ? ` · ${rebuttal.win_risk.toLowerCase()} mch` : ''}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal?.win_risk ? ` · ${rebuttal.win_risk.toLowerCase()} mch risk` : ''}</div>
                               </div>
-                              <div className="p-3 border-r border-stone-200">
+                              <div className="p-3">
                                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
-                                <div className="display-font font-bold text-xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
+                                <div className="display-font font-bold text-xl text-stone-900">${'{'}fightCalc.expectedRec.toFixed(2){'}'}</div>
                                 <div className="mono-font text-[9px] text-stone-400 mt-0.5">amt × win prob</div>
                               </div>
-                              <div className="p-3 border-r border-stone-200">
-                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">COST TO FIGHT</div>
-                                <div className="display-font font-bold text-xl text-stone-900">${(fightCalc.staffCost + fightCalc.netFee).toFixed(2)}</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">${fightCalc.staffCost.toFixed(0)} staff + ~${fightCalc.netFee} fee</div>
+                              <div className="p-3">
+                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WRITE-OFF RISK</div>
+                                <div className="display-font font-bold text-xl text-red-800">${'{'}fightCalc.writeOffRisk.toFixed(2){'}'}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">if lost + ~${'{'}fightCalc.netFee{'}'} filing fee</div>
                               </div>
-                              <div className={`p-3 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
-                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
-                                <div className={`display-font font-bold text-xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'}`}>
-                                  {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
+                              <div className={`p-3 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'{'}'}`}>
+                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'{'}'}`}>NET VALUE</div>
+                                <div className={`display-font font-bold text-xl ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'{'}'}`}>
+                                  {'{'}fightCalc.netValue >= 0 ? '+' : ''{'}'}{'{'}fightCalc.netValue.toFixed(2){'}'}
                                 </div>
-                                <div className={`mono-font text-xs font-bold mt-0.5 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>→ {fightCalc.recommendation}</div>
+                                <div className={`mono-font text-xs font-bold mt-0.5 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'{'}'}`}>→ {'{'}fightCalc.recommendation{'}'}</div>
                               </div>
                             </div>
                           )}
-                          <div className="px-4 py-2 border-t border-stone-300">
-                            <p className="mono-font text-[9px] text-stone-400 italic">Win prob from AI confidence + merchant defense. Network fee ~$15 est. Adjust for your institution's cost profile.</p>
+                          <div className="px-4 py-2">
+                            <p className="mono-font text-[9px] text-stone-400 italic">Win probability from AI analysis + merchant defense signals. Write-off risk = full disputed amount if lost. Network filing fee ~$25.</p>
                           </div>
                         </div>
                       )}
@@ -5138,6 +5148,7 @@ Return ONLY valid JSON:
                 <div className="flex border border-stone-200 overflow-x-auto" style={{ borderRadius: 0, WebkitOverflowScrolling: 'touch' }}>
                   {[
                     { id: 'all',         label: 'ALL' },
+                    { id: 'queued',      label: 'IN QUEUE' },
                     { id: 'in_progress', label: 'IN PROGRESS' },
                     { id: 'won',         label: 'WON' },
                     { id: 'lost',        label: 'LOST' },
@@ -5280,7 +5291,8 @@ Return ONLY valid JSON:
                                         <option value="resolved">Resolved — closed without formal outcome</option>
                                         <option value="withdrawn">Withdrawn</option>
                                       </>) : (<>
-                                        <option value="pending">Pending — not yet filed</option>
+                                        <option value="pending">Pending — not yet reviewed</option>
+                                        <option value="queued">In Queue — approved, awaiting batch filing</option>
                                         <option value="filed">Filed — submitted to network</option>
                                         <option value="investigating">Investigating — under internal review</option>
                                         <option value="representment">Representment received — merchant responded</option>
@@ -5396,12 +5408,23 @@ Return ONLY valid JSON:
                                   {/* ── Lifecycle stage buttons ───────────────── */}
                                   {o.status === 'pending' && (
                                     <>
+                                      <button onClick={() => advanceStage(o.id, 'queued')} className="mono-font text-[10px] px-1.5 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors" title="Queue for batch filing">IN QUEUE</button>
                                       <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
                                       <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">WD</button>
                                       <button onClick={() => markCaseOutcome(o.id, 'resolved')} className="mono-font text-[10px] px-1.5 py-0.5 border border-teal-600 text-teal-700 hover:bg-teal-50 transition-colors">RESOLVED</button>
+                                    </>
+                                  )}
+                                  {o.status === 'queued' && (
+                                    <>
+                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-violet-800 text-violet-50">IN QUEUE</span>
+                                      <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
+                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
+                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
+                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert to pending">↩</button>
                                     </>
                                   )}
                                   {o.status === 'filed' && (
@@ -8773,6 +8796,103 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── MULTI — Bulk dispute management ──────────────────────────────────────────
+function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
+  const queuedFraud   = outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type))
+  const queuedService = outcomes.filter(o => o.status === 'queued' && !queuedFraud.includes(o))
+  const [filed, setFiled] = React.useState(false)
+
+  const fileAllFraud = () => {
+    setOutcomes(prev => prev.map(o =>
+      queuedFraud.find(q => q.id === o.id) ? { ...o, status: 'filed' } : o
+    ))
+    setFiled(true)
+    setTimeout(() => setFiled(false), 3000)
+  }
+
+  return (
+    <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
+      <div className="mono-font mb-1" style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#A09585' }}>005 / MULTI</div>
+      <div className="display-font mb-6" style={{ fontSize: 'clamp(22px, 3vw, 30px)', color: '#1C1917', letterSpacing: '-0.02em', lineHeight: 1.1 }}>Bulk Dispute Filing</div>
+
+      {/* Fraud queue */}
+      <div className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
+          <div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">FRAUD DISPUTES — QUEUED FOR FILING</div>
+            <div className="mono-font text-[10px] text-stone-400 mt-0.5">{queuedFraud.length} case{queuedFraud.length !== 1 ? 's' : ''} · automated filing eligible</div>
+          </div>
+          <button
+            onClick={fileAllFraud}
+            disabled={queuedFraud.length === 0}
+            className="mono-font text-[10px] tracking-widest px-4 py-2"
+            style={{ background: queuedFraud.length === 0 ? '#D6D3CD' : filed ? '#064E3B' : '#1C1917', color: '#F5F1EA', border: 'none', cursor: queuedFraud.length === 0 ? 'not-allowed' : 'pointer' }}>
+            {filed ? 'FILED ✓' : `FILE ALL (${queuedFraud.length})`}
+          </button>
+        </div>
+        {queuedFraud.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <div className="mono-font text-[10px] text-stone-400 tracking-widest mb-1">NO FRAUD CASES IN QUEUE</div>
+            <p className="display-font text-stone-400 text-[13px]">Cases marked IN QUEUE with a fraud verdict will appear here.</p>
+            <button onClick={() => setActiveSection('desk')} className="mono-font text-[10px] tracking-widest mt-3 px-3 py-1.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">OPEN DISPUTE DESK</button>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-200">
+            {queuedFraud.map(o => (
+              <div key={o.id} className="px-5 py-3 flex items-center gap-4 flex-wrap">
+                <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
+                <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g, ' ')}</span>
+                <span className="mono-font text-[9px] text-stone-400">{o.date ? new Date(o.date).toLocaleDateString('en-CA') : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Service queue */}
+      <div className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
+          <div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">SERVICE DISPUTES — QUEUED</div>
+            <div className="mono-font text-[10px] text-stone-400 mt-0.5">{queuedService.length} case{queuedService.length !== 1 ? 's' : ''} · manual review required before filing</div>
+          </div>
+          <span className="mono-font text-[10px] px-3 py-1.5 border border-amber-600 text-amber-700">MANUAL REVIEW REQUIRED</span>
+        </div>
+        {queuedService.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <div className="mono-font text-[10px] text-stone-400 tracking-widest mb-1">NO SERVICE CASES IN QUEUE</div>
+            <p className="display-font text-stone-400 text-[13px]">Consumer dispute and service cases require a final agent review before filing.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-200">
+            {queuedService.map(o => (
+              <div key={o.id} className="px-5 py-3 flex items-center gap-4 flex-wrap">
+                <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
+                <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
+                <button onClick={() => setActiveSection('desk')} className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">REVIEW</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Cron job notice */}
+      <div className="border border-dashed border-stone-300 px-5 py-4">
+        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">SCHEDULED AUTO-FILING</div>
+        <p className="display-font text-stone-500 text-[13px] leading-relaxed">
+          Fraud disputes can be scheduled for automatic filing daily at 3:00 PM. Service disputes are excluded from auto-filing and always require agent sign-off.
+          Auto-filing is a platform-level feature — contact your administrator to enable it.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+
 function SettingsView({ settings, setSettings }) {
   const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }))
   const Section = ({ label }) => (
