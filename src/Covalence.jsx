@@ -2543,8 +2543,16 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [cbFiledDate, setCbFiledDate]   = useState('')
   const [cbCycleStage, setCbCycleStage] = useState('1cb')
   const [currentDeskCaseId, setCurrentDeskCaseId] = useState(null) // ID of most recently analyzed case in desk
+  const [rerunPending, setRerunPending] = useState(false)
 
   // ── Fight-or-Accept net value calculator ──────────────────────────────────
+
+  // ── Rerun trigger — fires analyze() after form pre-fill from tracker ────────
+  React.useEffect(() => {
+    if (!rerunPending) return
+    setRerunPending(false)
+    if (complaint.trim()) analyze()
+  }, [rerunPending])
 
   // ── Deadline push notifications ─────────────────────────────────────────────
   useEffect(() => {
@@ -2800,6 +2808,10 @@ Return ONLY a valid JSON object:
         avsMismatch: fiAvsMismatch === true ? true : fiAvsMismatch === false ? false : null,
         isVFMP: fiIsVFMP === true ? true : fiIsVFMP === false ? false : null,
         priorClaims: fiPriorClaims !== '' ? parseInt(fiPriorClaims) || 0 : null,
+        _complaint: complaint,
+        _transactionDate: transactionDate,
+        _cardType: cardType,
+        _currency: currency,
       }, ...prev])
     } catch (e) {
       setError(`Analysis failed: ${e.message}`)
@@ -5577,15 +5589,19 @@ Return ONLY valid JSON:
                                         if (pts[1]) setCurrency(pts[1])
                                       }
                                       if (o.network) setNetwork((o.network||'').toLowerCase().includes('visa') ? 'visa' : 'mastercard')
+                                      if (o._transactionDate) setTransactionDate(o._transactionDate)
+                                      if (o._cardType) setCardType(o._cardType)
+                                      if (o._complaint) setComplaint(o._complaint)
                                       if (o.cbStage) setCbCycleStage(o.cbStage)
                                       if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
                                       setCurrentDeskCaseId(o.id)
-                                      setResult(null); setError(null)
+                                      setResult(null); setRebuttal(null); setError(null)
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
+                                      if (o._complaint) setRerunPending(true)
                                     }}
-                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors whitespace-nowrap"
-                                    title="Pre-fill desk form from this case"
-                                  >OPEN IN DESK</button>
+                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
+                                    title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
+                                  >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
                                   <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
