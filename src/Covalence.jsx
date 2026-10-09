@@ -355,7 +355,7 @@ export default function Covalence() {
     { id:'dfa',      label:'003  DFA' },
     { id:'duo',      label:'004  DUO' },
     { id:'multi',    label:'005  MULTI' },
-    { id:'trio',     label:'005  TRIO' },
+    { id:'trio',     label:'006  TRIO' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -489,8 +489,8 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </div>
       )}
 
-      <div className="mb-5 border border-blue-600 px-4 py-3" style={{ background:'#EFF6FF' }}>
-        <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A8A' }}>
+      <div className="mb-5 border border-stone-300 px-4 py-3" style={{ background:'#FAF7F1' }}>
+        <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#78716C' }}>
           UPCOMING DEADLINES — NEXT 7 DAYS
         </div>
         {nextRespDue.length === 0 ? (
@@ -2542,6 +2542,7 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   // ── Chargeback cycle deadline tracker ────────────────────────────────────
   const [cbFiledDate, setCbFiledDate]   = useState('')
   const [cbCycleStage, setCbCycleStage] = useState('1cb')
+  const [currentDeskCaseId, setCurrentDeskCaseId] = useState(null) // ID of most recently analyzed case in desk
 
   // ── Fight-or-Accept net value calculator ──────────────────────────────────
 
@@ -2781,8 +2782,10 @@ Return ONLY a valid JSON object:
       const parsed = JSON.parse(text)
       setResult(parsed)
       // Save to outcome log with behavioral signals for DFA
+      const _newCaseId = 'COV-' + Date.now().toString(36).toUpperCase().slice(-6)
+      setCurrentDeskCaseId(_newCaseId)
       setOutcomes(prev => [{
-        id: 'COV-' + Date.now().toString(36).toUpperCase().slice(-6),
+        id: _newCaseId,
         date: new Date().toISOString(),
         merchant: merchant || '—',
         amount: amount ? amount + ' ' + currency : '—',
@@ -3778,6 +3781,70 @@ Return ONLY valid JSON:
                   <span>REASON CODE ANALYSIS</span>
                 </div>
 
+
+
+                {/* Visa CE3.0 warning — 10.4 Card-Not-Present disputes */}
+                {result?.recommended_reason_code?.startsWith('10.4') && network === 'visa' && (
+                  <div className="border-l-4 p-5 space-y-3" style={{ borderColor: '#7e22ce', background: '#faf5ff' }}>
+                    <div className="mono-font text-xs tracking-widest" style={{ color: '#581c87' }}>⚠ VISA COMPELLING EVIDENCE 3.0 — VERIFY BEFORE FILING</div>
+                    <p className="display-font text-stone-900 text-[15px] leading-relaxed">
+                      <strong>Visa CE3.0</strong> (active since April 2023) allows merchants to defeat 10.4 CNP fraud chargebacks if they can show two or more prior <em>undisputed</em> transactions from the same device fingerprint and/or IP address within the 120 days preceding this transaction. If the merchant is CE3.0-enabled and has that evidence on file, your chargeback will be reversed.
+                    </p>
+                    <div className="space-y-1.5">
+                      <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">CHECK BEFORE FILING:</div>
+                      {[
+                        'Is this cardholder a repeat customer at this merchant? If yes, CE3.0 risk is high.',
+                        'Pull IP address and device fingerprint from this transaction — do they match prior undisputed orders?',
+                        'Ask cardholder: have they ever shopped at this merchant before, even successfully?',
+                        'If prior undisputed transactions exist on the same device/IP, consider downgrading to 10.5 (VFMP) or escalating to fraud ops for further review before filing.',
+                      ].map((item, i) => (
+                        <div key={i} className="display-font text-[14px] flex gap-2 items-start leading-snug" style={{ color: '#4c1d95' }}>
+                          <span className="shrink-0 mt-0.5" style={{ color: '#9333ea' }}>→</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Missing info */}
+                {result.missing_information?.length > 0 && (
+                  <div className="border border-stone-400 bg-stone-50 p-5">
+                    <div className="mono-font text-xs tracking-widest text-stone-700 mb-3">INFORMATION NEEDED BEFORE FILING</div>
+                    <ul className="space-y-2">
+                      {result.missing_information.map((item, i) => (
+                        <li key={i} className="display-font text-stone-800 text-[15px] flex gap-2">
+                          <span className="text-stone-400">→</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Alternative codes */}
+                {result.alternative_codes?.length > 0 && (
+                  <div>
+                    <div className="mono-font text-xs tracking-widest text-stone-600 mb-3">ALTERNATIVE CODES TO CONSIDER</div>
+                    <div className="space-y-2">
+                      {result.alternative_codes.map((alt, i) => (
+                        <div key={i} className="border border-stone-300 bg-white p-4">
+                          <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+                            <span className="mono-font text-sm font-bold text-stone-900">{alt.code}</span>
+                            <span className="display-font italic text-stone-700 text-[15px]">{alt.title}</span>
+                          </div>
+                          <p className="display-font text-stone-600 text-sm">{alt.when_to_use}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Case Management ── */}
+            <div className="mt-6 border-t border-stone-200 pt-6 space-y-6">
+              <div className="mono-font text-[9px] tracking-widest text-stone-400">CASE MANAGEMENT</div>
                 {/* Case status lifecycle tracker */}
                 {caseStatusStage && (
                   <div className="border border-stone-300 bg-stone-50 p-4">
@@ -4024,66 +4091,19 @@ Return ONLY valid JSON:
                     {!cbFiledDate && (
                       <div className="mono-font text-[10px] text-stone-400 italic">Enter a filing date above to calculate the next response deadline.</div>
                     )}
+                    {/* Sync button — save stage + date onto the current case in the tracker */}
+                    {cbFiledDate && currentDeskCaseId && (
+                      <button
+                        onClick={() => setOutcomes(prev => prev.map(o =>
+                          o.id === currentDeskCaseId ? { ...o, cbStage: cbCycleStage, cbFiledDate } : o
+                        ))}
+                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-500 text-stone-600 hover:bg-stone-100 transition-colors self-start"
+                        title={"Save cycle stage + filing date to tracker row " + currentDeskCaseId}
+                      >SYNC DEADLINE → TRACKER ROW</button>
+                    )}
                 </div>
+            </div>
 
-                {/* Visa CE3.0 warning — 10.4 Card-Not-Present disputes */}
-                {result?.recommended_reason_code?.startsWith('10.4') && network === 'visa' && (
-                  <div className="border-l-4 p-5 space-y-3" style={{ borderColor: '#7e22ce', background: '#faf5ff' }}>
-                    <div className="mono-font text-xs tracking-widest" style={{ color: '#581c87' }}>⚠ VISA COMPELLING EVIDENCE 3.0 — VERIFY BEFORE FILING</div>
-                    <p className="display-font text-stone-900 text-[15px] leading-relaxed">
-                      <strong>Visa CE3.0</strong> (active since April 2023) allows merchants to defeat 10.4 CNP fraud chargebacks if they can show two or more prior <em>undisputed</em> transactions from the same device fingerprint and/or IP address within the 120 days preceding this transaction. If the merchant is CE3.0-enabled and has that evidence on file, your chargeback will be reversed.
-                    </p>
-                    <div className="space-y-1.5">
-                      <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">CHECK BEFORE FILING:</div>
-                      {[
-                        'Is this cardholder a repeat customer at this merchant? If yes, CE3.0 risk is high.',
-                        'Pull IP address and device fingerprint from this transaction — do they match prior undisputed orders?',
-                        'Ask cardholder: have they ever shopped at this merchant before, even successfully?',
-                        'If prior undisputed transactions exist on the same device/IP, consider downgrading to 10.5 (VFMP) or escalating to fraud ops for further review before filing.',
-                      ].map((item, i) => (
-                        <div key={i} className="display-font text-[14px] flex gap-2 items-start leading-snug" style={{ color: '#4c1d95' }}>
-                          <span className="shrink-0 mt-0.5" style={{ color: '#9333ea' }}>→</span>
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Missing info */}
-                {result.missing_information?.length > 0 && (
-                  <div className="border border-stone-400 bg-stone-50 p-5">
-                    <div className="mono-font text-xs tracking-widest text-stone-700 mb-3">INFORMATION NEEDED BEFORE FILING</div>
-                    <ul className="space-y-2">
-                      {result.missing_information.map((item, i) => (
-                        <li key={i} className="display-font text-stone-800 text-[15px] flex gap-2">
-                          <span className="text-stone-400">→</span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Alternative codes */}
-                {result.alternative_codes?.length > 0 && (
-                  <div>
-                    <div className="mono-font text-xs tracking-widest text-stone-600 mb-3">ALTERNATIVE CODES TO CONSIDER</div>
-                    <div className="space-y-2">
-                      {result.alternative_codes.map((alt, i) => (
-                        <div key={i} className="border border-stone-300 bg-white p-4">
-                          <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-                            <span className="mono-font text-sm font-bold text-stone-900">{alt.code}</span>
-                            <span className="display-font italic text-stone-700 text-[15px]">{alt.title}</span>
-                          </div>
-                          <p className="display-font text-stone-600 text-sm">{alt.when_to_use}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -4909,15 +4929,17 @@ Return ONLY valid JSON:
                     </div>
                   )}
 
-                  {/* NOT RECOMMENDED — redirect to formal dispute + fight-or-accept calculator */}
+                  {/* NOT RECOMMENDED — redirect to formal dispute */}
                   {!goodwillRec.recommended && (
-                    <div className="px-5 pt-2 pb-5 space-y-4">
+                    <div className="px-5 pt-2 pb-3">
                       <div className="flex items-center gap-2 text-stone-500">
                         <ArrowRight className="w-3.5 h-3.5 flex-shrink-0" />
                         <p className="mono-font text-xs tracking-wide">Proceed with formal chargeback filing — use Steps 01–04 above.</p>
                       </div>
-                      {/* ── Net Recovery Estimate ── */}
-                      {platformMode === 'fi' && result && (
+                    </div>
+                  )}
+                  {/* ── Net Recovery Estimate ── */}
+                  {platformMode === 'fi' && result && fightCalc && (
                         <div className="border border-stone-300 mt-2" style={{ background: '#EEE9E0' }}>
                           <div className="px-4 py-2.5 border-b border-stone-300">
                             <span className="mono-font text-[9px] tracking-widest text-stone-500">NET RECOVERY ESTIMATE</span>
@@ -4952,8 +4974,6 @@ Return ONLY valid JSON:
                             <p className="mono-font text-[9px] text-stone-400 italic">Win probability from AI analysis + merchant defense signals. Write-off risk = full disputed amount if lost. Network filing fee ~$25.</p>
                           </div>
                         </div>
-                      )}
-                    </div>
                   )}
                 </div>
               )}
@@ -5548,6 +5568,24 @@ Return ONLY valid JSON:
                                       >→ DUO</button>
                                     )}
                                   </div>
+                                  <button
+                                    onClick={() => {
+                                      if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
+                                      if (o.amount && o.amount !== '—') {
+                                        const pts = (o.amount || '').split(' ')
+                                        if (pts[0]) setAmount(pts[0])
+                                        if (pts[1]) setCurrency(pts[1])
+                                      }
+                                      if (o.network) setNetwork((o.network||'').toLowerCase().includes('visa') ? 'visa' : 'mastercard')
+                                      if (o.cbStage) setCbCycleStage(o.cbStage)
+                                      if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
+                                      setCurrentDeskCaseId(o.id)
+                                      setResult(null); setError(null)
+                                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                                    }}
+                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors whitespace-nowrap"
+                                    title="Pre-fill desk form from this case"
+                                  >OPEN IN DESK</button>
                                   <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
@@ -5580,6 +5618,35 @@ Return ONLY valid JSON:
                                 })}
                               </div>
                             )}
+
+                            {/* CB cycle deadline mini-strip */}
+                            {!isEditing && o.cbStage && o.cbFiledDate && (() => {
+                              const addDaysLocal = (d, n) => { const r = new Date(d + 'T12:00:00'); r.setDate(r.getDate() + n); return r }
+                              const filed = new Date(o.cbFiledDate + 'T12:00:00')
+                              const net = (o.network || '').toLowerCase()
+                              const stageLbl = o.cbStage === '1cb' ? '1ST CB' : o.cbStage === '2cb' ? '2ND PRES' : o.cbStage === 'prearb' ? 'PRE-ARB' : 'ARB'
+                              let deadline = null
+                              if (net.includes('visa')) {
+                                deadline = addDaysLocal(o.cbFiledDate, 30)
+                              } else {
+                                deadline = o.cbStage === '1cb' ? addDaysLocal(o.cbFiledDate, 45) : addDaysLocal(o.cbFiledDate, 30)
+                              }
+                              const dLeft = Math.round((deadline - new Date()) / 86400000)
+                              const overdue = dLeft < 0; const urgent = !overdue && dLeft <= 5
+                              const cls = overdue ? 'text-red-700 font-bold' : urgent ? 'text-amber-700 font-bold' : 'text-amber-900'
+                              const dlLabel = overdue
+                                ? `⚠ DEADLINE PASSED ${Math.abs(dLeft)}d ago`
+                                : dLeft === 0 ? '⚠ DUE TODAY'
+                                : `${dLeft}d remaining`
+                              return (
+                                <div className="px-4 pb-2 flex items-center gap-3 flex-wrap" style={{ background: '#FFFBEB' }}>
+                                  <span className="mono-font text-[9px] tracking-widest text-amber-700 opacity-60">CB CYCLE</span>
+                                  <span className={`mono-font text-[10px] tracking-wide ${cls}`}>
+                                    {stageLbl} · {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {dlLabel}
+                                  </span>
+                                </div>
+                              )
+                            })()}
 
                             {/* 360 panel — full case detail */}
                             {case360Id === o.id && (
