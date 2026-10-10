@@ -2463,6 +2463,7 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [sarDiscoveryDate, setSarDiscoveryDate]             = useState('')     // FI: date fraud was detected (for SAR deadline)
   const [sarDraftOpen, setSarDraftOpen]                     = useState(false)
   const [editingRow, setEditingRow]                         = useState(null)   // id of row being edited
+  const [expandedCbRow, setExpandedCbRow]               = useState(null)   // id of row with CB cycle panel open
   const [case360Id, setCase360Id]                           = useState(null)   // id of case with 360 panel open
   const [editDraft, setEditDraft]                           = useState({})     // draft field values
 
@@ -4058,66 +4059,6 @@ Return ONLY valid JSON:
                   </>
                 )}
 
-                {/* Chargeback cycle deadline tracker — for cases already in flight */}
-                <div className="border border-stone-300 p-5 space-y-4" style={{ background: '#FAF7F1' }}>
-                    <div className="mono-font text-xs tracking-widest text-stone-600">CHARGEBACK CYCLE DEADLINE TRACKER</div>
-                    <p className="display-font text-stone-500 text-[13px] leading-snug">
-                      Once you've filed this dispute with the network, enter the stage and filing date below to track the response window.
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">CURRENT CYCLE STAGE</label>
-                        <div className="flex flex-wrap gap-0">
-                          {[{v:'1cb',l:'1st CB'},{v:'2cb',l:'2nd Pres.'},{v:'prearb',l:'Pre-Arb'},{v:'arb',l:'Arb'}].map(({v,l}) => (
-                            <button key={v} onClick={() => setCbCycleStage(v)}
-                              className="mono-font text-[9px] tracking-wide px-2.5 py-1.5 transition-all"
-                              style={{ background: cbCycleStage===v?'#1A1814':'transparent', color: cbCycleStage===v?'#F5F1EA':'#6B5F4D', border:'1px solid #A09585', cursor:'pointer' }}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">DATE FILED WITH NETWORK</label>
-                        <input type="date" value={cbFiledDate} onChange={e => setCbFiledDate(e.target.value)}
-                          className="cov-input mono-font" style={{ fontSize: '12px' }} />
-                        <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank until you've filed</div>
-                      </div>
-                    </div>
-                    {cbDeadlines && cbDeadlines.length > 0 && (
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap gap-3">
-                          {cbDeadlines.map((dl, i) => (
-                            <div key={i} className={`px-3 py-2 ${dl.days !== null && dl.days <= 5 ? 'bg-red-900 text-red-50' : dl.days !== null && dl.days <= 15 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
-                              <div className="mono-font text-[9px] tracking-widest opacity-70 mb-0.5">{dl.label.toUpperCase()}</div>
-                              <div className="mono-font text-sm font-bold">{dl.date}</div>
-                              {dl.days !== null && (
-                                <div className="mono-font text-[10px] opacity-80">
-                                  {dl.days > 0 ? `${dl.days} days remaining` : dl.days === 0 ? 'DUE TODAY' : `${Math.abs(dl.days)} OVERDUE`}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {cbDeadlines[0]?.note && (
-                          <div className="mono-font text-[10px] text-stone-500 italic">{cbDeadlines[0].note}</div>
-                        )}
-                      </div>
-                    )}
-                    {!cbFiledDate && (
-                      <div className="mono-font text-[10px] text-stone-400 italic">Enter a filing date above to calculate the next response deadline.</div>
-                    )}
-                    {/* Sync button — save stage + date onto the current case in the tracker */}
-                    {cbFiledDate && currentDeskCaseId && (
-                      <button
-                        onClick={() => setOutcomes(prev => prev.map(o =>
-                          o.id === currentDeskCaseId ? { ...o, cbStage: cbCycleStage, cbFiledDate } : o
-                        ))}
-                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-500 text-stone-600 hover:bg-stone-100 transition-colors self-start"
-                        title={"Save cycle stage + filing date to tracker row " + currentDeskCaseId}
-                      >SYNC DEADLINE → TRACKER ROW</button>
-                    )}
-                </div>
             </div>
 
           </div>
@@ -5446,20 +5387,12 @@ Return ONLY valid JSON:
                                     <>
                                       <button onClick={() => advanceStage(o.id, 'queued')} className="mono-font text-[10px] px-1.5 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors" title="Queue for batch filing">IN QUEUE</button>
                                       <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
-                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">WD</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'resolved')} className="mono-font text-[10px] px-1.5 py-0.5 border border-teal-600 text-teal-700 hover:bg-teal-50 transition-colors">RESOLVED</button>
                                     </>
                                   )}
                                   {o.status === 'queued' && (
                                     <>
                                       <span className="mono-font text-[10px] px-1.5 py-0.5 bg-violet-800 text-violet-50">IN QUEUE</span>
                                       <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
-                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">INVSTG</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors">LOST</button>
                                       <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert to pending">↩</button>
                                     </>
                                   )}
@@ -5540,19 +5473,6 @@ Return ONLY valid JSON:
                                   {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
                                     <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors">PC</button>
                                   )}
-                                  {/* Next response due — inline date setter for active cases */}
-                                  {!['won','lost','withdrawn','resolved'].includes(o.status) && (
-                                    <label className="flex items-center gap-1 cursor-pointer" title="Set next response due date">
-                                      <span className="mono-font text-[9px] text-stone-400 tracking-wide shrink-0">NEXT RESP</span>
-                                      <input
-                                        type="date"
-                                        value={o.nextRespDate || ''}
-                                        onChange={e => setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, nextRespDate: e.target.value } : x))}
-                                        className="mono-font text-[9px] text-stone-600 border-0 border-b border-stone-300 bg-transparent outline-none cursor-pointer"
-                                        style={{ width: '88px', padding: '0 2px', fontSize: '9px' }}
-                                      />
-                                    </label>
-                                  )}
                                 </div>
                                 <div className="flex items-start gap-2 justify-end">
                                   <div className="flex flex-col items-end gap-1.5">
@@ -5606,6 +5526,12 @@ Return ONLY valid JSON:
                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
                                     title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
                                   >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
+                                   <button
+                                     onClick={() => setExpandedCbRow(expandedCbRow === o.id ? null : o.id)}
+                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
+                                     style={{ borderColor: expandedCbRow === o.id ? '#D97706' : '#A8A29E', color: expandedCbRow === o.id ? '#D97706' : '#78716C', background: expandedCbRow === o.id ? '#FFFBEB' : 'transparent' }}
+                                     title="Manage Chargeback Cycle"
+                                   >▸ CB</button>
                                   <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
@@ -5639,31 +5565,40 @@ Return ONLY valid JSON:
                               </div>
                             )}
 
-                            {/* CB cycle deadline mini-strip */}
-                            {!isEditing && o.cbStage && o.cbFiledDate && (() => {
-                              const addDaysLocal = (d, n) => { const r = new Date(d + 'T12:00:00'); r.setDate(r.getDate() + n); return r }
-                              const filed = new Date(o.cbFiledDate + 'T12:00:00')
-                              const net = (o.network || '').toLowerCase()
-                              const stageLbl = o.cbStage === '1cb' ? '1ST CB' : o.cbStage === '2cb' ? '2ND PRES' : o.cbStage === 'prearb' ? 'PRE-ARB' : 'ARB'
-                              let deadline = null
-                              if (net.includes('visa')) {
-                                deadline = addDaysLocal(o.cbFiledDate, 30)
-                              } else {
-                                deadline = o.cbStage === '1cb' ? addDaysLocal(o.cbFiledDate, 45) : addDaysLocal(o.cbFiledDate, 30)
-                              }
-                              const dLeft = Math.round((deadline - new Date()) / 86400000)
-                              const overdue = dLeft < 0; const urgent = !overdue && dLeft <= 5
-                              const cls = overdue ? 'text-red-700 font-bold' : urgent ? 'text-amber-700 font-bold' : 'text-amber-900'
-                              const dlLabel = overdue
-                                ? `⚠ DEADLINE PASSED ${Math.abs(dLeft)}d ago`
-                                : dLeft === 0 ? '⚠ DUE TODAY'
-                                : `${dLeft}d remaining`
+                            {/* CB Cycle expandable panel */}
+                            {expandedCbRow === o.id && (() => {
+                              const _addDL = (d, n) => { const r = new Date(d + 'T12:00:00'); r.setDate(r.getDate() + n); return r }
+                              const _net = (o.network || '').toLowerCase()
+                              const _st = o.cbStage || '1cb'
+                              const _dl = o.cbFiledDate
+                                ? (_net.includes('visa') ? _addDL(o.cbFiledDate, 30) : _st === '1cb' ? _addDL(o.cbFiledDate, 45) : _addDL(o.cbFiledDate, 30))
+                                : null
+                              const _dLeft = _dl ? Math.round((_dl - new Date()) / 86400000) : null
+                              const _ov = _dLeft !== null && _dLeft < 0
+                              const _urg = !_ov && _dLeft !== null && _dLeft <= 5
                               return (
-                                <div className="px-4 pb-2 flex items-center gap-3 flex-wrap" style={{ background: '#FFFBEB' }}>
-                                  <span className="mono-font text-[9px] tracking-widest text-amber-700 opacity-60">CB CYCLE</span>
-                                  <span className={`mono-font text-[10px] tracking-wide ${cls}`}>
-                                    {stageLbl} · {deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {dlLabel}
-                                  </span>
+                                <div className="px-4 py-3 border-t border-amber-200" style={{ background: '#FFFBEB' }}>
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="mono-font text-[9px] tracking-widest text-amber-700">CB STAGE</span>
+                                    {[{v:'1cb',l:'1ST CB'},{v:'2cb',l:'2ND PRES'},{v:'prearb',l:'PRE-ARB'},{v:'arb',l:'ARB'}].map(({v,l}) => (
+                                      <button key={v}
+                                        onClick={() => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, cbStage: v} : x))}
+                                        className="mono-font text-[9px] px-2 py-0.5 transition-all"
+                                        style={{ background: _st===v?'#1A1814':'transparent', color: _st===v?'#F5F1EA':'#92400E', border:'1px solid #D97706', cursor:'pointer' }}
+                                      >{l}</button>
+                                    ))}
+                                    <input type="date" value={o.cbFiledDate || ''}
+                                      onChange={e => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, cbFiledDate: e.target.value} : x))}
+                                      className="mono-font border border-amber-300 px-1 bg-transparent ml-2"
+                                      style={{ fontSize: '9px' }} />
+                                    {!o.cbFiledDate && <span className="mono-font text-[9px] text-amber-500 italic">← set filing date</span>}
+                                  </div>
+                                  {_dl && (() => {
+                                    const _cls = _ov ? 'text-red-700 font-bold' : _urg ? 'text-amber-700 font-bold' : 'text-amber-900'
+                                    const _lbl = _ov ? ('PASSED ' + Math.abs(_dLeft) + 'd ago') : _dLeft === 0 ? 'DUE TODAY' : (_dLeft + 'd remaining')
+                                    const _sl = _st==='1cb'?'1ST CB':_st==='2cb'?'2ND PRES':_st==='prearb'?'PRE-ARB':'ARB'
+                                    return (<div className="flex items-center gap-3"><span className="mono-font text-[9px] text-amber-500 tracking-wider">DEADLINE</span><span className={['mono-font text-[10px] tracking-wide', _cls].join(' ')}>{_sl} - {_dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})} - {_lbl}</span></div>)
+                                  })()}
                                 </div>
                               )
                             })()}
@@ -7493,7 +7428,7 @@ function TrioView() {
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
         <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 005 — TRIO</div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 006 — TRIO</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
             <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
           </h1>
@@ -8899,8 +8834,18 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
-      <div className="mono-font mb-1" style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#A09585' }}>005 / MULTI</div>
-      <div className="display-font mb-6" style={{ fontSize: 'clamp(22px, 3vw, 30px)', color: '#1C1917', letterSpacing: '-0.02em', lineHeight: 1.1 }}>Bulk Dispute Filing</div>
+      <div className="mono-font mb-1" style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#A09585' }}>ISSUE Nº 005 — MULTI</div>
+      <div className="display-font mb-1" style={{ fontSize: 'clamp(22px, 3vw, 30px)', color: '#1C1917', letterSpacing: '-0.02em', lineHeight: 1.1 }}>Bulk Dispute Filing</div>
+      <p className="display-font text-stone-500 text-[14px] mb-6">Queue cases from the Dispute Desk · file fraud disputes in bulk · route service cases for manual review.</p>
+      {/* Summary chips */}
+      <div className="flex gap-3 mb-6 flex-wrap">
+        <button onClick={() => setActiveSection('desk')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
+          ↗ {outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} FRAUD IN QUEUE — VIEW IN TRACKER
+        </button>
+        <button onClick={() => setActiveSection('desk')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
+          ↗ {outcomes.filter(o => o.status === 'queued' && !(o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} SERVICE IN QUEUE — VIEW IN TRACKER
+        </button>
+      </div>
 
       {/* Fraud queue */}
       <div className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
