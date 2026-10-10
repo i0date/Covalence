@@ -2544,16 +2544,7 @@ function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, 
   const [cbFiledDate, setCbFiledDate]   = useState('')
   const [cbCycleStage, setCbCycleStage] = useState('1cb')
   const [currentDeskCaseId, setCurrentDeskCaseId] = useState(null) // ID of most recently analyzed case in desk
-  const [rerunPending, setRerunPending] = useState(false)
 
-  // ── Fight-or-Accept net value calculator ──────────────────────────────────
-
-  // ── Rerun trigger — fires analyze() after form pre-fill from tracker ────────
-  React.useEffect(() => {
-    if (!rerunPending) return
-    setRerunPending(false)
-    if (complaint.trim()) analyze()
-  }, [rerunPending])
 
   // ── Deadline push notifications ─────────────────────────────────────────────
   useEffect(() => {
@@ -5521,7 +5512,7 @@ Return ONLY valid JSON:
                                       setCurrentDeskCaseId(o.id)
                                       setResult(null); setRebuttal(null); setError(null)
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
-                                      if (o._complaint) setRerunPending(true)
+                                      if (o._complaint) setTimeout(() => analyze(), 0)
                                     }}
                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
                                     title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
@@ -8839,10 +8830,10 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
       <p className="display-font text-stone-500 text-[14px] mb-6">Queue cases from the Dispute Desk · file fraud disputes in bulk · route service cases for manual review.</p>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
-        <button onClick={() => setActiveSection('desk')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
+        <button onClick={() => setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
           ↗ {outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} FRAUD IN QUEUE — VIEW IN TRACKER
         </button>
-        <button onClick={() => setActiveSection('desk')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
+        <button onClick={() => setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
           ↗ {outcomes.filter(o => o.status === 'queued' && !(o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} SERVICE IN QUEUE — VIEW IN TRACKER
         </button>
       </div>
