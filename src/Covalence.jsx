@@ -2729,7 +2729,7 @@ CONSUMER DISPUTES:
 Analyze this customer complaint and generate a structured dispute analysis.
 
 CUSTOMER COMPLAINT:
-"""${complaint}"""
+"""${effectiveComplaint}"""
 
 TRANSACTION DETAILS:
 - Merchant: ${merchant || 'Not provided'}
@@ -2900,7 +2900,7 @@ DISPUTE DETAILS:
 - Dispute Summary: ${result.dispute_summary}
 - Context: ${outcomeContext}
 - Goodwill outreach required: ${result.goodwill_outreach_required ? 'Yes — ' + result.goodwill_outreach_note : 'No'}
-- Original complaint: "${complaint}"
+- Original complaint: "${effectiveComplaint}"
 
 SELECT THE CORRECT OUTCOME:
 - FILING: dispute qualifies and the bank will file on the cardholder's behalf
