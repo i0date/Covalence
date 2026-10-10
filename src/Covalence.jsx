@@ -5145,7 +5145,7 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px', background: '#EEE9E0' }}>
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 90px 160px', background: '#EEE9E0' }}>
                       {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
@@ -5280,7 +5280,7 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px' }}>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 90px 160px' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
@@ -5329,98 +5329,11 @@ Return ONLY valid JSON:
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
-                                <div className="flex gap-1 flex-wrap items-center">
-                                  {/* ── Lifecycle stage buttons ───────────────── */}
-                                  {o.status === 'pending' && (
-                                    <>
-                                      <button onClick={() => advanceStage(o.id, 'queued')} className="mono-font text-[10px] px-1.5 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors" title="Queue for batch filing">IN QUEUE</button>
-                                      <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
-                                    </>
-                                  )}
-                                  {o.status === 'queued' && (
-                                    <>
-                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-violet-800 text-violet-50">IN QUEUE</span>
-                                      <button onClick={() => advanceStage(o.id, 'filed')} title={o.mode === 'merchant' ? 'File representment with acquirer' : 'Mark as filed with network'} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-100 transition-colors">{o.mode === 'merchant' ? 'SEND REPMT' : 'FILED'}</button>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert to pending">↩</button>
-                                    </>
-                                  )}
-                                  {o.status === 'filed' && (
-                                    <>
-                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{o.mode === 'merchant' ? 'REPMT FILED' : 'FILED'}</span>
-                                      <button onClick={() => advanceStage(o.id, 'investigating')} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap" title="Mark as under investigation — network or acquirer is reviewing">INVSTG</button>
-                                      <button onClick={() => advanceStage(o.id, 'representment')} title={o.mode === 'merchant' ? 'Acquirer responded to representment' : 'Merchant representment received'} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">{o.mode === 'merchant' ? 'ACQ RESP' : 'REPMT'}</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap" title="Mark case as won — funds recovered in our favour">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap" title="Mark case as lost — chargeback denied or not upheld">LOST</button>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
-                                    </>
-                                  )}
-                                  {o.status === 'investigating' && (
-                                    <>
-                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-blue-800 text-blue-50">INVSTG</span>
-                                      <button onClick={() => advanceStage(o.id, 'representment')} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap" title="Merchant representment received — move to rebuttal stage">REPMT</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap" title="Mark case as won — funds recovered in our favour">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap" title="Mark case as lost — chargeback denied or not upheld">LOST</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'resolved')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-100 transition-colors whitespace-nowrap" title="Mark as resolved — settled, reversed, or closed without network chargeback">RESOLVED</button>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
-                                    </>
-                                  )}
-                                  {o.status === 'representment' && (
-                                    <>
-                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-amber-800 text-amber-50">{o.mode === 'merchant' ? 'ACQ RESPONDED' : "REPMT RCV'D"}</span>
-                                      {o.mode !== 'merchant' && <button onClick={() => {
-                                        const amtNum = parseFloat((o.amount || '').replace(/[^0-9.]/g, ''))
-                                        const arbFee = (o.network || '').toLowerCase().includes('visa') ? 500 : 200
-                                        if (!isNaN(amtNum) && amtNum < arbFee) {
-                                          if (!window.confirm('⚠ Arb fee warning: dispute amount (' + (o.amount || '?') + ') is less than the ' + (o.network || 'network') + ' arbitration fee (~$' + arbFee + '). Escalating to pre-arb will cost more than the dispute value. Proceed anyway?')) return
-                                        }
-                                        advanceStage(o.id, 'pre_arb')
-                                      }} title="File pre-arbitration" className="mono-font text-[10px] px-1.5 py-0.5 border border-purple-700 text-purple-700 hover:bg-purple-50 transition-colors">PRE-ARB</button>}
-                                      {o.mode !== 'merchant' && <button onClick={() => generatePreArbDraft(o)} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-50 transition-colors">DRAFT PRE-ARB</button>}
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap" title="Mark case as won — funds recovered in our favour">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap" title="Mark case as lost — chargeback denied or not upheld">LOST</button>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
-                                    </>
-                                  )}
-                                  {o.status === 'pre_arb' && (
-                                    <>
-                                      {o.mode !== 'merchant' && <span className="mono-font text-[10px] px-1.5 py-0.5 bg-purple-900 text-purple-50">PRE-ARB FILED</span>}
-                                      {o.mode !== 'merchant' && <button onClick={() => generatePreArbDraft(o)} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-600 hover:bg-stone-50 transition-colors">DRAFT PRE-ARB</button>}
-                                      <button onClick={() => markCaseOutcome(o.id, 'won')} className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap" title="Mark case as won — funds recovered in our favour">WON</button>
-                                      <button onClick={() => markCaseOutcome(o.id, 'lost')} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap" title="Mark case as lost — chargeback denied or not upheld">LOST</button>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Revert">↩</button>
-                                    </>
-                                  )}
-                                  {o.status === 'resolved' && (
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                      <span className="mono-font text-[10px] px-1.5 py-0.5 bg-teal-800 text-teal-50">RESOLVED</span>
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark">↩</button>
-                                    </div>
-                                  )}
-                                  {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                      <span className={`mono-font text-[10px] px-1.5 py-0.5 ${o.status === 'won' ? 'bg-emerald-900 text-emerald-50' : o.status === 'lost' ? 'bg-red-900 text-red-50' : 'bg-stone-600 text-stone-50'}`}>
-                                        {o.status.toUpperCase()}
-                                      </span>
-                                      {o.status === 'lost' && o.mode !== 'merchant' && (
-                                        <>
-                                          {o.escalation === 'lea_referral'
-                                            ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-orange-900 text-orange-50" title="Referred to Law Enforcement">LEA ✓</span>
-                                            : <button onClick={() => escalateCase(o.id, 'lea_referral')} className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-700 text-orange-700 hover:bg-orange-50 transition-colors" title="Refer to law enforcement agency">LEA</button>
-                                          }
-                                          {o.escalation === 'writeoff'
-                                            ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-stone-700 text-stone-200" title="Written off">W/O ✓</span>
-                                            : <button onClick={() => escalateCase(o.id, 'writeoff')} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-100 transition-colors" title="Mark as written off">W/O</button>
-                                          }
-                                        </>
-                                      )}
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark outcome">↩</button>
-                                    </div>
-                                  )}
-                                  {/* PC button — FI only (Reg E is issuer obligation) */}
-                                  {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
-                                    <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap" title="Log provisional credit issued to cardholder (Reg E obligation for debit cards)">PC</button>
-                                  )}
-                                </div>
+                                {(() => {
+                                  const _sb = { pending:{bg:'#E7E2D9',text:'#4B4540',label:'PENDING'}, queued:{bg:'#4C1D95',text:'#F9FAFB',label:'IN QUEUE'}, filed:{bg:'#1C1917',text:'#F9FAFB',label:'FILED'}, investigating:{bg:'#1E3A8A',text:'#DBEAFE',label:'INVSTG'}, representment:{bg:'#92400E',text:'#FEF3C7',label:'REPMT'}, pre_arb:{bg:'#4A1D96',text:'#EDE9FE',label:'PRE-ARB'}, won:{bg:'#064E3B',text:'#D1FAE5',label:'WON'}, lost:{bg:'#7F1D1D',text:'#FEE2E2',label:'LOST'}, withdrawn:{bg:'#44403C',text:'#F5F5F4',label:'WD'}, resolved:{bg:'#134E4A',text:'#CCFBF1',label:'RESOLVED'} }
+                                  const _s = _sb[o.status] || {bg:'#E7E2D9',text:'#4B4540',label:(o.status||'—').toUpperCase()}
+                                  return <span className="mono-font text-[9px] px-2 py-1 font-bold tracking-widest inline-block" style={{background:_s.bg,color:_s.text,whiteSpace:'nowrap'}}>{_s.label}</span>
+                                })()}
                                 <div className="flex items-start gap-2 justify-end">
                                   <div className="flex flex-col items-end gap-1.5">
                                     {o.mode !== 'merchant' && onScoreInDfa && (
@@ -5485,6 +5398,67 @@ Return ONLY valid JSON:
                               </div>
                             )}
 
+                            {!isEditing && (
+                              <div className="px-4 py-1.5 flex items-center gap-1.5 flex-wrap" style={{borderTop:'1px solid #E7E2D9',background:'#F7F4EF'}}>
+                                {o.status === 'pending' && (<>
+                                  <span className="mono-font text-[9px] text-stone-400 mr-1 tracking-widest">ADVANCE</span>
+                                  <button onClick={() => advanceStage(o.id, 'queued')} title="Move to batch filing queue" className="mono-font text-[9px] px-1.5 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors whitespace-nowrap">IN QUEUE</button>
+                                  <button onClick={() => advanceStage(o.id, 'filed')} title="Mark chargeback as filed with network" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-700 text-stone-700 hover:bg-stone-50 transition-colors whitespace-nowrap">FILED</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw — case closed without filing" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                </>)}
+                                {o.status === 'queued' && (<>
+                                  <button onClick={() => revertCase(o.id)} title="Remove from batch queue, back to pending" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">↩ UNQUEUE</button>
+                                  <button onClick={() => advanceStage(o.id, 'filed')} title="Mark as filed with network" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-700 text-stone-700 hover:bg-stone-50 transition-colors whitespace-nowrap">FILED</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw without filing" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                </>)}
+                                {o.status === 'filed' && (<>
+                                  <button onClick={() => advanceStage(o.id, 'investigating')} title="Mark as under investigation by network or acquirer" className="mono-font text-[9px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap">INVSTG</button>
+                                  <button onClick={() => advanceStage(o.id, 'representment')} title="Merchant representment received" className="mono-font text-[9px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap">REPMT</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'won')} title="Case won — funds recovered in our favour" className="mono-font text-[9px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap">WON</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'lost')} title="Case lost — chargeback denied" className="mono-font text-[9px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw case" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                  <button onClick={() => revertCase(o.id)} title="Revert to pending" className="mono-font text-[9px] px-2 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                </>)}
+                                {o.status === 'investigating' && (<>
+                                  <button onClick={() => advanceStage(o.id, 'representment')} title="Merchant representment received — move to rebuttal stage" className="mono-font text-[9px] px-1.5 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap">REPMT</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'won')} title="Case won — funds recovered" className="mono-font text-[9px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap">WON</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'lost')} title="Case lost" className="mono-font text-[9px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw case" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'resolved')} title="Resolved — closed without formal outcome" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">RESOLVED</button>
+                                  <button onClick={() => revertCase(o.id)} title="Revert to filed" className="mono-font text-[9px] px-2 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                </>)}
+                                {o.status === 'representment' && (<>
+                                  <button onClick={() => markCaseOutcome(o.id, 'won')} title="Won on representment — prevailed in rebuttal" className="mono-font text-[9px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap">WON</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'lost')} title="Lost on representment" className="mono-font text-[9px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw case" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                  <button onClick={() => revertCase(o.id)} title="Revert to filed" className="mono-font text-[9px] px-2 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                </>)}
+                                {o.status === 'pre_arb' && (<>
+                                  {o.mode !== 'merchant' && <button onClick={() => generatePreArbDraft(o)} title="Generate pre-arbitration submission draft" className="mono-font text-[9px] px-1.5 py-0.5 border border-purple-700 text-purple-700 hover:bg-purple-50 transition-colors whitespace-nowrap">DRAFT PRE-ARB</button>}
+                                  <button onClick={() => markCaseOutcome(o.id, 'won')} title="Won at pre-arbitration" className="mono-font text-[9px] px-1.5 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap">WON</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'lost')} title="Lost at pre-arbitration" className="mono-font text-[9px] px-1.5 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                                  <button onClick={() => markCaseOutcome(o.id, 'withdrawn')} title="Withdraw case" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-50 transition-colors whitespace-nowrap">WD</button>
+                                  <button onClick={() => revertCase(o.id)} title="Revert" className="mono-font text-[9px] px-2 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                </>)}
+                                {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (<>
+                                  {o.status === 'lost' && o.mode !== 'merchant' && (<>
+                                    {o.escalation === 'lea_referral'
+                                      ? <span className="mono-font text-[9px] px-1.5 py-0.5 bg-orange-900 text-orange-50" title="Referred to Law Enforcement">LEA ✓</span>
+                                      : <button onClick={() => escalateCase(o.id, 'lea_referral')} title="Refer to law enforcement agency" className="mono-font text-[9px] px-1.5 py-0.5 border border-orange-700 text-orange-700 hover:bg-orange-50 transition-colors whitespace-nowrap">LEA</button>}
+                                    {o.escalation === 'writeoff'
+                                      ? <span className="mono-font text-[9px] px-1.5 py-0.5 bg-stone-700 text-stone-200" title="Written off">W/O ✓</span>
+                                      : <button onClick={() => escalateCase(o.id, 'writeoff')} title="Mark as written off" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-500 text-stone-500 hover:bg-stone-100 transition-colors whitespace-nowrap">W/O</button>}
+                                  </>)}
+                                  <button onClick={() => revertCase(o.id)} title="Re-open case — change status" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap">↩ RE-MARK</button>
+                                </>)}
+                                {o.status === 'resolved' && (
+                                  <button onClick={() => revertCase(o.id)} title="Re-open case" className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap">↩ RE-MARK</button>
+                                )}
+                                {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
+                                  <button onClick={() => markProvCredit(o.id)} title="Log provisional credit issued to cardholder (Reg E obligation for debit)" className="mono-font text-[9px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap ml-2">PC</button>
+                                )}
+                              </div>
+                            )}
                             {/* Provisional credit deadline row */}
                             {!isEditing && o.provCreditDate && o.mode !== 'merchant' && (
                               <div className="px-4 pb-2 flex items-center gap-4 flex-wrap" style={{ background: '#EEF2FF' }}>
