@@ -5145,7 +5145,7 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,2fr) auto', background: '#EEE9E0' }}>
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px', background: '#EEE9E0' }}>
                       {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
@@ -5280,7 +5280,7 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,2fr) auto' }}>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
@@ -5329,7 +5329,7 @@ Return ONLY valid JSON:
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
-                                <div className="flex gap-1 flex-wrap items-center min-w-0">
+                                <div className="flex gap-1 flex-wrap items-center">
                                   {/* ── Lifecycle stage buttons ───────────────── */}
                                   {o.status === 'pending' && (
                                     <>
