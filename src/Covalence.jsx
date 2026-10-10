@@ -5145,8 +5145,8 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 120px', background: '#EEE9E0' }}>
-                      {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', ''].map(h => (
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 1fr 120px', background: '#EEE9E0' }}>
+                      {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
                     </div>
@@ -5280,7 +5280,7 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 120px' }}>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 60px 1fr 90px 1fr 44px 1fr 120px' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
@@ -5329,72 +5329,7 @@ Return ONLY valid JSON:
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
-                                <div className="flex items-start gap-2 justify-end">
-                                  <div className="flex flex-col items-end gap-1.5">
-                                    {o.mode !== 'merchant' && onScoreInDfa && (
-                                      <button
-                                        onClick={() => onScoreInDfa([{
-                                          ...o,
-                                          code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
-                                          filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
-                                          windowDays: 45,
-                                          avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
-                                          deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
-                                          pinVerified: false, isVFMP: !!o.isVFMP,
-                                          strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
-                                          merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
-                                          note: `From Dispute Desk: ${o.merchant || ''}`,
-                                          source: 'desk',
-                                        }])}
-                                        className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
-                                        title="Send to DFA for funding assessment"
-                                      >→DFA</button>
-                                    )}
-                                    {onSendToDuo && (
-                                      <button
-                                        onClick={() => onSendToDuo(o)}
-                                        className="mono-font text-[10px] px-2 py-1 transition-colors"
-                                        style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
-                                        title="Open in Duo Mode — coordinate with receiving institution"
-                                      >→ DUO</button>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
-                                      if (o.amount && o.amount !== '—') {
-                                        const pts = (o.amount || '').split(' ')
-                                        if (pts[0]) setAmount(pts[0])
-                                        if (pts[1]) setCurrency(pts[1])
-                                      }
-                                      if (o.network) setNetwork((o.network||'').toLowerCase().includes('visa') ? 'visa' : 'mastercard')
-                                      if (o._transactionDate) setTransactionDate(o._transactionDate)
-                                      if (o._cardType) setCardType(o._cardType)
-                                      if (o._complaint) setComplaint(o._complaint)
-                                      if (o.cbStage) setCbCycleStage(o.cbStage)
-                                      if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
-                                      setCurrentDeskCaseId(o.id)
-                                      setResult(null); setRebuttal(null); setError(null)
-                                      if (onGoToDesk) onGoToDesk()
-                                      window.scrollTo({ top: 0, behavior: 'smooth' })
-                                      if (o._complaint) setTimeout(() => analyze(o._complaint), 0)
-                                    }}
-                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
-                                    title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
-                                  >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
-                                   <button
-                                     onClick={() => setExpandedCbRow(expandedCbRow === o.id ? null : o.id)}
-                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
-                                     style={{ borderColor: expandedCbRow === o.id ? '#D97706' : '#A8A29E', color: expandedCbRow === o.id ? '#D97706' : '#78716C', background: expandedCbRow === o.id ? '#FFFBEB' : 'transparent' }}
-                                     title="Manage Chargeback Cycle"
-                                   >▸ CB</button>
-                                  <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
-                                </div>
-                              </div>
-                            )}
-                            {!isEditing && (
-                              <div className="px-4 pb-1.5 pt-1 flex items-center gap-1 flex-wrap" style={{ borderTop: '1px solid #EDEDEB', background: '#FAFAF8' }}>
-                                <span className="mono-font text-[9px] tracking-widest text-stone-400 mr-1">STATUS</span>
+                                <div className="flex gap-1 flex-wrap items-center">
                                   {/* ── Lifecycle stage buttons ───────────────── */}
                                   {o.status === 'pending' && (
                                     <>
@@ -5466,7 +5401,6 @@ Return ONLY valid JSON:
                                       <span className={`mono-font text-[10px] px-1.5 py-0.5 ${o.status === 'won' ? 'bg-emerald-900 text-emerald-50' : o.status === 'lost' ? 'bg-red-900 text-red-50' : 'bg-stone-600 text-stone-50'}`}>
                                         {o.status.toUpperCase()}
                                       </span>
-                                      {/* Escalation — post-loss paths */}
                                       {o.status === 'lost' && o.mode !== 'merchant' && (
                                         <>
                                           {o.escalation === 'lea_referral'
@@ -5479,13 +5413,75 @@ Return ONLY valid JSON:
                                           }
                                         </>
                                       )}
-                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark">↩</button>
+                                      <button onClick={() => revertCase(o.id)} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors px-1" title="Re-mark outcome">↩</button>
                                     </div>
                                   )}
                                   {/* PC button — FI only (Reg E is issuer obligation) */}
                                   {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
                                     <button onClick={() => markProvCredit(o.id)} className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap" title="Log provisional credit issued to cardholder (Reg E obligation for debit cards)">PC</button>
                                   )}
+                                </div>
+                                <div className="flex items-start gap-2 justify-end">
+                                  <div className="flex flex-col items-end gap-1.5">
+                                    {o.mode !== 'merchant' && onScoreInDfa && (
+                                      <button
+                                        onClick={() => onScoreInDfa([{
+                                          ...o,
+                                          code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
+                                          filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
+                                          windowDays: 45,
+                                          avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
+                                          deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
+                                          pinVerified: false, isVFMP: !!o.isVFMP,
+                                          strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
+                                          merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
+                                          note: `From Dispute Desk: ${o.merchant || ''}`,
+                                          source: 'desk',
+                                        }])}
+                                        className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                        title="Send to DFA for funding assessment"
+                                      >→DFA</button>
+                                    )}
+                                    {onSendToDuo && (
+                                      <button
+                                        onClick={() => onSendToDuo(o)}
+                                        className="mono-font text-[10px] px-2 py-1 transition-colors"
+                                        style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                        title="Open in Duo Mode — coordinate with receiving institution"
+                                      >→ DUO</button>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
+                                      if (o.amount && o.amount !== '—') {
+                                        const pts = (o.amount || '').split(' ')
+                                        if (pts[0]) setAmount(pts[0])
+                                        if (pts[1]) setCurrency(pts[1])
+                                      }
+                                      if (o.network) setNetwork((o.network||'').toLowerCase().includes('visa') ? 'visa' : 'mastercard')
+                                      if (o._transactionDate) setTransactionDate(o._transactionDate)
+                                      if (o._cardType) setCardType(o._cardType)
+                                      if (o._complaint) setComplaint(o._complaint)
+                                      if (o.cbStage) setCbCycleStage(o.cbStage)
+                                      if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
+                                      setCurrentDeskCaseId(o.id)
+                                      setResult(null); setRebuttal(null); setError(null)
+                                      if (onGoToDesk) onGoToDesk()
+                                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                                      if (o._complaint) setTimeout(() => analyze(o._complaint), 0)
+                                    }}
+                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
+                                    title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
+                                  >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
+                                   <button
+                                     onClick={() => setExpandedCbRow(expandedCbRow === o.id ? null : o.id)}
+                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
+                                     style={{ borderColor: expandedCbRow === o.id ? '#D97706' : '#A8A29E', color: expandedCbRow === o.id ? '#D97706' : '#78716C', background: expandedCbRow === o.id ? '#FFFBEB' : 'transparent' }}
+                                     title="Manage Chargeback Cycle"
+                                   >▸ CB</button>
+                                  <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
+                                </div>
                               </div>
                             )}
 
@@ -6522,7 +6518,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 003 — DFA</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 004 — DFA</div>
             <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
@@ -7700,7 +7696,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   ) : null
   const DuoMasthead = ({ sub }) => (
     <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
-      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 004 — DUO{sub ? ` · ${sub}` : ''}</div>
+      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 005 — DUO{sub ? ` · ${sub}` : ''}</div>
       <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(36px,5vw,64px)', letterSpacing:'-0.03em' }}>Duo Mode</h1>
     </div>
   )
@@ -7955,7 +7951,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         <div className="mb-6 pb-5" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', flexWrap:'wrap', gap:'12px', alignItems:'flex-start', justifyContent:'space-between' }}>
           <div style={{ flex:1, minWidth:'200px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px', flexWrap:'wrap' }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-400">ISSUE Nº 004 — DUO</div>
+              <div className="mono-font text-[9px] tracking-widest text-stone-400">ISSUE Nº 005 — DUO</div>
               <div className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ color: st.color, background: st.bg, border: session.status === 'closed' ? 'none' : `1px solid ${st.color}30` }}>{st.label}</div>
             </div>
             <h1 className="display-font font-bold text-stone-900 leading-tight" style={{ fontSize:'clamp(18px,3vw,34px)', letterSpacing:'-0.02em' }}>
@@ -8788,7 +8784,7 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
       <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'24px' }}>
         <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 005 — MULTI</div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 003 — MULTI</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
             <span style={{ fontWeight:700 }}>Mul</span><span style={{ fontStyle:'italic', fontWeight:500 }}>ti</span>
           </h1>
