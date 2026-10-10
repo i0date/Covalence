@@ -3896,162 +3896,166 @@ Return ONLY valid JSON:
                   </div>
                 )}
 
-                {/* Reason code card */}
-                <div className="border-2 border-stone-900 bg-stone-50 p-6">
-                  <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-                    <div className="mono-font text-xs tracking-widest text-stone-600">RECOMMENDED REASON CODE</div>
-                    <div className="flex gap-2 flex-wrap">
-                      {result.category && (
-                        <div className="mono-font text-xs px-2 py-1 bg-stone-200 text-stone-800">
-                          {result.category.replace('mc_', '').replace('_', ' ').toUpperCase()}
+                {result && (
+                  <>
+                  {/* Reason code card */}
+                  <div className="border-2 border-stone-900 bg-stone-50 p-6">
+                    <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
+                      <div className="mono-font text-xs tracking-widest text-stone-600">RECOMMENDED REASON CODE</div>
+                      <div className="flex gap-2 flex-wrap">
+                        {result.category && (
+                          <div className="mono-font text-xs px-2 py-1 bg-stone-200 text-stone-800">
+                            {result.category.replace('mc_', '').replace('_', ' ').toUpperCase()}
+                          </div>
+                        )}
+                        <div className={`mono-font text-xs px-2 py-1 ${result.confidence === 'high' ? 'bg-emerald-900 text-emerald-50' : result.confidence === 'medium' ? 'bg-amber-900 text-amber-50' : 'bg-stone-700 text-stone-50'}`}>
+                          {result.confidence?.toUpperCase()} CONFIDENCE
                         </div>
-                      )}
-                      <div className={`mono-font text-xs px-2 py-1 ${result.confidence === 'high' ? 'bg-emerald-900 text-emerald-50' : result.confidence === 'medium' ? 'bg-amber-900 text-amber-50' : 'bg-stone-700 text-stone-50'}`}>
-                        {result.confidence?.toUpperCase()} CONFIDENCE
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-baseline gap-4 mb-3 flex-wrap">
-                    <div className="display-font font-bold text-4xl text-stone-900">{result.recommended_reason_code}</div>
-                    <div className="display-font italic text-xl text-stone-700">{result.reason_code_title}</div>
-                  </div>
-                  <p className="display-font text-stone-700 leading-relaxed text-[15px]">{result.rationale}</p>
-                </div>
-
-                {/* Dispute summary */}
-                <div className="border border-stone-900 bg-white p-6">
-                  <div className="flex items-baseline justify-between mb-4">
-                    <div className="mono-font text-xs tracking-widest text-stone-600">
-                      DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : 'MASTERCARD'}
+                    <div className="flex items-baseline gap-4 mb-3 flex-wrap">
+                      <div className="display-font font-bold text-4xl text-stone-900">{result.recommended_reason_code}</div>
+                      <div className="display-font italic text-xl text-stone-700">{result.reason_code_title}</div>
                     </div>
-                    <button onClick={copySummary} className="mono-font text-xs flex items-center gap-1.5 text-stone-700 hover:text-stone-900 transition-colors">
-                      {copied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
-                    </button>
+                    <p className="display-font text-stone-700 leading-relaxed text-[15px]">{result.rationale}</p>
                   </div>
-                  <p className="display-font text-stone-900 leading-relaxed text-[16px]" style={{ lineHeight: '1.7' }}>
-                    {result.dispute_summary}
-                  </p>
-                  {isFraud && (
-                    <div className="mt-4 pt-4 border-t border-stone-200">
-                      <p className="mono-font text-xs text-stone-500 italic">
-                        Note: for fraud disputes, liability shifts automatically. A brief summary is sufficient — the network does not require extended narrative for fraud reason codes.
+  
+                  {/* Dispute summary */}
+                  <div className="border border-stone-900 bg-white p-6">
+                    <div className="flex items-baseline justify-between mb-4">
+                      <div className="mono-font text-xs tracking-widest text-stone-600">
+                        DISPUTE SUMMARY — READY FOR {network === 'visa' ? 'VISA' : 'MASTERCARD'}
+                      </div>
+                      <button onClick={copySummary} className="mono-font text-xs flex items-center gap-1.5 text-stone-700 hover:text-stone-900 transition-colors">
+                        {copied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
+                      </button>
+                    </div>
+                    <p className="display-font text-stone-900 leading-relaxed text-[16px]" style={{ lineHeight: '1.7' }}>
+                      {result.dispute_summary}
+                    </p>
+                    {isFraud && (
+                      <div className="mt-4 pt-4 border-t border-stone-200">
+                        <p className="mono-font text-xs text-stone-500 italic">
+                          Note: for fraud disputes, liability shifts automatically. A brief summary is sufficient — the network does not require extended narrative for fraud reason codes.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+  
+                  {/* Merchant contact required flag */}
+                  {result.goodwill_outreach_required && (
+                    <div className="border-l-4 border-amber-700 bg-amber-50 p-5">
+                      <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ CARDHOLDER MUST CONTACT MERCHANT FIRST</div>
+                      <p className="display-font text-stone-900 text-[15px] leading-relaxed">{result.goodwill_outreach_note}</p>
+                      <p className="mono-font text-xs text-amber-800 mt-2">The cardholder — not the bank — contacts the merchant directly. The bank cannot file until that outreach and the merchant's response (or non-response) are documented.</p>
+                    </div>
+                  )}
+  
+                  {/* SAR / STR reminder — with deadline countdown when discovery date is set */}
+                  {isFraud && effectiveAmtNum >= settings.sarThreshold && (
+                    <div className="border-l-4 border-red-800 bg-red-50 p-5 space-y-3">
+                      <div className="mono-font text-xs tracking-widest text-red-900">⚠ SAR / STR REVIEW REQUIRED</div>
+                      <p className="display-font text-stone-900 text-[15px] leading-relaxed">
+                        This fraud case meets or exceeds the ${settings.sarThreshold.toLocaleString()} threshold. Review for <strong>Suspicious Activity Report</strong> (SAR / FinCEN) or <strong>Suspicious Transaction Report</strong> (STR / FINTRAC) filing requirements per your institution's BSA/AML policy.
+                      </p>
+                      {fiSarDeadline ? (
+                        <div className={`flex items-center gap-3 mono-font text-xs px-3 py-2 ${fiSarDaysLeft !== null && fiSarDaysLeft <= 7 ? 'bg-red-900 text-red-50' : fiSarDaysLeft !== null && fiSarDaysLeft <= 14 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
+                          <span>SAR DEADLINE: {fiSarDeadline}</span>
+                          {fiSarDaysLeft !== null && (
+                            <span className="font-bold">
+                              {fiSarDaysLeft > 0 ? `${fiSarDaysLeft} DAYS REMAINING` : fiSarDaysLeft === 0 ? 'DUE TODAY' : `${Math.abs(fiSarDaysLeft)} DAYS OVERDUE`}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mono-font text-[11px] text-red-700 italic">
+                          ↑ Enter the date fraud was detected in the intake form above to track the 30-day SAR filing deadline.
+                        </div>
+                      )}
+                    </div>
+                  )}
+  
+                  {/* SAR/STR draft memo */}
+                  {isFraud && effectiveAmtNum >= settings.sarThreshold && (
+                    <div className="border-l-4 border-red-800 bg-red-50 px-5 py-3">
+                      <button onClick={() => setSarDraftOpen(v => !v)} className="mono-font flex items-center gap-2 text-red-900 hover:text-red-700"
+                        style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                        <FileText className="w-3.5 h-3.5" />
+                        {sarDraftOpen ? '▾ HIDE SAR / STR MEMO DRAFT' : '▸ DRAFT SAR / STR MEMO'}
+                      </button>
+                      {sarDraftOpen && (() => {
+                        const sarDate = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
+                        const draftLines = [
+                          'SUSPICIOUS ACTIVITY REPORT — INTERNAL FILING MEMO',
+                          `Date Prepared: ${sarDate}`,
+                          'Filing Institution: [YOUR INSTITUTION NAME]',
+                          'Prepared By: [ANALYST NAME / BSA OFFICER]',
+                          '',
+                          'CASE SUMMARY',
+                          `Subject: ${merchant || '[MERCHANT / SUBJECT NAME]'}`,
+                          `Transaction Date: ${transactionDate || '[DATE]'}`,
+                          `Amount: ${amount ? `${amount} ${currency}` : '[AMOUNT]'}`,
+                          `Account Type: ${cardType || '[CARD TYPE]'}`,
+                          result && result.recommended_reason_code ? `Chargeback Code: ${result.recommended_reason_code} — ${result.reason_code_title || ''}` : '',
+                          '',
+                          'DESCRIPTION OF SUSPICIOUS ACTIVITY',
+                          (result && result.risk_notes) || `The cardholder reported unauthorized activity totaling ${amount ? `${amount} ${currency}` : '[AMOUNT]'} at ${merchant || '[MERCHANT]'}. This transaction meets the threshold for SAR/STR review.`,
+                          '',
+                          'TYPOLOGY',
+                          (result && result.fraud_sub_label) ? `Fraud Sub-Type: ${result.fraud_sub_label}` : 'Fraud Sub-Type: [SPECIFY]',
+                          (result && result.ato_suspected) ? 'Account takeover suspected. Review for unusual login activity, credential changes, new device additions.' : '[Describe transaction pattern]',
+                          '',
+                          'SUPPORTING DOCUMENTS',
+                          '☐ Dispute intake form',
+                          '☐ Transaction records',
+                          '☐ Cardholder statement',
+                          '☐ Prior dispute history',
+                          '',
+                          'FILING OBLIGATION',
+                          `FinCEN SAR: ${amount && parseFloat(amount) >= 5000 ? `Required — $${parseFloat(amount).toLocaleString()} meets $5,000 threshold` : 'Review — below $5,000 threshold'}`,
+                          `FINTRAC STR: ${currency === 'CAD' && amount && parseFloat(amount) >= 10000 ? `Required — $${parseFloat(amount).toLocaleString()} CAD meets $10,000 threshold` : 'Review if CAD transaction ≥ $10,000'}`,
+                          sarDiscoveryDate ? `SAR Deadline: ${fiSarDeadline} (30 days from discovery date)` : 'SAR Deadline: 30 days from date fraud detected (enter detection date above)',
+                          '',
+                          'DISPOSITION',
+                          '[Analyst: recommend file / decline / escalate to BSA officer]',
+                        ].filter(l => l !== null).join('\n')
+                        return (
+                          <div className="mt-3">
+                            <textarea readOnly value={draftLines} rows={18}
+                              style={{ width:'100%', fontSize:'11px', fontFamily:'monospace', lineHeight:1.55, padding:'12px', background:'#FFF5F5', border:'1px solid #FCA5A5', color:'#1C1917', resize:'vertical', boxSizing:'border-box' }} />
+                            <button onClick={() => navigator.clipboard.writeText(draftLines)} className="mono-font"
+                              style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 12px', marginTop:'6px', border:'1px solid #B91C1C', color:'#B91C1C', background:'none', cursor:'pointer' }}>
+                              COPY TO CLIPBOARD
+                            </button>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+  
+                  {/* Reg E / EFTA compliance block — debit cards only */}
+                  {cardType === 'debit' && (
+                    <div className="border-l-4 p-5 space-y-2" style={{ borderColor: '#1d4ed8', background: '#eff6ff' }}>
+                      <div className="mono-font text-xs tracking-widest" style={{ color: '#1e3a8a' }}>REG E / EFTA — DEBIT CARD</div>
+                      <p className="display-font text-stone-900 text-[15px] leading-relaxed">
+                        This is a debit card dispute. <strong>Regulation E</strong> requires the financial institution to issue provisional credit within <strong>10 business days</strong> of receiving the claim (5 business days for established accounts). Investigation must be completed within <strong>45 business days</strong> (20 business days for point-of-sale or foreign-initiated transactions).
+                      </p>
+                      {regEPcDue && (
+                        <div className="flex flex-wrap gap-4 pt-1">
+                          <div className="mono-font text-xs" style={{ color: '#1e40af' }}>
+                            <span className="text-stone-500">PC DUE BY: </span><span className="font-bold">{regEPcDue}</span>
+                          </div>
+                          <div className="mono-font text-xs" style={{ color: '#1e40af' }}>
+                            <span className="text-stone-500">INVESTIGATION DUE: </span><span className="font-bold">{regEInvDue}</span>
+                          </div>
+                        </div>
+                      )}
+                      <p className="mono-font text-[10px] text-stone-500 italic pt-1">
+                        Note: these dates are calculated from today (date of analysis). Adjust if claim was received on a different date.
                       </p>
                     </div>
                   )}
-                </div>
-
-                {/* Merchant contact required flag */}
-                {result.goodwill_outreach_required && (
-                  <div className="border-l-4 border-amber-700 bg-amber-50 p-5">
-                    <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ CARDHOLDER MUST CONTACT MERCHANT FIRST</div>
-                    <p className="display-font text-stone-900 text-[15px] leading-relaxed">{result.goodwill_outreach_note}</p>
-                    <p className="mono-font text-xs text-amber-800 mt-2">The cardholder — not the bank — contacts the merchant directly. The bank cannot file until that outreach and the merchant's response (or non-response) are documented.</p>
-                  </div>
-                )}
-
-                {/* SAR / STR reminder — with deadline countdown when discovery date is set */}
-                {isFraud && effectiveAmtNum >= settings.sarThreshold && (
-                  <div className="border-l-4 border-red-800 bg-red-50 p-5 space-y-3">
-                    <div className="mono-font text-xs tracking-widest text-red-900">⚠ SAR / STR REVIEW REQUIRED</div>
-                    <p className="display-font text-stone-900 text-[15px] leading-relaxed">
-                      This fraud case meets or exceeds the ${settings.sarThreshold.toLocaleString()} threshold. Review for <strong>Suspicious Activity Report</strong> (SAR / FinCEN) or <strong>Suspicious Transaction Report</strong> (STR / FINTRAC) filing requirements per your institution's BSA/AML policy.
-                    </p>
-                    {fiSarDeadline ? (
-                      <div className={`flex items-center gap-3 mono-font text-xs px-3 py-2 ${fiSarDaysLeft !== null && fiSarDaysLeft <= 7 ? 'bg-red-900 text-red-50' : fiSarDaysLeft !== null && fiSarDaysLeft <= 14 ? 'bg-amber-800 text-amber-50' : 'bg-stone-800 text-stone-100'}`}>
-                        <span>SAR DEADLINE: {fiSarDeadline}</span>
-                        {fiSarDaysLeft !== null && (
-                          <span className="font-bold">
-                            {fiSarDaysLeft > 0 ? `${fiSarDaysLeft} DAYS REMAINING` : fiSarDaysLeft === 0 ? 'DUE TODAY' : `${Math.abs(fiSarDaysLeft)} DAYS OVERDUE`}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mono-font text-[11px] text-red-700 italic">
-                        ↑ Enter the date fraud was detected in the intake form above to track the 30-day SAR filing deadline.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* SAR/STR draft memo */}
-                {isFraud && effectiveAmtNum >= settings.sarThreshold && (
-                  <div className="border-l-4 border-red-800 bg-red-50 px-5 py-3">
-                    <button onClick={() => setSarDraftOpen(v => !v)} className="mono-font flex items-center gap-2 text-red-900 hover:text-red-700"
-                      style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', padding:0 }}>
-                      <FileText className="w-3.5 h-3.5" />
-                      {sarDraftOpen ? '▾ HIDE SAR / STR MEMO DRAFT' : '▸ DRAFT SAR / STR MEMO'}
-                    </button>
-                    {sarDraftOpen && (() => {
-                      const sarDate = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})
-                      const draftLines = [
-                        'SUSPICIOUS ACTIVITY REPORT — INTERNAL FILING MEMO',
-                        `Date Prepared: ${sarDate}`,
-                        'Filing Institution: [YOUR INSTITUTION NAME]',
-                        'Prepared By: [ANALYST NAME / BSA OFFICER]',
-                        '',
-                        'CASE SUMMARY',
-                        `Subject: ${merchant || '[MERCHANT / SUBJECT NAME]'}`,
-                        `Transaction Date: ${transactionDate || '[DATE]'}`,
-                        `Amount: ${amount ? `${amount} ${currency}` : '[AMOUNT]'}`,
-                        `Account Type: ${cardType || '[CARD TYPE]'}`,
-                        result && result.recommended_reason_code ? `Chargeback Code: ${result.recommended_reason_code} — ${result.reason_code_title || ''}` : '',
-                        '',
-                        'DESCRIPTION OF SUSPICIOUS ACTIVITY',
-                        (result && result.risk_notes) || `The cardholder reported unauthorized activity totaling ${amount ? `${amount} ${currency}` : '[AMOUNT]'} at ${merchant || '[MERCHANT]'}. This transaction meets the threshold for SAR/STR review.`,
-                        '',
-                        'TYPOLOGY',
-                        (result && result.fraud_sub_label) ? `Fraud Sub-Type: ${result.fraud_sub_label}` : 'Fraud Sub-Type: [SPECIFY]',
-                        (result && result.ato_suspected) ? 'Account takeover suspected. Review for unusual login activity, credential changes, new device additions.' : '[Describe transaction pattern]',
-                        '',
-                        'SUPPORTING DOCUMENTS',
-                        '☐ Dispute intake form',
-                        '☐ Transaction records',
-                        '☐ Cardholder statement',
-                        '☐ Prior dispute history',
-                        '',
-                        'FILING OBLIGATION',
-                        `FinCEN SAR: ${amount && parseFloat(amount) >= 5000 ? `Required — $${parseFloat(amount).toLocaleString()} meets $5,000 threshold` : 'Review — below $5,000 threshold'}`,
-                        `FINTRAC STR: ${currency === 'CAD' && amount && parseFloat(amount) >= 10000 ? `Required — $${parseFloat(amount).toLocaleString()} CAD meets $10,000 threshold` : 'Review if CAD transaction ≥ $10,000'}`,
-                        sarDiscoveryDate ? `SAR Deadline: ${fiSarDeadline} (30 days from discovery date)` : 'SAR Deadline: 30 days from date fraud detected (enter detection date above)',
-                        '',
-                        'DISPOSITION',
-                        '[Analyst: recommend file / decline / escalate to BSA officer]',
-                      ].filter(l => l !== null).join('\n')
-                      return (
-                        <div className="mt-3">
-                          <textarea readOnly value={draftLines} rows={18}
-                            style={{ width:'100%', fontSize:'11px', fontFamily:'monospace', lineHeight:1.55, padding:'12px', background:'#FFF5F5', border:'1px solid #FCA5A5', color:'#1C1917', resize:'vertical', boxSizing:'border-box' }} />
-                          <button onClick={() => navigator.clipboard.writeText(draftLines)} className="mono-font"
-                            style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 12px', marginTop:'6px', border:'1px solid #B91C1C', color:'#B91C1C', background:'none', cursor:'pointer' }}>
-                            COPY TO CLIPBOARD
-                          </button>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                )}
-
-                {/* Reg E / EFTA compliance block — debit cards only */}
-                {cardType === 'debit' && (
-                  <div className="border-l-4 p-5 space-y-2" style={{ borderColor: '#1d4ed8', background: '#eff6ff' }}>
-                    <div className="mono-font text-xs tracking-widest" style={{ color: '#1e3a8a' }}>REG E / EFTA — DEBIT CARD</div>
-                    <p className="display-font text-stone-900 text-[15px] leading-relaxed">
-                      This is a debit card dispute. <strong>Regulation E</strong> requires the financial institution to issue provisional credit within <strong>10 business days</strong> of receiving the claim (5 business days for established accounts). Investigation must be completed within <strong>45 business days</strong> (20 business days for point-of-sale or foreign-initiated transactions).
-                    </p>
-                    {regEPcDue && (
-                      <div className="flex flex-wrap gap-4 pt-1">
-                        <div className="mono-font text-xs" style={{ color: '#1e40af' }}>
-                          <span className="text-stone-500">PC DUE BY: </span><span className="font-bold">{regEPcDue}</span>
-                        </div>
-                        <div className="mono-font text-xs" style={{ color: '#1e40af' }}>
-                          <span className="text-stone-500">INVESTIGATION DUE: </span><span className="font-bold">{regEInvDue}</span>
-                        </div>
-                      </div>
-                    )}
-                    <p className="mono-font text-[10px] text-stone-500 italic pt-1">
-                      Note: these dates are calculated from today (date of analysis). Adjust if claim was received on a different date.
-                    </p>
-                  </div>
+                  </>
                 )}
 
                 {/* Chargeback cycle deadline tracker — for cases already in flight */}
