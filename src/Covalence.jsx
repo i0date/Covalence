@@ -8782,9 +8782,20 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
-      <div className="mono-font mb-1" style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#A09585' }}>ISSUE Nº 005 — MULTI</div>
-      <div className="display-font mb-1" style={{ fontSize: 'clamp(22px, 3vw, 30px)', color: '#1C1917', letterSpacing: '-0.02em', lineHeight: 1.1 }}>Bulk Dispute Filing</div>
-      <p className="display-font text-stone-500 text-[14px] mb-6">Queue cases from the Dispute Desk · file fraud disputes in bulk · route service cases for manual review.</p>
+      <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'24px' }}>
+        <div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 005 — MULTI</div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
+            <span style={{ fontWeight:700 }}>Mul</span><span style={{ fontStyle:'italic', fontWeight:500 }}>ti</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:'1.5', maxWidth:'520px' }}>
+            Bulk dispute operations. Queue fraud and service cases from the Dispute Desk, file fraud chargebacks in batch, and route service disputes for manual review.
+          </p>
+        </div>
+        <div className="mono-font text-xs tracking-widest text-stone-600 shrink-0">
+          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
+        </div>
+      </div>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
         <button onClick={() => { setActiveSection('multi'); setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
