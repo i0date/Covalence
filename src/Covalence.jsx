@@ -401,6 +401,7 @@ export default function Covalence() {
         )}
         {activeSection === 'desk'     && (
           <DeskView
+  onGoToDesk={() => setActiveSection('desk')}
             outcomes={outcomes} setOutcomes={setOutcomes}
             settings={settings} setSettings={setSettings}
             triageHandoff={triageHandoff} setTriageHandoff={setTriageHandoff}
@@ -2436,7 +2437,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-function DeskView({ triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode }) {
+function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode }) {
   const [network, setNetwork]                               = useState('visa')
   const [complaint, setComplaint]                           = useState('')
   const [merchant, setMerchant]                             = useState('')
@@ -3846,47 +3847,6 @@ Return ONLY valid JSON:
               </div>
             )}
 
-            {/* ── Case Management ── */}
-            <div className="mt-6 border-t border-stone-200 pt-6 space-y-6">
-              <div className="mono-font text-[9px] tracking-widest text-stone-400">CASE MANAGEMENT</div>
-                {/* Case status lifecycle tracker */}
-                {caseStatusStage && (
-                  <div className="border border-stone-300 bg-stone-50 p-4">
-                    <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">CASE STATUS</div>
-                    <div className="flex items-stretch overflow-x-auto">
-                      {CASE_STATUS_STAGES.map((stage, idx) => {
-                        const stageIds = CASE_STATUS_STAGES.map(s => s.id)
-                        const currentIdx = stageIds.indexOf(caseStatusStage)
-                        const thisIdx    = idx
-                        const isDone     = thisIdx < currentIdx
-                        const isActive   = stage.id === caseStatusStage
-                        const ts         = caseStatusHistory[stage.id]
-                        return (
-                          <button
-                            key={stage.id}
-                            onClick={() => setCaseStatusStage(stage.id)}
-                            title={ts ? `Entered: ${new Date(ts).toLocaleDateString()}` : 'Click to set this stage'}
-                            className="flex-1 min-w-0 flex flex-col items-center text-center px-1 py-2 transition-all border-r last:border-r-0 border-stone-200"
-                            style={{ background: isActive ? '#1A1814' : isDone ? '#E8E4DC' : 'transparent', cursor: 'pointer' }}
-                          >
-                            <div className={`mono-font text-[8px] tracking-wide leading-tight ${isActive ? 'text-stone-100' : isDone ? 'text-stone-600' : 'text-stone-400'}`}>
-                              {stage.short}
-                            </div>
-                            {isDone && <div className="text-emerald-600 text-[10px] mt-0.5">✓</div>}
-                            {isActive && <div className="text-amber-400 text-[10px] mt-0.5">●</div>}
-                            {!isDone && !isActive && <div className="text-stone-300 text-[10px] mt-0.5">○</div>}
-                            {ts && isActive && (
-                              <div className="mono-font text-[7px] text-stone-400 mt-0.5 leading-none">
-                                {new Date(ts).toLocaleDateString('en-CA')}
-                              </div>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="mono-font text-[9px] text-stone-400 mt-2">Click any stage to advance the case status — persisted per case</div>
-                  </div>
-                )}
 
                 {result && (
                   <>
@@ -4050,7 +4010,6 @@ Return ONLY valid JSON:
                   </>
                 )}
 
-            </div>
 
           </div>
         </div>
@@ -4789,9 +4748,6 @@ Return ONLY valid JSON:
                       <ClipboardList className="w-4 h-4 text-stone-400" />
                       <span className="mono-font text-xs tracking-widest text-stone-500">DOCUMENTS TO COLLECT FROM CARDHOLDER</span>
                     </div>
-                    <button onClick={copyDocRequest} className="mono-font text-xs flex items-center gap-1.5 text-stone-600 hover:text-stone-900 transition-colors">
-                      {docRequestCopied ? <><Check className="w-3 h-3" /> EMAIL COPIED</> : <><Copy className="w-3 h-3" /> DRAFT OUTREACH EMAIL</>}
-                    </button>
                   </div>
                   <div className="px-5 py-4 space-y-3">
                     {evidence.cardholder.map((item, i) => {
@@ -4897,24 +4853,24 @@ Return ONLY valid JSON:
                               <div className="p-3">
                                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
                                 <div className="display-font font-bold text-xl text-stone-900">{fightCalc.winProb}%</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal?.win_risk ? ` · ${rebuttal.win_risk.toLowerCase()} mch risk` : ''}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal ? ' + REBUTTAL' : ''}</div>
                               </div>
                               <div className="p-3">
                                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
-                                <div className="display-font font-bold text-xl text-stone-900">${'{'}fightCalc.expectedRec.toFixed(2){'}'}</div>
+                                <div className="display-font font-bold text-xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
                                 <div className="mono-font text-[9px] text-stone-400 mt-0.5">amt × win prob</div>
                               </div>
                               <div className="p-3">
                                 <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WRITE-OFF RISK</div>
-                                <div className="display-font font-bold text-xl text-red-800">${'{'}fightCalc.writeOffRisk.toFixed(2){'}'}</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">if lost + ~${'{'}fightCalc.netFee{'}'} filing fee</div>
+                                <div className="display-font font-bold text-xl text-red-800">${fightCalc.writeOffRisk.toFixed(2)}</div>
+                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">if lost + ~${fightCalc.netFee} fee</div>
                               </div>
-                              <div className={`p-3 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'{'}'}`}>
-                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'{'}'}`}>NET VALUE</div>
-                                <div className={`display-font font-bold text-xl ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-50' : 'text-red-50'{'}'}`}>
-                                  {'{'}fightCalc.netValue >= 0 ? '+' : ''{'}'}{'{'}fightCalc.netValue.toFixed(2){'}'}
+                              <div className={`p-3 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
+                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
+                                <div className={`display-font font-bold text-xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-100' : 'text-red-100'}`}>
+                                  {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
                                 </div>
-                                <div className={`mono-font text-xs font-bold mt-0.5 ${'{'}fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'{'}'}`}>→ {'{'}fightCalc.recommendation{'}'}</div>
+                                <div className={`mono-font text-xs font-bold mt-0.5 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-400' : 'text-red-400'}`}>{fightCalc.recommendation}</div>
                               </div>
                             </div>
                           )}
@@ -5511,6 +5467,7 @@ Return ONLY valid JSON:
                                       if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
                                       setCurrentDeskCaseId(o.id)
                                       setResult(null); setRebuttal(null); setError(null)
+                                      if (onGoToDesk) onGoToDesk()
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
                                       if (o._complaint) setTimeout(() => analyze(), 0)
                                     }}
@@ -8830,16 +8787,16 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
       <p className="display-font text-stone-500 text-[14px] mb-6">Queue cases from the Dispute Desk · file fraud disputes in bulk · route service cases for manual review.</p>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
-        <button onClick={() => setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
+        <button onClick={() => { setActiveSection('multi'); setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
           ↗ {outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} FRAUD IN QUEUE — VIEW IN TRACKER
         </button>
-        <button onClick={() => setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
+        <button onClick={() => { setActiveSection('multi'); setTimeout(()=>document.getElementById('msq')?.scrollIntoView({behavior:'smooth'}),60) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
           ↗ {outcomes.filter(o => o.status === 'queued' && !(o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} SERVICE IN QUEUE — VIEW IN TRACKER
         </button>
       </div>
 
       {/* Fraud queue */}
-      <div className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
+      <div id="mfq" className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
           <div>
             <div className="mono-font text-xs tracking-widest text-stone-600">FRAUD DISPUTES — QUEUED FOR FILING</div>
@@ -8875,7 +8832,7 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
       </div>
 
       {/* Service queue */}
-      <div className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
+      <div id="msq" className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
           <div>
             <div className="mono-font text-xs tracking-widest text-stone-600">SERVICE DISPUTES — QUEUED</div>
