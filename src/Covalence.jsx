@@ -370,10 +370,10 @@ export default function Covalence() {
     { id:'triage',   label:'001  TRIAGE' },
     { id:'desk',     label:'002  DISPUTE DESK' },
     { id:'multi',    label:'003  MULTI' },
-    { id:'dfa',      label:'004  DFA' },
-    { id:'duo',      label:'005  DUO' },
-    { id:'trio',     label:'006  TRIO' },
-    { id:'file',     label:'007  FILE' },
+    { id:'file',     label:'004  FILE' },
+    { id:'dfa',      label:'005  DFA' },
+    { id:'duo',      label:'006  DUO' },
+    { id:'trio',     label:'007  TRIO' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -6776,7 +6776,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 004 — DFA</div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 005 — DFA</div>
             <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
@@ -7634,7 +7634,7 @@ function TrioView() {
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
         <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 006 — TRIO</div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — TRIO</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
             <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
           </h1>
@@ -8002,7 +8002,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   ) : null
   const DuoMasthead = ({ sub }) => (
     <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
-      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 005 — DUO{sub ? ` · ${sub}` : ''}</div>
+      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 006 — DUO{sub ? ` · ${sub}` : ''}</div>
       <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(36px,5vw,64px)', letterSpacing:'-0.03em' }}>Duo Mode</h1>
     </div>
   )
@@ -8257,7 +8257,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         <div className="mb-6 pb-5" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', flexWrap:'wrap', gap:'12px', alignItems:'flex-start', justifyContent:'space-between' }}>
           <div style={{ flex:1, minWidth:'200px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px', flexWrap:'wrap' }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-400">ISSUE Nº 005 — DUO</div>
+              <div className="mono-font text-[9px] tracking-widest text-stone-400">ISSUE Nº 006 — DUO</div>
               <div className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ color: st.color, background: st.bg, border: session.status === 'closed' ? 'none' : `1px solid ${st.color}30` }}>{st.label}</div>
             </div>
             <h1 className="display-font font-bold text-stone-900 leading-tight" style={{ fontSize:'clamp(18px,3vw,34px)', letterSpacing:'-0.02em' }}>
@@ -9826,7 +9826,7 @@ ${'═'.repeat(64)}`
       {/* Masthead */}
       <div className="mb-10 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:'16px'}}>
         <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — FILE</div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 004 — FILE</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
             <span style={{fontWeight:700}}>Fi</span><span style={{fontStyle:'italic',fontWeight:500}}>le</span>
           </h1>
