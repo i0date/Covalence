@@ -9006,6 +9006,14 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
     })
   }, [setAppOutcomes])
 
+  const [noteOpen,      setNoteOpen]      = React.useState({})
+  const [noteDraft,     setNoteDraft]     = React.useState({})
+  const [selectedIds,   setSelectedIds]   = React.useState([])
+  const [assignFilter,  setAssignFilter]  = React.useState('all')
+  const [agentList,     setAgentList]     = React.useState([])
+  const [assignOpen,    setAssignOpen]    = React.useState({})
+  const [showAnalytics, setShowAnalytics] = React.useState(false)
+
   const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
   const myEmail = covUser?.email||''
   const applyFilter = arr => assignFilter==='mine' ? arr.filter(o=>o.assignedTo===myEmail) : assignFilter==='unassigned' ? arr.filter(o=>!o.assignedTo) : arr
@@ -9022,13 +9030,6 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const queuedFraudRef = React.useRef(queuedFraud)
   queuedFraudRef.current = queuedFraud
   const autoFileFired = React.useRef(false)
-  const [noteOpen,    setNoteOpen]    = React.useState({})
-  const [noteDraft,   setNoteDraft]   = React.useState({})
-  const [selectedIds, setSelectedIds] = React.useState([])
-  const [assignFilter,setAssignFilter]= React.useState('all')
-  const [agentList,   setAgentList]   = React.useState([])
-  const [assignOpen,  setAssignOpen]  = React.useState({})
-  const [showAnalytics, setShowAnalytics] = React.useState(false)
 
   React.useEffect(() => {
     const tick = () => {
