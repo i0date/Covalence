@@ -9028,6 +9028,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [assignFilter,setAssignFilter]= React.useState('all')
   const [agentList,   setAgentList]   = React.useState([])
   const [assignOpen,  setAssignOpen]  = React.useState({})
+  const [showAnalytics, setShowAnalytics] = React.useState(false)
 
   React.useEffect(() => {
     const tick = () => {
@@ -9257,6 +9258,16 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
                   <button onClick={() => setActiveSection('desk')} className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">REVIEW</button>
+                  {assignOpen[o.id]?(
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {agentList.length>0?agentList.map(a=>(<button key={a.email} onClick={()=>assignCase(o.id,a.email,a.name)} className="mono-font text-[8px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-800 hover:text-stone-50 transition-colors">{a.name}</button>)):<span className="mono-font text-[9px] text-stone-400 italic">No agents</span>}
+                      <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:false}))} className="mono-font text-[9px] px-1 text-stone-400">✕</button>
+                    </div>
+                  ):(
+                    <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:true}))} className="mono-font text-[8px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
+                      {o.assignedTo?(o.assignedName||o.assignedTo.split('@')[0]).toUpperCase():'ASSIGN'}
+                    </button>
+                  )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                     {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
@@ -9329,7 +9340,6 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
 
       {/* ── Portfolio Analytics — collapsible, bottom of Multi ──────────── */}
       {(() => {
-        const [showAnalytics, setShowAnalytics] = React.useState(false)
         const resolved = outcomes.filter(o => ['won','lost','withdrawn'].includes(o.status))
         const won      = resolved.filter(o => o.status === 'won')
         const winRate  = resolved.length > 0 ? Math.round((won.length / resolved.length) * 100) : null
@@ -9442,9 +9452,9 @@ function FileView({ setActiveSection }) {
       </div>
       <div className="border border-dashed border-stone-300 p-8 text-center mb-8" style={{background:'#FAF7F1'}}>
         <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400 mb-4">UNDER CONSTRUCTION</div>
-        <div className="display-font font-bold text-stone-900 mb-4" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>Document attachment in Dispute Desk ships first.</div>
+        <div className="display-font font-bold text-stone-900 mb-4" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>Network filing is coming.</div>
         <p className="display-font text-stone-500 text-[14px] leading-relaxed" style={{maxWidth:'480px',margin:'0 auto 24px'}}>
-          Once agents can attach evidence in the Desk, FILE will auto-package it per network specs and generate ready-to-submit bundles — no portal switching required.
+          Cases queued in Multi will flow here for network-formatted submission — one package per case, built to each network's exact spec.
         </p>
         <button onClick={()=>setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-5 py-2.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">
           ← VIEW QUEUED CASES IN MULTI
