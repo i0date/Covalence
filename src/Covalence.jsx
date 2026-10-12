@@ -5649,6 +5649,29 @@ Return ONLY valid JSON:
                                       >MERCHANT RESP</button>
                                     )}
                                   </div>
+                                  {/* Pre-arb drafter — appears when stage is 2CB or PRE-ARB */}
+                                  {(_st === '2cb' || _st === 'prearb') && (
+                                    <div className="mt-3 pt-3 border-t border-amber-200">
+                                      <div className="mono-font text-[9px] tracking-widest text-amber-700 mb-1.5">
+                                        {_st === 'prearb' ? 'PRE-ARB REBUTTAL DRAFTER' : 'DRAFT PRE-ARB RESPONSE'}
+                                      </div>
+                                      <textarea
+                                        value={merchantRepNotes[o.id] || ''}
+                                        onChange={e => setMerchantRepNotes(prev => ({...prev, [o.id]: e.target.value}))}
+                                        placeholder="Paste merchant's representment response / acquirer rebuttal here…"
+                                        rows={3}
+                                        className="w-full mono-font text-[10px] border border-amber-300 px-2 py-1.5 resize-none focus:outline-none focus:border-amber-500"
+                                        style={{background:'#FFFBEB', fontFamily:'inherit'}}
+                                      />
+                                      <button
+                                        onClick={() => generatePreArbDraft(o)}
+                                        disabled={preArbLoading && preArbTargetId === o.id}
+                                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 mt-1.5 transition-colors"
+                                        style={{background:'#78350F', color:'#FEF3C7', border:'none', cursor:'pointer', opacity: preArbLoading && preArbTargetId === o.id ? 0.6 : 1}}
+                                      >{preArbLoading && preArbTargetId === o.id ? 'DRAFTING…' : 'GENERATE PRE-ARB REBUTTAL →'}</button>
+                                      <p className="mono-font text-[9px] text-amber-600 mt-1 italic">Merchant response is optional — AI will draft from case context alone if blank.</p>
+                                    </div>
+                                  )}
                                 </div>
                               )
                             })()}
@@ -8909,6 +8932,8 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const queuedFraudRef = React.useRef(queuedFraud)
   queuedFraudRef.current = queuedFraud
   const autoFileFired = React.useRef(false)
+  const [noteOpen, setNoteOpen]   = React.useState({}) // { [caseId]: bool }
+  const [noteDraft, setNoteDraft] = React.useState({}) // { [caseId]: string }
 
   React.useEffect(() => {
     const tick = () => {
@@ -8946,6 +8971,20 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
     ))
     setFiled(true)
     setTimeout(() => setFiled(false), 3000)
+  }
+
+  const saveNote = (id) => {
+    const text = (noteDraft[id] || '').trim()
+    setOutcomes(prev => prev.map(o => o.id === id
+      ? { ...o, notes: [
+            ...(o.notes || []),
+            { text, ts: new Date().toISOString(), author: localStorage.getItem('cov_agent_name') || 'Agent' }
+          ].filter(n => n.text)
+        }
+      : o
+    ))
+    setNoteDraft(prev => ({ ...prev, [id]: '' }))
+    setNoteOpen(prev => ({ ...prev, [id]: false }))
   }
 
   return (
@@ -8998,12 +9037,47 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
         ) : (
           <div className="divide-y divide-stone-200">
             {queuedFraud.map(o => (
-              <div key={o.id} className="px-5 py-3 flex items-center gap-4 flex-wrap">
-                <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
-                <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
-                <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
-                <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g, ' ')}</span>
-                <span className="mono-font text-[9px] text-stone-400">{o.date ? new Date(o.date).toLocaleDateString('en-CA') : ''}</span>
+              <div key={o.id}>
+                <div className="px-5 py-3 flex items-center gap-4 flex-wrap">
+                  <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                  <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                  <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
+                  <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g, ' ')}</span>
+                  <span className="mono-font text-[9px] text-stone-400">{o.date ? new Date(o.date).toLocaleDateString('en-CA') : ''}</span>
+                  <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
+                    className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
+                    {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
+                  </button>
+                </div>
+                {o.notes?.length > 0 && !noteOpen[o.id] && (
+                  <div className="px-5 pb-2 space-y-1">
+                    {o.notes.map((n,i) => (
+                      <div key={i} className="mono-font text-[9px] text-stone-500 flex gap-2">
+                        <span className="text-stone-400">{new Date(n.ts).toLocaleDateString('en-CA')} {n.author}</span>
+                        <span className="text-stone-600">{n.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {noteOpen[o.id] && (
+                  <div className="px-5 pb-3 pt-1 border-t border-stone-200" style={{background:'#F9F7F3'}}>
+                    <textarea
+                      value={noteDraft[o.id] || ''}
+                      onChange={e => setNoteDraft(p => ({...p, [o.id]: e.target.value}))}
+                      placeholder="Add a case note..."
+                      rows={2}
+                      className="w-full mono-font text-[11px] border border-stone-300 px-3 py-2 resize-none focus:outline-none focus:border-stone-500"
+                      style={{background:'#FAF7F1'}}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-1.5">
+                      <button onClick={() => saveNote(o.id)} disabled={!(noteDraft[o.id]||'').trim()}
+                        className="mono-font text-[9px] px-3 py-1 bg-stone-800 text-stone-50 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors">SAVE NOTE</button>
+                      <button onClick={() => setNoteOpen(p => ({...p, [o.id]: false}))}
+                        className="mono-font text-[9px] px-2 py-1 border border-stone-300 text-stone-400 hover:text-stone-600 transition-colors">CANCEL</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -9027,12 +9101,47 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
         ) : (
           <div className="divide-y divide-stone-200">
             {queuedService.map(o => (
-              <div key={o.id} className="px-5 py-3 flex items-center gap-4 flex-wrap">
-                <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
-                <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
-                <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
-                <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
-                <button onClick={() => setActiveSection('desk')} className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">REVIEW</button>
+              <div key={o.id}>
+                <div className="px-5 py-3 flex items-center gap-4 flex-wrap">
+                  <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                  <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                  <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
+                  <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
+                  <button onClick={() => setActiveSection('desk')} className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">REVIEW</button>
+                  <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
+                    className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
+                    {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
+                  </button>
+                </div>
+                {o.notes?.length > 0 && !noteOpen[o.id] && (
+                  <div className="px-5 pb-2 space-y-1">
+                    {o.notes.map((n,i) => (
+                      <div key={i} className="mono-font text-[9px] text-stone-500 flex gap-2">
+                        <span className="text-stone-400">{new Date(n.ts).toLocaleDateString('en-CA')} {n.author}</span>
+                        <span className="text-stone-600">{n.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {noteOpen[o.id] && (
+                  <div className="px-5 pb-3 pt-1 border-t border-stone-200" style={{background:'#F9F7F3'}}>
+                    <textarea
+                      value={noteDraft[o.id] || ''}
+                      onChange={e => setNoteDraft(p => ({...p, [o.id]: e.target.value}))}
+                      placeholder="Add a case note..."
+                      rows={2}
+                      className="w-full mono-font text-[11px] border border-stone-300 px-3 py-2 resize-none focus:outline-none focus:border-stone-500"
+                      style={{background:'#FAF7F1'}}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-1.5">
+                      <button onClick={() => saveNote(o.id)} disabled={!(noteDraft[o.id]||'').trim()}
+                        className="mono-font text-[9px] px-3 py-1 bg-stone-800 text-stone-50 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors">SAVE NOTE</button>
+                      <button onClick={() => setNoteOpen(p => ({...p, [o.id]: false}))}
+                        className="mono-font text-[9px] px-2 py-1 border border-stone-300 text-stone-400 hover:text-stone-600 transition-colors">CANCEL</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -9068,6 +9177,88 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
           </div>
         </div>
       </div>
+
+      {/* ── Portfolio Analytics — collapsible, bottom of Multi ──────────── */}
+      {(() => {
+        const [showAnalytics, setShowAnalytics] = React.useState(false)
+        const resolved = outcomes.filter(o => ['won','lost','withdrawn'].includes(o.status))
+        const won      = resolved.filter(o => o.status === 'won')
+        const winRate  = resolved.length > 0 ? Math.round((won.length / resolved.length) * 100) : null
+        const now = new Date()
+        const months = Array.from({length:6}, (_,i) => {
+          const d = new Date(now.getFullYear(), now.getMonth() - (5-i), 1)
+          return { label: d.toLocaleDateString('en-US',{month:'short',year:'2-digit'}), key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
+        })
+        const volumeByMonth = months.map(m => ({ ...m, count: outcomes.filter(o => o.date && o.date.startsWith(m.key)).length }))
+        const maxVol = Math.max(...volumeByMonth.map(m => m.count), 1)
+        const cats = {}
+        resolved.forEach(o => {
+          const c = (o.category || (o.verdict?.includes('FRAUD') ? 'fraud' : 'other')).replace('mc_','')
+          if (!cats[c]) cats[c] = {won:0,total:0}
+          cats[c].total++
+          if (o.status === 'won') cats[c].won++
+        })
+        const withDays = resolved.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
+        const avgDays = withDays.length > 0 ? Math.round(withDays.reduce((a,b)=>a+b,0)/withDays.length) : null
+        const openExposure = outcomes.filter(o=>['queued','filed','investigating','representment','pre_arb'].includes(o.status)).reduce((s,o)=>s+(parseFloat(o.amount)||0),0)
+        if (outcomes.length === 0) return null
+        return (
+          <div className="mt-6 border border-stone-300" style={{background:'#FAF7F1'}}>
+            <button onClick={() => setShowAnalytics(p => !p)} className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-stone-100 transition-colors">
+              <span className="mono-font text-[10px] tracking-widest text-stone-600">PORTFOLIO ANALYTICS</span>
+              <span className="mono-font text-[10px] text-stone-400">{showAnalytics ? '▲ COLLAPSE' : '▼ EXPAND'}</span>
+            </button>
+            {showAnalytics && (
+              <div className="border-t border-stone-200 px-5 py-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  {[
+                    {label:'TOTAL CASES',    value: outcomes.length},
+                    {label:'WIN RATE',       value: winRate !== null ? `${winRate}%` : '—',   sub:`${resolved.length} resolved`},
+                    {label:'AVG DAYS',       value: avgDays !== null ? `${avgDays}d` : '—',   sub:'to resolution'},
+                    {label:'OPEN EXPOSURE',  value: openExposure > 0 ? `$${openExposure.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—', sub:'in-progress'},
+                  ].map(({label,value,sub}) => (
+                    <div key={label}>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
+                      <div className="display-font font-bold text-stone-900" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>{value}</div>
+                      {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
+                    </div>
+                  ))}
+                </div>
+                <div className="mb-6">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CASE VOLUME — LAST 6 MONTHS</div>
+                  <div className="flex items-end gap-2" style={{height:'64px'}}>
+                    {volumeByMonth.map(m => (
+                      <div key={m.key} className="flex flex-col items-center flex-1 gap-1">
+                        <div className="w-full transition-all" style={{background:'#1C1917',height:`${Math.max(4,Math.round((m.count/maxVol)*52))}px`}} title={`${m.count} cases`} />
+                        <span className="mono-font text-[8px] text-stone-400">{m.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {Object.keys(cats).length > 0 && (
+                  <div>
+                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">WIN RATE BY CATEGORY</div>
+                    <div className="space-y-2">
+                      {Object.entries(cats).sort((a,b)=>b[1].total-a[1].total).map(([cat,{won:w,total:t}]) => {
+                        const pct = Math.round((w/t)*100)
+                        return (
+                          <div key={cat} className="flex items-center gap-3">
+                            <span className="mono-font text-[9px] text-stone-500 shrink-0" style={{width:'120px'}}>{cat.replace(/_/g,' ').toUpperCase()}</span>
+                            <div className="flex-1 h-2" style={{background:'#E7E3DB'}}>
+                              <div style={{width:`${pct}%`,height:'100%',background:pct>=70?'#064E3B':pct>=50?'#92400E':'#7F1D1D',transition:'width 0.3s'}} />
+                            </div>
+                            <span className="mono-font text-[9px] text-stone-600 shrink-0" style={{width:'48px',textAlign:'right'}}>{pct}% ({t})</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
