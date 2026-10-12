@@ -2917,7 +2917,7 @@ DISPUTE DETAILS:
 - Dispute Summary: ${result.dispute_summary}
 - Context: ${outcomeContext}
 - Goodwill outreach required: ${result.goodwill_outreach_required ? 'Yes — ' + result.goodwill_outreach_note : 'No'}
-- Original complaint: "${effectiveComplaint}"
+- Original complaint: "${complaint}"
 
 SELECT THE CORRECT OUTCOME:
 - FILING: dispute qualifies and the bank will file on the cardholder's behalf
@@ -5398,12 +5398,12 @@ Return ONLY valid JSON:
                                         <button onClick={() => {
                                           if (quickDueDate) setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, nextRespDate: quickDueDate } : x))
                                           setQuickDueDateRow(null); setQuickDueDate('')
-                                        }} className="mono-font text-[8px] px-1 py-0.5 bg-stone-900 text-stone-50">✓</button>
+                                        }} disabled={!quickDueDate} className="mono-font text-[8px] px-1 py-0.5 bg-stone-900 text-stone-50 disabled:bg-stone-300">✓</button>
                                         <button onClick={() => { setQuickDueDateRow(null); setQuickDueDate('') }}
                                           className="mono-font text-[8px] px-1 py-0.5 border border-stone-300 text-stone-500">✕</button>
                                       </span>
                                     ) : (
-                                      <button onClick={() => { setQuickDueDateRow(o.id); setQuickDueDate(o.nextRespDate || '') }}
+                                      <button onClick={() => { setQuickDueDateRow(o.id); setQuickDueDate(o.nextRespDate || new Date().toISOString().split('T')[0]) }}
                                         className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:border-blue-500 hover:text-blue-600 transition-colors whitespace-nowrap"
                                         title="Set next network response deadline">
                                         {o.nextRespDate ? '✎ DUE' : '+ DUE DATE'}
