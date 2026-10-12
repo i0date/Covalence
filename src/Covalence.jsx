@@ -2464,6 +2464,8 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [commsError, setCommsError]                         = useState(null)
   const [commsCopied, setCommsCopied]                       = useState(false)
   const [editableLetterBody, setEditableLetterBody]         = useState(_sess.editableLetterBody || '')
+  const [editableDocsSection,  setEditableDocsSection]         = useState('')
+  const [editableNextSteps,    setEditableNextSteps]           = useState('')
   const [docRequestCopied, setDocRequestCopied]             = useState(false)
   const [goodwillCopied, setGoodwillCopied]                 = useState(false)
   const [disputedAmount, setDisputedAmount]                 = useState(_sess.disputedAmount || '')     // partial dispute amount (optional)
@@ -2971,6 +2973,14 @@ Return ONLY valid JSON:
       const parsed = JSON.parse(text)
       setComms(parsed)
       setEditableLetterBody(parsed.body || '')
+      // Pre-populate editable docs from current evidence
+      try {
+        const ev = getEvidencePackage(result?.recommended_reason_code, result?.category)
+        const docLines = (ev?.cardholder || []).map(d => `→ ${d.text}${d.impact === 'required' ? ' (required)' : ''}`).join('\n')
+        const clarifyLines = (result?.missing_information || []).map(m => `→ ${m}`).join('\n')
+        setEditableDocsSection([docLines, clarifyLines].filter(Boolean).join('\n'))
+      } catch {}
+      setEditableNextSteps((parsed.next_steps || []).join('\n'))
     } catch (e) {
       setCommsError(`Communication draft failed: ${e.message}`)
     } finally {
@@ -2996,13 +3006,9 @@ Return ONLY valid JSON:
   const commsOc = comms ? (commsOutcomeMap[comms.outcome] || commsOutcomeMap.INVESTIGATION) : null
   const copyCommsLetter = () => {
     if (!comms) return
-    const docLines = evidence?.cardholder?.length > 0
-      ? '\n\nDOCUMENTS WE WILL NEED FROM YOU:\n' + evidence.cardholder.map(d => `• ${d.text}${d.impact === 'required' ? ' (required)' : d.impact === 'strengthens' ? ' (strengthens your case)' : ''}`).join('\n')
-      : ''
-    const clarifyLines = result?.missing_information?.length > 0
-      ? '\n\nPLEASE ALSO CLARIFY:\n' + result.missing_information.map(m => `→ ${m}`).join('\n')
-      : ''
-    const full = `Subject: ${comms.subject}\n\nDear Valued Cardholder,\n\n${editableLetterBody || comms.body}${docLines}${clarifyLines}\n\nNext Steps:\n${comms.next_steps?.map(s => `• ${s}`).join('\n')}\n\nExpected timeline: ${comms.timeline}\n\nSincerely,\nCustomer Care Team`
+    const docsBlock = editableDocsSection ? `\n\nWHAT WE'LL NEED FROM YOU:\n${editableDocsSection}` : ''
+    const stepsBlock = editableNextSteps ? `\n\nNext Steps:\n${editableNextSteps.split('\n').map(s => `• ${s}`).join('\n')}` : ''
+    const full = `Subject: ${comms.subject}\n\nDear Valued Cardholder,\n\n${editableLetterBody || comms.body}${docsBlock}${stepsBlock}\n\nExpected timeline: ${comms.timeline}\n\nSincerely,\nCustomer Care Team`
     navigator.clipboard.writeText(full)
     setCommsCopied(true)
     setTimeout(() => setCommsCopied(false), 2000)
@@ -3383,16 +3389,17 @@ Return ONLY valid JSON:
       if (smallDollar) {
         goodwillRec = {
           recommended: true, type: 'WRITE-OFF RECOMMENDED',
+          fraudNote: (result?.category === 'fraud' || result?.category === 'mc_fraud') ? '⚠ Fraud reporting obligation: regardless of write-off decision, review for SAR/STR filing if this transaction meets your institution\'s reporting threshold.' : null,
           typeColor: 'bg-amber-800 text-amber-50',
           rationale: `At ${amtStr}${partialNote}, investigation and network fees may exceed recovery (write-off threshold: $${settings.smallDollarThreshold}). A direct courtesy credit is the most efficient resolution.`,
-          script: `Hi [Cardholder name],\n\nI've reviewed your dispute regarding ${merchantStr} for ${amtStr}. Given the amount, I'd like to resolve this right away by applying a one-time courtesy credit of ${amtStr} to your account — no formal chargeback required. This will appear within 3-5 business days.\n\nShall I go ahead and apply that credit now?`,
+          script: `Hi [Cardholder name],\n\nI've reviewed your dispute regarding ${merchantStr} for ${amtStr}. Given the amount, I'd like to resolve this right away by applying a one-time courtesy credit of ${amtStr} to your account — no formal chargeback required. This will appear within 3-5 business days.\n\nI'm applying a courtesy credit of {amtStr} to your account now — you'll see it reflected within 3–5 business days.`,
         }
       } else if (result.goodwill_outreach_required) {
         goodwillRec = {
           recommended: true, type: 'GOODWILL RECOMMENDED',
           typeColor: 'bg-amber-700 text-amber-50',
           rationale: result.goodwill_outreach_note || 'Case may not meet all dispute criteria. A goodwill credit protects the customer relationship.',
-          script: `Hi [Cardholder name],\n\nThank you for your patience as we reviewed your dispute for ${amtStr} at ${merchantStr}${partialNote ? partialNote : ''}. While this case presents some challenges for a formal dispute, we value your relationship and want to make this right. I'd like to offer a one-time courtesy credit of ${amtStr} as a gesture of goodwill — it will appear within 3-5 business days.\n\nShall I go ahead and apply it?`,
+          script: `Hi [Cardholder name],\n\nThank you for your patience as we reviewed your dispute for ${amtStr} at ${merchantStr}${partialNote ? partialNote : ''}. While this case presents some challenges for a formal dispute, we value your relationship and want to make this right. I'd like to offer a one-time courtesy credit of ${amtStr} as a gesture of goodwill — it will appear within 3-5 business days.\n\nI'm applying a one-time courtesy credit of {amtStr} to your account — it will appear within 3–5 business days.`,
         }
       } else {
         // Clear dispute path — goodwill is NOT recommended. No script needed.
@@ -3933,12 +3940,19 @@ Return ONLY valid JSON:
                     )}
                   </div>
   
-                  {/* Merchant contact required flag */}
-                  {result.goodwill_outreach_required && (
+                  {/* Merchant contact flag — consumer disputes only, never fraud */}
+                  {result.goodwill_outreach_required && !isFraud && (
                     <div className="border-l-4 border-amber-700 bg-amber-50 p-5">
-                      <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ CARDHOLDER MUST CONTACT MERCHANT FIRST</div>
+                      <div className="mono-font text-xs tracking-widest text-amber-900 mb-2">⚠ MERCHANT CONTACT RECOMMENDED BEFORE FILING</div>
                       <p className="display-font text-stone-900 text-[15px] leading-relaxed">{result.goodwill_outreach_note}</p>
-                      <p className="mono-font text-xs text-amber-800 mt-2">The cardholder — not the bank — contacts the merchant directly. The bank cannot file until that outreach and the merchant's response (or non-response) are documented.</p>
+                      <p className="mono-font text-xs text-amber-800 mt-2">For consumer disputes, the cardholder — not the bank — contacts the merchant directly. Document their outreach attempt and the merchant's response (or non-response after reasonable time) before filing.</p>
+                    </div>
+                  )}
+                  {/* Fraud: merchant contact is never required but may assist high-dollar recovery */}
+                  {isFraud && parseFloat(amount) >= 500 && (
+                    <div className="border-l-4 border-stone-400 bg-stone-50 p-4">
+                      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">ℹ HIGH-DOLLAR FRAUD — OPTIONAL MERCHANT CONTACT</div>
+                      <p className="display-font text-stone-600 text-[13px] leading-relaxed">For large fraud claims, the cardholder may optionally notify the merchant to assist in identifying the culprit and preventing further fraud. This is not required to file and should not delay the chargeback.</p>
                     </div>
                   )}
   
@@ -4754,44 +4768,33 @@ Return ONLY valid JSON:
                     <p className="mono-font text-[10px] text-stone-400 mt-2">↑ Edit directly above before copying — docs &amp; clarify items are appended automatically on copy</p>
                   </div>
 
-                  {/* Customer-facing docs — inside the letter, above next steps */}
-                  {result && evidence && evidence.cardholder.length > 0 && (
+                  {/* Customer-facing docs — editable textarea */}
+                  {editableDocsSection !== undefined && comms && (
                     <div className="bg-blue-50 px-6 py-4 border-b border-blue-100">
-                      <div className="mono-font text-[10px] tracking-widest text-blue-700 mb-3">WHAT WE'LL NEED FROM YOU</div>
-                      <p className="display-font text-stone-700 text-[14px] mb-3 leading-snug">To process your dispute efficiently, please gather the following:</p>
-                      <div className="space-y-2">
-                        {evidence.cardholder.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2">
-                            <span className="text-blue-400 shrink-0 mt-0.5 text-[12px]">→</span>
-                            <span className="display-font text-stone-800 text-[14px] leading-snug">
-                              {item.text}
-                              {item.impact === 'required' && <span className="mono-font text-[9px] text-red-600 ml-1.5 tracking-wider">REQUIRED</span>}
-                            </span>
-                          </div>
-                        ))}
-                        {result.missing_information?.length > 0 && result.missing_information.map((m, i) => (
-                          <div key={`ci-${i}`} className="flex items-start gap-2">
-                            <span className="text-blue-400 shrink-0 mt-0.5 text-[12px]">→</span>
-                            <span className="display-font text-stone-700 text-[14px] leading-snug italic">{m}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="display-font text-stone-400 text-[11px] mt-3 italic">This section is included in the copied letter automatically.</p>
+                      <div className="mono-font text-[10px] tracking-widest text-blue-700 mb-2">WHAT WE'LL NEED FROM YOU</div>
+                      <p className="display-font text-stone-500 text-[11px] mb-2 italic">One item per line — edit freely before copying.</p>
+                      <textarea
+                        value={editableDocsSection}
+                        onChange={e => setEditableDocsSection(e.target.value)}
+                        rows={Math.max(4, (editableDocsSection.match(/\n/g)||[]).length + 2)}
+                        className="w-full display-font text-stone-800 text-[14px] leading-relaxed border border-blue-200 p-3 focus:outline-none focus:border-blue-500 resize-vertical"
+                        style={{ fontFamily: 'inherit', background: '#EFF6FF' }}
+                      />
                     </div>
                   )}
 
                   {/* Next steps + timeline */}
                   <div className="bg-stone-50 p-5 grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-stone-200">
                     <div>
-                      <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">NEXT STEPS FOR CARDHOLDER</div>
-                      <div className="space-y-2">
-                        {comms.next_steps?.map((step, i) => (
-                          <div key={i} className="display-font text-stone-800 text-[14px] flex gap-2 items-start">
-                            <span className="text-stone-400 shrink-0 mt-0.5">→</span>
-                            <span>{step}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <div className="mono-font text-xs tracking-widest text-stone-500 mb-2">NEXT STEPS FOR CARDHOLDER</div>
+                      <p className="display-font text-stone-400 text-[11px] mb-2 italic">One step per line — edit as needed.</p>
+                      <textarea
+                        value={editableNextSteps}
+                        onChange={e => setEditableNextSteps(e.target.value)}
+                        rows={Math.max(3, (editableNextSteps.match(/\n/g)||[]).length + 2)}
+                        className="w-full display-font text-stone-800 text-[14px] leading-relaxed border border-stone-200 p-3 focus:outline-none focus:border-stone-400 resize-vertical"
+                        style={{ fontFamily: 'inherit', background: '#F9F8F6' }}
+                      />
                     </div>
                     <div>
                       <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">EXPECTED TIMELINE</div>
