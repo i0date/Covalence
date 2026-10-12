@@ -493,7 +493,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
           The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
         </h1>
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-          From first call to final decision — triage disputes, build the case, batch-file chargebacks, score portfolios for funding, coordinate across institutions, and command fraud incidents. Six tools, one workflow.
+          From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
         </p>
       </div>
 
