@@ -9072,8 +9072,8 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
 
 function SettingsView({ settings, setSettings }) {
   const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }))
-  const Section = ({ label }) => (
-    <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'20px', marginTop:'4px' }}>
+  const Section = ({ label, first }) => (
+    <div style={{ borderTop: first ? 'none' : '1px solid #E8E3DA', paddingTop: first ? '0' : '20px', marginTop:'4px' }}>
       <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-5">{label}</div>
     </div>
   )
@@ -9110,7 +9110,7 @@ function SettingsView({ settings, setSettings }) {
       <div style={{ maxWidth:'500px', display:'grid', gap:'22px' }}>
 
         {/* ── Institution Profile ── */}
-        <Section label="INSTITUTION PROFILE" />
+        <Section label="INSTITUTION PROFILE" first />
         <div>
           <label className="cov-label">INSTITUTION NAME</label>
           <input type="text" value={settings.duoInstitutionName || ''}
