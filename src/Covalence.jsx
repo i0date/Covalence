@@ -3735,7 +3735,7 @@ Return ONLY valid JSON:
               )}
 
               <button
-                onClick={analyze}
+                onClick={() => analyze()}
                 disabled={loading || !complaint.trim()}
                 className="w-full bg-stone-900 text-stone-50 py-4 mono-font text-xs tracking-widest hover:bg-stone-800 disabled:bg-stone-400 transition-all flex items-center justify-center gap-3 group"
               >
