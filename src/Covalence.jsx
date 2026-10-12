@@ -5329,7 +5329,7 @@ Return ONLY valid JSON:
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
-                                <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%'}}>
+                                <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%',overflow:'hidden'}}>
 
                                   {/* ── PENDING ─────────────────────────────── */}
                                   {(!o.status || o.status === 'pending') && (<>
@@ -5410,7 +5410,7 @@ Return ONLY valid JSON:
                                   </>)}
 
                                 </div>
-                                <div className="flex items-start gap-2 justify-end">
+                                <div className="flex items-start gap-2 justify-end" style={{minWidth:0,overflow:'hidden'}}>
                                   <div className="flex flex-col items-end gap-1.5">
                                     {o.mode !== 'merchant' && onScoreInDfa && (
                                       <button
@@ -5474,7 +5474,7 @@ Return ONLY valid JSON:
                               </div>
                             )}
 
-                            {/* Provisional credit deadline row */}onal credit deadline row */}
+                            {/* Provisional credit deadline row */}
                             {!isEditing && o.provCreditDate && o.mode !== 'merchant' && (
                               <div className="px-4 pb-2 flex items-center gap-4 flex-wrap" style={{ background: '#EEF2FF' }}>
                                 <span className="mono-font text-[10px] text-blue-800 tracking-wider">PC LOGGED: {new Date(o.provCreditDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
