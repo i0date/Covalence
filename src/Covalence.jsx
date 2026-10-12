@@ -2457,6 +2457,7 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [commsLoading, setCommsLoading]                     = useState(false)
   const [commsError, setCommsError]                         = useState(null)
   const [commsCopied, setCommsCopied]                       = useState(false)
+  const [editableLetterBody, setEditableLetterBody]         = useState('')
   const [docRequestCopied, setDocRequestCopied]             = useState(false)
   const [goodwillCopied, setGoodwillCopied]                 = useState(false)
   const [disputedAmount, setDisputedAmount]                 = useState('')     // partial dispute amount (optional)
@@ -2951,7 +2952,9 @@ Return ONLY valid JSON:
         .join('')
         .replace(/```json|```/g, '')
         .trim()
-      setComms(JSON.parse(text))
+      const parsed = JSON.parse(text)
+      setComms(parsed)
+      setEditableLetterBody(parsed.body || '')
     } catch (e) {
       setCommsError(`Communication draft failed: ${e.message}`)
     } finally {
@@ -2977,7 +2980,13 @@ Return ONLY valid JSON:
   const commsOc = comms ? (commsOutcomeMap[comms.outcome] || commsOutcomeMap.INVESTIGATION) : null
   const copyCommsLetter = () => {
     if (!comms) return
-    const full = `Subject: ${comms.subject}\n\nDear Valued Cardholder,\n\n${comms.body}\n\nNext Steps:\n${comms.next_steps?.map(s => `• ${s}`).join('\n')}\n\nExpected timeline: ${comms.timeline}\n\nSincerely,\nCustomer Care Team`
+    const docLines = evidence?.cardholder?.length > 0
+      ? '\n\nDOCUMENTS WE WILL NEED FROM YOU:\n' + evidence.cardholder.map(d => `• ${d.text}${d.impact === 'required' ? ' (required)' : d.impact === 'strengthens' ? ' (strengthens your case)' : ''}`).join('\n')
+      : ''
+    const clarifyLines = result?.missing_information?.length > 0
+      ? '\n\nPLEASE ALSO CLARIFY:\n' + result.missing_information.map(m => `→ ${m}`).join('\n')
+      : ''
+    const full = `Subject: ${comms.subject}\n\nDear Valued Cardholder,\n\n${editableLetterBody || comms.body}${docLines}${clarifyLines}\n\nNext Steps:\n${comms.next_steps?.map(s => `• ${s}`).join('\n')}\n\nExpected timeline: ${comms.timeline}\n\nSincerely,\nCustomer Care Team`
     navigator.clipboard.writeText(full)
     setCommsCopied(true)
     setTimeout(() => setCommsCopied(false), 2000)
@@ -3312,10 +3321,23 @@ Return ONLY valid JSON:
     const _partial = disputedAmount && parseFloat(disputedAmount) > 0 && disputedAmount !== amount
     const amt = parseFloat(_partial ? disputedAmount : amount) || 0
     if (!amt || !result) return null
-    let winProb = result.confidence === 'high' ? 0.72 : result.confidence === 'medium' ? 0.50 : 0.28
-    if (rebuttal?.win_risk === 'LOW')    winProb = Math.min(0.88, winProb + 0.10)
-    if (rebuttal?.win_risk === 'HIGH')   winProb = Math.max(0.15, winProb - 0.20)
-    if (rebuttal?.win_risk === 'MEDIUM') winProb = Math.max(0.30, winProb - 0.08)
+    // Base win rate by dispute category (chargeback outcome data for issuers)
+    const cat = result.category || ''
+    let winProb = (cat === 'fraud' || cat === 'mc_fraud') ? 0.76
+                : (cat === 'processing_error' || cat === 'mc_processing_error') ? 0.74
+                : (cat === 'authorization' || cat === 'mc_authorization') ? 0.70
+                : 0.52  // consumer_dispute — more contested
+    // Adjust for AI confidence in reason code selection
+    if (result.confidence === 'low')    winProb -= 0.12
+    if (result.confidence === 'medium') winProb -= 0.04
+    // Adjust for 3DS status (3DS pass = liability shift away from issuer)
+    if (threeDSStatus === 'attempted_passed') winProb = Math.max(0.08, winProb - 0.22)
+    if (threeDSStatus === 'not_attempted')    winProb = Math.min(0.92, winProb + 0.05)
+    // Adjust for merchant defense strength (from rebuttal simulator)
+    if (rebuttal?.win_risk === 'LOW')    winProb = Math.min(0.92, winProb + 0.10)
+    if (rebuttal?.win_risk === 'MEDIUM') winProb = Math.max(0.20, winProb - 0.10)
+    if (rebuttal?.win_risk === 'HIGH')   winProb = Math.max(0.10, winProb - 0.24)
+    winProb = Math.max(0.08, Math.min(0.93, winProb))
     const netFee       = 25  // network filing fee estimate
     const expectedRec  = amt * winProb
     const writeOffRisk = amt * (1 - winProb)
@@ -4701,15 +4723,19 @@ Return ONLY valid JSON:
                     </div>
                   </div>
 
-                  {/* Letter body */}
-                  <div className="bg-white p-6 space-y-4 border-b border-stone-200">
-                    <p className="display-font text-stone-600 text-[14px] italic">Dear Valued Cardholder,</p>
-                    {comms.body?.split('\n\n').map((para, i) => (
-                      <p key={i} className="display-font text-stone-900 text-[15px] leading-relaxed">{para}</p>
-                    ))}
-                    <p className="display-font text-stone-600 text-[14px] italic pt-2">
-                      Sincerely,<br />Customer Care Team
-                    </p>
+                  {/* Letter body — editable textarea */}
+                  <div className="bg-white p-6 border-b border-stone-200">
+                    <p className="display-font text-stone-400 text-[12px] italic mb-3">Dear Valued Cardholder,</p>
+                    <textarea
+                      value={editableLetterBody}
+                      onChange={e => setEditableLetterBody(e.target.value)}
+                      rows={10}
+                      className="w-full display-font text-stone-900 text-[15px] leading-relaxed border border-stone-200 rounded-none p-3 focus:outline-none focus:border-stone-500 resize-vertical"
+                      style={{ fontFamily: 'inherit', background: '#FAFAF9' }}
+                      placeholder="Letter body will appear here after generating…"
+                    />
+                    <p className="display-font text-stone-400 text-[12px] italic mt-3">Sincerely,<br />Customer Care Team</p>
+                    <p className="mono-font text-[10px] text-stone-400 mt-2">↑ Edit directly above before copying — docs &amp; clarify items are appended automatically on copy</p>
                   </div>
 
                   {/* Next steps + timeline */}
