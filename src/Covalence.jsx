@@ -280,10 +280,11 @@ const GLOBAL_CSS = `
 // LOGIN GATE — identity capture on first visit
 // ═══════════════════════════════════════════════════════════════════════════════
 function LoginGate({ onLogin }) {
-  const [name,    setName]    = useState('')
-  const [email,   setEmail]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [err,     setErr]     = useState('')
+  const [name,        setName]        = useState('')
+  const [email,       setEmail]       = useState('')
+  const [institution, setInstitution] = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [err,         setErr]         = useState('')
 
   async function handleEnter(e) {
     e.preventDefault()
@@ -297,10 +298,11 @@ function LoginGate({ onLogin }) {
       fetch(`${_url}/rest/v1/access_log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: _key, Authorization: `Bearer ${_key}`, Prefer: 'return=minimal' },
-        body: JSON.stringify(entry),
+        body: JSON.stringify({ name:userData.name, email:userData.email, institution:userData.institution, entered_at:userData.at, user_agent:navigator.userAgent }),
       }).catch(() => {})
     }
-    const userData = { name: entry.name, email: entry.email, at: entry.entered_at }
+    const userData = { name: name.trim(), email: email.trim(), institution: institution.trim(), at: new Date().toISOString() }
+    try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); localStorage.setItem('cov_outcomes', JSON.stringify(mergeCases(local,remote))) } } catch {}
     localStorage.setItem('cov_user', JSON.stringify(userData))
     setLoading(false)
     onLogin(userData)
@@ -311,22 +313,27 @@ function LoginGate({ onLogin }) {
       <div style={{ width:'100%', maxWidth:'400px' }}>
         <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
         <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>Welcome</div>
-        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>Enter your name and email to continue.</div>
+        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>Enter your details to join the shared queue.</div>
         <form onSubmit={handleEnter}>
           <div style={{ marginBottom:'16px' }}>
             <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>NAME</div>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoFocus
               style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
           </div>
-          <div style={{ marginBottom:'24px' }}>
+          <div style={{ marginBottom:'16px' }}>
             <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>EMAIL</div>
-            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="your@email.com"
+            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@institution.com"
+              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
+          </div>
+          <div style={{ marginBottom:'24px' }}>
+            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>INSTITUTION <span style={{color:'#57534E'}}>(optional)</span></div>
+            <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="First National Bank"
               style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
           </div>
           {err && <div style={{ fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' }}>{err}</div>}
           <button type="submit" disabled={loading}
             style={{ width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'ENTERING...' : 'ENTER →'}
+            {loading ? 'SYNCING QUEUE...' : 'ENTER →'}
           </button>
         </form>
       </div>
@@ -347,8 +354,16 @@ export default function Covalence() {
   const [dfaQueue,      setDfaQueue]      = useState([])
   const [duoHandoff,    setDuoHandoff]    = useState(null)
 
-  useEffect(() => { saveOutcomes(outcomes) }, [outcomes])
+  useEffect(() => {
+    saveOutcomes(outcomes)
+    if (SUPA_URL && SUPA_KEY && outcomes.length > 0) pushCasesToSupa(outcomes).catch(()=>{})
+  }, [outcomes])
   useEffect(() => { saveSettings(settings) }, [settings])
+  useEffect(() => {
+    if (!SUPA_URL || !SUPA_KEY) return
+    const pull = () => pullCasesFromSupa().then(r => { if(r.length) setOutcomes(l => mergeCases(l,r)) }).catch(()=>{})
+    pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
+  }, [])
 
   const NAV = [
     { id:'home',     label:'HOME' },
@@ -358,6 +373,7 @@ export default function Covalence() {
     { id:'dfa',      label:'004  DFA' },
     { id:'duo',      label:'005  DUO' },
     { id:'trio',     label:'006  TRIO' },
+    { id:'file',     label:'007  FILE' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -388,9 +404,13 @@ export default function Covalence() {
                 </button>
               ))}
             </div>
-            {platformMode === 'merchant' && activeSection === 'desk' && (
-              <span className="mono-font desktop-only" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#F59E0B', marginLeft:'auto', padding:'14px 0', flexShrink:0 }}>MERCHANT MODE</span>
-            )}
+            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'16px',flexShrink:0}}>
+              {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
+              {covUser&&<div className="mono-font desktop-only" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'10px'}}>
+                <span style={{color:'#A8A29E'}}>{covUser.name}{covUser.institution?` · ${covUser.institution}`:''}</span>
+                <button onClick={()=>{localStorage.removeItem('cov_user');setCovUser(null)}} style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em'}}>SIGN OUT</button>
+              </div>}
+            </div>
           </div>
         </div>
 
@@ -422,8 +442,9 @@ export default function Covalence() {
         {activeSection === 'duo' && (
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
         )}
-        {activeSection === 'multi' && <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} />}
+        {activeSection === 'multi' && <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} />}
         {activeSection === 'trio' && <TrioView />}
+        {activeSection === 'file' && <FileView setActiveSection={setActiveSection} />}
       </div>
     </ErrorBoundary>
   )
@@ -7604,6 +7625,34 @@ async function duoPatch(id, updates) {
   if (!r.ok) throw new Error(await r.text())
   const d = await r.json(); return Array.isArray(d) ? d[0] : d
 }
+// ── Supabase shared-pool sync helpers ─────────────────────────────────────────
+async function pushCasesToSupa(cases) {
+  if (!SUPA_URL || !SUPA_KEY || !cases?.length) return
+  const rows = cases.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
+  await fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) })
+}
+async function pullCasesFromSupa() {
+  if (!SUPA_URL || !SUPA_KEY) return []
+  const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
+  if (!r.ok) return []
+  return (await r.json()||[]).map(r=>r.data).filter(Boolean)
+}
+function mergeCases(local, remote) {
+  const map = {}
+  local.forEach(c=>{map[c.id]=c})
+  remote.forEach(c=>{ const ex=map[c.id]; if(!ex){map[c.id]=c;return} if(new Date(c.updatedAt||0)>new Date(ex.updatedAt||0)) map[c.id]=c })
+  return Object.values(map)
+}
+async function upsertAgent(a) {
+  if (!SUPA_URL||!SUPA_KEY) return
+  await fetch(`${SUPA_URL}/rest/v1/cov_agents`, {method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({email:a.email, name:a.name, institution:a.institution||'', last_login:new Date().toISOString()})})
+}
+async function fetchAgents() {
+  if (!SUPA_URL||!SUPA_KEY) return []
+  const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
+  return r.ok ? await r.json() : []
+}
+
 function parseThread(raw) { try { return JSON.parse(raw || '[]') } catch { return raw ? [{ text: raw, ts: new Date(0).toISOString() }] : [] } }
 function buildThread(session) {
   const a = parseThread(session.notes_a).map(e => ({ ...e, role:'a', institution: session.institution_a }))
@@ -8931,7 +8980,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── MULTI — Bulk dispute management ──────────────────────────────────────────
-function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection }) {
+function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection, covUser }) {
   // Read live from localStorage so DeskView changes appear immediately
   const [outcomes, setLiveOutcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return _propOutcomes || [] }
@@ -8958,8 +9007,10 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   }, [setAppOutcomes])
 
   const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
-  const queuedFraud   = outcomes.filter(o => o.status === 'queued' && isFraudCase(o))
-  const queuedService = outcomes.filter(o => o.status === 'queued' && !isFraudCase(o))
+  const myEmail = covUser?.email||''
+  const applyFilter = arr => assignFilter==='mine' ? arr.filter(o=>o.assignedTo===myEmail) : assignFilter==='unassigned' ? arr.filter(o=>!o.assignedTo) : arr
+  const queuedFraud   = applyFilter(outcomes.filter(o => o.status === 'queued' && isFraudCase(o)))
+  const queuedService = applyFilter(outcomes.filter(o => o.status === 'queued' && !isFraudCase(o)))
   const [filed, setFiled] = React.useState(false)
 
   // ── 3pm auto-file ──────────────────────────────────────────────────────────
@@ -8971,8 +9022,12 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const queuedFraudRef = React.useRef(queuedFraud)
   queuedFraudRef.current = queuedFraud
   const autoFileFired = React.useRef(false)
-  const [noteOpen, setNoteOpen]   = React.useState({}) // { [caseId]: bool }
-  const [noteDraft, setNoteDraft] = React.useState({}) // { [caseId]: string }
+  const [noteOpen,    setNoteOpen]    = React.useState({})
+  const [noteDraft,   setNoteDraft]   = React.useState({})
+  const [selectedIds, setSelectedIds] = React.useState([])
+  const [assignFilter,setAssignFilter]= React.useState('all')
+  const [agentList,   setAgentList]   = React.useState([])
+  const [assignOpen,  setAssignOpen]  = React.useState({})
 
   React.useEffect(() => {
     const tick = () => {
@@ -9012,6 +9067,27 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
     setTimeout(() => setFiled(false), 3000)
   }
 
+  React.useEffect(() => { fetchAgents().then(setAgentList).catch(()=>{}) }, [])
+
+  const toggleSelect = id => setSelectedIds(p => p.includes(id)?p.filter(x=>x!==id):[...p,id])
+  const clearSelected = () => setSelectedIds([])
+  const fileSelected = () => {
+    setOutcomes(prev=>prev.map(o=>selectedIds.includes(o.id)&&isFraudCase(o)&&o.status==='queued'?{...o,status:'filed',filedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:o))
+    clearSelected(); setFiled(true); setTimeout(()=>setFiled(false),3000)
+  }
+  const exportSelectedCSV = () => {
+    const rows=outcomes.filter(o=>selectedIds.includes(o.id))
+    if(!rows.length) return
+    const h='ID,MERCHANT,AMOUNT,CURRENCY,VERDICT,STATUS,REASON CODE,DATE,ASSIGNED TO'
+    const lines=rows.map(o=>[o.id,o.merchant||'',o.amount||'',o.currency||'',o.verdict||'',o.status||'',o.reasonCode||'',o.date||'',o.assignedTo||''].map(v=>JSON.stringify(v)).join(','))
+    const a=document.createElement('a'); a.href='data:text/csv,'+encodeURIComponent([h,...lines].join('\n')); a.download=`cov-cases-${new Date().toISOString().split('T')[0]}.csv`; a.click()
+    clearSelected()
+  }
+  const assignCase = (caseId,email,name) => {
+    setOutcomes(prev=>prev.map(o=>o.id===caseId?{...o,assignedTo:email,assignedName:name,updatedAt:new Date().toISOString()}:o))
+    setAssignOpen(p=>({...p,[caseId]:false}))
+  }
+
   const saveNote = (id) => {
     const text = (noteDraft[id] || '').trim()
     setOutcomes(prev => prev.map(o => o.id === id
@@ -9042,6 +9118,23 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
           {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
         </div>
       </div>
+      {selectedIds.length > 0 && (
+        <div className="sticky top-14 z-40 mb-4 flex items-center gap-3 flex-wrap px-4 py-3 border border-stone-800" style={{background:'#1C1917'}}>
+          <span className="mono-font text-[10px] tracking-widest text-stone-300">{selectedIds.length} SELECTED</span>
+          <button onClick={fileSelected} className="mono-font text-[9px] tracking-widest px-3 py-1.5 bg-emerald-900 text-emerald-50 hover:bg-emerald-800 transition-colors">FILE FRAUD SELECTED</button>
+          <button onClick={exportSelectedCSV} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-600 text-stone-300 hover:border-stone-400 transition-colors">EXPORT CSV</button>
+          <button onClick={clearSelected} className="mono-font text-[9px] px-3 py-1.5 border border-stone-600 text-stone-500 hover:text-stone-300 transition-colors">DESELECT ALL ✕</button>
+        </div>
+      )}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        {[['all','ALL'],['mine','MINE'],['unassigned','UNASSIGNED']].map(([v,l])=>(
+          <button key={v} onClick={()=>setAssignFilter(v)} className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
+            style={{background:assignFilter===v?'#1C1917':'transparent',color:assignFilter===v?'#F5F1EA':'#78716C',border:'1px solid',borderColor:assignFilter===v?'#1C1917':'#D4CCBC',cursor:'pointer'}}>
+            {l}
+          </button>
+        ))}
+        {covUser&&<span className="mono-font text-[9px] text-stone-400 ml-2">· {covUser.name}</span>}
+      </div>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
         <button onClick={() => setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60)} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
@@ -9055,9 +9148,15 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
       {/* Fraud queue */}
       <div id="mfq" className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
-          <div>
-            <div className="mono-font text-xs tracking-widest text-stone-600">FRAUD DISPUTES — QUEUED FOR FILING</div>
-            <div className="mono-font text-[10px] text-stone-400 mt-0.5">{queuedFraud.length} case{queuedFraud.length !== 1 ? 's' : ''} · automated filing eligible</div>
+          <div className="flex items-center gap-3">
+            {queuedFraud.length>0&&<input type="checkbox"
+              checked={queuedFraud.length>0&&queuedFraud.every(o=>selectedIds.includes(o.id))}
+              onChange={e=>e.target.checked?setSelectedIds(p=>[...new Set([...p,...queuedFraud.map(o=>o.id)])]):setSelectedIds(p=>p.filter(id=>!queuedFraud.find(o=>o.id===id)))}
+              style={{width:'14px',height:'14px',cursor:'pointer',accentColor:'#1C1917'}} title="Select all"/>}
+            <div>
+              <div className="mono-font text-xs tracking-widest text-stone-600">FRAUD DISPUTES — QUEUED FOR FILING</div>
+              <div className="mono-font text-[10px] text-stone-400 mt-0.5">{queuedFraud.length} case{queuedFraud.length!==1?'s':''} · automated filing eligible</div>
+            </div>
           </div>
           <button
             onClick={fileAllFraud}
@@ -9077,12 +9176,23 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
           <div className="divide-y divide-stone-200">
             {queuedFraud.map(o => (
               <div key={o.id}>
-                <div className="px-5 py-3 flex items-center gap-4 flex-wrap">
+                <div className="px-5 py-3 flex items-center gap-3 flex-wrap">
+                  <input type="checkbox" checked={selectedIds.includes(o.id)} onChange={()=>toggleSelect(o.id)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#1C1917',flexShrink:0}}/>
                   <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
                   <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
-                  <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g, ' ')}</span>
-                  <span className="mono-font text-[9px] text-stone-400">{o.date ? new Date(o.date).toLocaleDateString('en-CA') : ''}</span>
+                  <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g,' ')}</span>
+                  <span className="mono-font text-[9px] text-stone-400">{o.date?new Date(o.date).toLocaleDateString('en-CA'):''}</span>
+                  {assignOpen[o.id]?(
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {agentList.length>0?agentList.map(a=>(<button key={a.email} onClick={()=>assignCase(o.id,a.email,a.name)} className="mono-font text-[8px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-800 hover:text-stone-50 transition-colors">{a.name}</button>)):<span className="mono-font text-[9px] text-stone-400 italic">No agents</span>}
+                      <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:false}))} className="mono-font text-[9px] px-1 text-stone-400">✕</button>
+                    </div>
+                  ):(
+                    <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:true}))} className="mono-font text-[8px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
+                      {o.assignedTo?(o.assignedName||o.assignedTo.split('@')[0]).toUpperCase():'ASSIGN'}
+                    </button>
+                  )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                     {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
@@ -9302,6 +9412,52 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   )
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 007 FILE VIEW
+// ═══════════════════════════════════════════════════════════════════════════════
+function FileView({ setActiveSection }) {
+  return (
+    <div style={{maxWidth:'1280px',margin:'0 auto',padding:'40px 24px'}}>
+      <div className="mb-10 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:'16px'}}>
+        <div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — FILE</div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
+            <span style={{fontWeight:700}}>Fi</span><span style={{fontStyle:'italic',fontWeight:500}}>le</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:1.6,maxWidth:'560px'}}>
+            Network submission hub. Cases queued in Multi — with evidence attached in the Dispute Desk — flow here for network-formatted filing. Visa, Mastercard, Amex, Discover. One package per case, per network spec.
+          </p>
+        </div>
+        <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+        {[{l:'VISA',s:'Visa Online · Dispute Submission',c:'#1A3A8F'},{l:'MASTERCARD',s:'MC Connect · Dispute Management',c:'#B22222'},{l:'AMEX',s:'American Express · Dispute Portal',c:'#006DB7'},{l:'DISCOVER',s:'Discover · Network Filing',c:'#B45309'}].map(n=>(
+          <div key={n.l} className="border border-stone-300 px-4 py-5" style={{background:'#FAF7F1'}}>
+            <div className="mono-font text-[10px] tracking-widest mb-2" style={{color:n.c}}>{n.l}</div>
+            <div className="display-font text-stone-500 text-[12px] leading-snug">{n.s}</div>
+            <div className="mono-font text-[9px] text-stone-400 mt-3 tracking-widest">COMING SOON</div>
+          </div>
+        ))}
+      </div>
+      <div className="border border-dashed border-stone-300 p-8 text-center mb-8" style={{background:'#FAF7F1'}}>
+        <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400 mb-4">UNDER CONSTRUCTION</div>
+        <div className="display-font font-bold text-stone-900 mb-4" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>Document attachment in Dispute Desk ships first.</div>
+        <p className="display-font text-stone-500 text-[14px] leading-relaxed" style={{maxWidth:'480px',margin:'0 auto 24px'}}>
+          Once agents can attach evidence in the Desk, FILE will auto-package it per network specs and generate ready-to-submit bundles — no portal switching required.
+        </p>
+        <button onClick={()=>setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-5 py-2.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">
+          ← VIEW QUEUED CASES IN MULTI
+        </button>
+      </div>
+      <div className="flex gap-3 flex-wrap">
+        {['SUBMISSION PACKAGE GENERATOR','NETWORK-SPEC VALIDATION','DOC BUNDLE PER CASE','AUDIT TRAIL','BATCH OR SINGLE FILING'].map(f=>(
+          <div key={f} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-300 text-stone-400">{f}</div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function SettingsView({ settings, setSettings }) {
   const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }))
