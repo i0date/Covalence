@@ -5410,7 +5410,7 @@ Return ONLY valid JSON:
                                   </>)}
 
                                 </div>
-                                <div className="flex items-start gap-2 justify-end" style={{minWidth:0,overflow:'hidden'}}>
+                                <div className="flex items-start gap-2 justify-end">
                                   <div className="flex flex-col items-end gap-1.5">
                                     {o.mode !== 'merchant' && onScoreInDfa && (
                                       <button
