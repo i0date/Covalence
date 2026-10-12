@@ -5145,7 +5145,7 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px', background: '#EEE9E0' }}>
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 200px 160px', background: '#EEE9E0' }}>
                       {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
@@ -5280,7 +5280,7 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(0,1fr) 160px' }}>
+                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 200px 160px' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
@@ -5329,75 +5329,86 @@ Return ONLY valid JSON:
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
-                                <div className="flex gap-1 flex-wrap items-start min-w-0">
-                                  {/* ── pending ── */}
+                                <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%'}}>
+
+                                  {/* ── PENDING ─────────────────────────────── */}
                                   {(!o.status || o.status === 'pending') && (<>
+                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating — gathering evidence before filing" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
                                     <button onClick={() => advanceStage(o.id,'queued')} title="Move to batch filing queue" className="mono-font text-[8px] px-1.5 py-0.5 border border-violet-600 text-violet-700 hover:bg-violet-50 whitespace-nowrap transition-colors">IN QUEUE</button>
-                                    <button onClick={() => advanceStage(o.id,'filed')} title="Mark as filed with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-600 text-stone-700 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
+                                    <button onClick={() => advanceStage(o.id,'filed')} title="Mark chargeback as filed with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw — close without filing" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit to cardholder (Reg E / debit obligation)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    )}
                                   </>)}
-                                  {/* ── queued ── */}
+
+                                  {/* ── INVSTG (agent investigating, pre-filing) ── */}
+                                  {o.status === 'investigating' && (<>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-blue-900 text-blue-50">INVSTG</span>
+                                    <button onClick={() => advanceStage(o.id,'filed')} title="Done investigating — file chargeback with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    {o.mode !== 'merchant' && (
+                                      o.escalation === 'lea_referral'
+                                        ? <span className="mono-font text-[8px] px-1.5 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA ✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[8px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>
+                                    )}
+                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    )}
+                                    <button onClick={() => revertCase(o.id)} title="Back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ PENDING</button>
+                                  </>)}
+
+                                  {/* ── IN QUEUE ────────────────────────────── */}
                                   {o.status === 'queued' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-violet-900 text-violet-50 font-bold whitespace-nowrap">IN QUEUE</span>
-                                    <button onClick={() => advanceStage(o.id,'filed')} title="Mark as filed with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-600 text-stone-700 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw — close without filing" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    <button onClick={() => revertCase(o.id)} title="Remove from queue — revert to pending" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
+                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    )}
+                                    <button onClick={() => revertCase(o.id)} title="Remove from batch queue — back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ UNQUEUE</button>
                                   </>)}
-                                  {/* ── filed ── */}
+
+                                  {/* ── FILED ───────────────────────────────── */}
                                   {o.status === 'filed' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-900 text-stone-50 font-bold whitespace-nowrap">FILED</span>
-                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Mark as under investigation by network or acquirer" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
-                                    <button onClick={() => advanceStage(o.id,'representment')} title="Merchant representment received" className="mono-font text-[8px] px-1.5 py-0.5 border border-amber-600 text-amber-700 hover:bg-amber-50 whitespace-nowrap transition-colors">REPMT</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won — funds recovered" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>
+                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won — chargeback upheld, funds recovered" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
                                     <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost — chargeback denied" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    )}
                                     <button onClick={() => revertCase(o.id)} title="Revert to pending" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
                                   </>)}
-                                  {/* ── investigating ── */}
-                                  {o.status === 'investigating' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-blue-900 text-blue-50 font-bold whitespace-nowrap">INVSTG</span>
-                                    <button onClick={() => advanceStage(o.id,'representment')} title="Merchant representment received — move to rebuttal" className="mono-font text-[8px] px-1.5 py-0.5 border border-amber-600 text-amber-700 hover:bg-amber-50 whitespace-nowrap transition-colors">REPMT</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'resolved')} title="Resolved without formal network outcome" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">RESOLVED</button>
-                                    <button onClick={() => revertCase(o.id)} title="Revert to filed" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+
+                                  {/* ── LEGACY: network_invstg / representment / pre_arb ── */}
+                                  {(o.status === 'network_invstg' || o.status === 'representment' || o.status === 'pre_arb') && (<>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-900 text-amber-50">
+                                      {o.status === 'network_invstg' ? 'NTW INVSTG' : o.status === 'representment' ? 'REPMT' : 'PRE-ARB'}
+                                    </span>
+                                    <button onClick={() => revertCase(o.id)} title="Re-mark status" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
-                                  {/* ── representment ── */}
-                                  {o.status === 'representment' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-amber-900 text-amber-50 font-bold whitespace-nowrap">REPMT</span>
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Won on representment" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Lost on representment" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    <button onClick={() => revertCase(o.id)} title="Revert to filed" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
-                                  </>)}
-                                  {/* ── pre_arb ── */}
-                                  {o.status === 'pre_arb' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-purple-900 text-purple-50 font-bold whitespace-nowrap">PRE-ARB</span>
-                                    {o.mode !== 'merchant' && <button onClick={() => generatePreArbDraft(o)} title="Generate pre-arbitration submission" className="mono-font text-[8px] px-1.5 py-0.5 border border-purple-600 text-purple-700 hover:bg-purple-50 whitespace-nowrap transition-colors">DRAFT</button>}
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Won at pre-arb" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Lost at pre-arb" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    <button onClick={() => revertCase(o.id)} title="Revert" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
-                                  </>)}
-                                  {/* ── resolved ── */}
+
+                                  {/* ── RESOLVED ────────────────────────────── */}
                                   {o.status === 'resolved' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-teal-900 text-teal-50 font-bold whitespace-nowrap">RESOLVED</span>
-                                    <button onClick={() => revertCase(o.id)} title="Re-open case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">↩ RE-MARK</button>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-teal-900 text-teal-50">RESOLVED</span>
+                                    <button onClick={() => revertCase(o.id)} title="Re-open case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
-                                  {/* ── won / lost / withdrawn ── */}
+
+                                  {/* ── WON / LOST / WITHDRAWN ──────────────── */}
                                   {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (<>
-                                    <span className={`mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap ${o.status==='won'?'bg-emerald-900 text-emerald-50':o.status==='lost'?'bg-red-900 text-red-50':'bg-stone-600 text-stone-50'}`}>{o.status==='withdrawn'?'WD':o.status.toUpperCase()}</span>
+                                    <span className={`mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap ${o.status==='won'?'bg-emerald-900 text-emerald-50':o.status==='lost'?'bg-red-900 text-red-50':'bg-stone-600 text-stone-50'}`}>
+                                      {o.status === 'withdrawn' ? 'WD' : o.status.toUpperCase()}
+                                    </span>
                                     {o.status === 'lost' && o.mode !== 'merchant' && (<>
-                                      {o.escalation === 'lea_referral' ? <span className="mono-font text-[8px] px-1 py-0.5 bg-orange-900 text-orange-50" title="Referred to law enforcement">LEA✓</span> : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Refer to law enforcement" className="mono-font text-[8px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>}
-                                      {o.escalation === 'writeoff' ? <span className="mono-font text-[8px] px-1 py-0.5 bg-stone-700 text-stone-200" title="Written off">W/O✓</span> : <button onClick={() => escalateCase(o.id,'writeoff')} title="Write off loss" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">W/O</button>}
+                                      {o.escalation === 'lea_referral'
+                                        ? <span className="mono-font text-[8px] px-1 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[8px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>}
+                                      {o.escalation === 'writeoff'
+                                        ? <span className="mono-font text-[8px] px-1 py-0.5 bg-stone-700 text-stone-200 whitespace-nowrap" title="Written off">W/O✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'writeoff')} title="Write off loss" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">W/O</button>}
                                     </>)}
-                                    <button onClick={() => revertCase(o.id)} title="Re-open / change outcome" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">↩ CHANGE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Re-open / change outcome" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
-                                  {/* ── PC button (FI only) ── */}
-                                  {o.mode !== 'merchant' && !o.provCreditDate && o.status !== 'withdrawn' && (
-                                    <button onClick={() => markProvCredit(o.id)} title="Log provisional credit to cardholder (Reg E / debit obligation)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
-                                  )}
+
                                 </div>
                                 <div className="flex items-start gap-2 justify-end">
                                   <div className="flex flex-col items-end gap-1.5">
@@ -5525,6 +5536,29 @@ Return ONLY valid JSON:
                                     const _sl = _st==='1cb'?'1ST CB':_st==='2cb'?'2ND PRES':_st==='prearb'?'PRE-ARB':'ARB'
                                     return (<div className="flex items-center gap-3"><span className="mono-font text-[9px] text-amber-500 tracking-wider">DEADLINE</span><span className={['mono-font text-[10px] tracking-wide', _cls].join(' ')}>{_sl} - {_dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})} - {_lbl}</span></div>)
                                   })()}
+                                  {/* Network indicators */}
+                                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    <button
+                                      onClick={() => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, networkInvstg: !x.networkInvstg} : x))}
+                                      title="Toggle: network or acquirer is actively processing this chargeback"
+                                      className={`mono-font text-[9px] px-1.5 py-0.5 border transition-colors whitespace-nowrap ${o.networkInvstg ? 'bg-blue-900 text-blue-50 border-blue-900' : 'border-blue-500 text-blue-600 hover:bg-blue-50'}`}
+                                    >{o.networkInvstg ? 'NTW INVSTG ✓' : 'NTW INVSTG'}</button>
+                                    {o.merchantRespDate ? (
+                                      <span className="mono-font text-[9px] text-amber-800 font-bold">
+                                        MERCHANT RESP: {new Date(o.merchantRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => setOutcomes(prev => prev.map(x => x.id === o.id ? {
+                                          ...x,
+                                          merchantRespDate: new Date().toISOString().split('T')[0],
+                                          cbStage: x.cbStage === '1cb' ? '2cb' : x.cbStage
+                                        } : x))}
+                                        title="Log merchant representment received — bumps CB stage to 2ND PRES if currently at 1ST CB"
+                                        className="mono-font text-[9px] px-1.5 py-0.5 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                                      >MERCHANT RESP</button>
+                                    )}
+                                  </div>
                                 </div>
                               )
                             })()}
