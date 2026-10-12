@@ -431,6 +431,7 @@ export default function Covalence() {
             onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }}
             onGoToDuo={() => setActiveSection('duo')}
             platformMode={platformMode} setPlatformMode={setPlatformMode}
+            covUser={covUser}
           />
         )}
         {activeSection === 'dfa'      && (
@@ -2499,7 +2500,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode }) {
+function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser }) {
   // Restore previous session so navigation away doesn't wipe in-progress analysis
   const _sess = React.useRef(loadDeskSession()).current
   const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
@@ -2545,6 +2546,11 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [fiAvsMismatch, setFiAvsMismatch]                   = useState(null)
   const [fiIsVFMP, setFiIsVFMP]                             = useState(null)
   const [fiPriorClaims, setFiPriorClaims]                   = useState('')
+
+  // ── Evidence / doc attachment ────────────────────────────────────────────────
+  const [docOpen,       setDocOpen]       = useState({})   // {[caseId]: boolean}
+  const [docUploading,  setDocUploading]  = useState({})   // {[caseId]: boolean}
+  const [docError,      setDocError]      = useState({})   // {[caseId]: string}
 
   // ── Pre-arb response drafter ──────────────────────────────────────────────
   const [preArbDraft, setPreArbDraft]                       = useState(null)
@@ -5619,6 +5625,12 @@ Return ONLY valid JSON:
                                      style={{ borderColor: expandedCbRow === o.id ? '#D97706' : '#A8A29E', color: expandedCbRow === o.id ? '#D97706' : '#78716C', background: expandedCbRow === o.id ? '#FFFBEB' : 'transparent' }}
                                      title="Manage Chargeback Cycle"
                                    >▸ CB</button>
+                                   <button
+                                     onClick={() => setDocOpen(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
+                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
+                                     style={{ borderColor: docOpen[o.id] ? '#166534' : '#A8A29E', color: docOpen[o.id] ? '#166534' : '#78716C', background: docOpen[o.id] ? '#F0FDF4' : 'transparent' }}
+                                     title="Evidence documents"
+                                   >📎{(o.docs||[]).length > 0 ? ` ${(o.docs||[]).length}` : ''}</button>
                                   <button onClick={() => startEdit(o)} className="text-stone-500 hover:text-stone-900 transition-colors mt-0.5" title="Edit row"><Pencil className="w-3.5 h-3.5" /></button>
                                 </div>
                               </div>
@@ -5735,6 +5747,67 @@ Return ONLY valid JSON:
                                 </div>
                               )
                             })()}
+
+                            {/* Evidence / doc attachment panel */}
+                            {docOpen[o.id] && (
+                              <div className="px-4 py-3 border-t border-stone-200" style={{ background: '#F0FDF4' }}>
+                                <div className="mono-font text-[9px] tracking-widest text-green-800 mb-3">EVIDENCE — {o.id}</div>
+                                {/* Existing docs list */}
+                                {(o.docs||[]).length === 0 && (
+                                  <p className="mono-font text-[10px] text-stone-400 mb-3">No documents attached yet.</p>
+                                )}
+                                {(o.docs||[]).length > 0 && (
+                                  <div className="space-y-1 mb-3">
+                                    {(o.docs||[]).map((d, i) => (
+                                      <div key={i} className="flex items-center gap-2">
+                                        <span className="mono-font text-[10px] text-stone-600 flex-1 truncate">{d.name}</span>
+                                        <span className="mono-font text-[9px] text-stone-400">{d.size ? `${(d.size/1024).toFixed(0)} KB` : ''}</span>
+                                        <span className="mono-font text-[9px] text-stone-400">{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}</span>
+                                        <a href={d.url} target="_blank" rel="noopener noreferrer"
+                                          className="mono-font text-[9px] text-green-700 hover:underline whitespace-nowrap">↗ VIEW</a>
+                                        <button
+                                          onClick={() => {
+                                            if (!window.confirm(`Remove ${d.name}?`)) return
+                                            setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, docs: (x.docs||[]).filter((_,j)=>j!==i), updatedAt: new Date().toISOString() } : x))
+                                          }}
+                                          className="mono-font text-[9px] text-red-500 hover:text-red-700 transition-colors"
+                                          title="Remove attachment">✕</button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Upload area */}
+                                {docError[o.id] && (
+                                  <p className="mono-font text-[9px] text-red-600 mb-2">⚠ {docError[o.id]}</p>
+                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <label className={`mono-font text-[9px] tracking-widest px-3 py-1.5 border cursor-pointer transition-colors whitespace-nowrap ${docUploading[o.id] ? 'border-stone-300 text-stone-400' : 'border-green-700 text-green-700 hover:bg-green-50'}`}>
+                                    {docUploading[o.id] ? 'UPLOADING…' : '+ ATTACH FILE'}
+                                    <input type="file" className="hidden" disabled={!!docUploading[o.id]}
+                                      accept=".pdf,.png,.jpg,.jpeg,.gif,.tiff,.doc,.docx,.xls,.xlsx,.csv,.txt,.eml,.msg"
+                                      onChange={async e => {
+                                        const file = e.target.files?.[0]
+                                        if (!file) return
+                                        setDocUploading(prev => ({ ...prev, [o.id]: true }))
+                                        setDocError(prev => ({ ...prev, [o.id]: null }))
+                                        try {
+                                          const stored = await uploadEvidence(o.id, file, covUser?.email || '')
+                                          setOutcomes(prev => prev.map(x => x.id === o.id
+                                            ? { ...x, docs: [...(x.docs||[]), stored], updatedAt: new Date().toISOString() }
+                                            : x))
+                                        } catch(err) {
+                                          setDocError(prev => ({ ...prev, [o.id]: err.message }))
+                                        } finally {
+                                          setDocUploading(prev => ({ ...prev, [o.id]: false }))
+                                          e.target.value = ''
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                  <span className="mono-font text-[9px] text-stone-400">PDF, PNG, JPG, DOCX, XLSX, EML accepted</span>
+                                </div>
+                              </div>
+                            )}
 
                             {/* 360 panel — full case detail */}
                             {case360Id === o.id && (
@@ -7653,6 +7726,26 @@ async function fetchAgents() {
   return r.ok ? await r.json() : []
 }
 
+async function uploadEvidence(caseId, file, agentEmail) {
+  if (!SUPA_URL || !SUPA_KEY) throw new Error('Supabase not configured')
+  const ts = Date.now()
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${caseId}/${ts}-${safeName}`
+  const r = await fetch(`${SUPA_URL}/storage/v1/object/cov-evidence/${path}`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'false',
+    },
+    body: file,
+  })
+  if (!r.ok) { const txt = await r.text().catch(()=>''); throw new Error(`Upload failed (${r.status}): ${txt}`) }
+  const publicUrl = `${SUPA_URL}/storage/v1/object/public/cov-evidence/${path}`
+  return { name: file.name, url: publicUrl, type: file.type || 'application/octet-stream', size: file.size, uploadedAt: new Date().toISOString(), uploadedBy: agentEmail || '' }
+}
+
 function parseThread(raw) { try { return JSON.parse(raw || '[]') } catch { return raw ? [{ text: raw, ts: new Date(0).toISOString() }] : [] } }
 function buildThread(session) {
   const a = parseThread(session.notes_a).map(e => ({ ...e, role:'a', institution: session.institution_a }))
@@ -9020,6 +9113,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const queuedFraud   = applyFilter(outcomes.filter(o => o.status === 'queued' && isFraudCase(o)))
   const queuedService = applyFilter(outcomes.filter(o => o.status === 'queued' && !isFraudCase(o)))
   const [filed, setFiled] = React.useState(false)
+  const [pkgModal, setPkgModal] = React.useState(null)   // { caseId, network, text } | null
 
   // ── 3pm auto-file ──────────────────────────────────────────────────────────
   const [autoFile, setAutoFile] = React.useState(() => {
@@ -9059,6 +9153,221 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
     const next = !autoFile
     setAutoFile(next)
     try { localStorage.setItem('cov_autobatch_3pm', next ? 'on' : 'off') } catch {}
+  }
+
+  const generateFilingPackage = (o) => {
+    const net = (o.network || '').toLowerCase()
+    const isVisa = net.includes('visa')
+    const isMC   = net.includes('master')
+    const isAmex = net.includes('amex') || net.includes('american')
+    const isDiscover = net.includes('discover')
+    const rc = o.reasonCode || ''
+    const amtRaw = parseFloat((o.amount || '0').replace(/[^0-9.]/g,'')) || 0
+    const amt = amtRaw.toFixed(2)
+    const currency = (o.currency || 'USD').toUpperCase()
+    const txDate = o._transactionDate || o.date || ''
+    const filedDate = new Date().toISOString().split('T')[0]
+    const instName = settings?.duoInstitutionName || '[INSTITUTION NAME]'
+    const agentName = localStorage.getItem('cov_agent_name') || '[AGENT NAME]'
+    const docs = (o.docs || [])
+    const docManifest = docs.length
+      ? docs.map((d,i) => `  ${String(i+1).padStart(2,'0')}. ${d.name} (${d.type||'unknown'}, ${d.size?`${(d.size/1024).toFixed(0)} KB`:'-'}) | ${d.uploadedAt?new Date(d.uploadedAt).toLocaleDateString('en-CA'):'-'} | ${d.uploadedBy||'-'} | ${d.url}`).join('\n')
+      : '  [NO DOCUMENTS ATTACHED — attach evidence in Dispute Desk before filing]'
+
+    let body = ''
+
+    if (isVisa) {
+      body = `VISA CHARGEBACK SUBMISSION PACKAGE
+═══════════════════════════════════════════════════════════════════
+PACKAGE GENERATED:    ${filedDate}
+ISSUER:               ${instName}
+PREPARED BY:          ${agentName}
+COVALENCE CASE ID:    ${o.id}
+═══════════════════════════════════════════════════════════════════
+
+DISPUTE DETAILS
+───────────────────────────────────────────────────────────────────
+CARDHOLDER NAME:      ${o.cardholderName || '[CARDHOLDER NAME]'}
+CARD LAST 4:          ${o.cardLast4 || '[XXXX]'}
+MERCHANT NAME:        ${o.merchant || '[MERCHANT NAME]'}
+TRANSACTION DATE:     ${txDate}
+TRANSACTION AMOUNT:   ${currency} ${amt}
+DISPUTE AMOUNT:       ${currency} ${amt}
+REASON CODE:          ${rc}
+REASON DESCRIPTION:   ${o.verdict ? o.verdict.replace(/_/g,' ') : '[REASON DESCRIPTION]'}
+CHARGEBACK REFERENCE: ${o.id}-VISA-${filedDate.replace(/-/g,'')}
+
+VISA REASON CODE MAPPING
+───────────────────────────────────────────────────────────────────
+FUNCTION CODE:        ${rc.startsWith('10') ? '4853' : rc.startsWith('13') ? '4853' : rc}
+DISPUTE CATEGORY:     ${rc.startsWith('10') ? 'Fraud (10.x)' : rc.startsWith('11') ? 'Authorization (11.x)' : rc.startsWith('12') ? 'Processing Error (12.x)' : rc.startsWith('13') ? 'Consumer Disputes (13.x)' : 'Other'}
+VISA ONLINE QUEUE:    ${rc.startsWith('10') || rc.startsWith('11') ? 'FRAUD_OR_NOT_RECEIVED' : 'DISPUTE_RESOLUTION'}
+
+REQUIRED FIELDS — VISA ONLINE
+───────────────────────────────────────────────────────────────────
+ACQUIRER REF NUMBER:  ${o.trackingRef || '[ARN — obtain from acquirer]'}
+TRANSACTION ID:       ${o.transactionId || '[TRANSACTION ID]'}
+AUTHORIZATION CODE:   ${o.authCode || '[AUTH CODE]'}
+MCC:                  ${o.mcc || '[MCC]'}
+3DS STATUS:           ${o.threeDSStatus || 'UNKNOWN'}
+
+CARDHOLDER STATEMENT SUMMARY
+───────────────────────────────────────────────────────────────────
+${o._complaint ? o._complaint.substring(0,500) + (o._complaint.length > 500 ? '...' : '') : '[PASTE CARDHOLDER STATEMENT]'}
+
+EVIDENCE MANIFEST (${docs.length} document${docs.length !== 1 ? 's' : ''})
+───────────────────────────────────────────────────────────────────
+${docManifest}
+
+CERTIFICATION
+───────────────────────────────────────────────────────────────────
+I certify that this dispute has been received from the cardholder,
+investigated in accordance with Visa Core Rules and Visa Product
+and Service Rules, and that all information provided is accurate.
+
+Prepared by: ${agentName}
+Institution: ${instName}
+Date:        ${filedDate}
+
+NEXT STEPS
+───────────────────────────────────────────────────────────────────
+1. Upload this package to Visa Online → Disputes → New Dispute
+2. Attach all evidence documents listed in manifest above
+3. Enter ARN and transaction details in the Visa Online form
+4. Submit and record Visa reference number back in Covalence
+═══════════════════════════════════════════════════════════════════`
+    } else if (isMC) {
+      body = `MASTERCARD CHARGEBACK SUBMISSION PACKAGE
+═══════════════════════════════════════════════════════════════════
+PACKAGE GENERATED:    ${filedDate}
+ISSUER:               ${instName}
+PREPARED BY:          ${agentName}
+COVALENCE CASE ID:    ${o.id}
+═══════════════════════════════════════════════════════════════════
+
+DISPUTE DETAILS
+───────────────────────────────────────────────────────────────────
+CARDHOLDER NAME:      ${o.cardholderName || '[CARDHOLDER NAME]'}
+CARD LAST 4:          ${o.cardLast4 || '[XXXX]'}
+MERCHANT NAME:        ${o.merchant || '[MERCHANT NAME]'}
+TRANSACTION DATE:     ${txDate}
+TRANSACTION AMOUNT:   ${currency} ${amt}
+DISPUTE AMOUNT:       ${currency} ${amt}
+REASON CODE:          ${rc}
+REASON DESCRIPTION:   ${o.verdict ? o.verdict.replace(/_/g,' ') : '[REASON DESCRIPTION]'}
+CHARGEBACK REFERENCE: ${o.id}-MC-${filedDate.replace(/-/g,'')}
+
+MASTERCARD REASON CODE MAPPING
+───────────────────────────────────────────────────────────────────
+MC REASON CODE:       ${rc || '[4xxx — see MC Chargeback Guide]'}
+DISPUTE CATEGORY:     ${rc==='4853'?'Cardholder Dispute':rc==='4863'?'Cardholder Does Not Recognize':rc==='4870'?'Chip Liability Shift':rc==='4871'?'Chip/PIN Liability Shift':rc==='4837'?'No Cardholder Authorization':rc==='4849'?'Questionable Merchant Activity':'See MC Chargeback Guide'}
+
+REQUIRED FIELDS — MC CONNECT
+───────────────────────────────────────────────────────────────────
+ACQUIRER REF NUMBER:  ${o.trackingRef || '[ARN]'}
+TRANSACTION ID:       ${o.transactionId || '[TRANSACTION ID]'}
+AUTHORIZATION CODE:   ${o.authCode || '[AUTH CODE]'}
+DE 38 (AUTH CODE):    ${o.authCode || '[DE 38 VALUE]'}
+DE 22 (POS ENTRY):    ${o.posEntry || '[POS ENTRY MODE]'}
+3DS STATUS:           ${o.threeDSStatus || 'UNKNOWN'}
+
+CARDHOLDER STATEMENT SUMMARY
+───────────────────────────────────────────────────────────────────
+${o._complaint ? o._complaint.substring(0,500) + (o._complaint.length > 500 ? '...' : '') : '[PASTE CARDHOLDER STATEMENT]'}
+
+EVIDENCE MANIFEST (${docs.length} document${docs.length !== 1 ? 's' : ''})
+───────────────────────────────────────────────────────────────────
+${docManifest}
+
+CERTIFICATION
+───────────────────────────────────────────────────────────────────
+I certify that this dispute complies with the Mastercard Rules and
+the Mastercard Chargeback Guide, and that all documentation has
+been reviewed and authenticated.
+
+Prepared by: ${agentName}
+Institution: ${instName}
+Date:        ${filedDate}
+
+NEXT STEPS
+───────────────────────────────────────────────────────────────────
+1. Log in to MC Connect → Dispute Management
+2. Upload this package and all evidence documents
+3. Enter DE fields and ARN as required
+4. Record MC reference number in Covalence
+═══════════════════════════════════════════════════════════════════`
+    } else if (isAmex) {
+      body = `AMERICAN EXPRESS DISPUTE SUBMISSION PACKAGE
+═══════════════════════════════════════════════════════════════════
+PACKAGE GENERATED:    ${filedDate}
+ISSUER:               ${instName}
+PREPARED BY:          ${agentName}
+COVALENCE CASE ID:    ${o.id}
+═══════════════════════════════════════════════════════════════════
+
+DISPUTE DETAILS
+───────────────────────────────────────────────────────────────────
+CARDMEMBER NAME:      ${o.cardholderName || '[CARDMEMBER NAME]'}
+CARD LAST 5:          ${o.cardLast4 || '[XXXXX]'}
+MERCHANT NAME:        ${o.merchant || '[MERCHANT NAME]'}
+CHARGE DATE:          ${txDate}
+CHARGE AMOUNT:        ${currency} ${amt}
+DISPUTE AMOUNT:       ${currency} ${amt}
+DISPUTE CATEGORY:     ${o.verdict ? o.verdict.replace(/_/g,' ') : '[DISPUTE CATEGORY]'}
+AMEX CASE ID:         ${o.id}-AMEX-${filedDate.replace(/-/g,'')}
+
+REQUIRED FIELDS — AMEX DISPUTE PORTAL
+───────────────────────────────────────────────────────────────────
+SE NUMBER:            ${o.seNumber || '[SERVICE ESTABLISHMENT NUMBER]'}
+TRANSACTION REF:      ${o.transactionId || '[AMEX TRANSACTION REFERENCE]'}
+AUTHORIZATION CODE:   ${o.authCode || '[AUTH CODE]'}
+
+CARDMEMBER STATEMENT SUMMARY
+───────────────────────────────────────────────────────────────────
+${o._complaint ? o._complaint.substring(0,500) + (o._complaint.length > 500 ? '...' : '') : '[PASTE CARDMEMBER STATEMENT]'}
+
+EVIDENCE MANIFEST (${docs.length} document${docs.length !== 1 ? 's' : ''})
+───────────────────────────────────────────────────────────────────
+${docManifest}
+
+Prepared by: ${agentName} · ${instName} · ${filedDate}
+═══════════════════════════════════════════════════════════════════`
+    } else {
+      // Discover or unknown network
+      const netLabel = isDiscover ? 'DISCOVER' : (o.network || 'UNKNOWN NETWORK').toUpperCase()
+      body = `${netLabel} DISPUTE SUBMISSION PACKAGE
+═══════════════════════════════════════════════════════════════════
+PACKAGE GENERATED:    ${filedDate}
+ISSUER:               ${instName}
+PREPARED BY:          ${agentName}
+COVALENCE CASE ID:    ${o.id}
+═══════════════════════════════════════════════════════════════════
+
+DISPUTE DETAILS
+───────────────────────────────────────────────────────────────────
+CARDHOLDER NAME:      ${o.cardholderName || '[CARDHOLDER NAME]'}
+CARD LAST 4:          ${o.cardLast4 || '[XXXX]'}
+MERCHANT NAME:        ${o.merchant || '[MERCHANT NAME]'}
+TRANSACTION DATE:     ${txDate}
+TRANSACTION AMOUNT:   ${currency} ${amt}
+DISPUTE AMOUNT:       ${currency} ${amt}
+REASON CODE:          ${rc}
+REASON DESCRIPTION:   ${o.verdict ? o.verdict.replace(/_/g,' ') : '[REASON DESCRIPTION]'}
+
+CARDHOLDER STATEMENT SUMMARY
+───────────────────────────────────────────────────────────────────
+${o._complaint ? o._complaint.substring(0,500) + (o._complaint.length > 500 ? '...' : '') : '[PASTE CARDHOLDER STATEMENT]'}
+
+EVIDENCE MANIFEST (${docs.length} document${docs.length !== 1 ? 's' : ''})
+───────────────────────────────────────────────────────────────────
+${docManifest}
+
+Prepared by: ${agentName} · ${instName} · ${filedDate}
+═══════════════════════════════════════════════════════════════════`
+    }
+
+    const networkLabel = isVisa ? 'VISA' : isMC ? 'MC' : isAmex ? 'AMEX' : isDiscover ? 'DISCOVER' : 'NETWORK'
+    setPkgModal({ caseId: o.id, network: networkLabel, text: body })
   }
 
   const fileAllFraud = () => {
@@ -9199,6 +9508,12 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                     {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
                   </button>
+                  <button
+                    onClick={() => generateFilingPackage(o)}
+                    className="mono-font text-[9px] px-2 py-0.5 border transition-colors whitespace-nowrap"
+                    style={{ borderColor:'#92400E', color:'#92400E', background:'transparent' }}
+                    title="Generate network-formatted filing package"
+                  >📦 PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length} DOC${(o.docs||[]).length!==1?'S':''}` : ''}</button>
                 </div>
                 {o.notes?.length > 0 && !noteOpen[o.id] && (
                   <div className="px-5 pb-2 space-y-1">
@@ -9419,6 +9734,39 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
           </div>
         )
       })()}
+
+      {/* ── Filing Package Modal ─────────────────────────────────────────── */}
+      {pkgModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
+          <div style={{ background:'#FAF7F1', maxWidth:'760px', width:'100%', maxHeight:'85vh', display:'flex', flexDirection:'column', border:'2px solid #1C1917' }}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-300">
+              <div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500">FILING PACKAGE — {pkgModal.network}</div>
+                <div className="mono-font text-xs text-stone-800 mt-0.5">{pkgModal.caseId}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const a = document.createElement('a')
+                    a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(pkgModal.text)
+                    a.download = `COV-${pkgModal.caseId}-${pkgModal.network}-${new Date().toISOString().split('T')[0]}.txt`
+                    a.click()
+                  }}
+                  className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
+                  style={{ background:'#1C1917', color:'#F5F1EA', border:'none', cursor:'pointer' }}
+                >↓ DOWNLOAD .TXT</button>
+                <button onClick={() => setPkgModal(null)} className="mono-font text-[10px] text-stone-500 hover:text-stone-900 transition-colors px-2">✕</button>
+              </div>
+            </div>
+            <pre style={{ flex:1, overflow:'auto', padding:'20px', fontFamily:'monospace', fontSize:'11px', lineHeight:1.7, whiteSpace:'pre-wrap', wordBreak:'break-word', color:'#1C1917', background:'#FAF7F1' }}>
+              {pkgModal.text}
+            </pre>
+            <div className="px-5 py-3 border-t border-stone-200 flex items-center gap-3 flex-wrap" style={{ background:'#F0EDE6' }}>
+              <span className="mono-font text-[9px] text-stone-500">Review all fields before uploading to the network portal. Bracketed values must be filled in manually.</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -9428,8 +9776,54 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
 // 007 FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 function FileView({ setActiveSection }) {
+  const [filedCases, setFiledCases] = React.useState([])
+  const [pkgModal2, setPkgModal2]   = React.useState(null)
+  const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
+
+  React.useEffect(() => {
+    try {
+      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      setFiledCases(all.filter(o => o.status === 'filed').sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+    } catch {}
+  }, [])
+
+  const regenPackage = (o) => {
+    const net = (o.network||'').toLowerCase()
+    const isVisa = net.includes('visa'); const isMC = net.includes('master')
+    const isAmex = net.includes('amex')||net.includes('american'); const isDiscover = net.includes('discover')
+    const netLabel = isVisa?'VISA':isMC?'MC':isAmex?'AMEX':isDiscover?'DISCOVER':'NETWORK'
+    const amt = (parseFloat((o.amount||'0').replace(/[^0-9.]/g,''))||0).toFixed(2)
+    const currency = (o.currency||'USD').toUpperCase()
+    const instName = settings?.duoInstitutionName || '[INSTITUTION NAME]'
+    const agentName = localStorage.getItem('cov_agent_name')||'[AGENT]'
+    const filedDate = o.filedAt ? new Date(o.filedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    const docs = o.docs||[]
+    const docManifest = docs.length
+      ? docs.map((d,i)=>`  ${String(i+1).padStart(2,'0')}. ${d.name} — ${d.url}`).join('\n')
+      : '  [NO DOCUMENTS ATTACHED]'
+    const text = `${netLabel} CHARGEBACK SUBMISSION — ${o.id}
+${'═'.repeat(64)}
+FILED:       ${filedDate}
+ISSUER:      ${instName}
+PREPARED BY: ${agentName}
+${'─'.repeat(64)}
+MERCHANT:    ${o.merchant||'—'}
+AMOUNT:      ${currency} ${amt}
+REASON CODE: ${o.reasonCode||'—'}
+VERDICT:     ${(o.verdict||'—').replace(/_/g,' ')}
+CARD LAST 4: ${o.cardLast4||'—'}
+TX DATE:     ${o._transactionDate||o.date||'—'}
+${'─'.repeat(64)}
+EVIDENCE MANIFEST (${docs.length} doc${docs.length!==1?'s':''})
+${docManifest}
+${'═'.repeat(64)}`
+    setPkgModal2({ caseId: o.id, network: netLabel, text })
+  }
+
   return (
     <div style={{maxWidth:'1280px',margin:'0 auto',padding:'40px 24px'}}>
+
+      {/* Masthead */}
       <div className="mb-10 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:'16px'}}>
         <div>
           <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — FILE</div>
@@ -9437,35 +9831,102 @@ function FileView({ setActiveSection }) {
             <span style={{fontWeight:700}}>Fi</span><span style={{fontStyle:'italic',fontWeight:500}}>le</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:1.6,maxWidth:'560px'}}>
-            Network submission hub. Cases queued in Multi — with evidence attached in the Dispute Desk — flow here for network-formatted filing. Visa, Mastercard, Amex, Discover. One package per case, per network spec.
+            Submission audit trail. Generate filing packages from Multi — they live here as a permanent record. Direct API submission is coming once network certification is in place.
           </p>
         </div>
         <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
       </div>
+
+      {/* Network cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-        {[{l:'VISA',s:'Visa Online · Dispute Submission',c:'#1A3A8F'},{l:'MASTERCARD',s:'MC Connect · Dispute Management',c:'#B22222'},{l:'AMEX',s:'American Express · Dispute Portal',c:'#006DB7'},{l:'DISCOVER',s:'Discover · Network Filing',c:'#B45309'}].map(n=>(
-          <div key={n.l} className="border border-stone-300 px-4 py-5" style={{background:'#FAF7F1'}}>
-            <div className="mono-font text-[10px] tracking-widest mb-2" style={{color:n.c}}>{n.l}</div>
-            <div className="display-font text-stone-500 text-[12px] leading-snug">{n.s}</div>
-            <div className="mono-font text-[9px] text-stone-400 mt-3 tracking-widest">COMING SOON</div>
+        {[{l:'VISA',s:'Visa Online · Dispute Submission',c:'#1A3A8F'},{l:'MASTERCARD',s:'MC Connect · Dispute Management',c:'#B22222'},{l:'AMEX',s:'American Express · Dispute Portal',c:'#006DB7'},{l:'DISCOVER',s:'Discover · Network Filing',c:'#B45309'}].map(n=>{
+          const count = filedCases.filter(o=>{const net=(o.network||'').toLowerCase();return n.l==='VISA'?net.includes('visa'):n.l==='MASTERCARD'?net.includes('master'):n.l==='AMEX'?(net.includes('amex')||net.includes('american')):net.includes('discover')}).length
+          return (
+            <div key={n.l} className="border border-stone-300 px-4 py-5" style={{background:'#FAF7F1'}}>
+              <div className="mono-font text-[10px] tracking-widest mb-2" style={{color:n.c}}>{n.l}</div>
+              <div className="display-font text-stone-500 text-[12px] leading-snug">{n.s}</div>
+              <div className="mono-font text-[9px] text-stone-400 mt-3 tracking-widest">{count > 0 ? `${count} FILED` : 'NO CASES YET'}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Submission log */}
+      <div className="border border-stone-300 mb-8" style={{background:'#FAF7F1'}}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
+          <div>
+            <div className="mono-font text-xs tracking-widest text-stone-600">SUBMISSION LOG</div>
+            <div className="mono-font text-[10px] text-stone-400 mt-0.5">{filedCases.length} case{filedCases.length!==1?'s':''} filed</div>
           </div>
-        ))}
+          <button onClick={()=>setActiveSection('multi')} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">← BACK TO MULTI</button>
+        </div>
+        {filedCases.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <div className="mono-font text-[10px] text-stone-400 tracking-widest mb-2">NO FILED CASES YET</div>
+            <p className="display-font text-stone-400 text-[13px] mb-4">File cases from the Multi queue — they'll appear here as a permanent log with re-downloadable packages.</p>
+            <button onClick={()=>setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">→ GO TO MULTI</button>
+          </div>
+        ) : (
+          <div className="divide-y divide-stone-200">
+            {/* Header */}
+            <div className="grid px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{gridTemplateColumns:'90px 55px minmax(0,1fr) 70px 70px 90px 90px'}}>
+              <span>CASE ID</span><span>FILED</span><span>MERCHANT</span><span>AMOUNT</span><span>NETWORK</span><span>REASON</span><span></span>
+            </div>
+            {filedCases.map(o => (
+              <div key={o.id} className="grid px-5 py-3 items-center" style={{gridTemplateColumns:'90px 55px minmax(0,1fr) 70px 70px 90px 90px'}}>
+                <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
+                <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                <span className="display-font text-sm text-stone-800 truncate pr-2">{o.merchant||'—'}</span>
+                <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
+                <span className="mono-font text-[10px]" style={{color:(o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'}}>
+                  {(o.network||'—').toUpperCase().substring(0,4)}
+                </span>
+                <span className="mono-font text-[9px] text-stone-500">{o.reasonCode||'—'}</span>
+                <div className="flex gap-1 flex-wrap">
+                  <button
+                    onClick={() => regenPackage(o)}
+                    className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                    title="Regenerate filing package"
+                  >↓ PKG</button>
+                  {(o.docs||[]).length > 0 && (
+                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-green-800 text-green-50">{(o.docs||[]).length}📎</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      <div className="border border-dashed border-stone-300 p-8 text-center mb-8" style={{background:'#FAF7F1'}}>
-        <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400 mb-4">UNDER CONSTRUCTION</div>
-        <div className="display-font font-bold text-stone-900 mb-4" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>Network filing is coming.</div>
-        <p className="display-font text-stone-500 text-[14px] leading-relaxed" style={{maxWidth:'480px',margin:'0 auto 24px'}}>
-          Cases queued in Multi will flow here for network-formatted submission — one package per case, built to each network's exact spec.
-        </p>
-        <button onClick={()=>setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-5 py-2.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">
-          ← VIEW QUEUED CASES IN MULTI
-        </button>
-      </div>
+
+      {/* Coming soon chips */}
       <div className="flex gap-3 flex-wrap">
-        {['SUBMISSION PACKAGE GENERATOR','NETWORK-SPEC VALIDATION','DOC BUNDLE PER CASE','AUDIT TRAIL','BATCH OR SINGLE FILING'].map(f=>(
+        {['DIRECT API SUBMISSION (PHASE 2)','NETWORK-SPEC VALIDATION','BATCH FILING','NETWORK ACKNOWLEDGMENT TRACKING'].map(f=>(
           <div key={f} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-300 text-stone-400">{f}</div>
         ))}
       </div>
+
+      {/* Package re-download modal */}
+      {pkgModal2 && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'24px'}}>
+          <div style={{background:'#FAF7F1',maxWidth:'760px',width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',border:'2px solid #1C1917'}}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-300">
+              <div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500">FILING PACKAGE — {pkgModal2.network}</div>
+                <div className="mono-font text-xs text-stone-800 mt-0.5">{pkgModal2.caseId}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(pkgModal2.text); a.download=`COV-${pkgModal2.caseId}-${pkgModal2.network}.txt`; a.click() }}
+                  className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
+                  style={{background:'#1C1917',color:'#F5F1EA',border:'none',cursor:'pointer'}}
+                >↓ DOWNLOAD .TXT</button>
+                <button onClick={()=>setPkgModal2(null)} className="mono-font text-[10px] text-stone-500 hover:text-stone-900 px-2">✕</button>
+              </div>
+            </div>
+            <pre style={{flex:1,overflow:'auto',padding:'20px',fontFamily:'monospace',fontSize:'11px',lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word',color:'#1C1917',background:'#FAF7F1'}}>{pkgModal2.text}</pre>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
