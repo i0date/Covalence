@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS = {
   // Operational
   pcMilestones:         [10, 45, 90],
   trackerWindowDays:    60,
+  batchFileTime:        '15:00', // HH:MM — daily auto-file time
 }
 
 // ─── Business-day helpers ─────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ function detectNetwork(code) {
 // ─── Shared storage ───────────────────────────────────────────────────────────
 function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
 function saveOutcomes(o) { try { localStorage.setItem('cov_outcomes', JSON.stringify(o)) } catch {} }
+function loadDeskSession() { try { return JSON.parse(sessionStorage.getItem('cov_desk_session') || 'null') || {} } catch { return {} } }
 function loadSettings()  { try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } } }
 function saveSettings(s) { try { localStorage.setItem('cov_settings', JSON.stringify(s)) } catch {} }
 
@@ -2438,30 +2440,34 @@ const NACHA_RETURN_CODES = [
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
 function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode }) {
-  const [network, setNetwork]                               = useState('visa')
-  const [complaint, setComplaint]                           = useState('')
-  const [merchant, setMerchant]                             = useState('')
-  const [amount, setAmount]                                 = useState('')
-  const [transactionDate, setTransactionDate]               = useState('')
-  const [expectedDeliveryDate, setExpectedDeliveryDate]     = useState('')
-  const [currency, setCurrency]                             = useState('CAD')
+  // Restore previous session so navigation away doesn't wipe in-progress analysis
+  const _sess = React.useRef(loadDeskSession()).current
+  const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
+  const [quickDueDate,    setQuickDueDate]    = React.useState('')
+  const [network, setNetwork]                               = useState(_sess.network || 'visa')
+  const [complaint, setComplaint]                           = useState(_sess.complaint || '')
+  const [merchant, setMerchant]                             = useState(_sess.merchant || '')
+  const [amount, setAmount]                                 = useState(_sess.amount || '')
+  const [transactionDate, setTransactionDate]               = useState(_sess.transactionDate || '')
+  const [expectedDeliveryDate, setExpectedDeliveryDate]     = useState(_sess.expectedDeliveryDate || '')
+  const [currency, setCurrency]                             = useState(_sess.currency || 'CAD')
   const [loading, setLoading]                               = useState(false)
-  const [result, setResult]                                 = useState(null)
+  const [result, setResult]                                 = useState(_sess.result ?? null)
   const [error, setError]                                   = useState(null)
   const [copied, setCopied]                                 = useState(false)
   const [checked, setChecked]                               = useState({})
-  const [rebuttal, setRebuttal]                             = useState(null)
+  const [rebuttal, setRebuttal]                             = useState(_sess.rebuttal ?? null)
   const [rebuttalLoading, setRebuttalLoading]               = useState(false)
   const [rebuttalError, setRebuttalError]                   = useState(null)
-  const [comms, setComms]                                   = useState(null)
+  const [comms, setComms]                                   = useState(_sess.comms ?? null)
   const [commsLoading, setCommsLoading]                     = useState(false)
   const [commsError, setCommsError]                         = useState(null)
   const [commsCopied, setCommsCopied]                       = useState(false)
-  const [editableLetterBody, setEditableLetterBody]         = useState('')
+  const [editableLetterBody, setEditableLetterBody]         = useState(_sess.editableLetterBody || '')
   const [docRequestCopied, setDocRequestCopied]             = useState(false)
   const [goodwillCopied, setGoodwillCopied]                 = useState(false)
-  const [disputedAmount, setDisputedAmount]                 = useState('')     // partial dispute amount (optional)
-  const [cardType, setCardType]                             = useState('credit') // 'credit' | 'debit'
+  const [disputedAmount, setDisputedAmount]                 = useState(_sess.disputedAmount || '')     // partial dispute amount (optional)
+  const [cardType, setCardType]                             = useState(_sess.cardType || 'credit') // 'credit' | 'debit'
   const [sarDiscoveryDate, setSarDiscoveryDate]             = useState('')     // FI: date fraud was detected (for SAR deadline)
   const [sarDraftOpen, setSarDraftOpen]                     = useState(false)
   const [editingRow, setEditingRow]                         = useState(null)   // id of row being edited
@@ -2470,7 +2476,7 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [editDraft, setEditDraft]                           = useState({})     // draft field values
 
   // ── 3DS / authentication ──────────────────────────────────────────────────
-  const [threeDSStatus, setThreeDSStatus]                   = useState('unknown') // 'not_attempted' | 'attempted_failed' | 'attempted_passed' | 'unknown'
+  const [threeDSStatus, setThreeDSStatus]                   = useState(_sess.threeDSStatus || 'unknown') // 'not_attempted' | 'attempted_failed' | 'attempted_passed' | 'unknown'
 
   // ── FI DFA signals — captured at intake, passed to DFA when scoring ───────
   // null = unknown (agent doesn't have info), false = no, true = yes
@@ -2543,9 +2549,9 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   }
 
   // ── Chargeback cycle deadline tracker ────────────────────────────────────
-  const [cbFiledDate, setCbFiledDate]   = useState('')
-  const [cbCycleStage, setCbCycleStage] = useState('1cb')
-  const [currentDeskCaseId, setCurrentDeskCaseId] = useState(null) // ID of most recently analyzed case in desk
+  const [cbFiledDate, setCbFiledDate]   = useState(_sess.cbFiledDate || '')
+  const [cbCycleStage, setCbCycleStage] = useState(_sess.cbCycleStage || '1cb')
+  const [currentDeskCaseId, setCurrentDeskCaseId] = useState(_sess.currentDeskCaseId ?? null) // ID of most recently analyzed case in desk
 
 
   // ── Deadline push notifications ─────────────────────────────────────────────
@@ -2581,6 +2587,16 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   useEffect(() => {
     localStorage.setItem('cov_outcomes', JSON.stringify(outcomes))
   }, [outcomes])
+
+  // ── Persist desk session so navigation away doesn't lose in-progress work ──
+  useEffect(() => {
+    const snap = { network, complaint, merchant, amount, currency, transactionDate, expectedDeliveryDate,
+      disputedAmount, cardType, threeDSStatus, cbFiledDate, cbCycleStage, result, rebuttal, comms,
+      editableLetterBody, currentDeskCaseId }
+    try { sessionStorage.setItem('cov_desk_session', JSON.stringify(snap)) } catch {}
+  }, [network, complaint, merchant, amount, currency, transactionDate, expectedDeliveryDate,
+      disputedAmount, cardType, threeDSStatus, cbFiledDate, cbCycleStage, result, rebuttal, comms,
+      editableLetterBody, currentDeskCaseId])
 
   // ── Compliance settings — persisted ───────────────────────────────────────
   const [settings, setSettings] = useState(() => {
@@ -5336,17 +5352,38 @@ Return ONLY valid JSON:
                                     if (!isFraudLike || !(amtNum >= settings.sarThreshold)) return null
                                     return <p className="mono-font text-[10px] text-red-700 mt-0.5 font-bold">⚠ SAR REVIEW</p>
                                   })()}
-                                  {/* Next response due badge */}
-                                  {o.nextRespDate && (() => {
-                                    const daysLeft = Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
-                                    const overdue = daysLeft < 0
-                                    const urgent = !overdue && daysLeft <= 3
-                                    return (
-                                      <span className={`mono-font text-[8px] tracking-widest px-1.5 py-0.5 font-bold whitespace-nowrap inline-block mt-1 ${overdue ? 'bg-red-700 text-red-50' : urgent ? 'bg-amber-700 text-amber-50' : 'bg-blue-700 text-blue-50'}`}>
-                                        {overdue ? `⚠ RESP OVERDUE ${Math.abs(daysLeft)}d` : `RESP ${daysLeft === 0 ? 'TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
+                                  {/* Next response due badge + quick-set */}
+                                  <div className="flex items-center gap-1 flex-wrap mt-1">
+                                    {o.nextRespDate && (() => {
+                                      const daysLeft = Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
+                                      const overdue = daysLeft < 0
+                                      const urgent = !overdue && daysLeft <= 3
+                                      return (
+                                        <span className={`mono-font text-[8px] tracking-widest px-1.5 py-0.5 font-bold whitespace-nowrap ${overdue ? 'bg-red-700 text-red-50' : urgent ? 'bg-amber-700 text-amber-50' : 'bg-blue-700 text-blue-50'}`}>
+                                          {overdue ? `⚠ RESP ${Math.abs(daysLeft)}d OVERDUE` : `RESP ${daysLeft === 0 ? 'TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
+                                        </span>
+                                      )
+                                    })()}
+                                    {quickDueDateRow === o.id ? (
+                                      <span className="flex items-center gap-1">
+                                        <input type="date" value={quickDueDate} onChange={e => setQuickDueDate(e.target.value)}
+                                          className="mono-font text-[8px] border border-stone-300 px-1 py-0.5"
+                                          style={{ fontSize:'10px', lineHeight:1, minWidth:0, width:'100px' }} />
+                                        <button onClick={() => {
+                                          if (quickDueDate) setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, nextRespDate: quickDueDate } : x))
+                                          setQuickDueDateRow(null); setQuickDueDate('')
+                                        }} className="mono-font text-[8px] px-1 py-0.5 bg-stone-900 text-stone-50">✓</button>
+                                        <button onClick={() => { setQuickDueDateRow(null); setQuickDueDate('') }}
+                                          className="mono-font text-[8px] px-1 py-0.5 border border-stone-300 text-stone-500">✕</button>
                                       </span>
-                                    )
-                                  })()}
+                                    ) : (
+                                      <button onClick={() => { setQuickDueDateRow(o.id); setQuickDueDate(o.nextRespDate || '') }}
+                                        className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:border-blue-500 hover:text-blue-600 transition-colors whitespace-nowrap"
+                                        title="Set next network response deadline">
+                                        {o.nextRespDate ? '✎ DUE' : '+ DUE DATE'}
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 {/* DFA grade badge — FI only; merchant rows show winProb badge in reason cell */}
                                 {o.mode !== 'merchant' ? (() => {
@@ -8847,7 +8884,8 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   React.useEffect(() => {
     const tick = () => {
       const now = new Date()
-      const target = new Date(now); target.setHours(15, 0, 0, 0)
+      const [bh, bm] = (settings?.batchFileTime || '15:00').split(':').map(Number)
+      const target = new Date(now); target.setHours(bh, bm, 0, 0)
       if (now >= target) { target.setDate(target.getDate() + 1); autoFileFired.current = false }
       const diff = Math.max(0, target - now)
       const h = Math.floor(diff / 3600000)
@@ -9083,6 +9121,12 @@ function SettingsView({ settings, setSettings }) {
         {/* ── Operational ── */}
         <Section label="OPERATIONAL DEFAULTS" />
         <Num label="TRACKER WINDOW (days)" field="trackerWindowDays" />
+        <div>
+          <label className="cov-label">BATCH FILING TIME (daily auto-file)</label>
+          <input type="time" value={settings.batchFileTime || '15:00'} onChange={e => set('batchFileTime', e.target.value)}
+            className="cov-input mono-font" style={{ fontSize:'14px', maxWidth:'160px' }} />
+          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Queued fraud cases auto-file at this time daily when Multi tab is open. Default: 3:00 PM.</div>
+        </div>
 
         <div style={{ display:'flex', gap:'12px', paddingTop:'8px' }}>
           <button onClick={() => setSettings({ ...DEFAULT_SETTINGS })}
