@@ -5336,15 +5336,15 @@ Return ONLY valid JSON:
                                     if (!isFraudLike || !(amtNum >= settings.sarThreshold)) return null
                                     return <p className="mono-font text-[10px] text-red-700 mt-0.5 font-bold">⚠ SAR REVIEW</p>
                                   })()}
-                                  {/* Next response due chip */}
+                                  {/* Next response due badge */}
                                   {o.nextRespDate && (() => {
                                     const daysLeft = Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
-                                    const urgent = daysLeft <= 3
                                     const overdue = daysLeft < 0
+                                    const urgent = !overdue && daysLeft <= 3
                                     return (
-                                      <p className={`mono-font text-[10px] mt-0.5 font-bold ${overdue ? 'text-red-700' : urgent ? 'text-amber-700' : 'text-blue-700'}`}>
-                                        {overdue ? `⚠ NEXT RESP OVERDUE ${Math.abs(daysLeft)}d ago` : `NEXT RESP ${daysLeft === 0 ? 'DUE TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
-                                      </p>
+                                      <span className={`mono-font text-[8px] tracking-widest px-1.5 py-0.5 font-bold whitespace-nowrap inline-block mt-1 ${overdue ? 'bg-red-700 text-red-50' : urgent ? 'bg-amber-700 text-amber-50' : 'bg-blue-700 text-blue-50'}`}>
+                                        {overdue ? `⚠ RESP OVERDUE ${Math.abs(daysLeft)}d` : `RESP ${daysLeft === 0 ? 'TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
+                                      </span>
                                     )
                                   })()}
                                 </div>
@@ -8803,14 +8803,79 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── MULTI — Bulk dispute management ──────────────────────────────────────────
-function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
-  const queuedFraud   = outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type))
-  const queuedService = outcomes.filter(o => o.status === 'queued' && !queuedFraud.includes(o))
+function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection }) {
+  // Read live from localStorage so DeskView changes appear immediately
+  const [outcomes, setLiveOutcomes] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return _propOutcomes || [] }
+  })
+  // Poll every 10 s for new queued cases added in DeskView
+  React.useEffect(() => {
+    const refresh = () => {
+      try {
+        const fresh = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+        setLiveOutcomes(fresh)
+      } catch {}
+    }
+    const id = setInterval(refresh, 10000)
+    return () => clearInterval(id)
+  }, [])
+  // Wrapper that keeps localStorage + App state in sync
+  const setOutcomes = React.useCallback((updater) => {
+    setLiveOutcomes(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      try { localStorage.setItem('cov_outcomes', JSON.stringify(next)) } catch {}
+      if (setAppOutcomes) setAppOutcomes(next)
+      return next
+    })
+  }, [setAppOutcomes])
+
+  const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
+  const queuedFraud   = outcomes.filter(o => o.status === 'queued' && isFraudCase(o))
+  const queuedService = outcomes.filter(o => o.status === 'queued' && !isFraudCase(o))
   const [filed, setFiled] = React.useState(false)
+
+  // ── 3pm auto-file ──────────────────────────────────────────────────────────
+  const [autoFile, setAutoFile] = React.useState(() => {
+    try { return localStorage.getItem('cov_autobatch_3pm') === 'on' } catch { return false }
+  })
+  const [batchCountdown, setBatchCountdown] = React.useState('')
+  const [nearBatch, setNearBatch]   = React.useState(false)
+  const queuedFraudRef = React.useRef(queuedFraud)
+  queuedFraudRef.current = queuedFraud
+  const autoFileFired = React.useRef(false)
+
+  React.useEffect(() => {
+    const tick = () => {
+      const now = new Date()
+      const target = new Date(now); target.setHours(15, 0, 0, 0)
+      if (now >= target) { target.setDate(target.getDate() + 1); autoFileFired.current = false }
+      const diff = Math.max(0, target - now)
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setBatchCountdown(h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`)
+      setNearBatch(diff < 15 * 60 * 1000) // within 15 min
+      if (autoFile && diff <= 1000 && !autoFileFired.current && queuedFraudRef.current.length > 0) {
+        autoFileFired.current = true
+        setOutcomes(prev => prev.map(o => isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString() } : o))
+        setFiled(true)
+        setTimeout(() => setFiled(false), 5000)
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [autoFile])
+
+  const toggleAutoFile = () => {
+    const next = !autoFile
+    setAutoFile(next)
+    try { localStorage.setItem('cov_autobatch_3pm', next ? 'on' : 'off') } catch {}
+  }
 
   const fileAllFraud = () => {
     setOutcomes(prev => prev.map(o =>
-      queuedFraud.find(q => q.id === o.id) ? { ...o, status: 'filed' } : o
+      isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString() } : o
     ))
     setFiled(true)
     setTimeout(() => setFiled(false), 3000)
@@ -8907,13 +8972,34 @@ function MultiView({ outcomes, setOutcomes, settings, setActiveSection }) {
         )}
       </div>
 
-      {/* Cron job notice */}
-      <div className="border border-dashed border-stone-300 px-5 py-4">
-        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">SCHEDULED AUTO-FILING</div>
-        <p className="display-font text-stone-500 text-[13px] leading-relaxed">
-          Fraud disputes can be scheduled for automatic filing daily at 3:00 PM. Service disputes are excluded from auto-filing and always require agent sign-off.
-          Auto-filing is a platform-level feature — contact your administrator to enable it.
-        </p>
+      {/* 3pm batch schedule panel */}
+      <div className={`border px-5 py-4 ${nearBatch && queuedFraud.length > 0 ? 'border-amber-600 bg-amber-50' : 'border-stone-300'}`} style={{ background: nearBatch && queuedFraud.length > 0 ? undefined : '#FAF7F1' }}>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">BATCH FILING WINDOW — 3:00 PM DAILY</div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className={`mono-font text-sm font-bold ${nearBatch && queuedFraud.length > 0 ? 'text-amber-700' : 'text-stone-700'}`}>
+                {batchCountdown} until 3:00 PM
+              </span>
+              <span className="mono-font text-[10px] text-stone-400">· {queuedFraud.length} fraud case{queuedFraud.length !== 1 ? 's' : ''} ready</span>
+            </div>
+            {nearBatch && queuedFraud.length > 0 && (
+              <p className="display-font text-amber-800 text-[13px] mt-1">⚡ Batch window approaching — file now or wait for auto-file at 3:00 PM.</p>
+            )}
+            <p className="display-font text-stone-400 text-[11px] mt-1 italic">Service disputes always require manual agent sign-off before filing.</p>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="mono-font text-[9px] tracking-widest text-stone-500">AUTO-FILE AT 3PM</span>
+              <button
+                onClick={toggleAutoFile}
+                className={`mono-font text-[9px] tracking-widest px-3 py-1.5 border transition-colors ${autoFile ? 'bg-stone-900 text-stone-50 border-stone-900' : 'border-stone-400 text-stone-500 hover:border-stone-700 hover:text-stone-700'}`}
+                title={autoFile ? 'Auto-file is ON — fraud cases will file automatically at 3:00 PM while this tab is open' : 'Enable auto-file at 3:00 PM (requires this tab to be open)'}
+              >{autoFile ? 'ON ✓' : 'OFF'}</button>
+            </div>
+            {autoFile && <p className="mono-font text-[9px] text-emerald-700">Tab must remain open</p>}
+          </div>
+        </div>
       </div>
     </div>
   )
