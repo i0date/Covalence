@@ -7630,38 +7630,413 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
 // 005 TRIO VIEW — fraud incident command
 // ═══════════════════════════════════════════════════════════════════════════════
 function TrioView() {
+  const STORAGE_KEY = 'cov_trio_incidents'
+  const loadIncidents = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
+  const saveIncidents = (arr) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch {} }
+
+  const [incidents, setIncidents]   = React.useState(loadIncidents)
+  const [activeId,  setActiveId]    = React.useState(null)
+  const [showCreate, setShowCreate] = React.useState(false)
+  const [noteDraft,  setNoteDraft]  = React.useState('')
+  const [linkInput,  setLinkInput]  = React.useState('')
+  const [linkError,  setLinkError]  = React.useState('')
+
+  // Create form state
+  const [form, setForm] = React.useState({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
+
+  const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
+  const allCases = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }, [])
+  const sarThreshold = parseFloat(settings.sarThreshold) || 5000
+  const agentName = localStorage.getItem('cov_agent_name') || 'Agent'
+
+  const persist = (updated) => { setIncidents(updated); saveIncidents(updated) }
+
+  const activeIncident = incidents.find(i => i.id === activeId) || null
+  const linkedCases = activeIncident ? allCases.filter(c => (activeIncident.linkedCaseIds||[]).includes(c.id)) : []
+  const linkedTotal = linkedCases.reduce((sum, c) => sum + (parseFloat((c.amount||'0').replace(/[^0-9.]/g,''))||0), 0)
+  const sarProgress = Math.min(linkedTotal / sarThreshold, 1)
+  const sarCrossed = linkedTotal >= sarThreshold
+
+  const elapsedLabel = (detectionDate) => {
+    if (!detectionDate) return '—'
+    const ms = Date.now() - new Date(detectionDate + 'T00:00:00').getTime()
+    const h = Math.floor(ms / 3600000)
+    if (h < 24) return `${h}h elapsed`
+    return `${Math.floor(h/24)}d ${h%24}h elapsed`
+  }
+
+  const createIncident = () => {
+    if (!form.name.trim()) return
+    const inc = {
+      id: 'TRI-' + Date.now().toString(36).toUpperCase(),
+      name: form.name.trim(),
+      type: form.type,
+      severity: form.severity,
+      detectionDate: form.detectionDate,
+      affectedProduct: form.affectedProduct.trim(),
+      description: form.description.trim(),
+      status: 'active',
+      linkedCaseIds: [],
+      notes: [],
+      cardholderNotified: 0,
+      cardholderTotal: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    const updated = [inc, ...incidents]
+    persist(updated)
+    setActiveId(inc.id)
+    setShowCreate(false)
+    setForm({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
+  }
+
+  const updateIncident = (id, patch) => {
+    persist(incidents.map(i => i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i))
+  }
+
+  const addNote = () => {
+    const text = noteDraft.trim()
+    if (!text || !activeIncident) return
+    const note = { text, author: agentName, ts: new Date().toISOString() }
+    updateIncident(activeId, { notes: [...(activeIncident.notes||[]), note] })
+    setNoteDraft('')
+  }
+
+  const linkCase = () => {
+    const cid = linkInput.trim().toUpperCase()
+    setLinkError('')
+    if (!cid) return
+    if ((activeIncident.linkedCaseIds||[]).includes(cid)) { setLinkError('Already linked'); return }
+    const found = allCases.find(c => c.id === cid)
+    if (!found) { setLinkError(`Case ${cid} not found in tracker`); return }
+    updateIncident(activeId, { linkedCaseIds: [...(activeIncident.linkedCaseIds||[]), cid] })
+    setLinkInput('')
+  }
+
+  const unlinkCase = (cid) => {
+    updateIncident(activeId, { linkedCaseIds: (activeIncident.linkedCaseIds||[]).filter(x => x !== cid) })
+  }
+
+  const SEV_COLORS = { LOW:'#065F46', MEDIUM:'#92400E', HIGH:'#B45309', CRITICAL:'#991B1B' }
+  const SEV_BG     = { LOW:'#ECFDF5', MEDIUM:'#FEF3C7', HIGH:'#FEF3C7', CRITICAL:'#FEF2F2' }
+  const STATUS_COLORS = { active:'#991B1B', contained:'#92400E', closed:'#78716C' }
+  const TYPE_LABELS = { fraud_wave:'Fraud Wave', bin_attack:'BIN Attack', ato:'Account Takeover', platform_compromise:'Platform Compromise', p2p_scam:'P2P Scam Campaign', other:'Other' }
+
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
+
+      {/* ── Masthead ── */}
+      <div className="mb-6 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
         <div>
           <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — TRIO</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
             <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
           </h1>
-          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.6, maxWidth:'560px' }}>
-            Fraud Incident Command. When a fraud wave hits — a mass ATO, a P2P scam campaign, a crypto platform exploit — Trio coordinates the issuing institution, the receiving institution, and the network or platform. One shared incident record. Escalation paths for every party. Built for speed.
+          <p className="display-font text-stone-600 mt-3" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.5, maxWidth:'560px' }}>
+            Fraud incident command. Open an incident when a wave hits, link your Desk cases, track SAR obligations, and run the war room notes feed — all in one place.
           </p>
         </div>
-        <div className="mono-font text-xs tracking-widest text-stone-600">
-          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
-        </div>
+        <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px', border:'1px dashed #D4CCBC', background:'#FAF7F1', textAlign:'center' }}>
-        <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400 mb-4">COMING NEXT</div>
-        <div className="display-font font-bold text-stone-900" style={{ fontSize:'clamp(22px,3vw,32px)', letterSpacing:'-0.02em', marginBottom:'16px' }}>
-          Trio Mode is under construction.
-        </div>
-        <p className="display-font text-stone-500" style={{ fontSize:'14px', lineHeight:1.7, maxWidth:'440px' }}>
-          Three-party fraud incident coordination — issuer, receiver, and platform — with a shared incident log, escalation triggers, and customer communication status.
-        </p>
-        <div className="mt-8 flex flex-col items-center gap-3">
-          <div className="mono-font text-[9px] tracking-widest text-stone-400">THREE PARTIES · ONE INCIDENT RECORD · REAL-TIME STATUS</div>
-          <div style={{ display:'flex', gap:'16px', flexWrap:'wrap', justifyContent:'center' }}>
-            {['ISSUING FI','RECEIVING FI / PLATFORM','CUSTOMER COMMS'].map(label => (
-              <div key={label} className="mono-font text-[9px] tracking-widest px-3 py-1.5" style={{ border:'1px solid #D4CCBC', color:'#78716C' }}>{label}</div>
+
+      {/* ── Under construction banner ── */}
+      <div className="mb-6 px-4 py-2.5 flex items-center gap-3" style={{ background:'#FEF3C7', border:'1px solid #D97706' }}>
+        <span className="mono-font text-[9px] tracking-widest text-amber-800">⚠ UNDER CONSTRUCTION</span>
+        <span className="display-font text-[12px] text-amber-700">Features are being activated gradually. Data is stored locally — cross-institutional sync coming in a later phase.</span>
+      </div>
+
+      <div className="grid gap-6" style={{ gridTemplateColumns: activeIncident ? '280px 1fr' : '1fr' }}>
+
+        {/* ── Incident list ── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="mono-font text-[10px] tracking-widest text-stone-500">INCIDENTS ({incidents.length})</div>
+            <button onClick={() => setShowCreate(true)}
+              className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
+              style={{ background:'#7F1D1D', color:'#FEF2F2', border:'none', cursor:'pointer' }}>
+              + NEW INCIDENT
+            </button>
+          </div>
+
+          {/* Create form */}
+          {showCreate && (
+            <div className="border border-red-200 p-4 mb-4" style={{ background:'#FEF2F2' }}>
+              <div className="mono-font text-[10px] tracking-widest text-red-800 mb-3">NEW INCIDENT</div>
+              <div className="space-y-3">
+                <div>
+                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">INCIDENT NAME *</label>
+                  <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
+                    value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
+                    placeholder="e.g. Skip the Dishes BIN Attack Oct 2026" />
+                </div>
+                <div className="grid gap-2" style={{ gridTemplateColumns:'1fr 1fr' }}>
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">TYPE</label>
+                    <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'#FAF7F1' }}
+                      value={form.type} onChange={e => setForm(f => ({...f, type: e.target.value}))}>
+                      {Object.entries(TYPE_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">SEVERITY</label>
+                    <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'#FAF7F1' }}
+                      value={form.severity} onChange={e => setForm(f => ({...f, severity: e.target.value}))}>
+                      {['LOW','MEDIUM','HIGH','CRITICAL'].map(s => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">DETECTION DATE</label>
+                  <input type="date" className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
+                    value={form.detectionDate} onChange={e => setForm(f => ({...f, detectionDate: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">AFFECTED PRODUCT / CHANNEL</label>
+                  <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
+                    value={form.affectedProduct} onChange={e => setForm(f => ({...f, affectedProduct: e.target.value}))}
+                    placeholder="e.g. Visa debit, P2P / Skip" />
+                </div>
+                <div>
+                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">INITIAL SUMMARY</label>
+                  <textarea rows={2} className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px] resize-none" style={{ background:'#FAF7F1' }}
+                    value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))}
+                    placeholder="What happened, how it was detected..." />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={createIncident} disabled={!form.name.trim()}
+                    className="mono-font text-[9px] tracking-widest px-4 py-1.5 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors"
+                    style={{ background: form.name.trim() ? '#7F1D1D' : undefined, color: form.name.trim() ? '#FEF2F2' : undefined, border:'none', cursor: form.name.trim() ? 'pointer' : undefined }}>
+                    OPEN INCIDENT
+                  </button>
+                  <button onClick={() => setShowCreate(false)}
+                    className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
+                    CANCEL
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Incident list */}
+          {incidents.length === 0 && !showCreate && (
+            <div className="px-4 py-8 text-center border border-dashed border-stone-300" style={{ background:'#FAF7F1' }}>
+              <div className="mono-font text-[10px] text-stone-400 tracking-widest mb-2">NO INCIDENTS</div>
+              <p className="display-font text-stone-400 text-[12px]">Open an incident when a fraud wave is detected.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {incidents.map(inc => (
+              <button key={inc.id} onClick={() => setActiveId(activeId === inc.id ? null : inc.id)}
+                className="w-full text-left px-3 py-3 border transition-colors"
+                style={{ background: activeId === inc.id ? '#1A1814' : '#FAF7F1', borderColor: activeId === inc.id ? '#1A1814' : '#D4CCBC' }}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="mono-font text-[9px]" style={{ color: activeId === inc.id ? '#A8A29E' : '#78716C' }}>{inc.id}</span>
+                  <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold"
+                    style={{ background: SEV_BG[inc.severity], color: SEV_COLORS[inc.severity] }}>{inc.severity}</span>
+                </div>
+                <div className="display-font text-sm font-semibold leading-tight" style={{ color: activeId === inc.id ? '#F5F1EA' : '#1A1814' }}>{inc.name}</div>
+                <div className="mono-font text-[9px] mt-1" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
+                  {TYPE_LABELS[inc.type]||inc.type} · {(inc.linkedCaseIds||[]).length} cases
+                </div>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className="mono-font text-[8px] font-bold" style={{ color: STATUS_COLORS[inc.status]||'#78716C' }}>
+                    ● {(inc.status||'active').toUpperCase()}
+                  </span>
+                  <span className="mono-font text-[8px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>{elapsedLabel(inc.detectionDate)}</span>
+                </div>
+              </button>
             ))}
           </div>
         </div>
+
+        {/* ── Active incident detail ── */}
+        {activeIncident && (
+          <div className="space-y-5">
+
+            {/* Header */}
+            <div className="px-5 py-4 border" style={{ background:'#1A1814', borderColor:'#1A1814' }}>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">{activeIncident.id} · {TYPE_LABELS[activeIncident.type]||activeIncident.type}</div>
+                  <div className="display-font font-bold text-stone-50" style={{ fontSize:'clamp(18px,2.5vw,26px)', letterSpacing:'-0.01em' }}>{activeIncident.name}</div>
+                  {activeIncident.affectedProduct && (
+                    <div className="mono-font text-[10px] text-stone-400 mt-1">PRODUCT / CHANNEL: {activeIncident.affectedProduct}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="mono-font text-[9px] px-2 py-1 font-bold"
+                    style={{ background: SEV_BG[activeIncident.severity], color: SEV_COLORS[activeIncident.severity] }}>{activeIncident.severity}</span>
+                  <select value={activeIncident.status}
+                    onChange={e => updateIncident(activeIncident.id, { status: e.target.value })}
+                    className="mono-font text-[9px] px-2 py-1 border-none font-bold tracking-widest cursor-pointer"
+                    style={{ background: activeIncident.status==='active'?'#7F1D1D':activeIncident.status==='contained'?'#78350F':'#374151', color:'#F5F1EA' }}>
+                    <option value="active">● ACTIVE</option>
+                    <option value="contained">◐ CONTAINED</option>
+                    <option value="closed">○ CLOSED</option>
+                  </select>
+                </div>
+              </div>
+              {activeIncident.description && (
+                <p className="display-font text-stone-400 text-[13px] mt-3 leading-snug">{activeIncident.description}</p>
+              )}
+              <div className="mono-font text-[9px] text-stone-600 mt-3">
+                DETECTED {activeIncident.detectionDate} · {elapsedLabel(activeIncident.detectionDate)} · {(activeIncident.notes||[]).length} WAR ROOM ENTRIES
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label:'LINKED CASES', value: (activeIncident.linkedCaseIds||[]).length },
+                { label:'TOTAL EXPOSURE', value: linkedTotal > 0 ? `$${linkedTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` : '$0.00' },
+                { label:'SAR STATUS', value: sarCrossed ? 'THRESHOLD HIT' : `$${(sarThreshold-linkedTotal).toFixed(0)} TO SAR`, highlight: sarCrossed },
+                { label:'CH NOTIFIED', value: `${activeIncident.cardholderNotified||0}${activeIncident.cardholderTotal?` / ${activeIncident.cardholderTotal}`:''}` },
+              ].map(s => (
+                <div key={s.label} className="px-4 py-3 border border-stone-300" style={{ background: s.highlight ? '#FEF2F2' : '#FAF7F1' }}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{s.label}</div>
+                  <div className="mono-font text-base font-bold" style={{ color: s.highlight ? '#991B1B' : '#1A1814' }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* SAR progress bar */}
+            <div className="border border-stone-300 px-4 py-3" style={{ background: sarCrossed ? '#FEF2F2' : '#FAF7F1' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="mono-font text-[9px] tracking-widest text-stone-500">SAR / STR THRESHOLD TRACKER</div>
+                {sarCrossed && <span className="mono-font text-[9px] tracking-widest font-bold text-red-700">⚠ FILING OBLIGATION MET</span>}
+              </div>
+              <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
+                <div className="h-2 transition-all" style={{ width: `${(sarProgress*100).toFixed(1)}%`, background: sarCrossed ? '#DC2626' : sarProgress > 0.7 ? '#D97706' : '#059669' }} />
+              </div>
+              <div className="flex justify-between mt-1.5">
+                <span className="mono-font text-[9px] text-stone-500">${linkedTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} linked</span>
+                <span className="mono-font text-[9px] text-stone-400">threshold: ${sarThreshold.toLocaleString()}</span>
+              </div>
+              {sarCrossed && (
+                <p className="mono-font text-[10px] text-red-700 mt-2 font-bold">SAR/STR filing is required. Coordinate with your compliance officer before finalizing write-offs on linked cases.</p>
+              )}
+            </div>
+
+            {/* Linked cases */}
+            <div className="border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+                <div className="mono-font text-[10px] tracking-widest text-stone-600">LINKED CASES ({(activeIncident.linkedCaseIds||[]).length})</div>
+                <div className="flex items-center gap-2">
+                  <input value={linkInput} onChange={e => setLinkInput(e.target.value.toUpperCase())}
+                    onKeyDown={e => e.key === 'Enter' && linkCase()}
+                    placeholder="CASE-XXXXXX" className="mono-font text-[10px] border border-stone-300 px-2 py-1"
+                    style={{ background:'white', width:'120px' }} />
+                  <button onClick={linkCase} className="mono-font text-[9px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
+                    + LINK
+                  </button>
+                </div>
+              </div>
+              {linkError && <div className="px-4 py-1 mono-font text-[9px] text-red-600">{linkError}</div>}
+              {(activeIncident.linkedCaseIds||[]).length === 0 ? (
+                <div className="px-4 py-6 text-center">
+                  <p className="mono-font text-[10px] text-stone-400">No cases linked. Enter a case ID from the Dispute Desk tracker.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-200">
+                  {linkedCases.length > 0 && linkedCases.map(c => (
+                    <div key={c.id} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
+                      <span className="mono-font text-[10px] text-stone-500 w-24 shrink-0">{c.id}</span>
+                      <span className="display-font text-sm text-stone-800 flex-1 truncate">{c.merchant||'—'}</span>
+                      <span className="mono-font text-[10px] text-stone-600">{c.amount||'—'}</span>
+                      <span className="mono-font text-[9px] px-1.5 py-0.5"
+                        style={{ background: c.status==='filed'?'#1C1917':c.status==='queued'?'#4C1D95':c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':'#D6D3CD', color: ['filed','queued','won','lost'].includes(c.status)?'#F5F1EA':'#57534E' }}>
+                        {(c.status||'pending').toUpperCase()}
+                      </span>
+                      <button onClick={() => unlinkCase(c.id)} className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
+                    </div>
+                  ))}
+                  {/* Show unresolved IDs (cases not yet in tracker) */}
+                  {(activeIncident.linkedCaseIds||[]).filter(id => !linkedCases.find(c=>c.id===id)).map(id => (
+                    <div key={id} className="px-4 py-2.5 flex items-center gap-3">
+                      <span className="mono-font text-[10px] text-stone-400 w-24 shrink-0">{id}</span>
+                      <span className="mono-font text-[9px] text-amber-700 italic">not found in local tracker</span>
+                      <button onClick={() => unlinkCase(id)} className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors ml-auto">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Cardholder notification tracker */}
+            <div className="border border-stone-300 px-4 py-4" style={{ background:'#FAF7F1' }}>
+              <div className="mono-font text-[10px] tracking-widest text-stone-600 mb-3">CARDHOLDER NOTIFICATION</div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <label className="mono-font text-[9px] text-stone-400 block mb-1">NOTIFIED</label>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => updateIncident(activeIncident.id, { cardholderNotified: Math.max(0,(activeIncident.cardholderNotified||0)-1) })}
+                      className="mono-font text-xs px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100">−</button>
+                    <span className="mono-font text-lg font-bold text-stone-900 px-3">{activeIncident.cardholderNotified||0}</span>
+                    <button onClick={() => updateIncident(activeIncident.id, { cardholderNotified: (activeIncident.cardholderNotified||0)+1 })}
+                      className="mono-font text-xs px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100">+</button>
+                  </div>
+                </div>
+                <div>
+                  <label className="mono-font text-[9px] text-stone-400 block mb-1">TARGET TOTAL</label>
+                  <input type="number" min="0"
+                    value={activeIncident.cardholderTotal||''}
+                    onChange={e => updateIncident(activeIncident.id, { cardholderTotal: parseInt(e.target.value)||0 })}
+                    className="mono-font text-base border border-stone-300 px-2 py-1 w-24"
+                    style={{ background:'white' }} placeholder="0" />
+                </div>
+                {(activeIncident.cardholderTotal||0) > 0 && (
+                  <div className="flex-1">
+                    <div className="mono-font text-[9px] text-stone-400 mb-1">
+                      {Math.round((activeIncident.cardholderNotified||0)/(activeIncident.cardholderTotal||1)*100)}% COMPLETE
+                    </div>
+                    <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-blue-600 transition-all"
+                        style={{ width: `${Math.min(100, Math.round((activeIncident.cardholderNotified||0)/(activeIncident.cardholderTotal||1)*100))}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* War room notes */}
+            <div className="border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <div className="px-4 py-3 border-b border-stone-200">
+                <div className="mono-font text-[10px] tracking-widest text-stone-600">WAR ROOM FEED</div>
+              </div>
+              <div className="px-4 py-3 border-b border-stone-200">
+                <textarea rows={2} value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addNote() }}
+                  placeholder="Add a situation update, action taken, or decision made... (⌘+Enter to post)"
+                  className="w-full mono-font text-[11px] border border-stone-300 px-3 py-2 resize-none focus:outline-none focus:border-stone-500"
+                  style={{ background:'white' }} />
+                <button onClick={addNote} disabled={!noteDraft.trim()}
+                  className="mono-font text-[9px] tracking-widest px-4 py-1.5 mt-2 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors"
+                  style={{ background: noteDraft.trim() ? '#1A1814' : undefined, color: noteDraft.trim() ? '#F5F1EA' : undefined, border:'none', cursor: noteDraft.trim() ? 'pointer' : undefined }}>
+                  POST UPDATE
+                </button>
+              </div>
+              {(activeIncident.notes||[]).length === 0 ? (
+                <div className="px-4 py-6 text-center">
+                  <p className="mono-font text-[10px] text-stone-400">No updates yet. Post the first situation report.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-200 max-h-80 overflow-y-auto">
+                  {[...(activeIncident.notes||[])].reverse().map((n, i) => (
+                    <div key={i} className="px-4 py-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="mono-font text-[9px] text-stone-500 font-bold">{n.author}</span>
+                        <span className="mono-font text-[9px] text-stone-400">{new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})} {new Date(n.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+                      </div>
+                      <p className="display-font text-[13px] text-stone-800 leading-snug">{n.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
       </div>
     </div>
   )
