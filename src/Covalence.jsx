@@ -471,7 +471,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
           The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
         </h1>
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-          Four tools, one workflow — triage incoming disputes, manage the desk, score portfolios for funding, and coordinate cross-institutional cases in real time.
+          From first call to final decision — triage disputes, build the case, batch-file chargebacks, score portfolios for funding, coordinate across institutions, and command fraud incidents. Six tools, one workflow.
         </p>
       </div>
 
@@ -515,6 +515,45 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         ))}
       </div>
 
+      {/* 60-day analytics snapshot */}
+      {(() => {
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60)
+        const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
+        const res60   = recent.filter(o => ['won','lost','withdrawn'].includes(o.status))
+        const won60   = res60.filter(o => o.status === 'won')
+        const wr60    = res60.length > 0 ? Math.round((won60.length / res60.length) * 100) : null
+        // avg days
+        const daysArr = res60.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
+        const avg60   = daysArr.length > 0 ? Math.round(daysArr.reduce((a,b)=>a+b,0)/daysArr.length) : null
+        // top category
+        const catMap  = {}
+        recent.forEach(o => { const c = (o.category||'unknown').replace('mc_',''); catMap[c] = (catMap[c]||0)+1 })
+        const topCat  = Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0]
+        // fraud vs service split
+        const fraudC  = recent.filter(o => o.category==='fraud'||o.category==='mc_fraud'||o.verdict==='TRUE_FRAUD').length
+        const svcC    = recent.length - fraudC
+        if (recent.length === 0) return null
+        return (
+          <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">60-DAY SNAPSHOT</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                {label:'WIN RATE',      value: wr60  !== null ? `${wr60}%` : '—',   sub: `${res60.length} resolved`},
+                {label:'AVG RESOLUTION',value: avg60 !== null ? `${avg60}d` : '—',  sub: 'days to close'},
+                {label:'FRAUD / SERVICE',value:`${fraudC} / ${svcC}`,               sub: `of ${recent.length} cases`},
+                {label:'TOP CATEGORY',  value: topCat ? topCat[0].replace(/_/g,' ').toUpperCase() : '—', sub: topCat ? `${topCat[1]} cases` : ''},
+              ].map(({label,value,sub}) => (
+                <div key={label}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
+                  <div className="display-font font-semibold text-stone-900" style={{fontSize:'clamp(16px,2.5vw,22px)',letterSpacing:'-0.02em',lineHeight:1.1}}>{value}</div>
+                  {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="mb-10" style={{ display:'flex', flexWrap:'wrap', gap:'12px' }}>
         <button onClick={() => setActiveSection('triage')} className="cov-btn">
           <Clipboard style={{ width:'16px', height:'16px' }} />START TRIAGE
@@ -526,7 +565,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
           <BarChart2 style={{ width:'16px', height:'16px' }} />SCORE IN DFA
         </button>
         <button onClick={() => setActiveSection('duo')} className="cov-btn" style={{ background:'#064E3B' }}>
-          <Send style={{ width:'16px', height:'16px' }} />004 DUO
+          <Send style={{ width:'16px', height:'16px' }} />005 DUO
         </button>
       </div>
 
@@ -1528,7 +1567,7 @@ Return ONLY valid JSON:
                   </div>
                   <button onClick={onGoToDuo} className="mono-font shrink-0 ml-4"
                     style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                    OPEN 004 DUO →
+                    OPEN 005 DUO →
                   </button>
                 </div>
               )}
@@ -1946,7 +1985,7 @@ Return ONLY valid JSON:
                       onSendToDuo ? onSendToDuo(claim) : onGoToDuo()
                     }} className="mono-font"
                       style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'9px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                      {isCE ? 'COORDINATE WITH RECEIVING EXCHANGE →' : 'OPEN IN 004 DUO →'}
+                      {isCE ? 'COORDINATE WITH RECEIVING EXCHANGE →' : 'OPEN IN 005 DUO →'}
                     </button>
                   </div>
                 )}
@@ -7535,7 +7574,7 @@ function TrioView() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 004 DUO VIEW — multi-institutional real-time collaboration
+// 005 DUO VIEW — multi-institutional real-time collaboration
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const SUPA_URL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_URL || '') : ''
