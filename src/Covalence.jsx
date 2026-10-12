@@ -5410,8 +5410,7 @@ Return ONLY valid JSON:
                                   </>)}
 
                                 </div>
-                                <div className="flex items-start gap-2 justify-end">
-                                  <div className="flex flex-col items-end gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1 justify-end" style={{minWidth:0}}>
                                     {o.mode !== 'merchant' && onScoreInDfa && (
                                       <button
                                         onClick={() => onScoreInDfa([{
@@ -5427,19 +5426,18 @@ Return ONLY valid JSON:
                                           note: `From Dispute Desk: ${o.merchant || ''}`,
                                           source: 'desk',
                                         }])}
-                                        className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                        className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap"
                                         title="Send to DFA for funding assessment"
                                       >→DFA</button>
                                     )}
                                     {onSendToDuo && (
                                       <button
                                         onClick={() => onSendToDuo(o)}
-                                        className="mono-font text-[10px] px-2 py-1 transition-colors"
-                                        style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                        className="mono-font text-[10px] px-2 py-0.5 transition-colors whitespace-nowrap"
+                                        style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em' }}
                                         title="Open in Duo Mode — coordinate with receiving institution"
-                                      >→ DUO</button>
+                                      >→DUO</button>
                                     )}
-                                  </div>
                                   <button
                                     onClick={() => {
                                       if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
