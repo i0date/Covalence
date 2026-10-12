@@ -4754,6 +4754,32 @@ Return ONLY valid JSON:
                     <p className="mono-font text-[10px] text-stone-400 mt-2">↑ Edit directly above before copying — docs &amp; clarify items are appended automatically on copy</p>
                   </div>
 
+                  {/* Customer-facing docs — inside the letter, above next steps */}
+                  {result && evidence && evidence.cardholder.length > 0 && (
+                    <div className="bg-blue-50 px-6 py-4 border-b border-blue-100">
+                      <div className="mono-font text-[10px] tracking-widest text-blue-700 mb-3">WHAT WE'LL NEED FROM YOU</div>
+                      <p className="display-font text-stone-700 text-[14px] mb-3 leading-snug">To process your dispute efficiently, please gather the following:</p>
+                      <div className="space-y-2">
+                        {evidence.cardholder.map((item, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="text-blue-400 shrink-0 mt-0.5 text-[12px]">→</span>
+                            <span className="display-font text-stone-800 text-[14px] leading-snug">
+                              {item.text}
+                              {item.impact === 'required' && <span className="mono-font text-[9px] text-red-600 ml-1.5 tracking-wider">REQUIRED</span>}
+                            </span>
+                          </div>
+                        ))}
+                        {result.missing_information?.length > 0 && result.missing_information.map((m, i) => (
+                          <div key={`ci-${i}`} className="flex items-start gap-2">
+                            <span className="text-blue-400 shrink-0 mt-0.5 text-[12px]">→</span>
+                            <span className="display-font text-stone-700 text-[14px] leading-snug italic">{m}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="display-font text-stone-400 text-[11px] mt-3 italic">This section is included in the copied letter automatically.</p>
+                    </div>
+                  )}
+
                   {/* Next steps + timeline */}
                   <div className="bg-stone-50 p-5 grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-stone-200">
                     <div>
@@ -4789,7 +4815,7 @@ Return ONLY valid JSON:
                   <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
                     <div className="flex items-center gap-2">
                       <ClipboardList className="w-4 h-4 text-stone-400" />
-                      <span className="mono-font text-xs tracking-widest text-stone-500">DOCUMENTS TO COLLECT FROM CARDHOLDER</span>
+                      <span className="mono-font text-xs tracking-widest text-stone-500">AGENT CHECKLIST — DOCS TO COLLECT</span>
                     </div>
                   </div>
                   <div className="px-5 py-4 space-y-3">
@@ -8937,11 +8963,11 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
       </div>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
-        <button onClick={() => { setActiveSection('multi'); setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
-          ↗ {outcomes.filter(o => o.status === 'queued' && (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} FRAUD IN QUEUE — VIEW IN TRACKER
+        <button onClick={() => setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60)} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
+          ↗ {queuedFraud.length} FRAUD IN QUEUE — SCROLL TO QUEUE
         </button>
-        <button onClick={() => { setActiveSection('multi'); setTimeout(()=>document.getElementById('msq')?.scrollIntoView({behavior:'smooth'}),60) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
-          ↗ {outcomes.filter(o => o.status === 'queued' && !(o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type)).length} SERVICE IN QUEUE — VIEW IN TRACKER
+        <button onClick={() => setTimeout(()=>document.getElementById('msq')?.scrollIntoView({behavior:'smooth'}),60)} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
+          ↗ {queuedService.length} SERVICE IN QUEUE — SCROLL TO QUEUE
         </button>
       </div>
 
