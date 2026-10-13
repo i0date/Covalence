@@ -7640,6 +7640,7 @@ function TrioView() {
   const [noteDraft,  setNoteDraft]  = React.useState('')
   const [linkInput,     setLinkInput]     = React.useState('')
   const [linkError,     setLinkError]     = React.useState('')
+  const [syncStatus,    setSyncStatus]    = React.useState('')
   const [fiInput,       setFiInput]       = React.useState({ name:'', type:'bank', status:'notified' })
   const [receivingEdit, setReceivingEdit] = React.useState(false)
   const [receivingDraft,setReceivingDraft]= React.useState({})
@@ -7652,7 +7653,47 @@ function TrioView() {
   const sarThreshold = parseFloat(settings.sarThreshold) || 5000
   const agentName = localStorage.getItem('cov_agent_name') || 'Agent'
 
-  const persist = (updated) => { setIncidents(updated); saveIncidents(updated) }
+  // Supabase sync on mount + every 30s
+  React.useEffect(() => {
+    const sync = async () => {
+      setSyncStatus('syncing')
+      try {
+        const remote = await pullTrioFromSupa()
+        if (remote.length) {
+          setIncidents(prev => {
+            const merged = mergeTrioIncidents(prev, remote)
+            saveIncidents(merged)
+            return merged
+          })
+        }
+        setSyncStatus('synced')
+      } catch { setSyncStatus('error') }
+    }
+    sync()
+    const id = setInterval(sync, 30000)
+    return () => clearInterval(id)
+  }, [])
+
+  const persist = (updated) => {
+    setIncidents(updated)
+    saveIncidents(updated)
+    pushTrioToSupa(updated).catch(() => {})
+  }
+
+  const joinIncident = (id) => {
+    setActiveId(id)
+    setIncidents(prev => {
+      const updated = prev.map(i => {
+        if (i.id !== id) return i
+        const parts = i.participants || []
+        if (parts.includes(agentName)) return i
+        return { ...i, participants: [...parts, agentName], updatedAt: new Date().toISOString() }
+      })
+      saveIncidents(updated)
+      pushTrioToSupa(updated).catch(() => {})
+      return updated
+    })
+  }
 
   const activeIncident = incidents.find(i => i.id === activeId) || null
   const linkedCases = activeIncident ? allCases.filter(c => (activeIncident.linkedCaseIds||[]).includes(c.id)) : []
@@ -7830,7 +7871,7 @@ function TrioView() {
 
           <div className="space-y-2">
             {incidents.map(inc => (
-              <button key={inc.id} onClick={() => setActiveId(activeId === inc.id ? null : inc.id)}
+              <button key={inc.id} onClick={() => joinIncident(inc.id)}
                 className="w-full text-left px-3 py-3 border transition-colors"
                 style={{ background: activeId === inc.id ? '#1A1814' : '#FAF7F1', borderColor: activeId === inc.id ? '#1A1814' : '#D4CCBC' }}>
                 <div className="flex items-center justify-between gap-2 mb-1">
@@ -7847,6 +7888,11 @@ function TrioView() {
                     ● {(inc.status||'active').toUpperCase()}
                   </span>
                   <span className="mono-font text-[8px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>{elapsedLabel(inc.detectionDate)}</span>
+                  {(inc.participants||[]).length > 0 && (
+                    <span className="mono-font text-[8px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
+                      · 👤 {(inc.participants||[]).length}
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
@@ -7855,7 +7901,10 @@ function TrioView() {
 
         {/* ── Active incident detail ── */}
         {activeIncident && (
-          <div className="space-y-5">
+          <div style={{ display:'flex', gap:'16px', alignItems:'flex-start', flexWrap:'wrap' }}>
+
+          {/* ── Left: operational panels ── */}
+          <div className="space-y-5" style={{ flex:'1 1 min(100%, 580px)', minWidth:0 }}>
 
             {/* Header */}
             <div className="px-5 py-4 border" style={{ background:'#1A1814', borderColor:'#1A1814' }}>
@@ -7886,6 +7935,22 @@ function TrioView() {
               <div className="mono-font text-[9px] text-stone-600 mt-3">
                 DETECTED {activeIncident.detectionDate} · {elapsedLabel(activeIncident.detectionDate)} · {(activeIncident.notes||[]).length} WAR ROOM ENTRIES
               </div>
+              {(activeIncident.participants||[]).length > 0 && (
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="mono-font text-[8px] text-stone-500 tracking-widest">AGENTS IN ROOM:</span>
+                  {(activeIncident.participants||[]).map((p,i) => (
+                    <span key={i} className="mono-font text-[8px] px-1.5 py-0.5 font-bold"
+                      style={{ background: p === agentName ? '#065F46' : '#292524', color: p === agentName ? '#D1FAE5' : '#A8A29E' }}>
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {syncStatus && (
+                <div className="mono-font text-[8px] mt-2" style={{ color: syncStatus==='error' ? '#EF4444' : syncStatus==='syncing' ? '#D97706' : '#6EE7B7' }}>
+                  {syncStatus==='syncing' ? '↻ SYNCING...' : syncStatus==='error' ? '✗ SYNC ERROR' : '✓ LIVE'}
+                </div>
+              )}
             </div>
 
             {/* Stats row */}
@@ -8181,41 +8246,48 @@ function TrioView() {
               )}
             </div>
 
-            {/* War room notes */}
-            <div className="border border-stone-300" style={{ background:'#FAF7F1' }}>
-              <div className="px-4 py-3 border-b border-stone-200">
-                <div className="mono-font text-[10px] tracking-widest text-stone-600">WAR ROOM FEED</div>
+          </div>{/* end left operational column */}
+
+          {/* ── Right: war room sticky panel ── */}
+          <div style={{ flex:'0 0 min(100%, 340px)', position:'sticky', top:'80px', alignSelf:'flex-start' }}>
+            <div className="border border-stone-800" style={{ background:'#1A1814', display:'flex', flexDirection:'column', minHeight:'520px' }}>
+              <div className="px-4 py-3 border-b border-stone-700 flex items-center justify-between">
+                <div className="mono-font text-[10px] tracking-widest" style={{ color:'#A8A29E' }}>WAR ROOM FEED</div>
+                <span className="mono-font text-[8px]" style={{ color:'#78716C' }}>{(activeIncident.notes||[]).length} ENTRIES</span>
               </div>
-              <div className="px-4 py-3 border-b border-stone-200">
+              <div style={{ flex:1, overflowY:'auto', maxHeight:'400px' }}>
+                {(activeIncident.notes||[]).length === 0 ? (
+                  <div className="px-4 py-8 text-center">
+                    <p className="mono-font text-[10px]" style={{ color:'#57534E' }}>No updates yet. Post the first situation report.</p>
+                  </div>
+                ) : (
+                  <div>
+                    {[...(activeIncident.notes||[])].reverse().map((n, i) => (
+                      <div key={i} className="px-4 py-3 border-b" style={{ borderColor:'#292524' }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="mono-font text-[9px] font-bold" style={{ color: n.author === agentName ? '#6EE7B7' : '#78716C' }}>{n.author}</span>
+                          <span className="mono-font text-[8px]" style={{ color:'#57534E' }}>{new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})} {new Date(n.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+                        </div>
+                        <p className="display-font text-[13px] leading-snug" style={{ color:'#D6D3D1' }}>{n.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t" style={{ borderColor:'#292524' }}>
                 <textarea rows={2} value={noteDraft} onChange={e => setNoteDraft(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addNote() }}
-                  placeholder="Add a situation update, action taken, or decision made... (⌘+Enter to post)"
-                  className="w-full mono-font text-[11px] border border-stone-300 px-3 py-2 resize-none focus:outline-none focus:border-stone-500"
-                  style={{ background:'white' }} />
+                  placeholder="Situation update, action taken, decision made... (⌘↵ to post)"
+                  className="w-full mono-font text-[11px] px-3 py-2 resize-none focus:outline-none"
+                  style={{ background:'#292524', color:'#D6D3D1', border:'1px solid #44403C', borderRadius:0 }} />
                 <button onClick={addNote} disabled={!noteDraft.trim()}
-                  className="mono-font text-[9px] tracking-widest px-4 py-1.5 mt-2 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors"
-                  style={{ background: noteDraft.trim() ? '#1A1814' : undefined, color: noteDraft.trim() ? '#F5F1EA' : undefined, border:'none', cursor: noteDraft.trim() ? 'pointer' : undefined }}>
+                  className="mono-font text-[9px] tracking-widest px-4 py-1.5 mt-2 w-full disabled:cursor-not-allowed transition-colors"
+                  style={{ background: noteDraft.trim() ? '#16A34A' : '#292524', color: noteDraft.trim() ? '#F0FDF4' : '#57534E', border:'none', cursor: noteDraft.trim() ? 'pointer' : undefined }}>
                   POST UPDATE
                 </button>
               </div>
-              {(activeIncident.notes||[]).length === 0 ? (
-                <div className="px-4 py-6 text-center">
-                  <p className="mono-font text-[10px] text-stone-400">No updates yet. Post the first situation report.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-stone-200 max-h-80 overflow-y-auto">
-                  {[...(activeIncident.notes||[])].reverse().map((n, i) => (
-                    <div key={i} className="px-4 py-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="mono-font text-[9px] text-stone-500 font-bold">{n.author}</span>
-                        <span className="mono-font text-[9px] text-stone-400">{new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})} {new Date(n.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
-                      </div>
-                      <p className="display-font text-[13px] text-stone-800 leading-snug">{n.text}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
+          </div>{/* end war room right column */}
 
           </div>
         )}
@@ -8281,6 +8353,32 @@ async function fetchAgents() {
   if (!SUPA_URL||!SUPA_KEY) return []
   const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
   return r.ok ? await r.json() : []
+}
+
+async function pushTrioToSupa(incidents) {
+  if (!SUPA_URL || !SUPA_KEY || !incidents?.length) return
+  const rows = incidents.map(i => ({ id: i.id, data: i, updated_at: i.updatedAt || new Date().toISOString() }))
+  await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents`, {
+    method: 'POST',
+    headers: { ...supaH(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(rows),
+  })
+}
+async function pullTrioFromSupa() {
+  if (!SUPA_URL || !SUPA_KEY) return []
+  const r = await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents?select=data,updated_at&order=updated_at.desc&limit=100`, { headers: supaH() })
+  if (!r.ok) return []
+  return (await r.json() || []).map(r => r.data).filter(Boolean)
+}
+function mergeTrioIncidents(local, remote) {
+  const map = {}
+  local.forEach(i => { map[i.id] = i })
+  remote.forEach(i => {
+    const ex = map[i.id]
+    if (!ex) { map[i.id] = i; return }
+    if (new Date(i.updatedAt || 0) > new Date(ex.updatedAt || 0)) map[i.id] = i
+  })
+  return Object.values(map).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 }
 
 async function uploadEvidence(caseId, file, agentEmail) {
@@ -10114,7 +10212,24 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
             <div className="mono-font text-xs tracking-widest text-stone-600">SERVICE DISPUTES — QUEUED</div>
             <div className="mono-font text-[10px] text-stone-400 mt-0.5">{queuedService.length} case{queuedService.length !== 1 ? 's' : ''} · manual review required before filing</div>
           </div>
-          <span className="mono-font text-[10px] px-3 py-1.5 border border-amber-600 text-amber-700">MANUAL REVIEW REQUIRED</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="mono-font text-[10px] px-3 py-1.5 border border-amber-600 text-amber-700">MANUAL REVIEW REQUIRED</span>
+            {queuedService.length > 0 && (
+              <button
+                onClick={() => {
+                  if (!window.confirm(`File all ${queuedService.length} service dispute${queuedService.length!==1?'s':''}? Each requires manual review before filing. Confirm only if you have reviewed all cases.`)) return
+                  setOutcomes(prev => prev.map(o =>
+                    !isFraudCase(o) && o.status === 'queued'
+                      ? { ...o, status: 'filed', filedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+                      : o
+                  ))
+                }}
+                className="mono-font text-[10px] tracking-widest px-4 py-1.5"
+                style={{ background:'#78350F', color:'#FEF3C7', border:'none', cursor:'pointer' }}>
+                FILE ALL REVIEWED ({queuedService.length})
+              </button>
+            )}
+          </div>
         </div>
         {queuedService.length === 0 ? (
           <div className="px-5 py-8 text-center">
@@ -10144,6 +10259,23 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                     {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
+                  </button>
+                  <button
+                    onClick={() => generateFilingPackage(o)}
+                    className="mono-font text-[9px] px-2 py-0.5 border transition-colors whitespace-nowrap"
+                    style={{ borderColor:'#92400E', color:'#92400E' }}
+                    title="Generate filing package">
+                    📦 PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length}📎` : ''}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!window.confirm(`File case ${o.id} — ${o.merchant}? Confirm you have completed manual review.`)) return
+                      setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, status:'filed', filedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : x))
+                    }}
+                    className="mono-font text-[9px] px-2 py-0.5 transition-colors whitespace-nowrap"
+                    style={{ background:'#1C1917', color:'#F5F1EA', border:'none', cursor:'pointer' }}
+                    title="File this case after manual review">
+                    FILE ✓
                   </button>
                 </div>
                 {o.notes?.length > 0 && !noteOpen[o.id] && (
