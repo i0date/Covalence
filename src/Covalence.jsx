@@ -3646,7 +3646,7 @@ Return ONLY valid JSON:
               <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Case Intake</h2>
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-5" style={{ flex:'1 1 400px', minWidth:0 }}>
 
               {/* Network + card type selectors */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -7638,8 +7638,11 @@ function TrioView() {
   const [activeId,  setActiveId]    = React.useState(null)
   const [showCreate, setShowCreate] = React.useState(false)
   const [noteDraft,  setNoteDraft]  = React.useState('')
-  const [linkInput,  setLinkInput]  = React.useState('')
-  const [linkError,  setLinkError]  = React.useState('')
+  const [linkInput,     setLinkInput]     = React.useState('')
+  const [linkError,     setLinkError]     = React.useState('')
+  const [fiInput,       setFiInput]       = React.useState({ name:'', type:'bank', status:'notified' })
+  const [receivingEdit, setReceivingEdit] = React.useState(false)
+  const [receivingDraft,setReceivingDraft]= React.useState({})
 
   // Create form state
   const [form, setForm] = React.useState({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
@@ -7733,7 +7736,7 @@ function TrioView() {
             <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
           </h1>
           <p className="display-font text-stone-600 mt-3" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.5, maxWidth:'560px' }}>
-            Fraud incident command. Open an incident when a wave hits, link your Desk cases, track SAR obligations, and run the war room notes feed — all in one place.
+            Three parties — your institution, the receiving platform or FI, and the affected customers — one incident record. Open a TRIO incident when a fraud wave hits: link your Desk cases, map the transaction chain, track SAR obligations, coordinate receiving FIs, and run the war room.
           </p>
         </div>
         <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
@@ -7745,10 +7748,10 @@ function TrioView() {
         <span className="display-font text-[12px] text-amber-700">Features are being activated gradually. Data is stored locally — cross-institutional sync coming in a later phase.</span>
       </div>
 
-      <div className="grid gap-6" style={{ gridTemplateColumns: activeIncident ? '280px 1fr' : '1fr' }}>
+      <div style={{ display:'flex', gap:'24px', flexWrap:'wrap', alignItems:'flex-start' }}>
 
         {/* ── Incident list ── */}
-        <div>
+        <div style={{ flex:'0 0 min(280px, 100%)', minWidth:0, maxWidth:'100%' }}>
           <div className="flex items-center justify-between mb-3">
             <div className="mono-font text-[10px] tracking-widest text-stone-500">INCIDENTS ({incidents.length})</div>
             <button onClick={() => setShowCreate(true)}
@@ -7997,6 +8000,185 @@ function TrioView() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* ── Customer / Transaction Flow ─────────────────────────────── */}
+            <div className="border border-stone-300 px-4 py-4" style={{ background:'#FAF7F1' }}>
+              <div className="mono-font text-[10px] tracking-widest text-stone-600 mb-3">TRANSACTION FLOW — THREE PARTIES</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Party A — Our cardholder */}
+                <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#F0FDF4' }}>
+                  <div className="mono-font text-[8px] tracking-widest text-green-700 mb-1">PARTY A · YOUR FI</div>
+                  <input
+                    value={activeIncident.flowSender || ''}
+                    onChange={e => updateIncident(activeIncident.id, { flowSender: e.target.value })}
+                    placeholder="e.g. Our cardholder"
+                    className="w-full text-center mono-font text-[10px] border-none focus:outline-none bg-transparent text-stone-800"
+                  />
+                </div>
+                <div className="mono-font text-stone-400 text-sm px-1">→</div>
+                {/* Party B — Platform / Receiving FI */}
+                <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#FEF3C7' }}>
+                  <div className="mono-font text-[8px] tracking-widest text-amber-700 mb-1">PARTY B · PLATFORM / RECEIVING FI</div>
+                  <input
+                    value={activeIncident.flowPlatform || ''}
+                    onChange={e => updateIncident(activeIncident.id, { flowPlatform: e.target.value })}
+                    placeholder="e.g. Skip the Dishes"
+                    className="w-full text-center mono-font text-[10px] border-none focus:outline-none bg-transparent text-stone-800"
+                  />
+                </div>
+                <div className="mono-font text-stone-400 text-sm px-1">→</div>
+                {/* Party C — Fraudster / recipient account */}
+                <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#FEF2F2' }}>
+                  <div className="mono-font text-[8px] tracking-widest text-red-700 mb-1">PARTY C · RECEIVING ACCOUNT</div>
+                  <input
+                    value={activeIncident.flowReceiver || ''}
+                    onChange={e => updateIncident(activeIncident.id, { flowReceiver: e.target.value })}
+                    placeholder="e.g. Fraudster's account"
+                    className="w-full text-center mono-font text-[10px] border-none focus:outline-none bg-transparent text-stone-800"
+                  />
+                </div>
+              </div>
+              {(activeIncident.flowSender || activeIncident.flowPlatform || activeIncident.flowReceiver) && (
+                <p className="mono-font text-[9px] text-stone-400 mt-2">Click any field to edit. This maps the fraud chain for the incident record.</p>
+              )}
+            </div>
+
+            {/* ── Receiving FI / Platform ───────────────────────────────────── */}
+            <div className="border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+                <div className="mono-font text-[10px] tracking-widest text-stone-600">RECEIVING FI / PLATFORM</div>
+                <button onClick={() => { setReceivingEdit(!receivingEdit); setReceivingDraft(activeIncident.receivingFi || {}) }}
+                  className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
+                  {receivingEdit ? 'CANCEL' : (activeIncident.receivingFi?.name ? 'EDIT' : '+ ADD')}
+                </button>
+              </div>
+              {receivingEdit ? (
+                <div className="px-4 py-3 space-y-2">
+                  <div className="grid gap-2" style={{ gridTemplateColumns:'1fr 1fr' }}>
+                    <div>
+                      <label className="mono-font text-[9px] text-stone-400 block mb-1">INSTITUTION / PLATFORM NAME</label>
+                      <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
+                        value={receivingDraft.name||''} onChange={e => setReceivingDraft(d => ({...d, name: e.target.value}))} placeholder="e.g. Skip the Dishes" />
+                    </div>
+                    <div>
+                      <label className="mono-font text-[9px] text-stone-400 block mb-1">TYPE</label>
+                      <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
+                        value={receivingDraft.type||'platform'} onChange={e => setReceivingDraft(d => ({...d, type: e.target.value}))}>
+                        <option value="platform">Platform / Marketplace</option>
+                        <option value="bank">Bank / Credit Union</option>
+                        <option value="fintech">Fintech / Neobank</option>
+                        <option value="exchange">Crypto Exchange</option>
+                        <option value="p2p">P2P Network</option>
+                        <option value="acquirer">Acquirer / Processor</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mono-font text-[9px] text-stone-400 block mb-1">CONTACT NAME</label>
+                      <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
+                        value={receivingDraft.contactName||''} onChange={e => setReceivingDraft(d => ({...d, contactName: e.target.value}))} placeholder="Fraud / Risk team contact" />
+                    </div>
+                    <div>
+                      <label className="mono-font text-[9px] text-stone-400 block mb-1">CONTACT INFO</label>
+                      <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
+                        value={receivingDraft.contactInfo||''} onChange={e => setReceivingDraft(d => ({...d, contactInfo: e.target.value}))} placeholder="Email or phone" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] text-stone-400 block mb-1">COOPERATION STATUS</label>
+                    <select className="border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
+                      value={receivingDraft.status||'not_contacted'} onChange={e => setReceivingDraft(d => ({...d, status: e.target.value}))}>
+                      <option value="not_contacted">Not yet contacted</option>
+                      <option value="notified">Notified</option>
+                      <option value="freeze_requested">Freeze requested</option>
+                      <option value="freeze_confirmed">Freeze confirmed</option>
+                      <option value="cooperating">Cooperating</option>
+                      <option value="unresponsive">Unresponsive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mono-font text-[9px] text-stone-400 block mb-1">NOTES</label>
+                    <textarea rows={2} className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px] resize-none" style={{ background:'white' }}
+                      value={receivingDraft.notes||''} onChange={e => setReceivingDraft(d => ({...d, notes: e.target.value}))} placeholder="Any relevant context..." />
+                  </div>
+                  <button onClick={() => { updateIncident(activeIncident.id, { receivingFi: receivingDraft }); setReceivingEdit(false) }}
+                    className="mono-font text-[9px] tracking-widest px-4 py-1.5 transition-colors"
+                    style={{ background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                    SAVE
+                  </button>
+                </div>
+              ) : activeIncident.receivingFi?.name ? (
+                <div className="px-4 py-3 grid gap-x-6 gap-y-1" style={{ gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))' }}>
+                  {[
+                    ['NAME', activeIncident.receivingFi.name],
+                    ['TYPE', (activeIncident.receivingFi.type||'').replace(/_/g,' ').toUpperCase()],
+                    ['CONTACT', activeIncident.receivingFi.contactName],
+                    ['INFO', activeIncident.receivingFi.contactInfo],
+                    ['STATUS', (activeIncident.receivingFi.status||'').replace(/_/g,' ').toUpperCase()],
+                  ].filter(([,v])=>v).map(([k,v]) => (
+                    <div key={k}>
+                      <div className="mono-font text-[8px] tracking-widest text-stone-400">{k}</div>
+                      <div className="mono-font text-[11px] text-stone-800">{v}</div>
+                    </div>
+                  ))}
+                  {activeIncident.receivingFi.notes && (
+                    <div className="col-span-full">
+                      <div className="mono-font text-[8px] tracking-widest text-stone-400">NOTES</div>
+                      <div className="display-font text-[12px] text-stone-600 italic">{activeIncident.receivingFi.notes}</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="px-4 py-5 text-center">
+                  <p className="mono-font text-[10px] text-stone-400">No receiving FI on record. Add contact and cooperation status.</p>
+                </div>
+              )}
+            </div>
+
+            {/* ── Other FIs Affected ───────────────────────────────────────── */}
+            <div className="border border-stone-300" style={{ background:'#FAF7F1' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 flex-wrap gap-2">
+                <div className="mono-font text-[10px] tracking-widest text-stone-600">OTHER FIs AFFECTED ({(activeIncident.affectedFis||[]).length})</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input value={fiInput.name} onChange={e => setFiInput(f => ({...f, name: e.target.value}))}
+                    placeholder="Institution name" className="mono-font text-[10px] border border-stone-300 px-2 py-1" style={{ background:'white', width:'160px' }} />
+                  <select value={fiInput.status} onChange={e => setFiInput(f => ({...f, status: e.target.value}))}
+                    className="mono-font text-[9px] border border-stone-300 px-1 py-1" style={{ background:'white' }}>
+                    <option value="notified">Notified</option>
+                    <option value="unaware">Unaware</option>
+                    <option value="cooperating">Cooperating</option>
+                    <option value="unresponsive">Unresponsive</option>
+                  </select>
+                  <button onClick={() => {
+                    if (!fiInput.name.trim()) return
+                    const entry = { name: fiInput.name.trim(), type: fiInput.type, status: fiInput.status, addedAt: new Date().toISOString() }
+                    updateIncident(activeIncident.id, { affectedFis: [...(activeIncident.affectedFis||[]), entry] })
+                    setFiInput({ name:'', type:'bank', status:'notified' })
+                  }} className="mono-font text-[9px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
+                    + ADD FI
+                  </button>
+                </div>
+              </div>
+              {(activeIncident.affectedFis||[]).length === 0 ? (
+                <div className="px-4 py-5 text-center">
+                  <p className="mono-font text-[10px] text-stone-400">No other FIs recorded. Add institutions affected by the same wave.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-200">
+                  {(activeIncident.affectedFis||[]).map((fi, i) => (
+                    <div key={i} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
+                      <span className="display-font text-sm text-stone-800 flex-1">{fi.name}</span>
+                      <span className="mono-font text-[8px] px-1.5 py-0.5"
+                        style={{ background: fi.status==='cooperating'?'#ECFDF5':fi.status==='unresponsive'?'#FEF2F2':'#F5F1EA', color: fi.status==='cooperating'?'#065F46':fi.status==='unresponsive'?'#991B1B':'#57534E' }}>
+                        {(fi.status||'').replace(/_/g,' ').toUpperCase()}
+                      </span>
+                      <button onClick={() => updateIncident(activeIncident.id, { affectedFis: (activeIncident.affectedFis||[]).filter((_,j)=>j!==i) })}
+                        className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* War room notes */}
