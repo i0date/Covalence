@@ -262,11 +262,13 @@ const GLOBAL_CSS = `
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   @media(max-width:767px) {
     .desktop-only     { display:none !important; }
-    /* nav: shrink logo, reduce gap, scroll nav buttons */
-    .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 12px !important; }
-    .cov-nav-inner button { flex-shrink:0; padding:14px 10px !important; font-size:8px !important; }
-    .cov-nav-logo     { padding-right:12px !important; margin-right:0 !important; }
-    .cov-nav-logo div { font-size:10px !important; letter-spacing:0.15em !important; }
+    /* nav: shrink logo, scroll nav buttons */
+    .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 8px !important; flex-wrap:nowrap !important; }
+    .cov-nav-inner button { flex-shrink:0; padding:14px 8px !important; font-size:7.5px !important; }
+    .cov-nav-logo     { padding-right:10px !important; margin-right:0 !important; border-right:none !important; flex-shrink:0; }
+    .cov-nav-logo div { font-size:9px !important; letter-spacing:0.12em !important; }
+    .cov-nav-buttons  { overflow-x:auto; -webkit-overflow-scrolling:touch; display:flex !important; flex-shrink:1 !important; min-width:0; }
+    .cov-nav-right    { flex-shrink:0; }
     /* home stats: 2-col on mobile */
     .home-stats-grid  { grid-template-columns:repeat(2,1fr) !important; }
     /* single-col fallback for fixed grids */
@@ -385,12 +387,12 @@ export default function Covalence() {
         <style>{GLOBAL_CSS}</style>
 
         {/* ── Top nav ── */}
-        <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflow:'hidden' }}>
+        <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflowY:'hidden', overflowX:'auto' }}>
           <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
             <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
             </div>
-            <div style={{ display:'flex', alignItems:'center' }}>
+            <div className="cov-nav-buttons" style={{ display:'flex', alignItems:'center' }}>
               {NAV.map(({ id, label }) => (
                 <button key={id} onClick={() => setActiveSection(id)}
                   style={{
@@ -404,7 +406,7 @@ export default function Covalence() {
                 </button>
               ))}
             </div>
-            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'16px',flexShrink:0}}>
+            <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
               {covUser&&<div className="mono-font" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
                 <span style={{color:'#A8A29E',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>{covUser.name}</span>
