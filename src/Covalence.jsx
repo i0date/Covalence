@@ -10764,109 +10764,161 @@ ${'═'.repeat(64)}`
 }
 
 function SettingsView({ settings, setSettings }) {
-  const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }))
-  const Section = ({ label, first }) => (
-    <div style={{ borderTop: first ? 'none' : '1px solid #E8E3DA', paddingTop: first ? '0' : '20px', marginTop:'4px' }}>
-      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-5">{label}</div>
+  const [saved, setSaved] = React.useState(false)
+  const set = (key, val) => {
+    setSettings(prev => ({ ...prev, [key]: val }))
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
+  const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
+
+  const Field = ({ label, hint, children }) => (
+    <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+      <label className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', textTransform:'uppercase' }}>{label}</label>
+      {children}
+      {hint && <p className="display-font" style={{ fontSize:'11px', color:'#A8A29E', lineHeight:1.4, margin:0 }}>{hint}</p>}
     </div>
   )
-  const Select = ({ label, field, options, hint }) => (
-    <div>
-      <label className="cov-label">{label}</label>
-      <select value={settings[field] || ''} onChange={e => set(field, e.target.value)}
-        className="cov-input mono-font" style={{ fontSize:'13px', maxWidth:'320px', cursor:'pointer' }}>
-        <option value="">— Select —</option>
-        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>
-      {hint && <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">{hint}</div>}
+  const Card = ({ title, children }) => (
+    <div style={{ border:'1px solid #D4CCBC', background:'#FAF7F1', overflow:'hidden' }}>
+      <div style={{ background:'#EEE9E0', borderBottom:'1px solid #D4CCBC', padding:'10px 20px' }}>
+        <span className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#57534E' }}>{title}</span>
+      </div>
+      <div style={{ padding:'20px', display:'grid', gap:'18px' }}>{children}</div>
     </div>
   )
-  const Num = ({ label, field, hint }) => (
-    <div>
-      <label className="cov-label">{label}</label>
-      <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]}
-        onChange={e => set(field, Number(e.target.value))}
-        className="cov-input mono-font" style={{ fontSize:'14px', maxWidth:'220px' }} />
-      {hint && <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">{hint}</div>}
-    </div>
+  const Txt = ({ field, placeholder, hint }) => (
+    <input type="text" value={settings[field] || ''} onChange={e => set(field, e.target.value)}
+      placeholder={placeholder}
+      style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'12px', color:'#1A1814', width:'100%', boxSizing:'border-box', outline:'none' }} />
   )
+  const Num = ({ field, hint, min, max }) => (
+    <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]} min={min} max={max}
+      onChange={e => set(field, Number(e.target.value))}
+      style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'140px', outline:'none' }} />
+  )
+  const Sel = ({ field, options }) => (
+    <select value={settings[field] || ''} onChange={e => set(field, e.target.value)}
+      style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'12px', color:'#1A1814', width:'100%', cursor:'pointer', outline:'none', appearance:'auto' }}>
+      <option value="">— select —</option>
+      {options.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  )
+  const Toggle = ({ field, onLabel, offLabel, hint }) => (
+    <Field label="" hint={hint}>
+      <button onClick={() => set(field, !settings[field])}
+        style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings[field] ? '#064E3B' : '#292524', color: settings[field] ? '#D1FAE5' : '#A8A29E', borderColor: settings[field] ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
+        <span style={{ fontSize:'7px' }}>{settings[field] ? '●' : '○'}</span>
+        {settings[field] ? onLabel : offLabel}
+      </button>
+    </Field>
+  )
+
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-10 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
-        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em' }}>
-          Settings
-        </h1>
-        <p className="display-font text-stone-600 mt-3" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.5 }}>
-          Institution profile, compliance thresholds, and operational defaults — applied across all tools and fed into the AI triage engine.
-        </p>
+
+      {/* Masthead */}
+      <div style={{ borderBottom:'1px solid #D4CCBC', marginBottom:'40px', paddingBottom:'24px', display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
+        <div>
+          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.25em', color:'#A8A29E', marginBottom:'12px' }}>COVALENCE · CONFIGURATION</div>
+          <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em', lineHeight:1 }}>
+            <span style={{ fontWeight:700 }}>Set</span><span style={{ fontStyle:'italic', fontWeight:500 }}>tings</span>
+          </h1>
+          <p className="display-font text-stone-500 mt-3" style={{ fontSize:'14px', lineHeight:1.5, maxWidth:'480px' }}>
+            Institution profile, compliance thresholds, and operational defaults — applied across all tools and fed into the AI triage engine.
+          </p>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px' }}>
+          {saved && (
+            <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.15em', color:'#065F46', background:'#ECFDF5', padding:'4px 10px', border:'1px solid #6EE7B7' }}>✓ SAVED</div>
+          )}
+          {agent && (
+            <div style={{ textAlign:'right' }}>
+              <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#78716C' }}>{agent.name}</div>
+              <div className="mono-font" style={{ fontSize:'8px', color:'#A8A29E' }}>{agent.email}{agent.institution ? ` · ${agent.institution}` : ''}</div>
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ maxWidth:'500px', display:'grid', gap:'22px' }}>
+
+      {/* Two-column grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start' }}>
 
         {/* ── Institution Profile ── */}
-        <Section label="INSTITUTION PROFILE" first />
-        <div>
-          <label className="cov-label">INSTITUTION NAME</label>
-          <input type="text" value={settings.duoInstitutionName || ''}
-            onChange={e => set('duoInstitutionName', e.target.value)}
-            placeholder="First Community Credit Union"
-            className="cov-input mono-font" style={{ fontSize:'14px' }} />
-          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Used in Duo/Trio sessions and AI triage context.</div>
-        </div>
-        <Select label="INSTITUTION TYPE" field="institutionType" options={[
-          ['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],
-          ['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],
-        ]} hint="Informs AI analysis — credit unions have different chargeback obligations than banks." />
-        <Select label="JURISDICTION" field="jurisdiction" options={[
-          ['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other'],
-        ]} hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules." />
-        <Select label="CONSUMER PROTECTION REGIME" field="regulatoryRegime" options={[
-          ['reg_e','Reg E (US — EFTA)'],['fcac','FCAC (Canada)'],['fca','FCA (UK)'],['other','Other / Mixed'],
-        ]} hint="Used to calibrate filing windows and dispute eligibility rules in Triage." />
+        <Card title="INSTITUTION PROFILE">
+          <Field label="Institution Name" hint="Used in filing packages, Duo sessions and AI triage context.">
+            <Txt field="duoInstitutionName" placeholder="First Community Credit Union" />
+          </Field>
+          <Field label="Institution Type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
+            <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform']]} />
+          </Field>
+          <Field label="Jurisdiction" hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules.">
+            <Sel field="jurisdiction" options={[['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other']]} />
+          </Field>
+          <Field label="Consumer Protection Regime" hint="Calibrates filing windows and dispute eligibility rules in Triage.">
+            <Sel field="regulatoryRegime" options={[['reg_e','Reg E (US — EFTA)'],['fcac','FCAC (Canada)'],['fca','FCA (UK)'],['other','Other / Mixed']]} />
+          </Field>
+        </Card>
 
         {/* ── SAR / STR Thresholds ── */}
-        <Section label="SAR / STR THRESHOLDS BY PAYMENT TYPE" />
-        <Num label="CARD / GENERAL ($)" field="sarThreshold" hint="Applies to debit and credit card fraud cases." />
-        <Num label="ACH / EFT ($)" field="sarThresholdACH" hint="Applies to ACH / EFT / bank transfer fraud." />
-        <Num label="P2P / E-TRANSFER ($)" field="sarThresholdP2P" hint="Applies to Zelle, Interac e-Transfer, wire fraud." />
-        <Num label="CRYPTO / DIGITAL ASSET ($)" field="sarThresholdCrypto" hint="Higher default reflects FinCEN/FINTRAC guidance for virtual asset MSBs." />
+        <Card title="SAR / STR THRESHOLDS BY PAYMENT TYPE">
+          <Field label="Card / General ($)" hint="Debit and credit card fraud cases."><Num field="sarThreshold" min={0} /></Field>
+          <Field label="ACH / EFT ($)" hint="ACH / EFT / bank transfer fraud."><Num field="sarThresholdACH" min={0} /></Field>
+          <Field label="P2P / E-Transfer ($)" hint="Zelle, Interac e-Transfer, wire fraud."><Num field="sarThresholdP2P" min={0} /></Field>
+          <Field label="Crypto / Digital Asset ($)" hint="Higher default reflects FinCEN/FINTRAC guidance for virtual asset MSBs."><Num field="sarThresholdCrypto" min={0} /></Field>
+        </Card>
 
         {/* ── Filing Windows ── */}
-        <Section label="FILING WINDOWS" />
-        <Num label="SMALL-DOLLAR WRITE-OFF THRESHOLD ($)" field="smallDollarThreshold" hint="Cases below this amount may be courtesy-credited directly." />
-        <Num label="FRAUD FILING WINDOW (days)" field="fraudWindowDays" />
-        <Num label="CONSUMER DISPUTE WINDOW (days)" field="consumerWindowDays" />
-        <Num label="ABSOLUTE CAP (days)" field="absoluteCapDays" />
+        <Card title="FILING WINDOWS">
+          <Field label="Small-Dollar Write-Off Threshold ($)" hint="Cases below this amount may be courtesy-credited directly."><Num field="smallDollarThreshold" min={0} /></Field>
+          <Field label="Fraud Filing Window (days)" hint="Visa/MC standard: 120 days from transaction."><Num field="fraudWindowDays" min={1} /></Field>
+          <Field label="Consumer Dispute Window (days)" hint="Typically 120 days from expected delivery."><Num field="consumerWindowDays" min={1} /></Field>
+          <Field label="Absolute Cap (days)" hint="Hard cap on any filing. Visa: 540 days from transaction."><Num field="absoluteCapDays" min={1} /></Field>
+        </Card>
 
-        {/* ── Module Toggles ── */}
-        <Section label="MODULE SETTINGS" />
-        <div>
-          <label className="cov-label">DFA SCORING ENGINE</label>
-          <button
-            onClick={() => set('dfaEnabled', settings.dfaEnabled === false ? true : false)}
-            className="mono-font text-[9px] tracking-widest px-4 py-2 border transition-colors"
-            style={{ background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C', cursor:'pointer' }}>
-            {settings.dfaEnabled !== false ? '● DFA ON' : '○ DFA OFF'}
-          </button>
-          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Toggle the Dispute Funding Analyzer scoring engine on or off. Default: on.</div>
-        </div>
+        {/* ── Operational Defaults ── */}
+        <Card title="OPERATIONAL DEFAULTS">
+          <Field label="Tracker Window (days)" hint="Days of cases shown in tracker and home screen.">
+            <Num field="trackerWindowDays" min={1} max={365} />
+          </Field>
+          <Field label="Batch Filing Time (daily auto-file)" hint="Queued fraud cases auto-file at this time daily when the Multi tab is open.">
+            <input type="time" value={settings.batchFileTime || '15:00'}
+              onChange={e => set('batchFileTime', e.target.value)}
+              style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'140px', outline:'none', cursor:'pointer' }} />
+          </Field>
+          <Field label="PC Milestones (business days)" hint="Three milestone deadlines shown on the PC countdown row.">
+            <div style={{ display:'flex', gap:'8px' }}>
+              {(settings.pcMilestones || DEFAULT_SETTINGS.pcMilestones).map((m, i) => (
+                <input key={i} type="number" value={m} min={1}
+                  onChange={e => set('pcMilestones', (settings.pcMilestones || DEFAULT_SETTINGS.pcMilestones).map((v,j) => j===i ? parseInt(e.target.value)||v : v))}
+                  style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'72px', textAlign:'center', outline:'none' }} />
+              ))}
+            </div>
+          </Field>
+        </Card>
 
-        {/* ── Operational ── */}
-        <Section label="OPERATIONAL DEFAULTS" />
-        <Num label="TRACKER WINDOW (days)" field="trackerWindowDays" />
-        <div>
-          <label className="cov-label">BATCH FILING TIME (daily auto-file)</label>
-          <input type="time" value={settings.batchFileTime || '15:00'} onChange={e => set('batchFileTime', e.target.value)}
-            className="cov-input mono-font" style={{ fontSize:'14px', maxWidth:'160px' }} />
-          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Queued fraud cases auto-file at this time daily when Multi tab is open. Default: 3:00 PM.</div>
-        </div>
+        {/* ── Module Settings ── */}
+        <Card title="MODULE SETTINGS">
+          <Field label="DFA Scoring Engine" hint="Toggle the Dispute Funding Analyzer scoring engine. Default: on.">
+            <button onClick={() => set('dfaEnabled', settings.dfaEnabled === false ? true : false)}
+              style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
+              <span style={{ fontSize:'7px' }}>{settings.dfaEnabled !== false ? '●' : '○'}</span>
+              {settings.dfaEnabled !== false ? 'DFA ON' : 'DFA OFF'}
+            </button>
+          </Field>
+        </Card>
 
-        <div style={{ display:'flex', gap:'12px', paddingTop:'8px' }}>
-          <button onClick={() => setSettings({ ...DEFAULT_SETTINGS })}
-            className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', border:'1px solid #A09585', color:'#6B5F4D', background:'transparent', cursor:'pointer' }}>
-            RESET TO DEFAULTS
-          </button>
-        </div>
       </div>
+
+      {/* Reset */}
+      <div style={{ marginTop:'32px', paddingTop:'24px', borderTop:'1px solid #E8E3DA', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'12px' }}>
+        <p className="display-font text-stone-400" style={{ fontSize:'12px', margin:0 }}>Settings are saved automatically as you type.</p>
+        <button onClick={() => { setSettings({ ...DEFAULT_SETTINGS }); setSaved(true); setTimeout(() => setSaved(false), 1800) }}
+          className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.15em', padding:'8px 16px', border:'1px solid #D4CCBC', color:'#78716C', background:'transparent', cursor:'pointer' }}>
+          RESET TO DEFAULTS
+        </button>
+      </div>
+
     </div>
   )
 }
