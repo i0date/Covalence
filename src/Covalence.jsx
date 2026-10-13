@@ -9838,6 +9838,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [agentList,     setAgentList]     = React.useState([])
   const [assignOpen,    setAssignOpen]    = React.useState({})
   const [showAnalytics, setShowAnalytics] = React.useState(false)
+  const [multiSearch,   setMultiSearch]   = React.useState('')
 
   const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
   const myEmail = covUser?.email||''
@@ -9850,7 +9851,6 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const queuedFraud   = _applySearch(applyFilter(outcomes.filter(o => o.status === 'queued' && isFraudCase(o))))
   const queuedService = _applySearch(applyFilter(outcomes.filter(o => o.status === 'queued' && !isFraudCase(o))))
   const [filed, setFiled] = React.useState(false)
-  const [multiSearch, setMultiSearch] = React.useState('')
   const [pkgModal, setPkgModal] = React.useState(null)   // { caseId, network, text } | null
 
   // ── 3pm auto-file ──────────────────────────────────────────────────────────
@@ -10681,15 +10681,15 @@ ${'═'.repeat(64)}`
                     title="Regenerate filing package">↓ PKG</button>
                   {o.status === 'filed' && (<>
                     <button onClick={() => updateOutcome(o.id, 'won')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-green-700 text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap">WON</button>
+                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-green-700 hover:text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap">✓ WON</button>
                     <button onClick={() => updateOutcome(o.id, 'lost')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-red-700 hover:text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">✗ LOST</button>
                     <button onClick={() => updateOutcome(o.id, 'pending_arb')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors whitespace-nowrap">PEND ARB</button>
+                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-violet-700 hover:text-violet-700 hover:bg-violet-50 transition-colors whitespace-nowrap">⏸ ARB</button>
                   </>)}
-                  {o.status === 'won' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-green-700 text-green-50">WON ✓</span>}
-                  {o.status === 'lost' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-red-700 text-red-50">LOST</span>}
-                  {o.status === 'pending_arb' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-violet-700 text-violet-50">PEND ARB</span>}
+                  {o.status === 'won' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#064E3B',color:'#D1FAE5'}}>WON ✓</span>}
+                  {o.status === 'lost' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#7F1D1D',color:'#FEE2E2'}}>LOST</span>}
+                  {o.status === 'pending_arb' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#4C1D95',color:'#EDE9FE'}}>PEND ARB</span>}
                   {(o.docs||[]).length > 0 && (
                     <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>
                   )}
@@ -10806,6 +10806,19 @@ function SettingsView({ settings, setSettings }) {
         <Num label="FRAUD FILING WINDOW (days)" field="fraudWindowDays" />
         <Num label="CONSUMER DISPUTE WINDOW (days)" field="consumerWindowDays" />
         <Num label="ABSOLUTE CAP (days)" field="absoluteCapDays" />
+
+        {/* ── Module Toggles ── */}
+        <Section label="MODULE SETTINGS" />
+        <div>
+          <label className="cov-label">DFA SCORING ENGINE</label>
+          <button
+            onClick={() => set('dfaEnabled', settings.dfaEnabled === false ? true : false)}
+            className="mono-font text-[9px] tracking-widest px-4 py-2 border transition-colors"
+            style={{ background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C', cursor:'pointer' }}>
+            {settings.dfaEnabled !== false ? '● DFA ON' : '○ DFA OFF'}
+          </button>
+          <div className="mono-font text-[9px] tracking-wide text-stone-400 mt-1">Toggle the Dispute Funding Analyzer scoring engine on or off. Default: on.</div>
+        </div>
 
         {/* ── Operational ── */}
         <Section label="OPERATIONAL DEFAULTS" />
