@@ -313,7 +313,7 @@ function LoginGate({ onLogin }) {
       <div style={{ width:'100%', maxWidth:'400px' }}>
         <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
         <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>Welcome</div>
-        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>Enter your details to join the shared queue.</div>
+        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>A working prototype. Enter your details to explore.</div>
         <form onSubmit={handleEnter}>
           <div style={{ marginBottom:'16px' }}>
             <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>NAME</div>
@@ -333,7 +333,7 @@ function LoginGate({ onLogin }) {
           {err && <div style={{ fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' }}>{err}</div>}
           <button type="submit" disabled={loading}
             style={{ width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'SYNCING QUEUE...' : 'ENTER →'}
+            {loading ? 'LOADING...' : 'ENTER →'}
           </button>
         </form>
       </div>
@@ -7641,6 +7641,7 @@ function TrioView() {
   const [linkInput,     setLinkInput]     = React.useState('')
   const [linkError,     setLinkError]     = React.useState('')
   const [syncStatus,    setSyncStatus]    = React.useState('')
+  const [mergeModal,    setMergeModal]    = React.useState(null) // id of incident being merged FROM
   const [fiInput,       setFiInput]       = React.useState({ name:'', type:'bank', status:'notified' })
   const [receivingEdit, setReceivingEdit] = React.useState(false)
   const [receivingDraft,setReceivingDraft]= React.useState({})
@@ -7678,6 +7679,30 @@ function TrioView() {
     setIncidents(updated)
     saveIncidents(updated)
     pushTrioToSupa(updated).catch(() => {})
+  }
+
+  const mergeIncidents = (fromId, intoId) => {
+    setIncidents(prev => {
+      const from = prev.find(i => i.id === fromId)
+      const into = prev.find(i => i.id === intoId)
+      if (!from || !into) return prev
+      const merged = {
+        ...into,
+        linkedCaseIds: [...new Set([...(into.linkedCaseIds||[]), ...(from.linkedCaseIds||[])])],
+        notes: [...(into.notes||[]), ...(from.notes||[])].sort((a,b) => new Date(a.ts)-new Date(b.ts)),
+        participants: [...new Set([...(into.participants||[]), ...(from.participants||[])])],
+        affectedFis: [...(into.affectedFis||[]), ...(from.affectedFis||[]).filter(f => !(into.affectedFis||[]).find(x => x.name === f.name))],
+        cardholderNotified: (into.cardholderNotified||0) + (from.cardholderNotified||0),
+        cardholderTotal: (into.cardholderTotal||0) + (from.cardholderTotal||0),
+        updatedAt: new Date().toISOString(),
+      }
+      const updated = prev.filter(i => i.id !== fromId).map(i => i.id === intoId ? merged : i)
+      saveIncidents(updated)
+      pushTrioToSupa(updated).catch(()=>{})
+      return updated
+    })
+    setMergeModal(null)
+    setActiveId(intoId)
   }
 
   const joinIncident = (id) => {
@@ -7927,6 +7952,13 @@ function TrioView() {
                     <option value="contained">◐ CONTAINED</option>
                     <option value="closed">○ CLOSED</option>
                   </select>
+                  {incidents.length > 1 && (
+                    <button onClick={() => setMergeModal(activeIncident.id)}
+                      className="mono-font text-[9px] px-2 py-1 tracking-widest"
+                      style={{ background:'#292524', color:'#A8A29E', border:'1px solid #44403C' }}>
+                      ⇄ MERGE
+                    </button>
+                  )}
                 </div>
               </div>
               {activeIncident.description && (
@@ -8291,6 +8323,40 @@ function TrioView() {
 
           </div>
         )}
+
+        {/* ── Merge modal ── */}
+        {mergeModal && (() => {
+          const fromInc = incidents.find(i => i.id === mergeModal)
+          if (!fromInc) return null
+          return (
+            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:'24px' }}>
+              <div style={{ background:'#1A1814', border:'1px solid #44403C', width:'100%', maxWidth:'440px', padding:'24px' }}>
+                <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>MERGE INCIDENT</div>
+                <div className="display-font font-bold mb-1" style={{ color:'#F5F1EA', fontSize:'16px' }}>{fromInc.name}</div>
+                <div className="mono-font text-[9px] mb-4" style={{ color:'#57534E' }}>Linked cases, notes, participants and affected FIs will be absorbed into the target incident. This incident will be removed.</div>
+                <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#78716C' }}>MERGE INTO →</div>
+                <div className="space-y-2">
+                  {incidents.filter(i => i.id !== mergeModal).map(i => (
+                    <button key={i.id} onClick={() => { if (window.confirm(`Merge "${fromInc.name}" into "${i.name}"? This cannot be undone.`)) mergeIncidents(mergeModal, i.id) }}
+                      className="w-full text-left px-3 py-3 border transition-colors hover:border-stone-400"
+                      style={{ background:'#252320', borderColor:'#3D3A35' }}>
+                      <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id}</div>
+                      <div className="display-font text-sm" style={{ color:'#E7E4DF' }}>{i.name}</div>
+                      <div className="mono-font text-[8px] mt-1" style={{ color:'#78716C' }}>
+                        {(i.linkedCaseIds||[]).length} cases · {(i.notes||[]).length} notes · {(i.participants||[]).length} agents
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setMergeModal(null)}
+                  className="mono-font text-[9px] tracking-widest mt-4 w-full py-2"
+                  style={{ background:'transparent', border:'1px solid #3D3A35', color:'#78716C' }}>
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
