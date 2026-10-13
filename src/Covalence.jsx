@@ -299,7 +299,7 @@ function LoginGate({ onLogin }) {
       fetch(`${_url}/rest/v1/access_log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: _key, Authorization: `Bearer ${_key}`, Prefer: 'return=minimal' },
-        body: JSON.stringify({ name:userData.name, email:userData.email, institution:userData.institution, entered_at:userData.at, user_agent:navigator.userAgent }),
+        body: JSON.stringify({ name:userData.name, email:userData.email, entered_at:userData.at, user_agent:navigator.userAgent }),
       }).catch(() => {})
     }
     try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); localStorage.setItem('cov_outcomes', JSON.stringify(mergeCases(local,remote))) } } catch {}
