@@ -291,7 +291,7 @@ function LoginGate({ onLogin }) {
     e.preventDefault()
     if (!name.trim() || !email.trim()) { setErr('Both fields required.'); return }
     setLoading(true); setErr('')
-    const entry = { name: name.trim(), email: email.trim(), entered_at: new Date().toISOString(), user_agent: navigator.userAgent }
+    const userData = { name: name.trim(), email: email.trim(), institution: institution.trim(), at: new Date().toISOString() }
     // Log to Supabase access_log (non-blocking — gate opens regardless)
     const _url = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_URL || '') : ''
     const _key = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_ANON_KEY || '') : ''
@@ -302,7 +302,6 @@ function LoginGate({ onLogin }) {
         body: JSON.stringify({ name:userData.name, email:userData.email, institution:userData.institution, entered_at:userData.at, user_agent:navigator.userAgent }),
       }).catch(() => {})
     }
-    const userData = { name: name.trim(), email: email.trim(), institution: institution.trim(), at: new Date().toISOString() }
     try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); localStorage.setItem('cov_outcomes', JSON.stringify(mergeCases(local,remote))) } } catch {}
     localStorage.setItem('cov_user', JSON.stringify(userData))
     setLoading(false)
