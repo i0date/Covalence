@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS = {
   sarThresholdACH:      5000,
   sarThresholdP2P:      5000,
   sarThresholdCrypto:   10000,
+  dfaEnabled:           true,         // DFA scoring — toggle in Settings
   // Filing windows
   smallDollarThreshold: 50,
   fraudWindowDays:      120,
@@ -445,7 +446,7 @@ export default function Covalence() {
         )}
         {activeSection === 'multi' && <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} />}
         {activeSection === 'trio' && <TrioView />}
-        {activeSection === 'file' && <FileView setActiveSection={setActiveSection} />}
+        {activeSection === 'file' && <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />}
       </div>
     </ErrorBoundary>
   )
@@ -5073,6 +5074,16 @@ Return ONLY valid JSON:
                         <p className="display-font text-[11px] text-stone-400 mt-1 leading-snug italic">{hint}</p>
                       </div>
                     ))}
+                    <div>
+                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">DFA SCORING</label>
+                      <button
+                        onClick={() => updateSetting('dfaEnabled', !settings.dfaEnabled)}
+                        className="mono-font text-[9px] tracking-widest px-4 py-2 border transition-colors"
+                        style={{ background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C' }}>
+                        {settings.dfaEnabled !== false ? '● DFA ON' : '○ DFA OFF'}
+                      </button>
+                      <p className="display-font text-[11px] text-stone-400 mt-1 leading-snug italic">Enable or disable the Dispute Funding Analyzer scoring engine</p>
+                    </div>
                     <div>
                       <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">PC MILESTONES (BUSINESS DAYS)</label>
                       <div className="flex gap-2">
@@ -9831,9 +9842,15 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
   const myEmail = covUser?.email||''
   const applyFilter = arr => assignFilter==='mine' ? arr.filter(o=>o.assignedTo===myEmail) : assignFilter==='unassigned' ? arr.filter(o=>!o.assignedTo) : arr
-  const queuedFraud   = applyFilter(outcomes.filter(o => o.status === 'queued' && isFraudCase(o)))
-  const queuedService = applyFilter(outcomes.filter(o => o.status === 'queued' && !isFraudCase(o)))
+  const _applySearch = arr => {
+    if (!multiSearch.trim()) return arr
+    const q = multiSearch.toLowerCase()
+    return arr.filter(o => (o.id||'').toLowerCase().includes(q) || (o.merchant||'').toLowerCase().includes(q) || (o.cardholderName||'').toLowerCase().includes(q) || (o.reasonCode||'').toLowerCase().includes(q) || (o.amount||'').toString().includes(q))
+  }
+  const queuedFraud   = _applySearch(applyFilter(outcomes.filter(o => o.status === 'queued' && isFraudCase(o))))
+  const queuedService = _applySearch(applyFilter(outcomes.filter(o => o.status === 'queued' && !isFraudCase(o))))
   const [filed, setFiled] = React.useState(false)
+  const [multiSearch, setMultiSearch] = React.useState('')
   const [pkgModal, setPkgModal] = React.useState(null)   // { caseId, network, text } | null
 
   // ── 3pm auto-file ──────────────────────────────────────────────────────────
@@ -10158,7 +10175,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
           <button onClick={clearSelected} className="mono-font text-[9px] px-3 py-1.5 border border-stone-600 text-stone-500 hover:text-stone-300 transition-colors">DESELECT ALL ✕</button>
         </div>
       )}
-      <div className="flex items-center gap-2 mb-5 flex-wrap">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         {[['all','ALL'],['mine','MINE'],['unassigned','UNASSIGNED']].map(([v,l])=>(
           <button key={v} onClick={()=>setAssignFilter(v)} className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
             style={{background:assignFilter===v?'#1C1917':'transparent',color:assignFilter===v?'#F5F1EA':'#78716C',border:'1px solid',borderColor:assignFilter===v?'#1C1917':'#D4CCBC',cursor:'pointer'}}>
@@ -10166,6 +10183,16 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
           </button>
         ))}
         {covUser&&<span className="mono-font text-[9px] text-stone-400 ml-2">· {covUser.name}</span>}
+        <div className="flex items-center gap-1 ml-auto" style={{flex:'0 0 auto'}}>
+          <input
+            value={multiSearch} onChange={e => setMultiSearch(e.target.value)}
+            placeholder="Search by ID, merchant, cardholder..."
+            className="mono-font text-[10px] border border-stone-300 px-3 py-1.5 focus:outline-none focus:border-stone-600"
+            style={{background:'white', minWidth:'220px'}} />
+          {multiSearch && (
+            <button onClick={() => setMultiSearch('')} className="mono-font text-[9px] text-stone-400 hover:text-stone-700 px-2">✕</button>
+          )}
+        </div>
       </div>
       {/* Summary chips */}
       <div className="flex gap-3 mb-6 flex-wrap">
@@ -10530,7 +10557,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
 // ═══════════════════════════════════════════════════════════════════════════════
 // 007 FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function FileView({ setActiveSection }) {
+function FileView({ setActiveSection, setAppOutcomes }) {
   const [filedCases, setFiledCases] = React.useState([])
   const [pkgModal2, setPkgModal2]   = React.useState(null)
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
@@ -10538,9 +10565,20 @@ function FileView({ setActiveSection }) {
   React.useEffect(() => {
     try {
       const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-      setFiledCases(all.filter(o => o.status === 'filed').sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      setFiledCases(all.filter(o => ['filed','won','lost','pending_arb'].includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
     } catch {}
   }, [])
+
+  const updateOutcome = (id, newStatus) => {
+    try {
+      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString() } : o)
+      localStorage.setItem('cov_outcomes', JSON.stringify(updated))
+      if (setAppOutcomes) setAppOutcomes(updated)
+      setFiledCases(updated.filter(o => ['filed','won','lost','pending_arb'].includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      if (SUPA_URL && SUPA_KEY) pushCasesToSupa(updated).catch(()=>{})
+    } catch {}
+  }
 
   const regenPackage = (o) => {
     const net = (o.network||'').toLowerCase()
@@ -10638,13 +10676,22 @@ ${'═'.repeat(64)}`
                 </span>
                 <span className="mono-font text-[9px] text-stone-500">{o.reasonCode||'—'}</span>
                 <div className="flex gap-1 flex-wrap">
-                  <button
-                    onClick={() => regenPackage(o)}
+                  <button onClick={() => regenPackage(o)}
                     className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
-                    title="Regenerate filing package"
-                  >↓ PKG</button>
+                    title="Regenerate filing package">↓ PKG</button>
+                  {o.status === 'filed' && (<>
+                    <button onClick={() => updateOutcome(o.id, 'won')}
+                      className="mono-font text-[8px] px-2 py-0.5 border border-green-700 text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap">WON</button>
+                    <button onClick={() => updateOutcome(o.id, 'lost')}
+                      className="mono-font text-[8px] px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">LOST</button>
+                    <button onClick={() => updateOutcome(o.id, 'pending_arb')}
+                      className="mono-font text-[8px] px-2 py-0.5 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors whitespace-nowrap">PEND ARB</button>
+                  </>)}
+                  {o.status === 'won' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-green-700 text-green-50">WON ✓</span>}
+                  {o.status === 'lost' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-red-700 text-red-50">LOST</span>}
+                  {o.status === 'pending_arb' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold bg-violet-700 text-violet-50">PEND ARB</span>}
                   {(o.docs||[]).length > 0 && (
-                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-green-800 text-green-50">{(o.docs||[]).length}📎</span>
+                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>
                   )}
                 </div>
               </div>
