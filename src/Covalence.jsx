@@ -406,9 +406,9 @@ export default function Covalence() {
             </div>
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'16px',flexShrink:0}}>
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
-              {covUser&&<div className="mono-font desktop-only" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'10px'}}>
-                <span style={{color:'#A8A29E'}}>{covUser.name}{covUser.institution?` · ${covUser.institution}`:''}</span>
-                <button onClick={()=>{localStorage.removeItem('cov_user');setCovUser(null)}} style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em'}}>SIGN OUT</button>
+              {covUser&&<div className="mono-font" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                <span style={{color:'#A8A29E',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>{covUser.name}</span>
+                <button onClick={()=>{localStorage.removeItem('cov_user');setCovUser(null)}} style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
             </div>
           </div>
