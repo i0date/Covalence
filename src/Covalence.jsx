@@ -415,16 +415,16 @@ export default function Covalence() {
           </div>
         </div>
 
-        {/* ── Section views ── */}
-        {activeSection === 'home'     && (
+        {/* ── Section views — all kept mounted (display:none when inactive) to preserve local state ── */}
+        <div style={{ display: activeSection === 'home' ? 'block' : 'none' }}>
           <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode} />
-        )}
-        {activeSection === 'triage'   && (
+        </div>
+        <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
           <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
-        )}
-        {activeSection === 'desk'     && (
+        </div>
+        <div style={{ display: activeSection === 'desk' ? 'block' : 'none' }}>
           <DeskView
-  onGoToDesk={() => setActiveSection('desk')}
+            onGoToDesk={() => setActiveSection('desk')}
             outcomes={outcomes} setOutcomes={setOutcomes}
             settings={settings} setSettings={setSettings}
             triageHandoff={triageHandoff} setTriageHandoff={setTriageHandoff}
@@ -434,19 +434,25 @@ export default function Covalence() {
             platformMode={platformMode} setPlatformMode={setPlatformMode}
             covUser={covUser}
           />
-        )}
-        {activeSection === 'dfa'      && (
+        </div>
+        <div style={{ display: activeSection === 'multi' ? 'block' : 'none' }}>
+          <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} />
+        </div>
+        <div style={{ display: activeSection === 'file' ? 'block' : 'none' }}>
+          <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />
+        </div>
+        <div style={{ display: activeSection === 'dfa' ? 'block' : 'none' }}>
           <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} />
-        )}
-        {activeSection === 'settings' && (
-          <SettingsView settings={settings} setSettings={setSettings} />
-        )}
-        {activeSection === 'duo' && (
+        </div>
+        <div style={{ display: activeSection === 'duo' ? 'block' : 'none' }}>
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
-        )}
-        {activeSection === 'multi' && <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} />}
-        {activeSection === 'trio' && <TrioView />}
-        {activeSection === 'file' && <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />}
+        </div>
+        <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
+          <TrioView />
+        </div>
+        <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
+          <SettingsView settings={settings} setSettings={setSettings} />
+        </div>
       </div>
     </ErrorBoundary>
   )
@@ -10661,41 +10667,66 @@ ${'═'.repeat(64)}`
           </div>
         ) : (
           <div className="divide-y divide-stone-200">
-            {/* Header */}
-            <div className="grid px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{gridTemplateColumns:'90px 55px minmax(0,1fr) 70px 70px 90px 90px'}}>
-              <span>CASE ID</span><span>FILED</span><span>MERCHANT</span><span>AMOUNT</span><span>NETWORK</span><span>REASON</span><span></span>
+            <div className="flex gap-3 px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{background:'#EEE9E0'}}>
+              <span style={{flex:'0 0 88px'}}>CASE ID</span>
+              <span style={{flex:'0 0 50px'}}>FILED</span>
+              <span style={{flex:'1 1 0',minWidth:0}}>MERCHANT</span>
+              <span style={{flex:'0 0 60px'}}>AMT</span>
+              <span style={{flex:'0 0 46px'}}>NET</span>
+              <span style={{flex:'0 0 auto'}}>↓ PKG</span>
             </div>
-            {filedCases.map(o => (
-              <div key={o.id} className="grid px-5 py-3 items-center" style={{gridTemplateColumns:'90px 55px minmax(0,1fr) 70px 70px 90px 90px'}}>
-                <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
-                <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
-                <span className="display-font text-sm text-stone-800 truncate pr-2">{o.merchant||'—'}</span>
-                <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
-                <span className="mono-font text-[10px]" style={{color:(o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'}}>
-                  {(o.network||'—').toUpperCase().substring(0,4)}
-                </span>
-                <span className="mono-font text-[9px] text-stone-500">{o.reasonCode||'—'}</span>
-                <div className="flex gap-1 flex-wrap">
-                  <button onClick={() => regenPackage(o)}
-                    className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
-                    title="Regenerate filing package">↓ PKG</button>
-                  {o.status === 'filed' && (<>
-                    <button onClick={() => updateOutcome(o.id, 'won')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-green-700 hover:text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap">✓ WON</button>
-                    <button onClick={() => updateOutcome(o.id, 'lost')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-red-700 hover:text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">✗ LOST</button>
-                    <button onClick={() => updateOutcome(o.id, 'pending_arb')}
-                      className="mono-font text-[8px] px-2 py-0.5 border border-stone-500 text-stone-600 hover:border-violet-700 hover:text-violet-700 hover:bg-violet-50 transition-colors whitespace-nowrap">⏸ ARB</button>
-                  </>)}
-                  {o.status === 'won' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#064E3B',color:'#D1FAE5'}}>WON ✓</span>}
-                  {o.status === 'lost' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#7F1D1D',color:'#FEE2E2'}}>LOST</span>}
-                  {o.status === 'pending_arb' && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#4C1D95',color:'#EDE9FE'}}>PEND ARB</span>}
-                  {(o.docs||[]).length > 0 && (
-                    <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>
-                  )}
+            {filedCases.map(o => {
+              const CB_STAGES = [
+                {id:'filed',          label:'1ST CB'},
+                {id:'network_invstg', label:'NTW INVSTG'},
+                {id:'representment',  label:'MERCHANT RESP'},
+                {id:'pre_arb',        label:'PRE-ARB'},
+                {id:'arbitration',    label:'ARB'},
+              ]
+              const TERMINAL = {won:'WON ✓',lost:'LOST','withdrawn':'WD','pending_arb':'PEND ARB'}
+              const curIdx = CB_STAGES.findIndex(s => s.id === o.status)
+              const isTerminal = !!TERMINAL[o.status]
+              const netColor = (o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'
+              return (
+                <div key={o.id} className="px-5 py-3 border-b border-stone-100">
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <span className="mono-font text-[10px] text-stone-500" style={{flex:'0 0 88px'}}>{o.id}</span>
+                    <span className="mono-font text-[10px] text-stone-400" style={{flex:'0 0 50px'}}>{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                    <span className="display-font text-sm text-stone-800 truncate" style={{flex:'1 1 0',minWidth:0}}>{o.merchant||'—'}</span>
+                    <span className="mono-font text-[10px] text-stone-600" style={{flex:'0 0 60px'}}>{o.amount||'—'}</span>
+                    <span className="mono-font text-[10px] font-bold" style={{flex:'0 0 46px',color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
+                    <div className="flex gap-1" style={{flex:'0 0 auto'}}>
+                      <button onClick={() => regenPackage(o)} className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">↓ PKG</button>
+                      {(o.docs||[]).length > 0 && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 mt-2 flex-wrap">
+                    {CB_STAGES.map((s, i) => {
+                      const isPast = curIdx > i && !isTerminal
+                      const isCurrent = curIdx === i && !isTerminal
+                      return (
+                        <React.Fragment key={s.id}>
+                          {i > 0 && <span className="mono-font text-[8px] text-stone-300">›</span>}
+                          <button onClick={() => !isCurrent && updateOutcome(o.id, s.id)} disabled={isCurrent}
+                            className="mono-font text-[8px] px-2 py-0.5 transition-colors whitespace-nowrap"
+                            style={{background:isCurrent?'#1A1814':isPast?'#D4CCBC':'transparent',color:isCurrent?'#F5F1EA':isPast?'#78716C':'#A8A29E',border:isCurrent?'1px solid #1A1814':isPast?'1px solid #D4CCBC':'1px solid #E0D9CE',cursor:isCurrent?'default':'pointer'}}>
+                            {s.label}
+                          </button>
+                        </React.Fragment>
+                      )
+                    })}
+                    <span className="mono-font text-[8px] text-stone-300">›</span>
+                    {!isTerminal ? (<>
+                      <button onClick={() => updateOutcome(o.id,'won')} className="mono-font text-[8px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:border-green-700 hover:text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap">✓ WON</button>
+                      <button onClick={() => updateOutcome(o.id,'lost')} className="mono-font text-[8px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:border-red-700 hover:text-red-700 hover:bg-red-50 transition-colors whitespace-nowrap">✗ LOST</button>
+                    </>) : (
+                      <span className="mono-font text-[8px] px-2 py-0.5 font-bold" style={{background:o.status==='won'?'#064E3B':o.status==='lost'?'#7F1D1D':o.status==='pending_arb'?'#4C1D95':'#57534E',color:o.status==='won'?'#D1FAE5':o.status==='lost'?'#FEE2E2':o.status==='pending_arb'?'#EDE9FE':'#E7E2D9'}}>{TERMINAL[o.status]}</span>
+                    )}
+                    {isTerminal && <button onClick={() => updateOutcome(o.id,'filed')} className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 transition-colors">↩</button>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
