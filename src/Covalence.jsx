@@ -292,6 +292,7 @@ function LoginGate({ onLogin }) {
   async function handleEnter(e) {
     e.preventDefault()
     if (!name.trim() || !email.trim()) { setErr('Both fields required.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setErr('Please enter a valid email address.'); return }
     setLoading(true); setErr('')
     const userData = { name: name.trim(), email: email.trim(), institution: institution.trim(), at: new Date().toISOString() }
     // Log to Supabase access_log (non-blocking — gate opens regardless)
