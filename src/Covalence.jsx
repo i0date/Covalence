@@ -468,7 +468,8 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
   const [outcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
   })
-  const [tourDismissed, setTourDismissed] = React.useState(() => !!localStorage.getItem('cov_tour_dismissed'))
+  const [tourOpen, setTourOpen] = React.useState(false)
+  const [tourSlide, setTourSlide] = React.useState(0)
   const settings = React.useMemo(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
   }, [])
@@ -507,45 +508,123 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </p>
       </div>
 
-      {/* ── Tool strip + first-visit guide ── */}
-      <div className="mb-8" style={{ borderBottom:'1px solid #D4CCBC', paddingBottom:'24px' }}>
-        <div style={{ display:'flex', overflowX:'auto', WebkitOverflowScrolling:'touch', gap:'1px', background:'#D4CCBC', marginBottom: tourDismissed ? '0' : '12px' }}>
-          {[
-            { num:'001', name:'TRIAGE',  sub:'Intake',          section:'triage' },
-            { num:'002', name:'DESK',    sub:'Case mgmt',       section:'desk'   },
-            { num:'003', name:'MULTI',   sub:'Batch ops',       section:'multi'  },
-            { num:'004', name:'FILE',    sub:'Post-filing',     section:'file'   },
-            { num:'005', name:'DFA',     sub:'Portfolio score', section:'dfa'    },
-            { num:'006', name:'DUO',     sub:'Collab',          section:'duo'    },
-            { num:'007', name:'TRIO',    sub:'Incident cmd',    section:'trio'   },
-          ].map(({ num, name, sub, section }) => (
-            <button key={num} onClick={() => setActiveSection(section)}
-              className="text-left mono-font"
-              style={{ background:'#FAF7F1', padding:'10px 14px', border:'none', cursor:'pointer', flexShrink:0, transition:'background 0.12s', minWidth:'90px' }}
-              onMouseEnter={e => e.currentTarget.style.background='#EAE5DC'}
-              onMouseLeave={e => e.currentTarget.style.background='#FAF7F1'}>
-              <div style={{ fontSize:'7px', letterSpacing:'0.16em', color:'#A8A29E', marginBottom:'3px' }}>{num}</div>
-              <div style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:600 }}>{name}</div>
-              <div style={{ fontSize:'8px', color:'#78716C', marginTop:'1px' }}>{sub}</div>
-            </button>
-          ))}
-        </div>
-        {!tourDismissed && (
-          <div className="px-4 py-3" style={{ background:'#F5F1EA', border:'1px solid #D4CCBC', borderTop:'none', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
-            <div className="display-font" style={{ color:'#57534E', fontSize:'13px' }}>
-              New here? Follow the workflow left to right — start with <strong style={{color:'#1A1814'}}>Triage</strong>, work through to <strong style={{color:'#1A1814'}}>File</strong>. DFA, Duo and Trio are for advanced scenarios.
-            </div>
-            <div style={{ display:'flex', gap:'8px', flexShrink:0 }}>
-              <button onClick={() => setActiveSection('triage')}
-                className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', background:'#1A1814', color:'#F5F1EA', border:'none', padding:'6px 14px', cursor:'pointer', whiteSpace:'nowrap' }}>
-                START →
+      {/* ── Tool strip ── */}
+      <div className="mb-8" style={{ borderBottom:'1px solid #D4CCBC', paddingBottom:'16px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'1px', marginBottom:'0' }}>
+          <div style={{ display:'flex', overflowX:'auto', WebkitOverflowScrolling:'touch', gap:'1px', background:'#D4CCBC', flex:1 }}>
+            {[
+              { num:'001', name:'TRIAGE',  sub:'Intake',          section:'triage' },
+              { num:'002', name:'DESK',    sub:'Case mgmt',       section:'desk'   },
+              { num:'003', name:'MULTI',   sub:'Batch ops',       section:'multi'  },
+              { num:'004', name:'FILE',    sub:'Post-filing',     section:'file'   },
+              { num:'005', name:'DFA',     sub:'Portfolio score', section:'dfa'    },
+              { num:'006', name:'DUO',     sub:'Collab',          section:'duo'    },
+              { num:'007', name:'TRIO',    sub:'Incident cmd',    section:'trio'   },
+            ].map(({ num, name, sub, section }) => (
+              <button key={num} onClick={() => setActiveSection(section)}
+                className="text-left mono-font"
+                style={{ background:'#FAF7F1', padding:'10px 14px', border:'none', cursor:'pointer', flexShrink:0, transition:'background 0.12s', minWidth:'90px' }}
+                onMouseEnter={e => e.currentTarget.style.background='#EAE5DC'}
+                onMouseLeave={e => e.currentTarget.style.background='#FAF7F1'}>
+                <div style={{ fontSize:'7px', letterSpacing:'0.16em', color:'#A8A29E', marginBottom:'3px' }}>{num}</div>
+                <div style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:600 }}>{name}</div>
+                <div style={{ fontSize:'8px', color:'#78716C', marginTop:'1px' }}>{sub}</div>
               </button>
-              <button onClick={() => { localStorage.setItem('cov_tour_dismissed','1'); setTourDismissed(true) }}
-                style={{ background:'transparent', border:'none', color:'#A8A29E', cursor:'pointer', fontSize:'14px', lineHeight:1 }}>✕</button>
+            ))}
+          </div>
+          {/* NEW HERE? pill */}
+          <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
+            className="mono-font"
+            style={{ flexShrink:0, marginLeft:'8px', fontSize:'8px', letterSpacing:'0.14em', padding:'8px 14px', background:'transparent', border:'1px solid #3D3A35', color:'#78716C', cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#D4CCBC' }}
+            onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#78716C' }}>
+            ? NEW HERE
+          </button>
+        </div>
+      </div>
+
+      {/* ── 7-slide tour modal ── */}
+      {tourOpen && (() => {
+        const SLIDES = [
+          { num:'001', name:'Triage', section:'triage', color:'#4C1D95',
+            problem:'Most institutions receive dispute first-contacts in free text — a phone call, a chat message, a form that asks only for the amount and the date. What gets lost is not information but structure.',
+            tool:'Triage is the entry point. It walks through transaction type, reason code, dollar amount, product, and filing window — and produces a structured handoff to the Dispute Desk.',
+            detail:'Filing windows are strict. Context, unlike time, can be recovered.' },
+          { num:'002', name:'Dispute Desk', section:'desk', color:'#1E3A5F',
+            problem:'A chargeback case is a sequence — intake, investigation, documentation, rebuttal, filing, outcome. Most ops teams manage this sequence across disconnected systems. Each handoff is a place where context falls out.',
+            tool:'The Dispute Desk is a case management layer. Each case carries its own timeline, reason code, status, evidence packet, and agent notes. Evidence lives with the case, not beside it.',
+            detail:'A document uploaded in Desk travels with the case into Multi, into filing, into the audit log.' },
+          { num:'003', name:'Multi', section:'multi', color:'#064E3B',
+            problem:'One dispute costs roughly the same to work whether the recovery is forty dollars or four thousand. Fixed operational cost against variable recovery — that asymmetry is the core economics problem in dispute management.',
+            tool:'Multi is the batch operations layer. It groups cases by network — Visa, Mastercard, Amex, Discover — and surfaces fraud and service queues separately. Analysts file as a group or generate packages case by case.',
+            detail:'The batch summary bar shows total dollar exposure queued and countdown to the next auto-file window.' },
+          { num:'004', name:'File', section:'file', color:'#92400E',
+            problem:'Filing a chargeback is not the end of a case. The network receives the package, a timer starts, and if the merchant representments — a response is required, grounded in the original submission.',
+            tool:'File is a submission history log and lifecycle tracker. Every case filed through Covalence leaves a record here. The CB pipeline runs from 1st CB through NTW INVSTG → Merchant Resp → Pre-Arb → Arbitration → Won/Lost.',
+            detail:'Cases that advance to any post-filing stage stay visible here. Filter by All / Active / Won / Lost.' },
+          { num:'005', name:'DFA', section:'dfa', color:'#1A1814',
+            problem:'A dispute portfolio is an asset. The right to recover from a filed chargeback has economic value before it is won. But the pricing of a dispute portfolio is opaque and often tilted against the institution selling.',
+            tool:'The Dispute Funding Analyzer scores individual claims across recovery rate, filing window proximity, reason code strength, and documentation quality — graded A through D with estimated advance rates.',
+            detail:'The portfolio view surfaces concentration risk, window risk, and the drag of low-grade claims on the aggregate score.' },
+          { num:'006', name:'Duo', section:'duo', color:'#1E3A5F',
+            problem:'Fraud does not stop at one institution. A card compromised in one breach surfaces at dozens of FIs within hours. The information that would interrupt these patterns is distributed across institutions with limited mechanisms to share it in time.',
+            tool:'Duo is a real-time collaboration layer for two institutions working a shared case or fraud pattern. Both sides connect to a live session, contribute case data, and maintain a joint record — synced through Supabase.',
+            detail:'The primary obstacle to inter-institutional coordination is not willingness but friction. Duo removes the friction.' },
+          { num:'007', name:'Trio', section:'trio', color:'#7F1D1D',
+            problem:'The hardest fraud events involve three parties simultaneously — your institution, the receiving platform or FI, and the cardholder population in between. These require coordination across all three layers at once.',
+            tool:'Trio is an incident command module with two modes: Operational (war room, linked cases, SAR tracking, receiving FI coordination) and Strategy (pattern intelligence, post-incident debrief, threat brief generation).',
+            detail:'Fraud incidents at scale are not case management problems. They are coordination problems. Trio is a room, not a record.' },
+        ]
+        const slide = SLIDES[tourSlide]
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}
+            onClick={e => { if (e.target === e.currentTarget) setTourOpen(false) }}>
+            <div style={{ background:'#1A1814', border:'1px solid #44403C', width:'100%', maxWidth:'560px', display:'flex', flexDirection:'column' }}>
+              {/* Header */}
+              <div style={{ borderBottom:'1px solid #2D2922', padding:'16px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', gap:'6px' }}>
+                  {SLIDES.map((_,i) => (
+                    <button key={i} onClick={() => setTourSlide(i)}
+                      style={{ width:'24px', height:'3px', background: i===tourSlide?'#D4CCBC':'#3D3A35', border:'none', cursor:'pointer', padding:0, transition:'background 0.15s' }}/>
+                  ))}
+                </div>
+                <button onClick={() => setTourOpen(false)} style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer', fontSize:'16px', lineHeight:1 }}>✕</button>
+              </div>
+              {/* Slide */}
+              <div style={{ padding:'32px 28px', flex:1 }}>
+                <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.2em', color:'#57534E', marginBottom:'8px' }}>{slide.num} — {tourSlide+1} OF 7</div>
+                <div className="display-font" style={{ fontSize:'28px', fontWeight:700, color:'#F5F1EA', lineHeight:1.1, marginBottom:'24px' }}>
+                  {slide.name.split('').map((c,i) => <span key={i} style={{ fontStyle: i>0&&i%3===0?'italic':'normal' }}>{c}</span>)}
+                </div>
+                <div style={{ borderLeft:`2px solid ${slide.color}`, paddingLeft:'16px', marginBottom:'16px' }}>
+                  <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE PROBLEM</div>
+                  <div className="display-font" style={{ fontSize:'13px', color:'#A8A29E', lineHeight:1.7 }}>{slide.problem}</div>
+                </div>
+                <div style={{ borderLeft:`2px solid ${slide.color}`, paddingLeft:'16px', marginBottom:'16px' }}>
+                  <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE TOOL</div>
+                  <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.7 }}>{slide.tool}</div>
+                </div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', fontStyle:'italic', lineHeight:1.6 }}>{slide.detail}</div>
+              </div>
+              {/* Footer nav */}
+              <div style={{ borderTop:'1px solid #2D2922', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <button onClick={() => setTourSlide(p => Math.max(0,p-1))} disabled={tourSlide===0}
+                  className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #3D3A35', color:tourSlide===0?'#3D3A35':'#78716C', cursor:tourSlide===0?'default':'pointer' }}>
+                  ← PREV
+                </button>
+                <button onClick={() => { setActiveSection(slide.section); setTourOpen(false) }}
+                  className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', padding:'6px 14px', background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
+                  OPEN {slide.name.toUpperCase()} →
+                </button>
+                {tourSlide < 6
+                  ? <button onClick={() => setTourSlide(p => p+1)} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>NEXT →</button>
+                  : <button onClick={() => setTourOpen(false)} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
+                }
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        )
+      })()}
 
       {urgent.length > 0 && (
         <div className="mb-6 border border-amber-700 px-4 py-3" style={{ background:'#FFFBEB' }}>
@@ -587,6 +666,42 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         ))}
       </div>
 
+
+      {/* ── 60-day snapshot ── */}
+      {(() => {
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60)
+        const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
+        const res60  = recent.filter(o => ['won','lost','withdrawn'].includes(o.status))
+        const won60  = res60.filter(o => o.status === 'won')
+        const wr60   = res60.length > 0 ? Math.round((won60.length / res60.length) * 100) : null
+        const daysArr = res60.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
+        const avg60   = daysArr.length > 0 ? Math.round(daysArr.reduce((a,b)=>a+b,0)/daysArr.length) : null
+        const catMap  = {}
+        recent.forEach(o => { const c = (o.category||'unknown').replace('mc_',''); catMap[c] = (catMap[c]||0)+1 })
+        const topCat  = Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0]
+        const fraudC  = recent.filter(o => o.category==='fraud'||o.category==='mc_fraud'||o.verdict==='TRUE_FRAUD').length
+        const svcC    = recent.length - fraudC
+        if (recent.length === 0) return null
+        return (
+          <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">60-DAY SNAPSHOT</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                {label:'WIN RATE',       value: wr60  !== null ? `${wr60}%` : '—',  sub: `${res60.length} resolved`},
+                {label:'AVG RESOLUTION', value: avg60 !== null ? `${avg60}d` : '—', sub: 'days to close'},
+                {label:'FRAUD / SERVICE',value:`${fraudC} / ${svcC}`,               sub: `of ${recent.length} cases`},
+                {label:'TOP CATEGORY',   value: topCat ? topCat[0].replace(/_/g,' ').toUpperCase() : '—', sub: topCat ? `${topCat[1]} cases` : ''},
+              ].map(({label,value,sub}) => (
+                <div key={label}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
+                  <div className="display-font font-semibold text-stone-900" style={{fontSize:'clamp(16px,2.5vw,22px)',letterSpacing:'-0.02em',lineHeight:1.1}}>{value}</div>
+                  {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {active.length > 0 ? (
         <div>
