@@ -508,38 +508,39 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </p>
       </div>
 
-      {/* ── Tool strip ── */}
-      <div className="mb-8" style={{ borderBottom:'1px solid #D4CCBC', paddingBottom:'16px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'1px', marginBottom:'0' }}>
-          <div style={{ display:'flex', overflowX:'auto', WebkitOverflowScrolling:'touch', gap:'1px', background:'#D4CCBC', flex:1 }}>
-            {[
-              { num:'001', name:'TRIAGE',  sub:'Intake',          section:'triage' },
-              { num:'002', name:'DESK',    sub:'Case mgmt',       section:'desk'   },
-              { num:'003', name:'MULTI',   sub:'Batch ops',       section:'multi'  },
-              { num:'004', name:'FILE',    sub:'Post-filing',     section:'file'   },
-              { num:'005', name:'DFA',     sub:'Portfolio score', section:'dfa'    },
-              { num:'006', name:'DUO',     sub:'Collab',          section:'duo'    },
-              { num:'007', name:'TRIO',    sub:'Incident cmd',    section:'trio'   },
-            ].map(({ num, name, sub, section }) => (
-              <button key={num} onClick={() => setActiveSection(section)}
-                className="text-left mono-font"
-                style={{ background:'#FAF7F1', padding:'10px 14px', border:'none', cursor:'pointer', flexShrink:0, transition:'background 0.12s', minWidth:'90px' }}
-                onMouseEnter={e => e.currentTarget.style.background='#EAE5DC'}
-                onMouseLeave={e => e.currentTarget.style.background='#FAF7F1'}>
-                <div style={{ fontSize:'7px', letterSpacing:'0.16em', color:'#A8A29E', marginBottom:'3px' }}>{num}</div>
-                <div style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:600 }}>{name}</div>
-                <div style={{ fontSize:'8px', color:'#78716C', marginTop:'1px' }}>{sub}</div>
-              </button>
-            ))}
-          </div>
-          {/* NEW HERE? pill */}
+      {/* ── Tool grid ── */}
+      <div className="mb-8">
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.18em', color:'#78716C' }}>THE WORKFLOW</div>
           <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
             className="mono-font"
-            style={{ flexShrink:0, marginLeft:'8px', fontSize:'8px', letterSpacing:'0.14em', padding:'8px 14px', background:'transparent', border:'1px solid #3D3A35', color:'#78716C', cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#D4CCBC' }}
-            onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#78716C' }}>
-            ? NEW HERE
+            style={{ fontSize:'9px', letterSpacing:'0.14em', padding:'7px 16px', background:'#1A1814', border:'none', color:'#D4CCBC', cursor:'pointer', transition:'all 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background='#3D3A35'}
+            onMouseLeave={e => e.currentTarget.style.background='#1A1814'}>
+            ◎ NEW HERE?
           </button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'1px', background:'#D4CCBC' }}>
+          {[
+            { num:'001', name:'TRIAGE',  role:'Intake & structure',        desc:'Classify the dispute, identify the regulation, hand off to Desk.',   section:'triage', col:'#FAF7F1' },
+            { num:'002', name:'DESK',    role:'Case management',            desc:'Investigate, document evidence, draft rebuttals, track the lifecycle.', section:'desk',   col:'#FAF7F1' },
+            { num:'003', name:'MULTI',   role:'Batch operations',           desc:'Queue by network, generate filing packages, advance in bulk.',          section:'multi',  col:'#FAF7F1' },
+            { num:'004', name:'FILE',    role:'Post-filing tracker',        desc:'CB lifecycle: 1st CB → NTW INVSTG → Merchant Resp → Pre-Arb → ARB.',    section:'file',   col:'#FAF7F1' },
+            { num:'005', name:'DFA',     role:'Portfolio scoring',          desc:'Grade claims A–D, assess advance rates, surface concentration risk.',   section:'dfa',    col:'#F0EDE6' },
+            { num:'006', name:'DUO',     role:'Inter-institutional collab', desc:'Real-time session with a second FI — shared case, shared record.',      section:'duo',    col:'#F0EDE6' },
+            { num:'007', name:'TRIO',    role:'Incident command',           desc:'Three-party fraud wave — war room, SAR tracking, strategy mode.',       section:'trio',   col:'#EAE4DC' },
+          ].map(({ num, name, role, desc, section, col }) => (
+            <button key={num} onClick={() => setActiveSection(section)}
+              className="text-left"
+              style={{ background:col, padding:'16px', border:'none', cursor:'pointer', transition:'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background='#DDD7CE'}
+              onMouseLeave={e => e.currentTarget.style.background=col}>
+              <div className="mono-font" style={{ fontSize:'7px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'5px' }}>{num}</div>
+              <div className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700, marginBottom:'3px' }}>{name}</div>
+              <div className="mono-font" style={{ fontSize:'8px', color:'#78716C', marginBottom:'8px' }}>{role}</div>
+              <div className="display-font" style={{ fontSize:'12px', color:'#57534E', lineHeight:1.5 }}>{desc}</div>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -10726,10 +10727,10 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                   </button>
                   <button
                     onClick={() => generateFilingPackage(o)}
-                    className="mono-font text-[9px] px-2 py-0.5 border transition-colors whitespace-nowrap"
-                    style={{ borderColor:'#92400E', color:'#92400E' }}
+                    className="mono-font text-[8px] px-2 py-0.5 border transition-colors whitespace-nowrap"
+                    style={{ borderColor:'#92400E', color:'#92400E', background:'transparent', cursor:'pointer' }}
                     title="Generate filing package">
-                    📦 PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length}📎` : ''}
+                    ↓ PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length} DOC${(o.docs||[]).length!==1?'S':''}` : ''}
                   </button>
                   <button
                     onClick={() => {
