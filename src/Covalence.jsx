@@ -10436,15 +10436,29 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
           )}
         </div>
       </div>
-      {/* Summary chips */}
-      <div className="flex gap-3 mb-6 flex-wrap">
-        <button onClick={() => setTimeout(()=>document.getElementById('mfq')?.scrollIntoView({behavior:'smooth'}),60)} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-violet-700 text-violet-700 hover:bg-violet-50 transition-colors">
-          ↗ {queuedFraud.length} FRAUD IN QUEUE — SCROLL TO QUEUE
-        </button>
-        <button onClick={() => setTimeout(()=>document.getElementById('msq')?.scrollIntoView({behavior:'smooth'}),60)} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-600 hover:bg-stone-100 transition-colors">
-          ↗ {queuedService.length} SERVICE IN QUEUE — SCROLL TO QUEUE
-        </button>
-      </div>
+      {/* Batch summary bar */}
+      {(() => {
+        const fraudTotal   = queuedFraud.reduce((s,o)=>s+(parseFloat((o.amount||'0').replace(/[^0-9.]/g,''))||0),0)
+        const serviceTotal = queuedService.reduce((s,o)=>s+(parseFloat((o.amount||'0').replace(/[^0-9.]/g,''))||0),0)
+        return (
+          <div className="mb-6" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'1px',background:'#D4CCBC'}}>
+            {[
+              {label:'FRAUD IN QUEUE',     val:queuedFraud.length,   sub:`$${fraudTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} total`,   col:'#4C1D95', jump:'mfq'},
+              {label:'SERVICE IN QUEUE',   val:queuedService.length, sub:`$${serviceTotal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} total`, col:'#1E3A5F', jump:'msq'},
+              {label:'SELECTED',           val:selectedIds.length,   sub:selectedIds.length>0?'ready to file':'none selected',                                               col:'#1A1814', jump:null},
+              {label:'NEXT BATCH IN',      val:batchCountdown,       sub:autoFile?'auto-file ON':'auto-file OFF',                                                            col:nearBatch?'#92400E':'#57534E', jump:null},
+            ].map(({label,val,sub,col,jump})=>(
+              <button key={label} onClick={()=>jump&&setTimeout(()=>document.getElementById(jump)?.scrollIntoView({behavior:'smooth'}),60)}
+                className="text-left"
+                style={{background:'#FAF7F1',padding:'14px 18px',border:'none',cursor:jump?'pointer':'default'}}>
+                <div className="mono-font" style={{fontSize:'8px',letterSpacing:'0.16em',color:'#78716C',marginBottom:'4px'}}>{label}</div>
+                <div className="mono-font font-bold" style={{fontSize:'22px',color:col,lineHeight:1}}>{val}</div>
+                <div className="mono-font" style={{fontSize:'9px',color:'#A8A29E',marginTop:'3px'}}>{sub}</div>
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Fraud queue */}
       <div id="mfq" className="border border-stone-300 mb-6" style={{ background: '#FAF7F1' }}>
@@ -10500,10 +10514,10 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                   </button>
                   <button
                     onClick={() => generateFilingPackage(o)}
-                    className="mono-font text-[9px] px-2 py-0.5 border transition-colors whitespace-nowrap"
-                    style={{ borderColor:'#92400E', color:'#92400E', background:'transparent' }}
+                    className="mono-font text-[8px] px-2 py-0.5 border transition-colors whitespace-nowrap"
+                    style={{ borderColor:'#92400E', color:'#92400E', background:'transparent', cursor:'pointer' }}
                     title="Generate network-formatted filing package"
-                  >📦 PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length} DOC${(o.docs||[]).length!==1?'S':''}` : ''}</button>
+                  >↓ PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length} DOC${(o.docs||[]).length!==1?'S':''}` : ''}</button>
                 </div>
                 {o.notes?.length > 0 && !noteOpen[o.id] && (
                   <div className="px-5 pb-2 space-y-1">
@@ -10799,15 +10813,19 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
 // ═══════════════════════════════════════════════════════════════════════════════
 // 007 FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
+const FILE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','won','lost','pending_arb','withdrawn']
+
 function FileView({ setActiveSection, setAppOutcomes }) {
   const [filedCases, setFiledCases] = React.useState([])
-  const [pkgModal2, setPkgModal2]   = React.useState(null)
+  const [pkgModal2,  setPkgModal2]  = React.useState(null)
+  const [fileSearch, setFileSearch] = React.useState('')
+  const [fileFilter, setFileFilter] = React.useState('all') // all | active | won | lost
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
 
   React.useEffect(() => {
     try {
       const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-      setFiledCases(all.filter(o => ['filed','won','lost','pending_arb'].includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
     } catch {}
   }, [])
 
@@ -10817,7 +10835,7 @@ function FileView({ setActiveSection, setAppOutcomes }) {
       const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString() } : o)
       localStorage.setItem('cov_outcomes', JSON.stringify(updated))
       if (setAppOutcomes) setAppOutcomes(updated)
-      setFiledCases(updated.filter(o => ['filed','won','lost','pending_arb'].includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
       if (SUPA_URL && SUPA_KEY) pushCasesToSupa(updated).catch(()=>{})
     } catch {}
   }
@@ -10888,20 +10906,65 @@ ${'═'.repeat(64)}`
 
       {/* Submission log */}
       <div className="border border-stone-300 mb-8" style={{background:'#FAF7F1'}}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-stone-200 flex-wrap gap-3">
-          <div>
-            <div className="mono-font text-xs tracking-widest text-stone-600">SUBMISSION LOG</div>
-            <div className="mono-font text-[10px] text-stone-400 mt-0.5">{filedCases.length} case{filedCases.length!==1?'s':''} filed</div>
+        <div className="px-5 py-3 border-b border-stone-200">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+            <div>
+              <div className="mono-font text-xs tracking-widest text-stone-600">SUBMISSION LOG</div>
+              <div className="mono-font text-[10px] text-stone-400 mt-0.5">{filedCases.length} case{filedCases.length!==1?'s':''} · all post-filing statuses</div>
+            </div>
+            <button onClick={()=>setActiveSection('multi')} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">← MULTI</button>
           </div>
-          <button onClick={()=>setActiveSection('multi')} className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">← BACK TO MULTI</button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {[['all','ALL'],['active','ACTIVE'],['won','WON'],['lost','LOST']].map(([v,l])=>(
+              <button key={v} onClick={()=>setFileFilter(v)}
+                className="mono-font text-[8px] tracking-widest px-3 py-1 transition-colors"
+                style={{background:fileFilter===v?'#1C1917':'transparent',color:fileFilter===v?'#F5F1EA':'#78716C',border:'1px solid',borderColor:fileFilter===v?'#1C1917':'#D4CCBC',cursor:'pointer'}}>
+                {l}
+              </button>
+            ))}
+            <div className="flex items-center gap-1 ml-auto">
+              <input value={fileSearch} onChange={e=>setFileSearch(e.target.value)}
+                placeholder="Search ID, merchant..."
+                className="mono-font text-[9px] border border-stone-300 px-3 py-1 focus:outline-none focus:border-stone-500"
+                style={{background:'white',minWidth:'180px'}}/>
+              {fileSearch&&<button onClick={()=>setFileSearch('')} className="mono-font text-[9px] text-stone-400 hover:text-stone-700 px-1">✕</button>}
+            </div>
+          </div>
         </div>
-        {filedCases.length === 0 ? (
+        {(() => {
+          const ACTIVE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','pending_arb']
+          const filtered = filedCases.filter(o => {
+            if (fileFilter === 'active') return ACTIVE_STATUSES.includes(o.status)
+            if (fileFilter === 'won')    return o.status === 'won'
+            if (fileFilter === 'lost')   return o.status === 'lost'
+            return true
+          }).filter(o => {
+            if (!fileSearch.trim()) return true
+            const q = fileSearch.toLowerCase()
+            return (o.id||'').toLowerCase().includes(q)||(o.merchant||'').toLowerCase().includes(q)||(o.reasonCode||'').toLowerCase().includes(q)||(o.network||'').toLowerCase().includes(q)
+          })
+          return filtered
+        })().length === 0 && filedCases.length === 0 ? (
           <div className="px-5 py-10 text-center">
             <div className="mono-font text-[10px] text-stone-400 tracking-widest mb-2">NO FILED CASES YET</div>
             <p className="display-font text-stone-400 text-[13px] mb-4">File cases from the Multi queue — they'll appear here as a permanent log with re-downloadable packages.</p>
             <button onClick={()=>setActiveSection('multi')} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">→ GO TO MULTI</button>
           </div>
-        ) : (
+        ) : (() => {
+          const ACTIVE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','pending_arb']
+          const filtered = filedCases.filter(o => {
+            if (fileFilter === 'active') return ACTIVE_STATUSES.includes(o.status)
+            if (fileFilter === 'won')    return o.status === 'won'
+            if (fileFilter === 'lost')   return o.status === 'lost'
+            return true
+          }).filter(o => {
+            if (!fileSearch.trim()) return true
+            const q = fileSearch.toLowerCase()
+            return (o.id||'').toLowerCase().includes(q)||(o.merchant||'').toLowerCase().includes(q)||(o.reasonCode||'').toLowerCase().includes(q)||(o.network||'').toLowerCase().includes(q)
+          })
+          return filtered.length === 0 ? (
+            <div className="px-5 py-8 text-center mono-font text-[10px] text-stone-400 tracking-widest">NO CASES MATCH FILTER</div>
+          ) : (
           <div className="divide-y divide-stone-200">
             <div className="flex gap-3 px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{background:'#EEE9E0'}}>
               <span style={{flex:'0 0 88px'}}>CASE ID</span>
@@ -10911,7 +10974,7 @@ ${'═'.repeat(64)}`
               <span style={{flex:'0 0 46px'}}>NET</span>
               <span style={{flex:'0 0 auto'}}>↓ PKG</span>
             </div>
-            {filedCases.map(o => {
+            {filtered.map(o => {
               const CB_STAGES = [
                 {id:'filed',          label:'1ST CB'},
                 {id:'network_invstg', label:'NTW INVSTG'},
@@ -10964,7 +11027,8 @@ ${'═'.repeat(64)}`
               )
             })}
           </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* Coming soon chips */}
