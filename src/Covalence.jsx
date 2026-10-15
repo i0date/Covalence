@@ -7660,10 +7660,74 @@ function TrioView() {
   const [linkInput,     setLinkInput]     = React.useState('')
   const [linkError,     setLinkError]     = React.useState('')
   const [syncStatus,    setSyncStatus]    = React.useState('')
-  const [mergeModal,    setMergeModal]    = React.useState(null) // id of incident being merged FROM
+  const [mergeModal,    setMergeModal]    = React.useState(null)
   const [fiInput,       setFiInput]       = React.useState({ name:'', type:'bank', status:'notified' })
   const [receivingEdit, setReceivingEdit] = React.useState(false)
   const [receivingDraft,setReceivingDraft]= React.useState({})
+  // ── Strategy mode ──
+  const [strategyMode,      setStrategyMode]      = React.useState(false)
+  const [strategyIncId,     setStrategyIncId]     = React.useState(null)   // which incident is open in debrief
+  const [strategyNotes,     setStrategyNotes]     = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_trio_strategy_notes') || '{}') } catch { return {} } })
+  const [strategyDraft,     setStrategyDraft]     = React.useState('')
+  const [briefCopied,       setBriefCopied]       = React.useState(false)
+
+  const saveStrategyNote = (incId, text) => {
+    const updated = { ...strategyNotes, [incId]: [...(strategyNotes[incId]||[]), { text, author: localStorage.getItem('cov_agent_name')||'Strategist', ts: new Date().toISOString() }] }
+    setStrategyNotes(updated)
+    try { localStorage.setItem('cov_trio_strategy_notes', JSON.stringify(updated)) } catch {}
+    setStrategyDraft('')
+  }
+
+  const generateThreatBrief = (inc) => {
+    const linked = (inc.linkedCaseIds||[]).length
+    const fis    = (inc.affectedFis||[]).map(f => f.name).join(', ') || 'None recorded'
+    const parts  = (inc.participants||[]).join(', ') || 'None recorded'
+    const notes  = (strategyNotes[inc.id]||[])
+    const noteLines = notes.length ? notes.map(n => `  [${new Date(n.ts).toLocaleDateString()}] ${n.author}: ${n.text}`).join('\n') : '  No strategic annotations recorded.'
+    const sarFlag = (() => { try { const s = JSON.parse(localStorage.getItem('cov_settings')||'{}'); const t = parseFloat(s.sarThreshold)||5000; const allC = JSON.parse(localStorage.getItem('cov_outcomes')||'[]'); const total = allC.filter(c=>(inc.linkedCaseIds||[]).includes(c.id)).reduce((s,c)=>s+parseFloat(c.amount||0),0); return total>=t ? `⚠ SAR THRESHOLD: Linked case total $${total.toFixed(2)} meets or exceeds $${t.toLocaleString()} threshold. Review SAR/STR filing obligation.` : `Linked case total: $${total.toFixed(2)} (below SAR threshold of $${t.toLocaleString()})` } catch { return 'SAR assessment unavailable.' } })()
+    return `TRIO THREAT BRIEF
+══════════════════════════════════════════════════════
+INCIDENT:       ${inc.name}
+ID:             ${inc.id}
+TYPE:           ${(inc.type||'').replace(/_/g,' ').toUpperCase()}
+SEVERITY:       ${inc.severity||'—'}
+STATUS:         ${(inc.status||'active').toUpperCase()}
+DETECTED:       ${inc.detectionDate||'—'}
+GENERATED:      ${new Date().toLocaleString()}
+
+SUMMARY
+──────────────────────────────────────────────────────
+${inc.description||'No description provided.'}
+
+SCOPE
+──────────────────────────────────────────────────────
+Linked cases:         ${linked}
+Participating agents: ${parts}
+Affected FIs:         ${fis}
+Cardholder exposure:  ${inc.cardholderNotified||0} notified of ${inc.cardholderTotal||0} affected
+
+REGULATORY
+──────────────────────────────────────────────────────
+${sarFlag}
+
+WAR ROOM — LAST 5 ENTRIES
+──────────────────────────────────────────────────────
+${(inc.notes||[]).slice(-5).map(n=>`  [${new Date(n.ts).toLocaleTimeString()}] ${n.author}: ${n.text}`).join('\n')||'  No war room entries.'}
+
+STRATEGIC ANNOTATIONS
+──────────────────────────────────────────────────────
+${noteLines}
+
+RECOMMENDED ACTIONS
+──────────────────────────────────────────────────────
+${inc.status==='closed'
+  ? '  ✓ Incident closed. Review pattern findings and update fraud policy if applicable.'
+  : '  • Confirm SAR/STR obligations with BSA Officer.\n  • Assess whether Duo coordination with receiving FIs is active.\n  • Determine escalation path to Risk Committee if exposure exceeds threshold.'}
+
+══════════════════════════════════════════════════════
+COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
+`
+  }
 
   // Create form state
   const [form, setForm] = React.useState({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
@@ -7824,7 +7888,21 @@ function TrioView() {
             Three parties — your institution, the receiving platform or FI, and the affected customers — one incident record. Open a TRIO incident when a fraud wave hits: link your Desk cases, map the transaction chain, track SAR obligations, coordinate receiving FIs, and run the war room.
           </p>
         </div>
-        <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'12px' }}>
+          <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
+          {/* ── Mode toggle ── */}
+          <div style={{ display:'flex', border:'1px solid #3D3A35', overflow:'hidden' }}>
+            {[['OPERATIONAL','⚡'],['STRATEGY','◈']].map(([mode, icon]) => (
+              <button key={mode} onClick={() => { setStrategyMode(mode==='STRATEGY'); setStrategyIncId(null) }}
+                className="mono-font"
+                style={{ fontSize:'8px', letterSpacing:'0.12em', padding:'6px 14px', border:'none', cursor:'pointer', transition:'all 0.15s',
+                  background: (strategyMode ? mode==='STRATEGY' : mode==='OPERATIONAL') ? '#D4CCBC' : 'transparent',
+                  color:       (strategyMode ? mode==='STRATEGY' : mode==='OPERATIONAL') ? '#1A1814' : '#78716C' }}>
+                {icon} {mode}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Under construction banner ── */}
@@ -7833,7 +7911,174 @@ function TrioView() {
         <span className="display-font text-[12px] text-amber-700">Features are being activated gradually. Data is stored locally — cross-institutional sync coming in a later phase.</span>
       </div>
 
-      <div style={{ display:'flex', gap:'24px', flexWrap:'wrap', alignItems:'flex-start' }}>
+      {/* ══════════════════════════════════════════════════════════
+           STRATEGY MODE
+      ══════════════════════════════════════════════════════════ */}
+      {strategyMode && (() => {
+        const closed   = incidents.filter(i => i.status === 'closed')
+        const allIncs  = incidents
+        const debriefInc = strategyIncId ? incidents.find(i => i.id === strategyIncId) : null
+
+        // Pattern aggregates
+        const typeCount = {}
+        const fiCount   = {}
+        allIncs.forEach(i => {
+          typeCount[i.type||'unknown'] = (typeCount[i.type||'unknown']||0)+1;
+          (i.affectedFis||[]).forEach(f => { fiCount[f.name] = (fiCount[f.name]||0)+1 })
+        })
+        const topTypes = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])
+        const topFis   = Object.entries(fiCount).sort((a,b)=>b[1]-a[1]).slice(0,6)
+        const totalCases = allIncs.reduce((s,i)=>s+(i.linkedCaseIds||[]).length,0)
+        const openCount  = allIncs.filter(i=>i.status==='active').length
+        const contCount  = allIncs.filter(i=>i.status==='contained').length
+        const closeCount = closed.length
+
+        return (
+          <div>
+            {/* ── Strategy header ── */}
+            <div className="mb-6 px-4 py-3" style={{ background:'#1A1814', border:'1px solid #44403C' }}>
+              <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>TRIO — STRATEGY MODE</div>
+              <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Retrospective analysis · Pattern intelligence · Threat brief generation</div>
+            </div>
+
+            {/* ── Pattern layer ── */}
+            <div className="mb-6">
+              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ PATTERN LAYER — ALL INCIDENTS</div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:'12px', marginBottom:'20px' }}>
+                {[
+                  ['TOTAL INCIDENTS', allIncs.length],
+                  ['ACTIVE',          openCount,  '#991B1B'],
+                  ['CONTAINED',       contCount,  '#92400E'],
+                  ['CLOSED',          closeCount, '#78716C'],
+                  ['LINKED CASES',    totalCases],
+                ].map(([label,val,col]) => (
+                  <div key={label} style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'12px' }}>
+                    <div className="mono-font text-[8px] tracking-widest mb-1" style={{ color:'#57534E' }}>{label}</div>
+                    <div className="mono-font font-bold" style={{ fontSize:'22px', color: col||'#D4CCBC' }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', flexWrap:'wrap' }}>
+                {/* Incident types */}
+                <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px' }}>
+                  <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT TYPES</div>
+                  {topTypes.length ? topTypes.map(([type,count]) => (
+                    <div key={type} className="flex items-center justify-between mb-2">
+                      <div className="mono-font text-[9px]" style={{ color:'#A8A29E' }}>{type.replace(/_/g,' ').toUpperCase()}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                        <div style={{ width:`${Math.round((count/allIncs.length)*80)}px`, height:'4px', background:'#D4CCBC', minWidth:'4px' }}/>
+                        <div className="mono-font text-[9px]" style={{ color:'#D4CCBC' }}>{count}</div>
+                      </div>
+                    </div>
+                  )) : <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No incidents yet.</div>}
+                </div>
+
+                {/* Repeat FIs */}
+                <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px' }}>
+                  <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>REPEAT INSTITUTIONS</div>
+                  {topFis.length ? topFis.map(([fi,count]) => (
+                    <div key={fi} className="flex items-center justify-between mb-2">
+                      <div className="mono-font text-[9px]" style={{ color:'#A8A29E' }}>{fi}</div>
+                      <div className="mono-font text-[9px] font-bold" style={{ color: count>1?'#F59E0B':'#78716C' }}>{count}×</div>
+                    </div>
+                  )) : <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No cross-incident FI data.</div>}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Post-incident debrief ── */}
+            <div className="mb-6">
+              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ POST-INCIDENT DEBRIEF</div>
+              {closed.length === 0 && (
+                <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No closed incidents yet. Close an incident in operational mode to begin debrief.</div>
+              )}
+              <div className="space-y-2 mb-4">
+                {closed.map(i => (
+                  <button key={i.id} onClick={() => setStrategyIncId(strategyIncId===i.id ? null : i.id)}
+                    className="w-full text-left px-4 py-3 transition-colors"
+                    style={{ background: strategyIncId===i.id?'#252320':'#1E1C18', border:`1px solid ${strategyIncId===i.id?'#78716C':'#2D2922'}` }}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id} · CLOSED</div>
+                        <div className="display-font" style={{ color:'#E7E4DF', fontSize:'13px' }}>{i.name}</div>
+                      </div>
+                      <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>
+                        {(strategyNotes[i.id]||[]).length} annotations · {strategyIncId===i.id?'▲':'▼'}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Debrief panel */}
+              {debriefInc && (
+                <div style={{ background:'#1A1814', border:'1px solid #44403C', padding:'20px' }}>
+                  <div className="mono-font text-[9px] tracking-widest mb-4" style={{ color:'#78716C' }}>DEBRIEF — {debriefInc.name.toUpperCase()}</div>
+
+                  {/* Incident summary row */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'10px', marginBottom:'20px' }}>
+                    {[
+                      ['TYPE',      (debriefInc.type||'—').replace(/_/g,' ').toUpperCase()],
+                      ['SEVERITY',  debriefInc.severity||'—'],
+                      ['DETECTED',  debriefInc.detectionDate||'—'],
+                      ['CASES',     (debriefInc.linkedCaseIds||[]).length],
+                      ['AGENTS',    (debriefInc.participants||[]).length],
+                      ['FIs',       (debriefInc.affectedFis||[]).length],
+                    ].map(([k,v]) => (
+                      <div key={k}>
+                        <div className="mono-font text-[8px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>{k}</div>
+                        <div className="mono-font text-[10px]" style={{ color:'#D4CCBC' }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Strategic annotations */}
+                  <div className="mb-4">
+                    <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>STRATEGIC ANNOTATIONS</div>
+                    {(strategyNotes[debriefInc.id]||[]).length === 0 && (
+                      <div className="mono-font text-[9px] mb-3" style={{ color:'#3D3A35' }}>No annotations yet. Add your pattern observations below.</div>
+                    )}
+                    {(strategyNotes[debriefInc.id]||[]).map((n,idx) => (
+                      <div key={idx} className="mb-2 px-3 py-2" style={{ background:'#252320', borderLeft:'2px solid #78716C' }}>
+                        <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                        <div className="display-font text-sm" style={{ color:'#D4CCBC' }}>{n.text}</div>
+                      </div>
+                    ))}
+                    <textarea
+                      value={strategyDraft}
+                      onChange={e => setStrategyDraft(e.target.value)}
+                      placeholder="Add strategic observation — pattern, recommended control change, escalation note..."
+                      rows={3}
+                      style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginTop:'8px' }}
+                    />
+                    <button onClick={() => { if(strategyDraft.trim()) saveStrategyNote(debriefInc.id, strategyDraft.trim()) }}
+                      disabled={!strategyDraft.trim()}
+                      className="mono-font text-[9px] tracking-widest mt-2 px-4 py-2"
+                      style={{ background: strategyDraft.trim()?'#D4CCBC':'transparent', color: strategyDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: strategyDraft.trim()?'pointer':'default' }}>
+                      + ADD ANNOTATION
+                    </button>
+                  </div>
+
+                  {/* Threat brief */}
+                  <div style={{ borderTop:'1px solid #2D2922', paddingTop:'16px' }}>
+                    <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>THREAT BRIEF</div>
+                    <div className="mono-font text-[9px] mb-3" style={{ color:'#3D3A35' }}>Generates a structured brief from all incident data and your strategic annotations. Ready for Risk Committee or compliance reporting.</div>
+                    <button onClick={() => { navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
+                      className="mono-font text-[9px] tracking-widest px-5 py-2.5"
+                      style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
+                      {briefCopied ? '✓ COPIED TO CLIPBOARD' : '◈ GENERATE & COPY THREAT BRIEF'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Operational mode ── */}
+      {!strategyMode && <div style={{ display:'flex', gap:'24px', flexWrap:'wrap', alignItems:'flex-start' }}>
 
         {/* ── Incident list ── */}
         <div style={{ flex:'0 0 min(280px, 100%)', minWidth:0, maxWidth:'100%' }}>
@@ -8343,8 +8588,10 @@ function TrioView() {
           </div>
         )}
 
-        {/* ── Merge modal ── */}
-        {mergeModal && (() => {
+      </div>}{/* end !strategyMode operational wrapper */}
+
+      {/* ── Merge modal (always mounted) ── */}
+      {mergeModal && (() => {
           const fromInc = incidents.find(i => i.id === mergeModal)
           if (!fromInc) return null
           return (
@@ -8376,7 +8623,6 @@ function TrioView() {
             </div>
           )
         })()}
-      </div>
     </div>
   )
 }
