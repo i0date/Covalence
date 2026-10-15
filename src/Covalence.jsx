@@ -507,59 +507,44 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </p>
       </div>
 
-      {/* ── First-visit banner ── */}
-      {!tourDismissed && (
-        <div className="mb-6 px-5 py-4" style={{ background:'#1A1814', border:'1px solid #44403C', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'16px' }}>
-          <div>
-            <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#78716C' }}>FIRST TIME HERE?</div>
-            <div className="display-font mb-2" style={{ color:'#F5F1EA', fontSize:'15px' }}>Covalence is a dispute operations suite — seven tools, one connected workflow.</div>
-            <div className="display-font" style={{ color:'#A8A29E', fontSize:'13px', lineHeight:1.6 }}>
-              Start with <strong style={{color:'#D4CCBC'}}>Triage</strong> to intake a case, then follow it through <strong style={{color:'#D4CCBC'}}>Dispute Desk → Multi → File</strong>. Use <strong style={{color:'#D4CCBC'}}>DFA</strong> to score a portfolio, <strong style={{color:'#D4CCBC'}}>Duo</strong> to coordinate with another institution, and <strong style={{color:'#D4CCBC'}}>Trio</strong> to command a fraud incident.
-            </div>
-            <button onClick={() => setActiveSection('triage')}
-              className="mono-font mt-3"
-              style={{ fontSize:'9px', letterSpacing:'0.14em', background:'#D4CCBC', color:'#1A1814', border:'none', padding:'8px 18px', cursor:'pointer' }}>
-              START WITH TRIAGE →
-            </button>
-          </div>
-          <button onClick={() => { localStorage.setItem('cov_tour_dismissed','1'); setTourDismissed(true) }}
-            style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer', fontSize:'18px', flexShrink:0, lineHeight:1 }}>✕</button>
-        </div>
-      )}
-
-      {/* ── Workflow map (always visible) ── */}
-      <div className="mb-8">
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
-          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.18em', color:'#78716C' }}>THE WORKFLOW</div>
-          {tourDismissed && (
-            <button onClick={() => { localStorage.removeItem('cov_tour_dismissed'); setTourDismissed(false) }}
-              className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.1em', color:'#78716C', background:'transparent', border:'1px solid #3D3A35', padding:'3px 10px', cursor:'pointer' }}>
-              ? SHOW GUIDE
-            </button>
-          )}
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'1px', background:'#D4CCBC' }}>
+      {/* ── Tool strip + first-visit guide ── */}
+      <div className="mb-8" style={{ borderBottom:'1px solid #D4CCBC', paddingBottom:'24px' }}>
+        <div style={{ display:'flex', overflowX:'auto', WebkitOverflowScrolling:'touch', gap:'1px', background:'#D4CCBC', marginBottom: tourDismissed ? '0' : '12px' }}>
           {[
-            { num:'001', name:'TRIAGE',   role:'Intake & structure',          desc:'Classify the dispute, identify the regulation, and hand off to Desk.',  section:'triage',   col:'#FAF7F1' },
-            { num:'002', name:'DESK',     role:'Case management',              desc:'Investigate, document evidence, draft rebuttals, track the lifecycle.',  section:'desk',     col:'#FAF7F1' },
-            { num:'003', name:'MULTI',    role:'Batch operations',             desc:'Queue cases by network, generate filing packages, advance in bulk.',      section:'multi',    col:'#FAF7F1' },
-            { num:'004', name:'FILE',     role:'Post-filing tracker',          desc:'Submission log, CB lifecycle stages from 1st CB through arbitration.',    section:'file',     col:'#FAF7F1' },
-            { num:'005', name:'DFA',      role:'Portfolio scoring',            desc:'Grade claims A–D, assess advance rates, surface concentration risk.',     section:'dfa',      col:'#F0EDE6' },
-            { num:'006', name:'DUO',      role:'Inter-institutional collab',   desc:'Real-time session with a second FI — shared case, shared record.',        section:'duo',      col:'#F0EDE6' },
-            { num:'007', name:'TRIO',     role:'Incident command',             desc:'Three-party fraud wave — war room, SAR tracking, strategy mode.',         section:'trio',     col:'#F0EDE6' },
-          ].map(({ num, name, role, desc, section, col }) => (
+            { num:'001', name:'TRIAGE',  sub:'Intake',          section:'triage' },
+            { num:'002', name:'DESK',    sub:'Case mgmt',       section:'desk'   },
+            { num:'003', name:'MULTI',   sub:'Batch ops',       section:'multi'  },
+            { num:'004', name:'FILE',    sub:'Post-filing',     section:'file'   },
+            { num:'005', name:'DFA',     sub:'Portfolio score', section:'dfa'    },
+            { num:'006', name:'DUO',     sub:'Collab',          section:'duo'    },
+            { num:'007', name:'TRIO',    sub:'Incident cmd',    section:'trio'   },
+          ].map(({ num, name, sub, section }) => (
             <button key={num} onClick={() => setActiveSection(section)}
-              className="text-left"
-              style={{ background:col, padding:'16px', border:'none', cursor:'pointer', transition:'background 0.15s' }}
+              className="text-left mono-font"
+              style={{ background:'#FAF7F1', padding:'10px 14px', border:'none', cursor:'pointer', flexShrink:0, transition:'background 0.12s', minWidth:'90px' }}
               onMouseEnter={e => e.currentTarget.style.background='#EAE5DC'}
-              onMouseLeave={e => e.currentTarget.style.background=col}>
-              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.18em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
-              <div className="mono-font font-bold" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', marginBottom:'2px' }}>{name}</div>
-              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.06em', color:'#78716C', marginBottom:'6px' }}>{role}</div>
-              <div className="display-font" style={{ fontSize:'12px', color:'#57534E', lineHeight:1.5 }}>{desc}</div>
+              onMouseLeave={e => e.currentTarget.style.background='#FAF7F1'}>
+              <div style={{ fontSize:'7px', letterSpacing:'0.16em', color:'#A8A29E', marginBottom:'3px' }}>{num}</div>
+              <div style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:600 }}>{name}</div>
+              <div style={{ fontSize:'8px', color:'#78716C', marginTop:'1px' }}>{sub}</div>
             </button>
           ))}
         </div>
+        {!tourDismissed && (
+          <div className="px-4 py-3" style={{ background:'#F5F1EA', border:'1px solid #D4CCBC', borderTop:'none', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
+            <div className="display-font" style={{ color:'#57534E', fontSize:'13px' }}>
+              New here? Follow the workflow left to right — start with <strong style={{color:'#1A1814'}}>Triage</strong>, work through to <strong style={{color:'#1A1814'}}>File</strong>. DFA, Duo and Trio are for advanced scenarios.
+            </div>
+            <div style={{ display:'flex', gap:'8px', flexShrink:0 }}>
+              <button onClick={() => setActiveSection('triage')}
+                className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', background:'#1A1814', color:'#F5F1EA', border:'none', padding:'6px 14px', cursor:'pointer', whiteSpace:'nowrap' }}>
+                START →
+              </button>
+              <button onClick={() => { localStorage.setItem('cov_tour_dismissed','1'); setTourDismissed(true) }}
+                style={{ background:'transparent', border:'none', color:'#A8A29E', cursor:'pointer', fontSize:'14px', lineHeight:1 }}>✕</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {urgent.length > 0 && (
@@ -602,59 +587,6 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         ))}
       </div>
 
-      {/* 60-day analytics snapshot */}
-      {(() => {
-        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60)
-        const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
-        const res60   = recent.filter(o => ['won','lost','withdrawn'].includes(o.status))
-        const won60   = res60.filter(o => o.status === 'won')
-        const wr60    = res60.length > 0 ? Math.round((won60.length / res60.length) * 100) : null
-        // avg days
-        const daysArr = res60.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
-        const avg60   = daysArr.length > 0 ? Math.round(daysArr.reduce((a,b)=>a+b,0)/daysArr.length) : null
-        // top category
-        const catMap  = {}
-        recent.forEach(o => { const c = (o.category||'unknown').replace('mc_',''); catMap[c] = (catMap[c]||0)+1 })
-        const topCat  = Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0]
-        // fraud vs service split
-        const fraudC  = recent.filter(o => o.category==='fraud'||o.category==='mc_fraud'||o.verdict==='TRUE_FRAUD').length
-        const svcC    = recent.length - fraudC
-        if (recent.length === 0) return null
-        return (
-          <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">60-DAY SNAPSHOT</div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                {label:'WIN RATE',      value: wr60  !== null ? `${wr60}%` : '—',   sub: `${res60.length} resolved`},
-                {label:'AVG RESOLUTION',value: avg60 !== null ? `${avg60}d` : '—',  sub: 'days to close'},
-                {label:'FRAUD / SERVICE',value:`${fraudC} / ${svcC}`,               sub: `of ${recent.length} cases`},
-                {label:'TOP CATEGORY',  value: topCat ? topCat[0].replace(/_/g,' ').toUpperCase() : '—', sub: topCat ? `${topCat[1]} cases` : ''},
-              ].map(({label,value,sub}) => (
-                <div key={label}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
-                  <div className="display-font font-semibold text-stone-900" style={{fontSize:'clamp(16px,2.5vw,22px)',letterSpacing:'-0.02em',lineHeight:1.1}}>{value}</div>
-                  {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
-
-      <div className="mb-10" style={{ display:'flex', flexWrap:'wrap', gap:'12px' }}>
-        <button onClick={() => setActiveSection('triage')} className="cov-btn">
-          <Clipboard style={{ width:'16px', height:'16px' }} />START TRIAGE
-        </button>
-        <button onClick={() => setActiveSection('desk')} className="cov-btn" style={{ background:'#3B3530' }}>
-          <FileText style={{ width:'16px', height:'16px' }} />DISPUTE DESK
-        </button>
-        <button onClick={() => setActiveSection('dfa')} className="cov-btn" style={{ background:'#2D3748' }}>
-          <BarChart2 style={{ width:'16px', height:'16px' }} />SCORE IN DFA
-        </button>
-        <button onClick={() => setActiveSection('duo')} className="cov-btn" style={{ background:'#064E3B' }}>
-          <Send style={{ width:'16px', height:'16px' }} />005 DUO
-        </button>
-      </div>
 
       {active.length > 0 ? (
         <div>
