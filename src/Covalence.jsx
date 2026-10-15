@@ -468,6 +468,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
   const [outcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
   })
+  const [tourDismissed, setTourDismissed] = React.useState(() => !!localStorage.getItem('cov_tour_dismissed'))
   const settings = React.useMemo(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
   }, [])
@@ -504,6 +505,61 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
           From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
         </p>
+      </div>
+
+      {/* ── First-visit banner ── */}
+      {!tourDismissed && (
+        <div className="mb-6 px-5 py-4" style={{ background:'#1A1814', border:'1px solid #44403C', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'16px' }}>
+          <div>
+            <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#78716C' }}>FIRST TIME HERE?</div>
+            <div className="display-font mb-2" style={{ color:'#F5F1EA', fontSize:'15px' }}>Covalence is a dispute operations suite — seven tools, one connected workflow.</div>
+            <div className="display-font" style={{ color:'#A8A29E', fontSize:'13px', lineHeight:1.6 }}>
+              Start with <strong style={{color:'#D4CCBC'}}>Triage</strong> to intake a case, then follow it through <strong style={{color:'#D4CCBC'}}>Dispute Desk → Multi → File</strong>. Use <strong style={{color:'#D4CCBC'}}>DFA</strong> to score a portfolio, <strong style={{color:'#D4CCBC'}}>Duo</strong> to coordinate with another institution, and <strong style={{color:'#D4CCBC'}}>Trio</strong> to command a fraud incident.
+            </div>
+            <button onClick={() => setActiveSection('triage')}
+              className="mono-font mt-3"
+              style={{ fontSize:'9px', letterSpacing:'0.14em', background:'#D4CCBC', color:'#1A1814', border:'none', padding:'8px 18px', cursor:'pointer' }}>
+              START WITH TRIAGE →
+            </button>
+          </div>
+          <button onClick={() => { localStorage.setItem('cov_tour_dismissed','1'); setTourDismissed(true) }}
+            style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer', fontSize:'18px', flexShrink:0, lineHeight:1 }}>✕</button>
+        </div>
+      )}
+
+      {/* ── Workflow map (always visible) ── */}
+      <div className="mb-8">
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.18em', color:'#78716C' }}>THE WORKFLOW</div>
+          {tourDismissed && (
+            <button onClick={() => { localStorage.removeItem('cov_tour_dismissed'); setTourDismissed(false) }}
+              className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.1em', color:'#78716C', background:'transparent', border:'1px solid #3D3A35', padding:'3px 10px', cursor:'pointer' }}>
+              ? SHOW GUIDE
+            </button>
+          )}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'1px', background:'#D4CCBC' }}>
+          {[
+            { num:'001', name:'TRIAGE',   role:'Intake & structure',          desc:'Classify the dispute, identify the regulation, and hand off to Desk.',  section:'triage',   col:'#FAF7F1' },
+            { num:'002', name:'DESK',     role:'Case management',              desc:'Investigate, document evidence, draft rebuttals, track the lifecycle.',  section:'desk',     col:'#FAF7F1' },
+            { num:'003', name:'MULTI',    role:'Batch operations',             desc:'Queue cases by network, generate filing packages, advance in bulk.',      section:'multi',    col:'#FAF7F1' },
+            { num:'004', name:'FILE',     role:'Post-filing tracker',          desc:'Submission log, CB lifecycle stages from 1st CB through arbitration.',    section:'file',     col:'#FAF7F1' },
+            { num:'005', name:'DFA',      role:'Portfolio scoring',            desc:'Grade claims A–D, assess advance rates, surface concentration risk.',     section:'dfa',      col:'#F0EDE6' },
+            { num:'006', name:'DUO',      role:'Inter-institutional collab',   desc:'Real-time session with a second FI — shared case, shared record.',        section:'duo',      col:'#F0EDE6' },
+            { num:'007', name:'TRIO',     role:'Incident command',             desc:'Three-party fraud wave — war room, SAR tracking, strategy mode.',         section:'trio',     col:'#F0EDE6' },
+          ].map(({ num, name, role, desc, section, col }) => (
+            <button key={num} onClick={() => setActiveSection(section)}
+              className="text-left"
+              style={{ background:col, padding:'16px', border:'none', cursor:'pointer', transition:'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background='#EAE5DC'}
+              onMouseLeave={e => e.currentTarget.style.background=col}>
+              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.18em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
+              <div className="mono-font font-bold" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', marginBottom:'2px' }}>{name}</div>
+              <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.06em', color:'#78716C', marginBottom:'6px' }}>{role}</div>
+              <div className="display-font" style={{ fontSize:'12px', color:'#57534E', lineHeight:1.5 }}>{desc}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {urgent.length > 0 && (
