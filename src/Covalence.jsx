@@ -8068,7 +8068,42 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             {/* ── Strategy header ── */}
             <div className="mb-6 px-4 py-3" style={{ background:'#1A1814', border:'1px solid #44403C' }}>
               <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>TRIO — STRATEGY MODE</div>
-              <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Retrospective analysis · Pattern intelligence · Threat brief generation</div>
+              <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Post directives · Review patterns · Debrief closed incidents</div>
+            </div>
+
+            {/* ── Strategy directives — broadcast to all analysts ── */}
+            <div className="mb-6">
+              <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ STRATEGY DIRECTIVES</div>
+              <div className="mono-font text-[9px] mb-3" style={{ color:'#57534E' }}>Directives are visible to all analysts in the operational view. Use them to broadcast priorities, containment instructions, or escalation decisions.</div>
+              <textarea
+                value={globalNoteDraft}
+                onChange={e => setGlobalNoteDraft(e.target.value)}
+                placeholder="e.g. — Pause all P2P approvals over $500 pending further review. Escalate any new linked accounts immediately to BSA. All analysts: prioritise linked cases COV-XXXXX through COV-XXXXX."
+                rows={4}
+                style={{ width:'100%', background:'#1E1C18', border:'1px solid #44403C', color:'#E7E4DF', padding:'12px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginBottom:'8px', boxSizing:'border-box' }}
+              />
+              <button onClick={() => { if(globalNoteDraft.trim()) saveGlobalNote(globalNoteDraft.trim()) }}
+                disabled={!globalNoteDraft.trim()}
+                className="mono-font text-[9px] tracking-widest px-5 py-2.5"
+                style={{ background: globalNoteDraft.trim()?'#D4CCBC':'transparent', color: globalNoteDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: globalNoteDraft.trim()?'pointer':'default' }}>
+                ◈ POST DIRECTIVE TO ANALYSTS
+              </button>
+              {globalNotes.length > 0 && (
+                <div className="mt-4" style={{ maxHeight:'200px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'6px' }}>
+                  {globalNotes.map((n,idx) => (
+                    <div key={n.id||idx} style={{ padding:'10px 14px', background:'#1E1C18', borderLeft:'3px solid #78716C', display:'flex', gap:'12px', alignItems:'flex-start' }}>
+                      <div style={{ flex:1 }}>
+                        <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                        <div className="display-font" style={{ fontSize:'13px', color:'#C8C2B8', lineHeight:1.55 }}>{n.text}</div>
+                      </div>
+                      <button onClick={() => { const updated = globalNotes.filter((_,i)=>i!==idx); setGlobalNotes(updated); try{localStorage.setItem('cov_strategy_global_notes',JSON.stringify(updated))}catch{} }}
+                        style={{ background:'transparent', border:'none', color:'#3D3A35', cursor:'pointer', fontSize:'11px', flexShrink:0, padding:'2px' }}
+                        onMouseEnter={e=>e.currentTarget.style.color='#EF4444'}
+                        onMouseLeave={e=>e.currentTarget.style.color='#3D3A35'}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* ── Pattern layer ── */}
@@ -8265,34 +8300,6 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               })()}
             </div>
 
-            {/* ── Global strategist note ── */}
-            <div className="mb-2">
-              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ STRATEGIST NOTES</div>
-              <div className="mono-font text-[9px] mb-3" style={{ color:'#57534E' }}>Leave observations about portfolio-wide patterns, systemic controls, or emerging risks — separate from incident-level debrief annotations.</div>
-              {globalNotes.length > 0 && (
-                <div className="mb-4" style={{ maxHeight:'220px', overflowY:'auto' }}>
-                  {globalNotes.map((n,idx) => (
-                    <div key={n.id||idx} className="mb-2 px-3 py-2" style={{ background:'#1E1C18', borderLeft:'2px solid #44403C' }}>
-                      <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
-                      <div className="display-font text-sm" style={{ color:'#D4CCBC', lineHeight:1.5 }}>{n.text}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <textarea
-                value={globalNoteDraft}
-                onChange={e => setGlobalNoteDraft(e.target.value)}
-                placeholder="Add a portfolio-level observation — emerging fraud vector, systemic gap, recommended policy change..."
-                rows={3}
-                style={{ width:'100%', background:'#1E1C18', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginBottom:'8px', boxSizing:'border-box' }}
-              />
-              <button onClick={() => { if(globalNoteDraft.trim()) saveGlobalNote(globalNoteDraft.trim()) }}
-                disabled={!globalNoteDraft.trim()}
-                className="mono-font text-[9px] tracking-widest px-4 py-2"
-                style={{ background: globalNoteDraft.trim()?'#D4CCBC':'transparent', color: globalNoteDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: globalNoteDraft.trim()?'pointer':'default' }}>
-                + SAVE NOTE
-              </button>
-            </div>
 
           </div>
         )
@@ -8437,6 +8444,24 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     <option value="contained">◐ CONTAINED</option>
                     <option value="closed">○ CLOSED</option>
                   </select>
+                  {activeIncident.status !== 'closed' && (
+                    <button
+                      onClick={() => { if (window.confirm(`Close incident "${activeIncident.name}"? This moves it to debrief in Strategy Mode.`)) updateIncident(activeIncident.id, { status:'closed', closedAt: new Date().toISOString() }) }}
+                      className="mono-font text-[9px] px-3 py-1 tracking-widest transition-colors"
+                      style={{ background:'transparent', color:'#9CA3AF', border:'1px solid #374151', cursor:'pointer' }}
+                      onMouseEnter={e => { e.currentTarget.style.background='#374151'; e.currentTarget.style.color='#F5F1EA' }}
+                      onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#9CA3AF' }}>
+                      ○ CLOSE INCIDENT
+                    </button>
+                  )}
+                  {activeIncident.status === 'closed' && (
+                    <button
+                      onClick={() => updateIncident(activeIncident.id, { status:'active', closedAt: null })}
+                      className="mono-font text-[9px] px-3 py-1 tracking-widest"
+                      style={{ background:'transparent', color:'#6EE7B7', border:'1px solid #065F46', cursor:'pointer' }}>
+                      ↺ REOPEN
+                    </button>
+                  )}
                   {incidents.length > 1 && (
                     <button onClick={() => setMergeModal(activeIncident.id)}
                       className="mono-font text-[9px] px-2 py-1 tracking-widest"
@@ -8811,22 +8836,25 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
 
       </div>}{/* end !strategyMode operational wrapper */}
 
-      {/* ── Strategist notes — always visible (read-only for analysts) ── */}
+      {/* ── Strategist directives — always visible to analysts in operational mode ── */}
       {!strategyMode && globalNotes.length > 0 && (
-        <div className="mt-6" style={{ border:'1px solid #2D2922', background:'#1A1814', padding:'16px 20px' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-            <div className="mono-font text-[9px] tracking-widest" style={{ color:'#78716C' }}>◈ STRATEGY NOTES — FROM RISK STRATEGIST</div>
-            <div className="mono-font text-[8px]" style={{ color:'#3D3A35' }}>SWITCH TO STRATEGY MODE TO ADD NOTES</div>
+        <div className="mt-6" style={{ border:'1px solid #44403C', background:'#1A1814', padding:'16px 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+            <div>
+              <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#D4CCBC' }}>◈ STRATEGY DIRECTIVES</div>
+              <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>Posted by Risk Strategist — read carefully before actioning cases</div>
+            </div>
+            <div className="mono-font text-[8px] px-2 py-1" style={{ color:'#F59E0B', background:'#292524', border:'1px solid #92400E' }}>READ ONLY</div>
           </div>
-          <div style={{ maxHeight:'180px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'8px' }}>
+          <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'6px' }}>
             {globalNotes.slice(0,10).map((n,idx) => (
-              <div key={n.id||idx} style={{ padding:'10px 14px', background:'#252320', borderLeft:'2px solid #44403C' }}>
-                <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
-                <div className="display-font" style={{ fontSize:'13px', color:'#C8C2B8', lineHeight:1.55 }}>{n.text}</div>
+              <div key={n.id||idx} style={{ padding:'12px 16px', background:'#252320', borderLeft:'3px solid #78716C' }}>
+                <div className="mono-font text-[8px] mb-2" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.6 }}>{n.text}</div>
               </div>
             ))}
             {globalNotes.length > 10 && (
-              <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older notes — open Strategy Mode to see all</div>
+              <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older directives — switch to Strategy Mode to see all</div>
             )}
           </div>
         </div>
