@@ -508,39 +508,36 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </p>
       </div>
 
-      {/* ── Tool grid ── */}
+      {/* ── Tool buttons ── */}
       <div className="mb-8">
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
-          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.18em', color:'#78716C' }}>THE WORKFLOW</div>
-          <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
-            className="mono-font"
-            style={{ fontSize:'9px', letterSpacing:'0.14em', padding:'7px 16px', background:'#1A1814', border:'none', color:'#D4CCBC', cursor:'pointer', transition:'all 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.background='#3D3A35'}
-            onMouseLeave={e => e.currentTarget.style.background='#1A1814'}>
-            ◎ NEW HERE?
-          </button>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'1px', background:'#D4CCBC' }}>
+        <div style={{ display:'flex', gap:'1px', flexWrap:'wrap', background:'#D4CCBC', marginBottom:'10px' }}>
           {[
-            { num:'001', name:'TRIAGE',  role:'Intake & structure',        desc:'Classify the dispute, identify the regulation, hand off to Desk.',   section:'triage', col:'#FAF7F1' },
-            { num:'002', name:'DESK',    role:'Case management',            desc:'Investigate, document evidence, draft rebuttals, track the lifecycle.', section:'desk',   col:'#FAF7F1' },
-            { num:'003', name:'MULTI',   role:'Batch operations',           desc:'Queue by network, generate filing packages, advance in bulk.',          section:'multi',  col:'#FAF7F1' },
-            { num:'004', name:'FILE',    role:'Post-filing tracker',        desc:'CB lifecycle: 1st CB → NTW INVSTG → Merchant Resp → Pre-Arb → ARB.',    section:'file',   col:'#FAF7F1' },
-            { num:'005', name:'DFA',     role:'Portfolio scoring',          desc:'Grade claims A–D, assess advance rates, surface concentration risk.',   section:'dfa',    col:'#F0EDE6' },
-            { num:'006', name:'DUO',     role:'Inter-institutional collab', desc:'Real-time session with a second FI — shared case, shared record.',      section:'duo',    col:'#F0EDE6' },
-            { num:'007', name:'TRIO',    role:'Incident command',           desc:'Three-party fraud wave — war room, SAR tracking, strategy mode.',       section:'trio',   col:'#EAE4DC' },
-          ].map(({ num, name, role, desc, section, col }) => (
+            { num:'001', name:'TRIAGE', section:'triage', bg:'#EDE9E3' },
+            { num:'002', name:'DESK',   section:'desk',   bg:'#E8E3DC' },
+            { num:'003', name:'MULTI',  section:'multi',  bg:'#E3DDD5' },
+            { num:'004', name:'FILE',   section:'file',   bg:'#DDD7CE' },
+            { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
+            { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
+            { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
+          ].map(({ num, name, section, bg }) => (
             <button key={num} onClick={() => setActiveSection(section)}
-              className="text-left"
-              style={{ background:col, padding:'16px', border:'none', cursor:'pointer', transition:'background 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background='#DDD7CE'}
-              onMouseLeave={e => e.currentTarget.style.background=col}>
-              <div className="mono-font" style={{ fontSize:'7px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'5px' }}>{num}</div>
-              <div className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700, marginBottom:'3px' }}>{name}</div>
-              <div className="mono-font" style={{ fontSize:'8px', color:'#78716C', marginBottom:'8px' }}>{role}</div>
-              <div className="display-font" style={{ fontSize:'12px', color:'#57534E', lineHeight:1.5 }}>{desc}</div>
+              className="mono-font"
+              style={{ background:bg, border:'none', cursor:'pointer', padding:'14px 20px', flex:'1 1 auto', textAlign:'left', transition:'background 0.12s', minWidth:'80px' }}
+              onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
+              onMouseLeave={e => e.currentTarget.style.background=bg}>
+              <div style={{ fontSize:'7px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
+              <div style={{ fontSize:'12px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
             </button>
           ))}
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
+            className="mono-font"
+            style={{ fontSize:'9px', letterSpacing:'0.16em', padding:'9px 20px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#FAF7F1' }}
+            onMouseLeave={e => { e.currentTarget.style.background='#2D2922'; e.currentTarget.style.color='#E8E3DC' }}>
+            ◎ &nbsp;NEW HERE? &nbsp;START WITH THE TOUR
+          </button>
         </div>
       </div>
 
