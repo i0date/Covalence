@@ -8021,17 +8021,24 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'12px' }}>
           <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
           {/* ── Mode toggle ── */}
-          <div style={{ display:'flex', border:'1px solid #3D3A35', overflow:'hidden' }}>
-            {[['OPERATIONAL','⚡'],['STRATEGY','◈']].map(([mode, icon]) => (
-              <button key={mode} onClick={() => { setStrategyMode(mode==='STRATEGY'); setStrategyIncId(null) }}
-                className="mono-font"
-                style={{ fontSize:'8px', letterSpacing:'0.12em', padding:'6px 14px', border:'none', cursor:'pointer', transition:'all 0.15s',
-                  background: (strategyMode ? mode==='STRATEGY' : mode==='OPERATIONAL') ? '#D4CCBC' : 'transparent',
-                  color:       (strategyMode ? mode==='STRATEGY' : mode==='OPERATIONAL') ? '#1A1814' : '#78716C' }}>
-                {icon} {mode}
-              </button>
-            ))}
+          <div style={{ display:'flex', gap:'1px', background:'#D4CCBC' }}>
+            {[['OPERATIONAL','⚡'],['STRATEGY','◈']].map(([mode, icon]) => {
+              const active = strategyMode ? mode==='STRATEGY' : mode==='OPERATIONAL'
+              return (
+                <button key={mode} onClick={() => { setStrategyMode(mode==='STRATEGY'); setStrategyIncId(null) }}
+                  className="mono-font"
+                  style={{ fontSize:'10px', letterSpacing:'0.14em', padding:'10px 22px', border:'none', cursor:'pointer', transition:'all 0.15s',
+                    background: active ? '#1A1814' : '#EDE9E3',
+                    color:      active ? '#D4CCBC' : '#78716C',
+                    fontWeight: active ? 700 : 400 }}>
+                  {icon} &nbsp;{mode}
+                </button>
+              )
+            })}
           </div>
+          {strategyMode && (
+            <div className="mono-font text-[8px] tracking-widest" style={{ color:'#78716C' }}>RISK STRATEGIST VIEW</div>
+          )}
         </div>
       </div>
 
@@ -8837,26 +8844,41 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
       </div>}{/* end !strategyMode operational wrapper */}
 
       {/* ── Strategist directives — always visible to analysts in operational mode ── */}
-      {!strategyMode && globalNotes.length > 0 && (
+      {!strategyMode && (
         <div className="mt-6" style={{ border:'1px solid #44403C', background:'#1A1814', padding:'16px 20px' }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
             <div>
               <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#D4CCBC' }}>◈ STRATEGY DIRECTIVES</div>
-              <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>Posted by Risk Strategist — read carefully before actioning cases</div>
+              <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>Posted by Risk Strategist — read before actioning cases</div>
             </div>
-            <div className="mono-font text-[8px] px-2 py-1" style={{ color:'#F59E0B', background:'#292524', border:'1px solid #92400E' }}>READ ONLY</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+              <div className="mono-font text-[8px] px-2 py-1" style={{ color:'#F59E0B', background:'#292524', border:'1px solid #92400E' }}>READ ONLY</div>
+              <button onClick={() => { setStrategyMode(true); setStrategyIncId(null) }}
+                className="mono-font text-[8px] tracking-widest px-3 py-1"
+                style={{ background:'transparent', border:'1px solid #44403C', color:'#78716C', cursor:'pointer' }}
+                onMouseEnter={e=>{e.currentTarget.style.color='#D4CCBC'}}
+                onMouseLeave={e=>{e.currentTarget.style.color='#78716C'}}>
+                ◈ OPEN STRATEGY MODE
+              </button>
+            </div>
           </div>
-          <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'6px' }}>
-            {globalNotes.slice(0,10).map((n,idx) => (
-              <div key={n.id||idx} style={{ padding:'12px 16px', background:'#252320', borderLeft:'3px solid #78716C' }}>
-                <div className="mono-font text-[8px] mb-2" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
-                <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.6 }}>{n.text}</div>
-              </div>
-            ))}
-            {globalNotes.length > 10 && (
-              <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older directives — switch to Strategy Mode to see all</div>
-            )}
-          </div>
+          {globalNotes.length === 0 ? (
+            <div className="mono-font text-[9px] py-4 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>
+              No directives posted yet. Switch to Strategy Mode to post one.
+            </div>
+          ) : (
+            <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'6px' }}>
+              {globalNotes.slice(0,10).map((n,idx) => (
+                <div key={n.id||idx} style={{ padding:'12px 16px', background:'#252320', borderLeft:'3px solid #78716C' }}>
+                  <div className="mono-font text-[8px] mb-2" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                  <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.6 }}>{n.text}</div>
+                </div>
+              ))}
+              {globalNotes.length > 10 && (
+                <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older directives — switch to Strategy Mode to see all</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
