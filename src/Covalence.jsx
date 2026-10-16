@@ -8211,13 +8211,13 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
 
               {/* Filter bar */}
               <div style={{ display:'flex', gap:'2px', marginBottom:'12px', flexWrap:'wrap' }}>
-                {[['all','ALL'],['fraud','FRAUD'],['service','SERVICE'],['open','OPEN'],['won','WON'],['lost','LOST']].map(([val,lbl]) => (
+                {[['all','ALL'],['triage','TRIAGE ONLY'],['fraud','FRAUD'],['service','SERVICE'],['open','OPEN'],['won','WON'],['lost','LOST']].map(([val,lbl]) => (
                   <button key={val} onClick={() => setCaseFilter(val)}
                     className="mono-font"
                     style={{ fontSize:'8px', letterSpacing:'0.14em', padding:'5px 12px', border:'1px solid', cursor:'pointer', transition:'all 0.12s',
-                      background: caseFilter===val ? '#D4CCBC' : 'transparent',
-                      color:      caseFilter===val ? '#1A1814'  : '#57534E',
-                      borderColor:caseFilter===val ? '#D4CCBC'  : '#2D2922' }}>
+                      background: caseFilter===val ? (val==='triage'?'#2D1B4E':'#D4CCBC') : 'transparent',
+                      color:      caseFilter===val ? (val==='triage'?'#C4B5FD':'#1A1814')  : '#57534E',
+                      borderColor:caseFilter===val ? (val==='triage'?'#6D28D9':'#D4CCBC')  : '#2D2922' }}>
                     {lbl}
                   </button>
                 ))}
@@ -8226,6 +8226,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               {/* Case rows */}
               {(() => {
                 const filtered = allCases.filter(c => {
+                  if (caseFilter === 'triage')  return c._source === 'TRIAGE'
                   if (caseFilter === 'fraud')   return c.category === 'fraud' || c.category === 'mc_fraud' || c.verdict === 'TRUE_FRAUD'
                   if (caseFilter === 'service') return c.category !== 'fraud' && c.category !== 'mc_fraud' && c.verdict !== 'TRUE_FRAUD'
                   if (caseFilter === 'open')    return !['won','lost','withdrawn'].includes(c.status)
