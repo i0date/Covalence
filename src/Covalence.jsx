@@ -7849,7 +7849,21 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
   const [form, setForm] = React.useState({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
 
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
-  const allCases = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }, [])
+  // allCases = Desk/Multi/File cases (cov_outcomes) + Triage intake log (triage_outcomes), deduplicated by id
+  const allCases = React.useMemo(() => {
+    try {
+      const desk    = JSON.parse(localStorage.getItem('cov_outcomes')    || '[]')
+      const triage  = JSON.parse(localStorage.getItem('triage_outcomes') || '[]').map(t => ({
+        ...t,
+        _source: 'TRIAGE',
+        status: t.outcome || t.routing || 'triaged',
+        merchant: t.merchant || '—',
+      }))
+      const deskIds = new Set(desk.map(c => c.id))
+      const triageOnly = triage.filter(t => !deskIds.has(t.id))
+      return [...desk, ...triageOnly].sort((a,b) => new Date(b.date||0) - new Date(a.date||0))
+    } catch { return [] }
+  }, [])
   const sarThreshold = parseFloat(settings.sarThreshold) || 5000
   const agentName = localStorage.getItem('cov_agent_name') || 'Agent'
 
@@ -8226,12 +8240,15 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   <div style={{ border:'1px solid #2D2922', maxHeight:'320px', overflowY:'auto' }}>
                     {filtered.slice(0,50).map((c,i) => (
                       <div key={c.id||i} style={{ display:'flex', gap:'12px', alignItems:'center', padding:'10px 14px', borderTop: i>0?'1px solid #2D2922':'none', background:'#1A1814' }}>
-                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, width:'96px' }}>{c.id||'—'}</div>
+                        <div className="mono-font" style={{ fontSize:'8px', padding:'2px 6px', flexShrink:0, background: c._source==='TRIAGE'?'#2D1B4E':'#1E2A3A', color: c._source==='TRIAGE'?'#C4B5FD':'#93C5FD', letterSpacing:'0.1em' }}>
+                          {c._source||'DESK'}
+                        </div>
+                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, width:'88px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.id||'—'}</div>
                         <div className="display-font" style={{ fontSize:'12px', color:'#D4CCBC', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant||c.description||'—'}</div>
                         <div className="mono-font" style={{ fontSize:'9px', color:'#A8A29E', flexShrink:0 }}>{c.amount||'—'}</div>
                         <div className="mono-font" style={{ fontSize:'8px', padding:'2px 7px', flexShrink:0,
-                          background: c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':c.status==='pending'?'#292524':'#1E3A5F',
-                          color: c.status==='won'?'#D1FAE5':c.status==='lost'?'#FEE2E2':'#CBD5E1' }}>
+                          background: c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':c.status==='triaged'||c.status==='DESK'?'#3D2A00':c.status==='pending'?'#292524':'#1E3A5F',
+                          color: c.status==='won'?'#D1FAE5':c.status==='lost'?'#FEE2E2':c.status==='triaged'||c.status==='DESK'?'#FCD34D':'#CBD5E1' }}>
                           {(c.status||'unknown').toUpperCase()}
                         </div>
                         <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, minWidth:'54px', textAlign:'right' }}>
@@ -8792,6 +8809,27 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         )}
 
       </div>}{/* end !strategyMode operational wrapper */}
+
+      {/* ── Strategist notes — always visible (read-only for analysts) ── */}
+      {!strategyMode && globalNotes.length > 0 && (
+        <div className="mt-6" style={{ border:'1px solid #2D2922', background:'#1A1814', padding:'16px 20px' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+            <div className="mono-font text-[9px] tracking-widest" style={{ color:'#78716C' }}>◈ STRATEGY NOTES — FROM RISK STRATEGIST</div>
+            <div className="mono-font text-[8px]" style={{ color:'#3D3A35' }}>SWITCH TO STRATEGY MODE TO ADD NOTES</div>
+          </div>
+          <div style={{ maxHeight:'180px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'8px' }}>
+            {globalNotes.slice(0,10).map((n,idx) => (
+              <div key={n.id||idx} style={{ padding:'10px 14px', background:'#252320', borderLeft:'2px solid #44403C' }}>
+                <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                <div className="display-font" style={{ fontSize:'13px', color:'#C8C2B8', lineHeight:1.55 }}>{n.text}</div>
+              </div>
+            ))}
+            {globalNotes.length > 10 && (
+              <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older notes — open Strategy Mode to see all</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Merge modal (always mounted) ── */}
       {mergeModal && (() => {
