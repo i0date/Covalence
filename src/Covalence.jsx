@@ -45,6 +45,9 @@ const DEFAULT_SETTINGS = {
   pcMilestones:         [10, 45, 90],
   trackerWindowDays:    60,
   batchFileTime:        '15:00', // HH:MM — daily auto-file time
+  // Home snapshot
+  snapshotEnabled:      true,
+  snapshotDays:         60,
 }
 
 // ─── Business-day helpers ─────────────────────────────────────────────────────
@@ -450,7 +453,7 @@ export default function Covalence() {
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
-          <TrioView />
+          <TrioView outcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} />
@@ -665,9 +668,10 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
       </div>
 
 
-      {/* ── 60-day snapshot ── */}
-      {(() => {
-        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60)
+      {/* ── Snapshot (days configurable in Settings) ── */}
+      {settings.snapshotEnabled !== false && (() => {
+        const snapDays = settings.snapshotDays || 60
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - snapDays)
         const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
         const res60  = recent.filter(o => ['won','lost','withdrawn'].includes(o.status))
         const won60  = res60.filter(o => o.status === 'won')
@@ -682,7 +686,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         if (recent.length === 0) return null
         return (
           <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">60-DAY SNAPSHOT</div>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">{snapDays}-DAY SNAPSHOT</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 {label:'WIN RATE',       value: wr60  !== null ? `${wr60}%` : '—',  sub: `${res60.length} resolved`},
@@ -726,7 +730,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </div>
       ) : (
         <div className="border border-stone-200 px-6 py-12 text-center" style={{ background:'#FAF7F1' }}>
-          <div className="display-font text-stone-400 italic" style={{ fontSize:'18px' }}>No cases in the last 60 days</div>
+          <div className="display-font text-stone-400 italic" style={{ fontSize:'18px' }}>No cases in the last {snapDays} days</div>
           <button onClick={() => setActiveSection('triage')}
             className="mono-font text-stone-500 mt-4 hover:text-stone-800 transition-colors"
             style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', display:'block', margin:'16px auto 0' }}>
@@ -7749,7 +7753,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 005 TRIO VIEW — fraud incident command
 // ═══════════════════════════════════════════════════════════════════════════════
-function TrioView() {
+function TrioView({ outcomes: _parentOutcomes }) {
   const STORAGE_KEY = 'cov_trio_incidents'
   const loadIncidents = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
   const saveIncidents = (arr) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch {} }
@@ -7771,6 +7775,17 @@ function TrioView() {
   const [strategyNotes,     setStrategyNotes]     = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_trio_strategy_notes') || '{}') } catch { return {} } })
   const [strategyDraft,     setStrategyDraft]     = React.useState('')
   const [briefCopied,       setBriefCopied]       = React.useState(false)
+  const [caseFilter,        setCaseFilter]        = React.useState('all')   // all | fraud | service | won | open
+  const [globalNoteDraft,   setGlobalNoteDraft]   = React.useState('')
+  const [globalNotes,       setGlobalNotes]       = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_strategy_global_notes') || '[]') } catch { return [] } })
+  const saveGlobalNote = (text) => {
+    const user = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
+    const note = { id: crypto.randomUUID(), text, author: user?.name || 'Strategist', ts: new Date().toISOString() }
+    const updated = [note, ...globalNotes]
+    setGlobalNotes(updated)
+    setGlobalNoteDraft('')
+    try { localStorage.setItem('cov_strategy_global_notes', JSON.stringify(updated)) } catch {}
+  }
 
   const saveStrategyNote = (incId, text) => {
     const updated = { ...strategyNotes, [incId]: [...(strategyNotes[incId]||[]), { text, author: localStorage.getItem('cov_agent_name')||'Strategist', ts: new Date().toISOString() }] }
@@ -8174,6 +8189,93 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 </div>
               )}
             </div>
+
+            {/* ── Cross-tool intelligence ── */}
+            <div className="mb-6">
+              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ CROSS-TOOL CASE INTELLIGENCE</div>
+              <div className="mono-font text-[9px] mb-4" style={{ color:'#57534E' }}>All cases across Triage, Desk, Multi and File — visible to the strategist in read mode.</div>
+
+              {/* Filter bar */}
+              <div style={{ display:'flex', gap:'2px', marginBottom:'12px', flexWrap:'wrap' }}>
+                {[['all','ALL'],['fraud','FRAUD'],['service','SERVICE'],['open','OPEN'],['won','WON'],['lost','LOST']].map(([val,lbl]) => (
+                  <button key={val} onClick={() => setCaseFilter(val)}
+                    className="mono-font"
+                    style={{ fontSize:'8px', letterSpacing:'0.14em', padding:'5px 12px', border:'1px solid', cursor:'pointer', transition:'all 0.12s',
+                      background: caseFilter===val ? '#D4CCBC' : 'transparent',
+                      color:      caseFilter===val ? '#1A1814'  : '#57534E',
+                      borderColor:caseFilter===val ? '#D4CCBC'  : '#2D2922' }}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {/* Case rows */}
+              {(() => {
+                const filtered = allCases.filter(c => {
+                  if (caseFilter === 'fraud')   return c.category === 'fraud' || c.category === 'mc_fraud' || c.verdict === 'TRUE_FRAUD'
+                  if (caseFilter === 'service') return c.category !== 'fraud' && c.category !== 'mc_fraud' && c.verdict !== 'TRUE_FRAUD'
+                  if (caseFilter === 'open')    return !['won','lost','withdrawn'].includes(c.status)
+                  if (caseFilter === 'won')     return c.status === 'won'
+                  if (caseFilter === 'lost')    return c.status === 'lost'
+                  return true
+                })
+                if (filtered.length === 0) return (
+                  <div className="mono-font text-[9px] py-6 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>No cases match this filter.</div>
+                )
+                return (
+                  <div style={{ border:'1px solid #2D2922', maxHeight:'320px', overflowY:'auto' }}>
+                    {filtered.slice(0,50).map((c,i) => (
+                      <div key={c.id||i} style={{ display:'flex', gap:'12px', alignItems:'center', padding:'10px 14px', borderTop: i>0?'1px solid #2D2922':'none', background:'#1A1814' }}>
+                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, width:'96px' }}>{c.id||'—'}</div>
+                        <div className="display-font" style={{ fontSize:'12px', color:'#D4CCBC', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant||c.description||'—'}</div>
+                        <div className="mono-font" style={{ fontSize:'9px', color:'#A8A29E', flexShrink:0 }}>{c.amount||'—'}</div>
+                        <div className="mono-font" style={{ fontSize:'8px', padding:'2px 7px', flexShrink:0,
+                          background: c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':c.status==='pending'?'#292524':'#1E3A5F',
+                          color: c.status==='won'?'#D1FAE5':c.status==='lost'?'#FEE2E2':'#CBD5E1' }}>
+                          {(c.status||'unknown').toUpperCase()}
+                        </div>
+                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, minWidth:'54px', textAlign:'right' }}>
+                          {c.date ? new Date(c.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}
+                        </div>
+                      </div>
+                    ))}
+                    {filtered.length > 50 && (
+                      <div className="mono-font text-center py-2" style={{ fontSize:'8px', color:'#57534E', borderTop:'1px solid #2D2922' }}>+ {filtered.length-50} more — apply a filter to narrow</div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* ── Global strategist note ── */}
+            <div className="mb-2">
+              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ STRATEGIST NOTES</div>
+              <div className="mono-font text-[9px] mb-3" style={{ color:'#57534E' }}>Leave observations about portfolio-wide patterns, systemic controls, or emerging risks — separate from incident-level debrief annotations.</div>
+              {globalNotes.length > 0 && (
+                <div className="mb-4" style={{ maxHeight:'220px', overflowY:'auto' }}>
+                  {globalNotes.map((n,idx) => (
+                    <div key={n.id||idx} className="mb-2 px-3 py-2" style={{ background:'#1E1C18', borderLeft:'2px solid #44403C' }}>
+                      <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                      <div className="display-font text-sm" style={{ color:'#D4CCBC', lineHeight:1.5 }}>{n.text}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <textarea
+                value={globalNoteDraft}
+                onChange={e => setGlobalNoteDraft(e.target.value)}
+                placeholder="Add a portfolio-level observation — emerging fraud vector, systemic gap, recommended policy change..."
+                rows={3}
+                style={{ width:'100%', background:'#1E1C18', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginBottom:'8px', boxSizing:'border-box' }}
+              />
+              <button onClick={() => { if(globalNoteDraft.trim()) saveGlobalNote(globalNoteDraft.trim()) }}
+                disabled={!globalNoteDraft.trim()}
+                className="mono-font text-[9px] tracking-widest px-4 py-2"
+                style={{ background: globalNoteDraft.trim()?'#D4CCBC':'transparent', color: globalNoteDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: globalNoteDraft.trim()?'pointer':'default' }}>
+                + SAVE NOTE
+              </button>
+            </div>
+
           </div>
         )
       })()}
@@ -11320,6 +11422,18 @@ function SettingsView({ settings, setSettings }) {
               {settings.dfaEnabled !== false ? 'DFA ON' : 'DFA OFF'}
             </button>
           </Field>
+          <Field label="Home Snapshot" hint="Show the rolling case snapshot on the home screen.">
+            <button onClick={() => set('snapshotEnabled', settings.snapshotEnabled === false ? true : false)}
+              style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.snapshotEnabled !== false ? '#064E3B' : '#292524', color: settings.snapshotEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.snapshotEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
+              <span style={{ fontSize:'7px' }}>{settings.snapshotEnabled !== false ? '●' : '○'}</span>
+              {settings.snapshotEnabled !== false ? 'SNAPSHOT ON' : 'SNAPSHOT OFF'}
+            </button>
+          </Field>
+          {settings.snapshotEnabled !== false && (
+            <Field label="Snapshot Window (days)" hint="Number of days the home snapshot looks back. Default: 60.">
+              <Num field="snapshotDays" min={7} max={365} />
+            </Field>
+          )}
         </Card>
 
       </div>
