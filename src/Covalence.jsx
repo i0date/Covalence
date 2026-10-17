@@ -846,6 +846,38 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     localStorage.setItem('triage_outcomes', JSON.stringify(outcomes))
   }, [outcomes])
 
+  // ── Archive ──────────────────────────────────────────────────────────────────
+  const [archivedOutcomes, setArchivedOutcomes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('triage_archive') || '[]') } catch { return [] }
+  })
+  useEffect(() => {
+    localStorage.setItem('triage_archive', JSON.stringify(archivedOutcomes))
+  }, [archivedOutcomes])
+  const [showArchived, setShowArchived] = useState(false)
+  const [verdictFilter, setVerdictFilter] = useState('all')
+
+  const archiveAll = () => {
+    if (!outcomes.length) return
+    if (!window.confirm(`Archive all ${outcomes.length} triage record${outcomes.length !== 1 ? 's' : ''}? They'll be hidden from the active log but recoverable.`)) return
+    setArchivedOutcomes(prev => [...outcomes.map(o => ({ ...o, archivedAt: new Date().toISOString() })), ...prev])
+    setOutcomes([])
+  }
+
+  const archiveOne = (id) => {
+    const record = outcomes.find(o => o.id === id)
+    if (!record) return
+    setArchivedOutcomes(prev => [{ ...record, archivedAt: new Date().toISOString() }, ...prev])
+    setOutcomes(prev => prev.filter(o => o.id !== id))
+  }
+
+  const unarchiveOne = (id) => {
+    const record = archivedOutcomes.find(o => o.id === id)
+    if (!record) return
+    const { archivedAt, ...rest } = record
+    setOutcomes(prev => [rest, ...prev])
+    setArchivedOutcomes(prev => prev.filter(o => o.id !== id))
+  }
+
   // ── Reset transaction type + network when account type changes ───────────────
   useEffect(() => {
     if (accountType && transactionType) {
@@ -2384,36 +2416,68 @@ Return ONLY valid JSON:
             ))}
           </div>
 
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <input
               type="text"
               placeholder="Search by case ID, merchant, or verdict..."
               value={triageSearch}
               onChange={e => setTriageSearch(e.target.value)}
               className="input-field"
-              style={{ fontSize: '12px', padding: '6px 10px', flex: 1, maxWidth: '360px' }}
+              style={{ fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: '200px', maxWidth: '320px' }}
             />
             {triageSearch && (
-              <button onClick={() => setTriageSearch('')} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors tracking-widest">✕ CLEAR</button>
+              <button onClick={() => setTriageSearch('')} className="mono-font text-[10px] text-stone-400 hover:text-stone-700 transition-colors tracking-widest" style={{ background:'none', border:'none', cursor:'pointer' }}>✕</button>
             )}
+            <select
+              value={verdictFilter}
+              onChange={e => setVerdictFilter(e.target.value)}
+              className="mono-font"
+              style={{ fontSize:'10px', letterSpacing:'0.08em', padding:'6px 8px', border:'1px solid #D4CCBC', background:'#FAF7F1', color:'#57534E', cursor:'pointer' }}>
+              <option value="all">ALL VERDICTS</option>
+              <option value="TRUE_FRAUD">TRUE FRAUD</option>
+              <option value="FRIENDLY_FRAUD">FRIENDLY FRAUD</option>
+              <option value="AUTHORIZED_PUSH_PAYMENT">AUTH PUSH PAYMENT</option>
+              <option value="MERCHANT_ERROR">MERCHANT ERROR</option>
+              <option value="PROCESSING_ERROR">PROCESSING ERROR</option>
+              <option value="NEEDS_REVIEW">NEEDS REVIEW</option>
+            </select>
+            <div style={{ marginLeft:'auto', display:'flex', gap:'8px', alignItems:'center' }}>
+              {!showArchived && outcomes.length > 0 && (
+                <button onClick={archiveAll}
+                  className="mono-font"
+                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background:'none', border:'1px solid #D4CCBC', color:'#78716C', cursor:'pointer' }}
+                  title="Move all active records to archive">
+                  ↓ ARCHIVE ALL
+                </button>
+              )}
+              <button onClick={() => setShowArchived(v => !v)}
+                className="mono-font"
+                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background: showArchived ? '#2D2922' : 'none', color: showArchived ? '#E8E3DC' : '#78716C', border:'1px solid ' + (showArchived ? '#2D2922' : '#D4CCBC'), cursor:'pointer' }}>
+                {showArchived ? '← ACTIVE LOG' : `ARCHIVED (${archivedOutcomes.length})`}
+              </button>
+            </div>
           </div>
 
           <div className="border border-stone-200 overflow-hidden" style={{ background: '#FAF7F1' }}>
             <div className="overflow-x-auto">
               <div style={{ minWidth: '600px' }}>
                 <div className="grid px-4 py-2 border-b border-stone-200" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr 80px' }}>
-                  {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'VERDICT / OUTCOME', ''].map((h, i) => (
+                  {['CASE', showArchived ? 'ARCHIVED' : 'DATE', 'MERCHANT', 'AMOUNT', 'VERDICT / OUTCOME', ''].map((h, i) => (
                     <span key={i} className="mono-font text-xs tracking-widest text-stone-400">{h}</span>
                   ))}
                 </div>
                 <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                  {outcomes.filter(o => {
-                    if (!triageSearch.trim()) return true
-                    const q = triageSearch.toLowerCase()
-                    return (o.id||'').toLowerCase().includes(q) ||
-                      (o.merchant||'').toLowerCase().includes(q) ||
-                      (o.verdict||'').toLowerCase().includes(q) ||
-                      (o.amount||'').toLowerCase().includes(q)
+                  {(showArchived ? archivedOutcomes : outcomes).filter(o => {
+                    const matchSearch = (() => {
+                      if (!triageSearch.trim()) return true
+                      const q = triageSearch.toLowerCase()
+                      return (o.id||'').toLowerCase().includes(q) ||
+                        (o.merchant||'').toLowerCase().includes(q) ||
+                        (o.verdict||'').toLowerCase().includes(q) ||
+                        (o.amount||'').toLowerCase().includes(q)
+                    })()
+                    const matchVerdict = verdictFilter === 'all' || o.verdict === verdictFilter
+                    return matchSearch && matchVerdict
                   }).map(o => {
                     const vc = classConfig[o.verdict]
                     if (!vc) return null
@@ -2447,7 +2511,7 @@ Return ONLY valid JSON:
                         ) : (
                           <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '80px 70px 1fr 90px 1fr 80px' }}>
                             <span className="mono-font text-xs text-stone-400">{o.id}</span>
-                            <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            <span className="mono-font text-xs text-stone-500">{new Date(showArchived && o.archivedAt ? o.archivedAt : o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             <span className="display-font text-sm text-stone-700 truncate pr-3">{o.merchant}</span>
                             <span className="mono-font text-xs text-stone-600">{o.amount}</span>
                             <div className="flex items-center gap-2 flex-wrap">
@@ -2468,30 +2532,40 @@ Return ONLY valid JSON:
                               )}
                             </div>
                             <div className="flex flex-col items-end gap-1">
-                              {onSendToDuo && (
-                                <button onClick={() => onSendToDuo({ ...o, source:'triage' })}
+                              {showArchived ? (
+                                <button onClick={() => unarchiveOne(o.id)}
                                   className="mono-font text-[10px] px-2 py-0.5"
-                                  style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
-                                  title="Open in Duo Mode">→ DUO</button>
-                              )}
-                              {onHandoff && (
-                                <button
-                                  onClick={() => onHandoff({
-                                    caseId: o.id,
-                                    classification: o.verdict,
-                                    confidence: o.confidence || 'MEDIUM',
-                                    headline: (o.verdict || '').replace(/_/g, ' '),
-                                    merchant: o.merchant || '',
-                                    amount: o.amount || '',
-                                    network: (o.network || '').toLowerCase(),
-                                  })}
-                                  className="mono-font text-[10px] px-2 py-0.5"
-                                  style={{ background:'#1E3A5F', color:'#BFDBFE', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
-                                  title="Send to Dispute Desk — pre-fills desk form without rerunning triage">→ DESK</button>
-                              )}
-                              <button onClick={() => { setTriageEditId(o.id); setTriageEditDraft({ merchant: o.merchant, amount: o.amount }) }}
-                                className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors"
-                                style={{ background:'none', cursor:'pointer' }} title="Edit case details">✎</button>
+                                  style={{ background:'none', border:'1px solid #A8A29E', color:'#78716C', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                  title="Restore to active log">↩ RESTORE</button>
+                              ) : (<>
+                                {onSendToDuo && (
+                                  <button onClick={() => onSendToDuo({ ...o, source:'triage' })}
+                                    className="mono-font text-[10px] px-2 py-0.5"
+                                    style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                    title="Open in Duo Mode">→ DUO</button>
+                                )}
+                                {onHandoff && (
+                                  <button
+                                    onClick={() => onHandoff({
+                                      caseId: o.id,
+                                      classification: o.verdict,
+                                      confidence: o.confidence || 'MEDIUM',
+                                      headline: (o.verdict || '').replace(/_/g, ' '),
+                                      merchant: o.merchant || '',
+                                      amount: o.amount || '',
+                                      network: (o.network || '').toLowerCase(),
+                                    })}
+                                    className="mono-font text-[10px] px-2 py-0.5"
+                                    style={{ background:'#1E3A5F', color:'#BFDBFE', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                    title="Send to Dispute Desk — pre-fills desk form without rerunning triage">→ DESK</button>
+                                )}
+                                <button onClick={() => { setTriageEditId(o.id); setTriageEditDraft({ merchant: o.merchant, amount: o.amount }) }}
+                                  className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors"
+                                  style={{ background:'none', cursor:'pointer' }} title="Edit case details">✎</button>
+                                <button onClick={() => archiveOne(o.id)}
+                                  className="mono-font text-[10px] px-2 py-0.5 border border-stone-200 text-stone-400 hover:bg-stone-50 transition-colors"
+                                  style={{ background:'none', cursor:'pointer' }} title="Archive this record">↓</button>
+                              </>)}
                             </div>
                           </div>
                         )}
@@ -2503,12 +2577,30 @@ Return ONLY valid JSON:
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end">
-            <button onClick={() => { if (window.confirm('Clear all outcome history?')) setOutcomes([]) }}
-              className="mono-font text-xs tracking-widest text-stone-400 hover:text-stone-600 transition-colors"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              CLEAR LOG
-            </button>
+          <div className="mt-3 flex justify-between items-center">
+            <div className="mono-font text-[9px] tracking-widest text-stone-400">
+              {showArchived
+                ? `${archivedOutcomes.length} archived record${archivedOutcomes.length !== 1 ? 's' : ''}`
+                : `${outcomes.length} active record${outcomes.length !== 1 ? 's' : ''}`}
+            </div>
+            <div className="flex gap-3">
+              {showArchived && archivedOutcomes.length > 0 && (
+                <button
+                  onClick={() => { if (window.confirm(`Permanently delete all ${archivedOutcomes.length} archived records? This cannot be undone.`)) setArchivedOutcomes([]) }}
+                  className="mono-font text-[10px] tracking-widest text-red-400 hover:text-red-600 transition-colors"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  ✕ CLEAR ARCHIVE
+                </button>
+              )}
+              {!showArchived && outcomes.length > 0 && (
+                <button
+                  onClick={() => { if (window.confirm(`Permanently delete all ${outcomes.length} active triage records? Consider archiving instead.`)) setOutcomes([]) }}
+                  className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-red-500 transition-colors"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  ✕ CLEAR ACTIVE LOG
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
