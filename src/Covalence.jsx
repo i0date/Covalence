@@ -3744,11 +3744,7 @@ Return ONLY valid JSON:
             <button onClick={() => { setPlatformMode('fi'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
             <button onClick={() => { setPlatformMode('merchant'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
           </div>
-          {platformMode === 'merchant' && (
-            <div className="mono-font text-[9px] tracking-widest mt-3 px-3 py-2 flex items-center gap-2" style={{background:'#1C1917',color:'#F59E0B',border:'1px solid #92400E',width:'fit-content'}}>
-              <span style={{fontSize:'8px'}}>●</span> MERCHANT / ACQUIRER MODE ACTIVE — Steps below are for merchants fighting chargebacks
-            </div>
-          )}
+
         </div>
 
         {/* ── Triage handoff banner ── */}
