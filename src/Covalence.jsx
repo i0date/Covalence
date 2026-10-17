@@ -838,6 +838,19 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   const [ceActionPlanError, setCeActionPlanError]       = useState(null)
   const [ceActionPlanCopied, setCeActionPlanCopied]     = useState(false)
 
+  // ── CE Resolution tracking ───────────────────────────────────────────────
+  const [ceResolution, setCeResolution] = useState({ status: '', actions: [], notes: '' })
+  const CE_ACTIONS = [
+    'Exchange freeze requested',
+    'Chain analytics submitted',
+    'SAR / STR filed',
+    'Law enforcement referral',
+    'Customer funds partially recovered',
+    'Receiving exchange contacted',
+    'Account suspended',
+    'Case closed — no recovery',
+  ]
+
   // ── Outcome tracking ────────────────────────────────────────────────────────
   const [outcomes, setOutcomes] = useState(() => {
     try { return JSON.parse(localStorage.getItem('triage_outcomes') || '[]') } catch { return [] }
@@ -1257,7 +1270,7 @@ Return ONLY valid JSON, no markdown:
   // ── CE action plan ───────────────────────────────────────────────────────────
   const generateCEActionPlan = async () => {
     if (!result) return
-    setCeActionPlanLoading(true); setCeActionPlanError(null); setCeActionPlan(null)
+    setCeActionPlanLoading(true); setCeActionPlanError(null); setCeActionPlan(null); setCeResolution({ status: '', actions: [], notes: ''  })
     const prompt = `You are a senior fraud operations analyst at a crypto exchange. Based on this triage classification, generate a complete operational action plan.
 
 INCIDENT: ${result.classification} — ${result.label}
@@ -2353,6 +2366,72 @@ Return ONLY valid JSON:
                 </div>
               )}
 
+              {/* ── CE RESOLUTION STEP ───────────────────────────────────────── */}
+              {isCE && result && (
+                <div className="border border-stone-300" style={{ background: '#F5F1EA' }}>
+                  <div className="px-5 py-4 border-b border-stone-200" style={{ background: '#EDE9E0' }}>
+                    <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-0.5">STEP 4 — RESOLUTION</div>
+                    <div className="display-font font-semibold text-stone-900" style={{ fontSize: '15px', letterSpacing: '-0.01em' }}>Record Actions &amp; Outcome</div>
+                    <p className="mono-font text-[10px] text-stone-500 mt-1">CE cases don't route to a network — track what was actually done and close the case here.</p>
+                  </div>
+                  <div className="px-5 py-4 space-y-4">
+                    {/* Resolution status */}
+                    <div>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">CASE STATUS</div>
+                      <div className="flex gap-2 flex-wrap">
+                        {[{id:'open',label:'OPEN',bg:'#92400E',fg:'#FEF3C7'},{id:'in_progress',label:'IN PROGRESS',bg:'#1E3A8A',fg:'#DBEAFE'},{id:'resolved',label:'RESOLVED',bg:'#064E3B',fg:'#D1FAE5'},{id:'no_recovery',label:'NO RECOVERY',bg:'#3F3F46',fg:'#E4E4E7'}].map(s => (
+                          <button key={s.id} onClick={() => setCeResolution(r => ({ ...r, status: r.status === s.id ? '' : s.id }))}
+                            className="mono-font text-[9px] px-3 py-1.5 tracking-widest transition-colors"
+                            style={{ background: ceResolution.status === s.id ? s.bg : 'none', color: ceResolution.status === s.id ? s.fg : '#78716C', border: '1px solid ' + (ceResolution.status === s.id ? s.bg : '#D4CCBC'), cursor: 'pointer' }}>
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Actions taken */}
+                    <div>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">ACTIONS TAKEN</div>
+                      <div className="flex flex-wrap gap-2">
+                        {CE_ACTIONS.map(a => {
+                          const active = ceResolution.actions.includes(a)
+                          return (
+                            <button key={a} onClick={() => setCeResolution(r => ({ ...r, actions: active ? r.actions.filter(x => x !== a) : [...r.actions, a] }))}
+                              className="mono-font text-[9px] px-2.5 py-1 tracking-wide transition-colors"
+                              style={{ background: active ? '#1A1814' : 'none', color: active ? '#E8E3DC' : '#78716C', border: '1px solid ' + (active ? '#1A1814' : '#D4CCBC'), cursor: 'pointer' }}>
+                              {active ? '✓ ' : ''}{a}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">RESOLUTION NOTES</div>
+                      <textarea
+                        value={ceResolution.notes}
+                        onChange={e => setCeResolution(r => ({ ...r, notes: e.target.value }))}
+                        placeholder="What happened? Recovery amount, exchange response, LEA case number, SAR filed date..."
+                        rows={3}
+                        className="w-full display-font"
+                        style={{ fontSize: '13px', lineHeight: 1.5, padding: '10px 12px', border: '1px solid #D4CCBC', background: '#FAF7F1', resize: 'vertical', fontFamily: 'inherit' }}
+                      />
+                    </div>
+                    {/* Save to triage log */}
+                    <button
+                      onClick={() => {
+                        if (!ceResolution.status) { alert('Set a case status before saving.'); return }
+                        const rec = outcomes.find(o => o.id === result?._caseId) || outcomes[0]
+                        setOutcomes(prev => prev.map(o => o === rec ? { ...o, ceResolution } : o))
+                        alert('Resolution saved to triage log.')
+                      }}
+                      className="mono-font text-[10px] tracking-widest px-4 py-2"
+                      style={{ background: '#1A1814', color: '#E8E3DC', border: 'none', cursor: 'pointer', letterSpacing: '0.12em' }}>
+                      SAVE RESOLUTION
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* ── Send to Dispute Desk ── */}
               {handedOff ? (
                 <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
@@ -2435,11 +2514,9 @@ Return ONLY valid JSON:
               style={{ fontSize:'10px', letterSpacing:'0.08em', padding:'6px 8px', border:'1px solid #D4CCBC', background:'#FAF7F1', color:'#57534E', cursor:'pointer' }}>
               <option value="all">ALL VERDICTS</option>
               <option value="TRUE_FRAUD">TRUE FRAUD</option>
-              <option value="FRIENDLY_FRAUD">FRIENDLY FRAUD</option>
-              <option value="AUTHORIZED_PUSH_PAYMENT">AUTH PUSH PAYMENT</option>
-              <option value="MERCHANT_ERROR">MERCHANT ERROR</option>
-              <option value="PROCESSING_ERROR">PROCESSING ERROR</option>
-              <option value="NEEDS_REVIEW">NEEDS REVIEW</option>
+              <option value="FIRST_PARTY_FRAUD">FIRST-PARTY FRAUD</option>
+              <option value="CONSUMER_DISPUTE">CONSUMER DISPUTE</option>
+              <option value="AUTHORIZED_PUSH_PAYMENT">AUTH. PUSH PAYMENT</option>
             </select>
             <div style={{ marginLeft:'auto', display:'flex', gap:'8px', alignItems:'center' }}>
               {!showArchived && outcomes.length > 0 && (
@@ -3450,7 +3527,7 @@ Return ONLY valid JSON:
         network: network === 'visa' ? 'VISA' : 'MC',
         reasonCode: mchReasonCode || '—',
         reasonTitle: REASON_TITLES[mchCode] || (mchCode ? 'Chargeback — ' + mchCode : 'Merchant chargeback'),
-        status: 'queued',
+        status: 'received',
         resolvedDate: null,
         mode: 'merchant',
         threeDSStatus: mchThreeDS,
@@ -3701,7 +3778,7 @@ Return ONLY valid JSON:
 
   // Outcome tracker: 60-day window only
   // Lifecycle stages: pending → filed → representment → pre_arb → won | lost | withdrawn
-  const LIFECYCLE_IN_PROGRESS = new Set(['queued', 'filed', 'investigating', 'representment', 'pre_arb'])
+  const LIFECYCLE_IN_PROGRESS = new Set(['queued', 'filed', 'investigating', 'representment', 'pre_arb', 'received', 'rebuttal_prep', 'submitted'])
   const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
@@ -3835,6 +3912,17 @@ Return ONLY valid JSON:
           <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
             <button onClick={() => { setPlatformMode('fi'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
             <button onClick={() => { setPlatformMode('merchant'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
+          </div>
+          {/* ── Mode indicator strip ── */}
+          <div style={{ marginTop:'12px', padding:'10px 16px', borderLeft:'3px solid ' + (platformMode === 'fi' ? '#1D4ED8' : '#92400E'), background: platformMode === 'fi' ? '#EFF6FF' : '#FFFBEB' }}>
+            <span className="mono-font text-[9px] tracking-widest" style={{ color: platformMode === 'fi' ? '#1E3A8A' : '#78350F', fontWeight: 700 }}>
+              {platformMode === 'fi' ? 'ISSUER / FI MODE' : 'MERCHANT MODE'}
+            </span>
+            <span className="mono-font text-[9px] ml-3" style={{ color: platformMode === 'fi' ? '#1D4ED8' : '#92400E' }}>
+              {platformMode === 'fi'
+                ? '— File disputes on behalf of cardholders. Reg E / Reg Z compliance. Network chargeback workflow.'
+                : '— Fight chargebacks as a merchant. Build rebuttal evidence. Submit representment to your acquirer.'}
+            </span>
           </div>
 
         </div>
@@ -5721,19 +5809,26 @@ Return ONLY valid JSON:
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
                                 <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%',overflow:'hidden'}}>
 
-                                  {/* ── PENDING ─────────────────────────────── */}
-                                  {(!o.status || o.status === 'pending') && (<>
-                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating — gathering evidence before filing" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
+                                  {/* ── PENDING (FI only) ───────────────────── */}
+                                  {o.mode !== 'merchant' && (!o.status || o.status === 'pending') && (<>
+                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
                                     <button onClick={() => advanceStage(o.id,'queued')} title="Move to batch filing queue" className="mono-font text-[8px] px-1.5 py-0.5 border border-violet-600 text-violet-700 hover:bg-violet-50 whitespace-nowrap transition-colors">IN QUEUE</button>
                                     <button onClick={() => advanceStage(o.id,'filed')} title="Mark chargeback as filed with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw — close without filing" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    {o.mode !== 'merchant' && !o.provCreditDate && (
-                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit to cardholder (Reg E / debit obligation)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    {!o.provCreditDate && (
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                     )}
                                   </>)}
 
-                                  {/* ── INVSTG (agent investigating, pre-filing) ── */}
-                                  {o.status === 'investigating' && (<>
+                                  {/* ── MERCHANT: RECEIVED ──────────────────── */}
+                                  {o.mode === 'merchant' && (o.status === 'received' || !o.status || o.status === 'pending') && (<>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-orange-800 text-orange-50">RECEIVED</span>
+                                    <button onClick={() => advanceStage(o.id,'rebuttal_prep')} title="Begin preparing representment rebuttal" className="mono-font text-[8px] px-1.5 py-0.5 border border-amber-700 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">PREP REBUTTAL</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede — do not fight this chargeback" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
+                                  </>)}
+
+                                  {/* ── INVSTG (FI only) ───────────────────── */}
+                                  {o.mode !== 'merchant' && o.status === 'investigating' && (<>
                                     <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-blue-900 text-blue-50">INVSTG</span>
                                     <button onClick={() => advanceStage(o.id,'filed')} title="Done investigating — file chargeback with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
@@ -5748,28 +5843,45 @@ Return ONLY valid JSON:
                                     <button onClick={() => revertCase(o.id)} title="Back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ PENDING</button>
                                   </>)}
 
-                                  {/* ── IN QUEUE ────────────────────────────── */}
-                                  {o.status === 'queued' && (<>
+                                  {/* ── IN QUEUE (FI only) ──────────────────── */}
+                                  {o.mode !== 'merchant' && o.status === 'queued' && (<>
                                     <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
-                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                    {!o.provCreditDate && (
                                       <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
-                                    )}
-                                    {o.mode === 'merchant' && (
-                                      <button onClick={() => advanceStage(o.id, 'filed')} title="Mark representment as filed with acquirer" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
                                     )}
                                     <button onClick={() => revertCase(o.id)} title="Remove from batch queue — back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ UNQUEUE</button>
                                   </>)}
 
-                                  {/* ── FILED ───────────────────────────────── */}
+                                  {/* ── MERCHANT: REBUTTAL PREP ─────────────── */}
+                                  {o.mode === 'merchant' && o.status === 'rebuttal_prep' && (<>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-800 text-amber-50">REBUTTAL PREP</span>
+                                    <button onClick={() => advanceStage(o.id,'submitted')} title="Representment submitted to acquirer" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">SUBMITTED</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede this chargeback" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Back to received" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ BACK</button>
+                                  </>)}
+
+                                  {/* ── MERCHANT: SUBMITTED ─────────────────── */}
+                                  {o.mode === 'merchant' && o.status === 'submitted' && (<>
+                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">SUBMITTED</span>
+                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Representment won — chargeback reversed" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Representment lost — chargeback upheld" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
+                                    <button onClick={() => revertCase(o.id)} title="Revert to prep" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                  </>)}
+
+                                  {/* ── FILED (FI) / legacy merchant filed ─── */}
                                   {o.status === 'filed' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won — chargeback upheld, funds recovered" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost — chargeback denied" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    {o.mode !== 'merchant' && !o.provCreditDate && (
-                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
-                                    )}
-                                    <button onClick={() => revertCase(o.id)} title="Revert to pending" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                    {o.mode === 'merchant'
+                                      ? <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-700 text-stone-200">SUBMITTED (legacy)</span>
+                                      : <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>}
+                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
+                                    {o.mode !== 'merchant' && (<>
+                                      <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                      {!o.provCreditDate && (
+                                        <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                      )}
+                                    </>)}
+                                    <button onClick={() => revertCase(o.id)} title="Revert" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
                                   </>)}
 
                                   {/* ── LEGACY: network_invstg / representment / pre_arb ── */}
