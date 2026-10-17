@@ -730,7 +730,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         </div>
       ) : (
         <div className="border border-stone-200 px-6 py-12 text-center" style={{ background:'#FAF7F1' }}>
-          <div className="display-font text-stone-400 italic" style={{ fontSize:'18px' }}>No cases in the last {snapDays} days</div>
+          <div className="display-font text-stone-400 italic" style={{ fontSize:'18px' }}>No cases in the last {settings.snapshotDays || 60} days</div>
           <button onClick={() => setActiveSection('triage')}
             className="mono-font text-stone-500 mt-4 hover:text-stone-800 transition-colors"
             style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', display:'block', margin:'16px auto 0' }}>
