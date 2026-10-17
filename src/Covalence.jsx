@@ -2456,14 +2456,14 @@ Return ONLY valid JSON:
                                 <div className="flex gap-1 flex-wrap">
                                   <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
                                   <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
-                                  <button onClick={() => reloadCase(o)} className="mono-font text-xs px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                                  <button onClick={() => reloadCase(o)} className="mono-font text-[10px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Re-run triage analysis on this case" style={{ background: 'none', cursor: 'pointer' }}>↺ RERUN</button>
                                 </div>
                               ) : (
                                 <div className="flex gap-1 items-center flex-wrap">
                                   <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
                                     {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
                                   </span>
-                                  <button onClick={() => reloadCase(o)} className="mono-font text-xs px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Pre-fill form with this case" style={{ background: 'none', cursor: 'pointer' }}>↺</button>
+                                  <button onClick={() => reloadCase(o)} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Re-run triage analysis on this case" style={{ background: 'none', cursor: 'pointer' }}>↺ RERUN</button>
                                 </div>
                               )}
                             </div>
@@ -2473,6 +2473,21 @@ Return ONLY valid JSON:
                                   className="mono-font text-[10px] px-2 py-0.5"
                                   style={{ background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
                                   title="Open in Duo Mode">→ DUO</button>
+                              )}
+                              {onHandoff && (
+                                <button
+                                  onClick={() => onHandoff({
+                                    caseId: o.id,
+                                    classification: o.verdict,
+                                    confidence: o.confidence || 'MEDIUM',
+                                    headline: (o.verdict || '').replace(/_/g, ' '),
+                                    merchant: o.merchant || '',
+                                    amount: o.amount || '',
+                                    network: (o.network || '').toLowerCase(),
+                                  })}
+                                  className="mono-font text-[10px] px-2 py-0.5"
+                                  style={{ background:'#1E3A5F', color:'#BFDBFE', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
+                                  title="Send to Dispute Desk — pre-fills desk form without rerunning triage">→ DESK</button>
                               )}
                               <button onClick={() => { setTriageEditId(o.id); setTriageEditDraft({ merchant: o.merchant, amount: o.amount }) }}
                                 className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors"
@@ -5645,6 +5660,9 @@ Return ONLY valid JSON:
                                     <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
                                     {o.mode !== 'merchant' && !o.provCreditDate && (
                                       <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                    )}
+                                    {o.mode === 'merchant' && (
+                                      <button onClick={() => advanceStage(o.id, 'filed')} title="Mark representment as filed with acquirer" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
                                     )}
                                     <button onClick={() => revertCase(o.id)} title="Remove from batch queue — back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ UNQUEUE</button>
                                   </>)}
@@ -11292,13 +11310,13 @@ ${'═'.repeat(64)}`
               const netColor = (o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'
               return (
                 <div key={o.id} className="px-5 py-3 border-b border-stone-100">
-                  <div className="flex gap-3 items-center flex-wrap">
-                    <span className="mono-font text-[10px] text-stone-500" style={{flex:'0 0 88px'}}>{o.id}</span>
-                    <span className="mono-font text-[10px] text-stone-400" style={{flex:'0 0 50px'}}>{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                  <div className="flex gap-3 items-center" style={{minWidth:0}}>
+                    <span className="mono-font text-[10px] text-stone-500 shrink-0" style={{flex:'0 0 88px'}}>{o.id}</span>
+                    <span className="mono-font text-[10px] text-stone-400 shrink-0" style={{flex:'0 0 50px'}}>{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
                     <span className="display-font text-sm text-stone-800 truncate" style={{flex:'1 1 0',minWidth:0}}>{o.merchant||'—'}</span>
-                    <span className="mono-font text-[10px] text-stone-600" style={{flex:'0 0 60px'}}>{o.amount||'—'}</span>
-                    <span className="mono-font text-[10px] font-bold" style={{flex:'0 0 46px',color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
-                    <div className="flex gap-1" style={{flex:'0 0 auto'}}>
+                    <span className="mono-font text-[10px] text-stone-600 shrink-0" style={{flex:'0 0 60px'}}>{o.amount||'—'}</span>
+                    <span className="mono-font text-[10px] font-bold shrink-0" style={{flex:'0 0 46px',color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
+                    <div className="flex gap-1 shrink-0" style={{flex:'0 0 auto'}}>
                       <button onClick={() => regenPackage(o)} className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">↓ PKG</button>
                       {(o.docs||[]).length > 0 && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>}
                     </div>
