@@ -3741,9 +3741,14 @@ Return ONLY valid JSON:
               : 'Build your representment case, fight chargebacks with evidence, and monitor your chargeback ratio against Visa and Mastercard network thresholds.'}
           </p>
           <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
-            <button onClick={() => setPlatformMode('fi')} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
-            <button onClick={() => setPlatformMode('merchant')} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
+            <button onClick={() => { setPlatformMode('fi'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
+            <button onClick={() => { setPlatformMode('merchant'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
           </div>
+          {platformMode === 'merchant' && (
+            <div className="mono-font text-[9px] tracking-widest mt-3 px-3 py-2 flex items-center gap-2" style={{background:'#1C1917',color:'#F59E0B',border:'1px solid #92400E',width:'fit-content'}}>
+              <span style={{fontSize:'8px'}}>●</span> MERCHANT / ACQUIRER MODE ACTIVE — Steps below are for merchants fighting chargebacks
+            </div>
+          )}
         </div>
 
         {/* ── Triage handoff banner ── */}
@@ -11287,14 +11292,15 @@ ${'═'.repeat(64)}`
           return filtered.length === 0 ? (
             <div className="px-5 py-8 text-center mono-font text-[10px] text-stone-400 tracking-widest">NO CASES MATCH FILTER</div>
           ) : (
-          <div className="divide-y divide-stone-200">
-            <div className="flex gap-3 px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{background:'#EEE9E0'}}>
-              <span style={{flex:'0 0 88px'}}>CASE ID</span>
-              <span style={{flex:'0 0 50px'}}>FILED</span>
-              <span style={{flex:'1 1 0',minWidth:0}}>MERCHANT</span>
-              <span style={{flex:'0 0 60px'}}>AMT</span>
-              <span style={{flex:'0 0 46px'}}>NET</span>
-              <span style={{flex:'0 0 auto'}}>↓ PKG</span>
+          <div className="divide-y divide-stone-200" style={{overflowX:'auto'}}>
+            <div style={{minWidth:'560px'}}>
+            <div className="grid px-5 py-2 mono-font text-[9px] tracking-widest text-stone-400" style={{background:'#EEE9E0',gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto'}}>
+              <span>CASE ID</span>
+              <span>FILED</span>
+              <span>MERCHANT</span>
+              <span>AMT</span>
+              <span>NET</span>
+              <span>↓ PKG</span>
             </div>
             {filtered.map(o => {
               const CB_STAGES = [
@@ -11310,13 +11316,13 @@ ${'═'.repeat(64)}`
               const netColor = (o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'
               return (
                 <div key={o.id} className="px-5 py-3 border-b border-stone-100">
-                  <div className="flex gap-3 items-center" style={{minWidth:0}}>
-                    <span className="mono-font text-[10px] text-stone-500 shrink-0" style={{flex:'0 0 88px'}}>{o.id}</span>
-                    <span className="mono-font text-[10px] text-stone-400 shrink-0" style={{flex:'0 0 50px'}}>{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
-                    <span className="display-font text-sm text-stone-800 truncate" style={{flex:'1 1 0',minWidth:0}}>{o.merchant||'—'}</span>
-                    <span className="mono-font text-[10px] text-stone-600 shrink-0" style={{flex:'0 0 60px'}}>{o.amount||'—'}</span>
-                    <span className="mono-font text-[10px] font-bold shrink-0" style={{flex:'0 0 46px',color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
-                    <div className="flex gap-1 shrink-0" style={{flex:'0 0 auto'}}>
+                  <div className="grid items-center px-5" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
+                    <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
+                    <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                    <span className="display-font text-sm text-stone-800 truncate">{o.merchant||'—'}</span>
+                    <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
+                    <span className="mono-font text-[10px] font-bold" style={{color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
+                    <div className="flex gap-1">
                       <button onClick={() => regenPackage(o)} className="mono-font text-[8px] px-2 py-0.5 border border-amber-700 text-amber-700 hover:bg-amber-50 transition-colors">↓ PKG</button>
                       {(o.docs||[]).length > 0 && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>}
                     </div>
@@ -11348,6 +11354,7 @@ ${'═'.repeat(64)}`
                 </div>
               )
             })}
+          </div>
           </div>
           )
         })()}
@@ -11536,11 +11543,9 @@ function SettingsView({ settings, setSettings }) {
               {settings.snapshotEnabled !== false ? 'SNAPSHOT ON' : 'SNAPSHOT OFF'}
             </button>
           </Field>
-          {settings.snapshotEnabled !== false && (
-            <Field label="Snapshot Window (days)" hint="Number of days the home snapshot looks back. Default: 60.">
+          <Field label="Snapshot Window (days)" hint="Number of days the home snapshot looks back. Default: 60.">
               <Num field="snapshotDays" min={7} max={365} />
             </Field>
-          )}
         </Card>
 
       </div>
