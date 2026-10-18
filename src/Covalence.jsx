@@ -808,6 +808,7 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   const [handedOff, setHandedOff]       = useState(false)
   const [triageSearch,    setTriageSearch]    = useState('')
   const [triageEditId,    setTriageEditId]    = useState(null)
+  const [overridePickId,  setOverridePickId]  = useState(null)
   const [triageEditDraft, setTriageEditDraft] = useState({})
 
   // ── Platform mode: 'fi' = Financial Institution, 'ce' = Crypto Exchange ──────
@@ -1330,8 +1331,8 @@ Return ONLY valid JSON:
     setResult(null); setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  const markOutcome = (id, val) =>
-    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, outcome: val } : o))
+  const markOutcome = (id, val, correctedVerdict) =>
+    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, outcome: val, ...(correctedVerdict ? { correctedVerdict } : {}) } : o))
 
   const exportReport = () => {
     if (!result) return
@@ -2626,10 +2627,29 @@ Return ONLY valid JSON:
                             <span className="mono-font text-xs text-stone-600">{o.amount}</span>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
-                              {o.outcome === 'pending' ? (
+                              {overridePickId === o.id ? (
+                                /* ── Inline verdict picker on override ── */
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="mono-font text-[8px] tracking-widest text-red-700">WHAT IS THE CORRECT VERDICT?</div>
+                                  {[
+                                    { id:'TRUE_FRAUD',               label:'TRUE FRAUD' },
+                                    { id:'FIRST_PARTY_FRAUD',        label:'FIRST-PARTY FRAUD' },
+                                    { id:'CONSUMER_DISPUTE',         label:'CONSUMER DISPUTE' },
+                                    { id:'AUTHORIZED_PUSH_PAYMENT',  label:'AUTH. PUSH PAYMENT' },
+                                  ].map(v => (
+                                    <button key={v.id}
+                                      onClick={() => { markOutcome(o.id, 'overridden', v.id); setOverridePickId(null) }}
+                                      className="mono-font text-[9px] px-2 py-0.5 text-left transition-colors"
+                                      style={{ background: v.id === o.verdict ? '#FEE2E2' : '#FAF7F1', border:'1px solid ' + (v.id === o.verdict ? '#FCA5A5' : '#D4CCBC'), color: v.id === o.verdict ? '#991B1B' : '#57534E', cursor:'pointer' }}>
+                                      {v.id === o.verdict ? '← was: ' : ''}{v.label}
+                                    </button>
+                                  ))}
+                                  <button onClick={() => setOverridePickId(null)} className="mono-font text-[8px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }}>CANCEL</button>
+                                </div>
+                              ) : o.outcome === 'pending' ? (
                                 <div className="flex gap-1 flex-wrap">
                                   <button onClick={() => markOutcome(o.id, 'confirmed')} className="mono-font text-xs px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors" title="Verdict was correct" style={{ background: 'none', cursor: 'pointer' }}>✓</button>
-                                  <button onClick={() => markOutcome(o.id, 'overridden')} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was overridden" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
+                                  <button onClick={() => setOverridePickId(o.id)} className="mono-font text-xs px-2 py-0.5 border border-red-700 text-red-700 hover:bg-red-50 transition-colors" title="Verdict was wrong — select correct verdict" style={{ background: 'none', cursor: 'pointer' }}>✗</button>
                                   <button onClick={() => reloadCase(o)} className="mono-font text-[10px] px-2 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 transition-colors" title="Re-run triage analysis on this case" style={{ background: 'none', cursor: 'pointer' }}>↺ RERUN</button>
                                 </div>
                               ) : (
@@ -2637,6 +2657,10 @@ Return ONLY valid JSON:
                                   <span className={`mono-font text-xs ${o.outcome === 'confirmed' ? 'text-emerald-700' : 'text-red-700'}`}>
                                     {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
                                   </span>
+                                  {o.correctedVerdict && o.correctedVerdict !== o.verdict && (
+                                    <span className="mono-font text-[8px] px-1 py-0.5 bg-red-100 text-red-700">→ {o.correctedVerdict.replace(/_/g,' ')}</span>
+                                  )}
+                                  <button onClick={() => { setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, outcome: 'pending', correctedVerdict: null } : x)) }} className="mono-font text-[8px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }} title="Reset outcome">↩</button>
                                   <button onClick={() => reloadCase(o)} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Re-run triage analysis on this case" style={{ background: 'none', cursor: 'pointer' }}>↺ RERUN</button>
                                 </div>
                               )}
@@ -8508,11 +8532,18 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   <div style={{ borderTop:'1px solid #2D2922', paddingTop:'16px' }}>
                     <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>THREAT BRIEF</div>
                     <div className="mono-font text-[9px] mb-3" style={{ color:'#3D3A35' }}>Generates a structured brief from all incident data and your strategic annotations. Ready for Risk Committee or compliance reporting.</div>
-                    <button onClick={() => { navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
-                      className="mono-font text-[9px] tracking-widest px-5 py-2.5"
-                      style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
-                      {briefCopied ? '✓ COPIED TO CLIPBOARD' : '◈ GENERATE & COPY THREAT BRIEF'}
-                    </button>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => { navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
+                        className="mono-font text-[9px] tracking-widest px-5 py-2.5"
+                        style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
+                        {briefCopied ? '✓ COPIED' : '◈ COPY THREAT BRIEF'}
+                      </button>
+                      <button onClick={() => { const txt = generateThreatBrief(debriefInc); const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(txt); a.download=`TRIO-BRIEF-${(debriefInc.title||'incident').replace(/\s+/g,'-').toUpperCase()}-${new Date().toISOString().split('T')[0]}.txt`; a.click() }}
+                        className="mono-font text-[9px] tracking-widest px-5 py-2.5"
+                        style={{ background:'transparent', border:'1px solid #78716C', color:'#78716C', cursor:'pointer' }}>
+                        ↓ DOWNLOAD .TXT
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -10695,7 +10726,8 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
       setNearBatch(diff < 15 * 60 * 1000) // within 15 min
       if (autoFile && diff <= 1000 && !autoFileFired.current && queuedFraudRef.current.length > 0) {
         autoFileFired.current = true
-        setOutcomes(prev => prev.map(o => isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString() } : o))
+        const _autoAgent = localStorage.getItem('cov_agent_name') || ''
+        setOutcomes(prev => prev.map(o => isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString(), filedBy: _autoAgent || 'AUTO' } : o))
         setFiled(true)
         setTimeout(() => setFiled(false), 5000)
       }
@@ -10927,8 +10959,9 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
   }
 
   const fileAllFraud = () => {
+    const _agent = localStorage.getItem('cov_agent_name') || ''
     setOutcomes(prev => prev.map(o =>
-      isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString() } : o
+      isFraudCase(o) && o.status === 'queued' ? { ...o, status: 'filed', filedAt: new Date().toISOString(), filedBy: _agent || 'SYSTEM' } : o
     ))
     setFiled(true)
     setTimeout(() => setFiled(false), 3000)
@@ -10939,7 +10972,8 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
   const toggleSelect = id => setSelectedIds(p => p.includes(id)?p.filter(x=>x!==id):[...p,id])
   const clearSelected = () => setSelectedIds([])
   const fileSelected = () => {
-    setOutcomes(prev=>prev.map(o=>selectedIds.includes(o.id)&&isFraudCase(o)&&o.status==='queued'?{...o,status:'filed',filedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}:o))
+    const _agent = localStorage.getItem('cov_agent_name') || ''
+    setOutcomes(prev=>prev.map(o=>selectedIds.includes(o.id)&&isFraudCase(o)&&o.status==='queued'?{...o,status:'filed',filedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),filedBy:_agent||'SYSTEM'}:o))
     clearSelected(); setFiled(true); setTimeout(()=>setFiled(false),3000)
   }
   const exportSelectedCSV = () => {
@@ -11396,6 +11430,9 @@ function FileView({ setActiveSection, setAppOutcomes }) {
   const [pkgModal2,  setPkgModal2]  = React.useState(null)
   const [fileSearch, setFileSearch] = React.useState('')
   const [fileFilter, setFileFilter] = React.useState('all') // all | active | won | lost
+  const [fileNetFilter, setFileNetFilter] = React.useState('') // '' | 'visa' | 'master' | 'amex' | 'discover'
+  const [fileNoteOpen, setFileNoteOpen] = React.useState(null)
+  const [fileNoteDraft, setFileNoteDraft] = React.useState('')
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
 
   React.useEffect(() => {
@@ -11405,10 +11442,10 @@ function FileView({ setActiveSection, setAppOutcomes }) {
     } catch {}
   }, [])
 
-  const updateOutcome = (id, newStatus) => {
+  const updateOutcome = (id, newStatus, patch = {}) => {
     try {
       const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString() } : o)
+      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString(), ...patch } : o)
       localStorage.setItem('cov_outcomes', JSON.stringify(updated))
       if (setAppOutcomes) setAppOutcomes(updated)
       setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
@@ -11469,13 +11506,17 @@ ${'═'.repeat(64)}`
       {/* Network cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
         {[{l:'VISA',s:'Visa Online · Dispute Submission',c:'#1A3A8F'},{l:'MASTERCARD',s:'MC Connect · Dispute Management',c:'#B22222'},{l:'AMEX',s:'American Express · Dispute Portal',c:'#006DB7'},{l:'DISCOVER',s:'Discover · Network Filing',c:'#B45309'}].map(n=>{
+          const netKey = n.l==='VISA'?'visa':n.l==='MASTERCARD'?'master':n.l==='AMEX'?'amex':'discover'
           const count = filedCases.filter(o=>{const net=(o.network||'').toLowerCase();return n.l==='VISA'?net.includes('visa'):n.l==='MASTERCARD'?net.includes('master'):n.l==='AMEX'?(net.includes('amex')||net.includes('american')):net.includes('discover')}).length
+          const isActive = fileNetFilter === netKey
           return (
-            <div key={n.l} className="border border-stone-300 px-4 py-5" style={{background:'#FAF7F1'}}>
-              <div className="mono-font text-[10px] tracking-widest mb-2" style={{color:n.c}}>{n.l}</div>
-              <div className="display-font text-stone-500 text-[12px] leading-snug">{n.s}</div>
-              <div className="mono-font text-[9px] text-stone-400 mt-3 tracking-widest">{count > 0 ? `${count} FILED` : 'NO CASES YET'}</div>
-            </div>
+            <button key={n.l} onClick={() => setFileNetFilter(isActive ? '' : netKey)}
+              className="border px-4 py-5 text-left transition-colors w-full"
+              style={{background: isActive ? '#1A1814' : '#FAF7F1', borderColor: isActive ? '#1A1814' : '#D1CCBB', cursor:'pointer'}}>
+              <div className="mono-font text-[10px] tracking-widest mb-2" style={{color: isActive ? '#F5F1EA' : n.c}}>{n.l}</div>
+              <div className="display-font text-[12px] leading-snug" style={{color: isActive ? '#D4CCBC' : '#78716C'}}>{n.s}</div>
+              <div className="mono-font text-[9px] mt-3 tracking-widest" style={{color: isActive ? '#A8A29E' : '#A8A29E'}}>{count > 0 ? `${count} FILED${isActive?' · FILTERING':''}` : 'NO CASES YET'}</div>
+            </button>
           )
         })}
       </div>
@@ -11518,6 +11559,10 @@ ${'═'.repeat(64)}`
             if (!fileSearch.trim()) return true
             const q = fileSearch.toLowerCase()
             return (o.id||'').toLowerCase().includes(q)||(o.merchant||'').toLowerCase().includes(q)||(o.reasonCode||'').toLowerCase().includes(q)||(o.network||'').toLowerCase().includes(q)
+          }).filter(o => {
+            if (!fileNetFilter) return true
+            const net = (o.network||'').toLowerCase()
+            return (fileNetFilter==='visa'&&net.includes('visa'))||(fileNetFilter==='master'&&net.includes('master'))||(fileNetFilter==='amex'&&(net.includes('amex')||net.includes('american')))||(fileNetFilter==='discover'&&net.includes('discover'))
           })
           return filtered
         })().length === 0 && filedCases.length === 0 ? (
@@ -11537,6 +11582,10 @@ ${'═'.repeat(64)}`
             if (!fileSearch.trim()) return true
             const q = fileSearch.toLowerCase()
             return (o.id||'').toLowerCase().includes(q)||(o.merchant||'').toLowerCase().includes(q)||(o.reasonCode||'').toLowerCase().includes(q)||(o.network||'').toLowerCase().includes(q)
+          }).filter(o => {
+            if (!fileNetFilter) return true
+            const net = (o.network||'').toLowerCase()
+            return (fileNetFilter==='visa'&&net.includes('visa'))||(fileNetFilter==='master'&&net.includes('master'))||(fileNetFilter==='amex'&&(net.includes('amex')||net.includes('american')))||(fileNetFilter==='discover'&&net.includes('discover'))
           })
           return filtered.length === 0 ? (
             <div className="px-5 py-8 text-center mono-font text-[10px] text-stone-400 tracking-widest">NO CASES MATCH FILTER</div>
@@ -11567,7 +11616,7 @@ ${'═'.repeat(64)}`
                 <div key={o.id} className="px-5 py-3 border-b border-stone-100">
                   <div className="grid items-center px-5" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
                     <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
-                    <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                    <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}{o.filedBy && <span className="ml-1 text-stone-300" title="Filed by">[{o.filedBy}]</span>}</span>
                     <span className="display-font text-sm text-stone-800 truncate">{o.merchant||'—'}</span>
                     <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
                     <span className="mono-font text-[10px] font-bold" style={{color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
@@ -11599,7 +11648,31 @@ ${'═'.repeat(64)}`
                       <span className="mono-font text-[8px] px-2 py-0.5 font-bold" style={{background:o.status==='won'?'#064E3B':o.status==='lost'?'#7F1D1D':o.status==='pending_arb'?'#4C1D95':'#57534E',color:o.status==='won'?'#D1FAE5':o.status==='lost'?'#FEE2E2':o.status==='pending_arb'?'#EDE9FE':'#E7E2D9'}}>{TERMINAL[o.status]}</span>
                     )}
                     {isTerminal && <button onClick={() => updateOutcome(o.id,'filed')} className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 transition-colors">↩</button>}
+                  <button onClick={() => { if (fileNoteOpen===o.id) { setFileNoteOpen(null) } else { setFileNoteOpen(o.id); setFileNoteDraft(o.note||'') } }}
+                    className="mono-font text-[8px] px-2 py-0.5 border transition-colors"
+                    style={{borderColor: o.note ? '#92400E' : '#D4CCBC', color: o.note ? '#92400E' : '#A8A29E', background: fileNoteOpen===o.id ? '#FFFBEB' : 'transparent'}}>
+                    {o.note ? '📝 NOTE' : '+ NOTE'}
+                  </button>
                   </div>
+                  {fileNoteOpen === o.id && (
+                    <div className="mt-2 pt-2 border-t border-stone-200">
+                      <textarea value={fileNoteDraft} onChange={e=>setFileNoteDraft(e.target.value)}
+                        placeholder="Case notes, response strategy, adjuster contact..."
+                        className="w-full display-font text-sm text-stone-700 resize-none border border-stone-300 px-3 py-2 focus:outline-none focus:border-stone-500"
+                        style={{background:'#FEFCF9',minHeight:'72px'}} />
+                      <div className="flex gap-2 mt-1">
+                        <button onClick={() => { updateOutcome(o.id, o.status, { note: fileNoteDraft }); setFileNoteOpen(null) }}
+                          className="mono-font text-[9px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-700 hover:text-stone-50 transition-colors">
+                          SAVE NOTE
+                        </button>
+                        {o.note && <button onClick={() => { updateOutcome(o.id, o.status, { note: '' }); setFileNoteOpen(null) }}
+                          className="mono-font text-[9px] tracking-widest px-3 py-1 border border-red-300 text-red-400 hover:bg-red-50 transition-colors">
+                          CLEAR
+                        </button>}
+                        <button onClick={() => setFileNoteOpen(null)} className="mono-font text-[9px] text-stone-400 hover:text-stone-700 px-2">cancel</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
