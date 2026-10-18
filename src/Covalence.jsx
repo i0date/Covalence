@@ -3110,6 +3110,15 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [mchRepDeadline, setMchRepDeadline]                 = useState('')
   const [mchSubmitDate, setMchSubmitDate]                   = useState('')
   const [mchTrackingRef, setMchTrackingRef]                 = useState('')
+  // Step 05 — Outcome state
+  const [mchOutcome, setMchOutcome]                         = useState('')   // 'won'|'lost'|'pre_arb'|'no_response'
+  const [mchOutcomeDate, setMchOutcomeDate]                 = useState('')
+  const [mchRecoveryAmt, setMchRecoveryAmt]                 = useState('')
+  const [mchPreArbLetter, setMchPreArbLetter]               = useState(null)
+  const [mchPreArbLoading, setMchPreArbLoading]             = useState(false)
+  const [mchPreArbError, setMchPreArbError]                 = useState(null)
+  const [mchPreArbCopied, setMchPreArbCopied]               = useState(false)
+  const [mchAcqEmailCopied, setMchAcqEmailCopied]           = useState(false)
 
   // ── Case status lifecycle tracker ─────────────────────────────────────────
   const CASE_STATUS_STAGES = [
@@ -3797,6 +3806,62 @@ Return ONLY valid JSON:
       setMchRepLetter(data.content.filter(b => b.type === 'text').map(b => b.text).join('').trim())
     } catch (e) { setMchRepLetterError('Letter failed: ' + e.message) }
     finally { setMchRepLetterLoading(false) }
+  }
+
+  // ── Pre-Arb response letter (merchant mode) ──────────────────────────────
+  const generatePreArbLetter = async () => {
+    setMchPreArbLoading(true); setMchPreArbError(null); setMchPreArbLetter(null)
+    const prompt = 'You are a chargeback representment expert. The merchant won the initial representment but the issuer has escalated to Pre-Arbitration (second chargeback). Draft a formal Pre-Arbitration response letter from the merchant to their acquirer.\n\n'
+      + 'CASE DETAILS:\n'
+      + 'Merchant: ' + (merchant || 'N/A') + '\n'
+      + 'Network: ' + (network || 'Visa') + '\n'
+      + 'Reason Code: ' + (mchReasonCode || 'N/A') + '\n'
+      + 'Amount: ' + (amount || 'N/A') + ' ' + (currency || 'CAD') + '\n'
+      + 'Order ID: ' + (mchOrderId || 'N/A') + '\n'
+      + 'Original Claim: ' + (complaint || 'N/A') + '\n'
+      + (mchResult ? 'Original Defence: ' + mchResult.rebuttal_strategy + '\n' : '')
+      + '\nDraft a firm Pre-Arbitration response (250-350 words) arguing why the issuer\'s escalation is unfounded. Cite the original representment evidence. Merchant speaks as "we". Return ONLY the letter text.'
+    try {
+      const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 800, messages: [{ role: 'user', content: prompt }] }) })
+      if (!res.ok) throw new Error('API ' + res.status)
+      const data = await res.json()
+      setMchPreArbLetter(data.content.filter(b => b.type === 'text').map(b => b.text).join('').trim())
+    } catch (e) { setMchPreArbError('Pre-Arb letter failed: ' + e.message) }
+    finally { setMchPreArbLoading(false) }
+  }
+
+  // Acquirer submission cover email
+  const mchAcqSubmissionEmail = () => {
+    const net = (network || 'Visa').charAt(0).toUpperCase() + (network || 'visa').slice(1)
+    const code = mchReasonCode || '[REASON CODE]'
+    const ref = mchTrackingRef || '[ACQUIRER REF]'
+    const dl = mchRepDeadline ? new Date(mchRepDeadline + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '[DEADLINE]'
+    return `Subject: Chargeback Representment — ${net} ${code} — ${merchant || '[MERCHANT]'} — Ref ${ref}
+
+Dear ${mchAcquirer || '[Acquirer Name]'} Dispute Team,
+
+Please find attached our representment package for the following chargeback:
+
+  Merchant:     ${merchant || '[Merchant Name]'}
+  Network:      ${net}
+  Reason Code:  ${code}
+  Amount:       ${amount || '[AMOUNT]'} ${currency || 'CAD'}
+  Order ID:     ${mchOrderId || '[ORDER ID]'}
+  Acquirer Ref: ${ref}
+  Your Deadline: ${dl}
+
+Included in this package:
+  • Representment rebuttal letter
+  • Transaction authorization record and AVS/CVV response
+  • ${mchDeliveryConfirmed === 'yes' ? 'Confirmed delivery documentation' : 'Customer communication logs'}
+  • ${mchThreeDS === 'passed' ? '3DS authentication confirmation (liability shift applies)' : 'IP address and device fingerprint logs'}
+  • Terms and conditions accepted at checkout
+
+Please confirm receipt and log under the reference above. We are available to provide supplementary materials if required.
+
+Yours faithfully,
+${merchant || '[Merchant Name]'} — Disputes Team`
   }
 
   // ── CBR calculations (merchant mode) ──────────────────────────────────────
@@ -5110,6 +5175,180 @@ Return ONLY valid JSON:
               </div>
               <div className="display-font text-emerald-700 text-[12px] mt-1 italic">
                 Issuer decision typically arrives 30–75 days after submission. Track the outcome in Step 05 below.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Step 05 — Acquirer Submission Email ── */}
+        <div className="section-divider" />
+        <div>
+          <div className="flex items-baseline gap-3 mb-2">
+            <span className="mono-font text-xs text-stone-500">05</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Acquirer Submission Email</h2>
+          </div>
+          <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
+            Cover email to send to your acquirer/processor alongside the representment package.
+          </p>
+          <div className="border border-stone-900">
+            <div className="bg-stone-900 px-4 py-3 flex items-center justify-between">
+              <div className="mono-font text-[10px] tracking-widest text-stone-400">ACQUIRER SUBMISSION EMAIL</div>
+              <button onClick={() => { navigator.clipboard.writeText(mchAcqSubmissionEmail()); setMchAcqEmailCopied(true); setTimeout(() => setMchAcqEmailCopied(false), 2000) }}
+                className="mono-font text-[10px] flex items-center gap-1.5 text-stone-400 hover:text-stone-200 transition-colors">
+                {mchAcqEmailCopied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
+              </button>
+            </div>
+            <div className="bg-white p-5">
+              {mchAcqSubmissionEmail().split('\n').map((line, i) => (
+                <p key={i} className={'display-font text-stone-800 text-[13px] leading-relaxed ' + (line === '' ? 'mt-2' : '')}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap' }}>{line || '\u00A0'}</p>
+              ))}
+            </div>
+            <div className="bg-stone-50 px-4 py-2 border-t border-stone-200 mono-font text-[9px] text-stone-400">
+              Fill acquirer name, deadline, and tracking ref in Step 04 to auto-populate this template.
+            </div>
+          </div>
+        </div>
+
+        {/* ── Step 06 — Outcome Tracker ── */}
+        <div className="section-divider" />
+        <div>
+          <div className="flex items-baseline gap-3 mb-2">
+            <span className="mono-font text-xs text-stone-500">06</span>
+            <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Outcome Tracker</h2>
+          </div>
+          <p className="display-font text-stone-500 text-[15px] mb-6 ml-7" style={{ lineHeight: '1.5' }}>
+            Log the issuer decision when it arrives. Outcomes are saved to your case tracker and inform your chargeback win rate.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label className="input-label">Issuer Decision</label>
+              <div className="flex flex-wrap gap-0">
+                {[
+                  { id: 'won',         label: 'WON — REVERSED',   color: '#064E3B', bg: '#D1FAE5' },
+                  { id: 'lost',        label: 'LOST — UPHELD',    color: '#7F1D1D', bg: '#FEE2E2' },
+                  { id: 'pre_arb',     label: 'PRE-ARB ESCALATED', color: '#4C1D95', bg: '#EDE9FE' },
+                  { id: 'no_response', label: 'NO RESPONSE (WIN)', color: '#1E3A5F', bg: '#DBEAFE' },
+                ].map(opt => (
+                  <button key={opt.id} onClick={() => setMchOutcome(opt.id)}
+                    className="network-btn"
+                    style={mchOutcome === opt.id ? { background: opt.color, color: opt.bg, borderColor: opt.color } : {}}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="input-label">Decision Date</label>
+              <input type="date" value={mchOutcomeDate} onChange={e => setMchOutcomeDate(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
+            </div>
+          </div>
+          {(mchOutcome === 'won' || mchOutcome === 'no_response') && (
+            <div className="mb-6">
+              <label className="input-label">Amount Recovered</label>
+              <input type="text" value={mchRecoveryAmt} onChange={e => setMchRecoveryAmt(e.target.value)}
+                placeholder={amount || '0.00'} className="input-field" style={{ maxWidth: '200px' }} />
+            </div>
+          )}
+          {mchOutcome && (
+            <button
+              onClick={() => {
+                const id = 'MCH-' + Date.now().toString(36).toUpperCase()
+                const rec = {
+                  id, mode: 'merchant', status: mchOutcome === 'pre_arb' ? 'pre_arb' : mchOutcome === 'won' || mchOutcome === 'no_response' ? 'won' : 'lost',
+                  date: mchOrderDate || new Date().toISOString().split('T')[0],
+                  merchant: merchant || '', amount: amount || '', currency: currency || 'CAD',
+                  reasonCode: mchReasonCode || '', network: network || 'visa',
+                  acquirer: mchAcquirer || '', trackingRef: mchTrackingRef || '',
+                  submittedAt: mchSubmitDate || '', outcomeDate: mchOutcomeDate || '',
+                  recoveryAmt: mchRecoveryAmt || amount || '',
+                  winProbability: mchResult?.win_probability || '',
+                  deliveryConfirmed: mchDeliveryConfirmed === 'yes',
+                  threeDS: mchThreeDS, verdict: mchOutcome === 'won' || mchOutcome === 'no_response' ? 'WON' : mchOutcome === 'pre_arb' ? 'PRE_ARB' : 'LOST',
+                  updatedAt: new Date().toISOString(),
+                }
+                saveOutcomes([...outcomes.filter(o => o.id !== id), rec])
+              }}
+              className="flex items-center gap-3 px-6 py-4 bg-stone-900 text-stone-50 mono-font text-xs tracking-widest hover:bg-stone-800 transition-all group mb-6">
+              <span>SAVE OUTCOME TO TRACKER</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+          )}
+
+          {/* Pre-Arb escalation workflow */}
+          {mchOutcome === 'pre_arb' && (
+            <div className="border border-purple-700 bg-purple-50 p-6 space-y-4">
+              <div className="mono-font text-[9px] tracking-widest text-purple-900 mb-2">⚠ PRE-ARBITRATION ESCALATION</div>
+              <p className="display-font text-purple-900 text-[14px] leading-relaxed">
+                The issuer has filed a second chargeback. You now have a second opportunity to respond — typically 30 days from the escalation date (Visa) or 45 days (Mastercard). Confirm your deadline with your acquirer immediately.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px]">
+                <div className="mono-font text-purple-800 border border-purple-200 bg-white p-3">
+                  <div className="text-[9px] tracking-widest mb-1 text-purple-500">VISA PRE-ARB DEADLINE</div>
+                  {mchOutcomeDate
+                    ? (() => { const d = new Date(mchOutcomeDate + 'T12:00:00'); d.setDate(d.getDate() + 30); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' (30d)' })()
+                    : 'Enter decision date above'}
+                </div>
+                <div className="mono-font text-purple-800 border border-purple-200 bg-white p-3">
+                  <div className="text-[9px] tracking-widest mb-1 text-purple-500">MC PRE-ARB DEADLINE</div>
+                  {mchOutcomeDate
+                    ? (() => { const d = new Date(mchOutcomeDate + 'T12:00:00'); d.setDate(d.getDate() + 45); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' (45d)' })()
+                    : 'Enter decision date above'}
+                </div>
+              </div>
+              {!mchPreArbLetter && !mchPreArbLoading && (
+                <button onClick={generatePreArbLetter}
+                  className="flex items-center gap-3 px-5 py-3 bg-purple-900 text-purple-50 mono-font text-xs tracking-widest hover:bg-purple-800 transition-all group">
+                  <FileText className="w-4 h-4" />
+                  <span>GENERATE PRE-ARB RESPONSE LETTER</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
+              {mchPreArbLoading && (
+                <div className="flex items-center gap-3 p-4 bg-white border border-purple-200">
+                  <Loader2 className="w-4 h-4 text-purple-700 animate-spin shrink-0" />
+                  <p className="display-font text-purple-700 italic text-[14px]">Drafting Pre-Arb response…</p>
+                </div>
+              )}
+              {mchPreArbError && (
+                <div className="border border-red-700 bg-red-50 p-3 mono-font text-[11px] text-red-800">{mchPreArbError}</div>
+              )}
+              {mchPreArbLetter && (
+                <div className="border border-purple-700">
+                  <div className="bg-purple-900 px-4 py-3 flex items-center justify-between">
+                    <div className="mono-font text-[10px] tracking-widest text-purple-200">PRE-ARB RESPONSE LETTER</div>
+                    <button onClick={() => { navigator.clipboard.writeText(mchPreArbLetter); setMchPreArbCopied(true); setTimeout(() => setMchPreArbCopied(false), 2000) }}
+                      className="mono-font text-[10px] flex items-center gap-1.5 text-purple-300 hover:text-purple-100 transition-colors">
+                      {mchPreArbCopied ? <><Check className="w-3 h-3" /> COPIED</> : <><Copy className="w-3 h-3" /> COPY</>}
+                    </button>
+                  </div>
+                  <div className="bg-white p-5">
+                    {mchPreArbLetter.split('\n\n').map((para, i) => (
+                      <p key={i} className={'display-font text-stone-800 text-[14px] leading-relaxed ' + (i > 0 ? 'mt-3' : '')}>{para}</p>
+                    ))}
+                  </div>
+                  <div className="bg-purple-50 px-4 py-2 border-t border-purple-200">
+                    <button onClick={generatePreArbLetter} className="mono-font text-[10px] tracking-widest text-purple-600 hover:text-purple-900 transition-colors">↺ REGENERATE</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {(mchOutcome === 'won' || mchOutcome === 'no_response') && (
+            <div className="px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
+              <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-1">✓ CHARGEBACK REVERSED</div>
+              <div className="display-font text-emerald-900 text-[15px]">
+                {mchOutcomeDate ? new Date(mchOutcomeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : 'Decision date not set'}
+                {(mchRecoveryAmt || amount) && <> · <span className="font-semibold">{mchRecoveryAmt || amount} {currency || 'CAD'} recovered</span></>}
+              </div>
+              <div className="display-font text-emerald-700 text-[12px] mt-1 italic">Outcome saved to your tracker. This win will calibrate your DFA historical win rates.</div>
+            </div>
+          )}
+          {mchOutcome === 'lost' && (
+            <div className="px-5 py-4 border border-red-700" style={{ background: '#FEF2F2' }}>
+              <div className="mono-font text-[9px] tracking-widest text-red-800 mb-1">✗ CHARGEBACK UPHELD — FUNDS DEBITED</div>
+              <div className="display-font text-red-900 text-[14px]">
+                Review the issuer decision for the specific reason. If procedural error, file a compliance case via your acquirer.
               </div>
             </div>
           )}
