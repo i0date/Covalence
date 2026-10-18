@@ -7077,7 +7077,7 @@ function computeAmountScore(a) {
 
 function scoreClaim(c, effectiveWinRates) {
   const stageMod         = computeStageModifier(c.cycleStage)
-  const baseProb         = computeRecoveryProb(c, winRateOverrides)
+  const baseProb         = computeRecoveryProb(c, effectiveWinRates)
   const recoveryProb     = parseFloat(Math.max(0.05, Math.min(0.96, baseProb + stageMod.probMod)).toFixed(2))
   const timeScore        = parseFloat(Math.min(1, computeTimeScore(c) * stageMod.timeMulti).toFixed(2))
   const amountScore      = computeAmountScore(c.amount)
