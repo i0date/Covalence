@@ -2497,6 +2497,83 @@ Return ONLY valid JSON:
                 </div>
               )}
 
+
+              {/* ── Prior Disputes Intelligence ──────────────────────────────── */}
+              {result && (() => {
+                const normMerchant = (s) => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'')
+                const thisMerchant = normMerchant(merchant)
+                // Pull from both stores
+                const deskCases = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes')||'[]') } catch { return [] } })()
+                const triageCases = (() => { try { return JSON.parse(localStorage.getItem('triage_outcomes')||'[]') } catch { return [] } })()
+                const triageArchive = (() => { try { return JSON.parse(localStorage.getItem('triage_archive')||'[]') } catch { return [] } })()
+                // Match by merchant (fuzzy: normalized contains match)
+                const matchedDesk = thisMerchant.length >= 3
+                  ? deskCases.filter(o => normMerchant(o.merchant).includes(thisMerchant) || thisMerchant.includes(normMerchant(o.merchant).substring(0,6)))
+                  : []
+                const matchedTriage = thisMerchant.length >= 3
+                  ? [...triageCases, ...triageArchive].filter(o => normMerchant(o.merchant||o.inputs?.merchant).includes(thisMerchant) || thisMerchant.includes(normMerchant((o.merchant||o.inputs?.merchant||'').substring(0,6))))
+                  : []
+                const total = matchedDesk.length + matchedTriage.length
+                if (total === 0) return null
+                const VERDICT_COLORS = { TRUE_FRAUD:'#7F1D1D', FIRST_PARTY_FRAUD:'#78350F', CONSUMER_DISPUTE:'#1E3A5F', AUTHORIZED_PUSH_PAYMENT:'#4C1D95' }
+                const VERDICT_BG     = { TRUE_FRAUD:'#FEE2E2', FIRST_PARTY_FRAUD:'#FEF3C7', CONSUMER_DISPUTE:'#DBEAFE', AUTHORIZED_PUSH_PAYMENT:'#EDE9FE' }
+                const VERDICT_SHORT  = { TRUE_FRAUD:'TRUE FRAUD', FIRST_PARTY_FRAUD:'1P FRAUD', CONSUMER_DISPUTE:'CONSUMER DISPUTE', AUTHORIZED_PUSH_PAYMENT:'APP FRAUD' }
+                // Aggregate signals
+                const allVerdicts = [
+                  ...matchedTriage.map(o => o.verdict || o.correctedVerdict),
+                  ...matchedDesk.map(o => o.verdict)
+                ].filter(Boolean)
+                const fraudCount   = allVerdicts.filter(v => v === 'TRUE_FRAUD' || v === 'AUTHORIZED_PUSH_PAYMENT').length
+                const pattern = fraudCount >= 2 ? 'REPEAT FRAUD' : fraudCount === 1 ? 'PRIOR FRAUD' : matchedDesk.filter(o=>o.status==='won').length > 0 ? 'PRIOR WIN' : 'PRIOR HISTORY'
+                const patternColor = fraudCount >= 2 ? '#7F1D1D' : fraudCount === 1 ? '#92400E' : '#1E3A5F'
+                return (
+                  <div className="border border-stone-300 mb-4" style={{ background: '#F9F6F0' }}>
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
+                      <div className="flex items-center gap-3">
+                        <span className="mono-font text-[9px] tracking-widest text-stone-500">◈ PRIOR DISPUTES</span>
+                        <span className="mono-font text-[8px] tracking-widest px-2 py-0.5 font-bold" style={{ background: patternColor, color: '#F5F1EA' }}>{pattern}</span>
+                      </div>
+                      <span className="mono-font text-[9px] text-stone-400">{total} record{total !== 1 ? 's' : ''} matched · {merchant}</span>
+                    </div>
+                    <div className="divide-y divide-stone-200">
+                      {matchedDesk.slice(0,5).map((o, i) => {
+                        const net = (o.network||'').toUpperCase().substring(0,4)
+                        const st = o.status || '—'
+                        const stColor = st === 'won' ? '#064E3B' : st === 'lost' ? '#7F1D1D' : '#57534E'
+                        return (
+                          <div key={i} className="flex items-center gap-3 px-4 py-2 flex-wrap">
+                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">{net}</span>
+                            <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant}</span>
+                            <span className="mono-font text-[9px] text-stone-500">{o.amount}</span>
+                            {o.verdict && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
+                            <span className="mono-font text-[8px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
+                            <span className="mono-font text-[8px] text-stone-300">DESK</span>
+                          </div>
+                        )
+                      })}
+                      {matchedTriage.slice(0,5).map((o, i) => {
+                        const v = o.correctedVerdict || o.verdict
+                        return (
+                          <div key={'t'+i} className="flex items-center gap-3 px-4 py-2 flex-wrap">
+                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{(o.date||o.timestamp) ? new Date(o.date||o.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">—</span>
+                            <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant || o.inputs?.merchant || '—'}</span>
+                            <span className="mono-font text-[9px] text-stone-500">{o.amount || o.inputs?.amount || '—'}</span>
+                            {v && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[v]||'#E7E2D9', color: VERDICT_COLORS[v]||'#57534E' }}>{VERDICT_SHORT[v]||v}</span>}
+                            {o.outcome && o.outcome !== 'pending' && <span className="mono-font text-[8px] font-bold uppercase text-stone-500">{o.outcome}</span>}
+                            <span className="mono-font text-[8px] text-stone-300">TRIAGE</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {total > 10 && (
+                      <div className="px-4 py-2 mono-font text-[9px] text-stone-400 border-t border-stone-200">+{total - 10} more records not shown</div>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* ── Send to Dispute Desk ── */}
               {handedOff ? (
                 <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
