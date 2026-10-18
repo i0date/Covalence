@@ -811,8 +811,8 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   const [overridePickId,  setOverridePickId]  = useState(null)
   const [triageEditDraft, setTriageEditDraft] = useState({})
 
-  // ── Platform mode: 'fi' = Financial Institution, 'ce' = Crypto Exchange ──────
-  const [platformMode, setPlatformMode] = useState('fi')
+  // ── Channel mode: 'fi' = Financial Institution/card, 'ce' = Crypto Exchange ──
+  const [triageChannelMode, setTriageChannelMode] = useState('fi')
 
   // ── Crypto Exchange (CE) mode state ─────────────────────────────────────────
   const [ceAccountType, setCeAccountType]               = useState('')
@@ -996,7 +996,7 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
                                   { bg: '#374151', text: '#D1D5DB' }
 
   // ── CE computed values ───────────────────────────────────────────────────────
-  const isCE           = platformMode === 'ce'
+  const isCE           = triageChannelMode === 'ce'
   const ceDaysSince    = ceTxDate ? Math.floor((Date.now() - new Date(ceTxDate).getTime()) / 86400000) : null
   const ceAmountNum    = parseFloat(ceAmount) || 0
   const ceSarFlagUS    = ceAmountNum >= 5000  && (ceCountry === 'us'   || ceCountry === 'both') && ceCurrency === 'USD'
@@ -1454,9 +1454,9 @@ Return ONLY valid JSON:
         {/* Platform mode toggle */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
-            <button key={m.id} onClick={() => { setPlatformMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
+            <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
-              style={{ background: platformMode === m.id ? '#1A1814' : 'transparent', color: platformMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
+              style={{ background: triageChannelMode === m.id ? '#1A1814' : 'transparent', color: triageChannelMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
               {m.label}
             </button>
           ))}
@@ -2855,7 +2855,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser }) {
+function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser, setOutcomes: setRootOutcomes }) {
   // Restore previous session so navigation away doesn't wipe in-progress analysis
   const _sess = React.useRef(loadDeskSession()).current
   const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
@@ -2916,6 +2916,7 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [merchantRepNotes, setMerchantRepNotes]             = useState({}) // {[outcomeId]: string}
 
   // ── Platform mode ─────────────────────────────────────────────────────────
+  const [supaSyncStatus, setSupaSyncStatus] = React.useState(SUPA_URL && SUPA_KEY ? 'idle' : 'disabled')
   // platformMode + setPlatformMode come as props from Covalence
 
   // ── Merchant intake state ─────────────────────────────────────────────────
@@ -3008,7 +3009,13 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
   })
   useEffect(() => {
-    localStorage.setItem('cov_outcomes', JSON.stringify(outcomes))
+    saveOutcomes(outcomes)   // writes to localStorage + notifies Multi via _covRefreshMulti
+    if (SUPA_URL && SUPA_KEY && outcomes.length > 0) {
+      setSupaSyncStatus('syncing')
+      pushCasesToSupa(outcomes)
+        .then(() => setSupaSyncStatus('synced'))
+        .catch(() => setSupaSyncStatus('error'))
+    }
   }, [outcomes])
 
   // ── Persist desk session so navigation away doesn't lose in-progress work ──
@@ -3953,8 +3960,13 @@ Return ONLY valid JSON:
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 002 — THE DISPUTE DESK</div>
-            <div className="mono-font text-xs tracking-widest text-stone-600">
-              {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+            <div className="flex items-center gap-3">
+              {supaSyncStatus === 'syncing' && <span className="mono-font text-[9px] tracking-widest text-amber-600">↻ SYNCING</span>}
+              {supaSyncStatus === 'synced'  && <span className="mono-font text-[9px] tracking-widest text-emerald-600">✓ SYNCED</span>}
+              {supaSyncStatus === 'error'   && <span className="mono-font text-[9px] tracking-widest text-red-600">✗ SYNC ERROR</span>}
+              <div className="mono-font text-xs tracking-widest text-stone-600">
+                {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
+              </div>
             </div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize: 'clamp(48px, 7vw, 88px)', letterSpacing: '-0.03em' }}>
