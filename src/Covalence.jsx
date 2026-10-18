@@ -141,7 +141,7 @@ function detectNetwork(code) {
 
 // ─── Shared storage ───────────────────────────────────────────────────────────
 function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
-function saveOutcomes(o) { try { localStorage.setItem('cov_outcomes', JSON.stringify(o)) } catch {} }
+function saveOutcomes(o) { try { localStorage.setItem('cov_outcomes', JSON.stringify(o)); if (typeof window._covRefreshMulti === 'function') window._covRefreshMulti() } catch {} }
 function loadDeskSession() { try { return JSON.parse(sessionStorage.getItem('cov_desk_session') || 'null') || {} } catch { return {} } }
 function loadSettings()  { try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } } }
 function saveSettings(s) { try { localStorage.setItem('cov_settings', JSON.stringify(s)) } catch {} }
@@ -10659,7 +10659,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [outcomes, setLiveOutcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return _propOutcomes || [] }
   })
-  // Poll every 10 s for new queued cases added in DeskView
+  // Sync immediately via storage event, plus 30s fallback poll
   React.useEffect(() => {
     const refresh = () => {
       try {
@@ -10667,14 +10667,21 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
         setLiveOutcomes(fresh)
       } catch {}
     }
-    const id = setInterval(refresh, 10000)
-    return () => clearInterval(id)
+    // Same-tab writes don't fire storage events, so we also expose a manual trigger
+    window._covRefreshMulti = refresh
+    window.addEventListener('storage', (e) => { if (e.key === 'cov_outcomes') refresh() })
+    const id = setInterval(refresh, 30000)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('storage', refresh)
+      delete window._covRefreshMulti
+    }
   }, [])
   // Wrapper that keeps localStorage + App state in sync
   const setOutcomes = React.useCallback((updater) => {
     setLiveOutcomes(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      try { localStorage.setItem('cov_outcomes', JSON.stringify(next)) } catch {}
+      try { localStorage.setItem('cov_outcomes', JSON.stringify(next)); if (typeof window._covRefreshMulti === 'function') window._covRefreshMulti() } catch {}
       if (setAppOutcomes) setAppOutcomes(next)
       return next
     })
@@ -11613,8 +11620,8 @@ ${'═'.repeat(64)}`
               const isTerminal = !!TERMINAL[o.status]
               const netColor = (o.network||'').toLowerCase().includes('visa')?'#1A3A8F':(o.network||'').toLowerCase().includes('master')?'#B22222':'#78716C'
               return (
-                <div key={o.id} className="px-5 py-3 border-b border-stone-100">
-                  <div className="grid items-center px-5" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
+                <div key={o.id} className="border-b border-stone-100">
+                  <div className="grid items-center px-5 py-3" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
                     <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
                     <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}{o.filedBy && <span className="ml-1 text-stone-300" title="Filed by">[{o.filedBy}]</span>}</span>
                     <span className="display-font text-sm text-stone-800 truncate">{o.merchant||'—'}</span>
