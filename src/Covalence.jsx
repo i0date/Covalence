@@ -5795,8 +5795,8 @@ Return ONLY valid JSON:
                       )
                     })()}
 
-                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 200px 160px', background: '#EEE9E0' }}>
-                      {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS', ''].map(h => (
+                    <div className="grid px-4 py-2 border-b border-stone-300" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(180px,1fr)', background: '#EEE9E0' }}>
+                      {['CASE', 'DATE', 'MERCHANT', 'AMOUNT', 'REASON CODE', 'DFA', 'STATUS'].map(h => (
                         <span key={h} className="mono-font text-[10px] tracking-widest text-stone-500">{h}</span>
                       ))}
                     </div>
@@ -5930,14 +5930,14 @@ Return ONLY valid JSON:
                               </div>
                             ) : (
                               /* ── View mode ─────────────────────────────────── */
-                              <div className="grid px-4 py-3 items-center" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px 200px 160px' }}>
+                              <div className="grid px-4 py-3 items-start" style={{ gridTemplateColumns: '90px 55px minmax(0,1fr) 85px minmax(0,1fr) 44px minmax(180px,1fr)' }}>
                                 <button
                                   onClick={() => setCase360Id(prev => prev === o.id ? null : o.id)}
                                   className="mono-font text-xs text-stone-400 hover:text-stone-900 transition-colors text-left"
                                   title="Toggle case 360 view"
                                 >{o.id}</button>
                                 <span className="mono-font text-xs text-stone-500">{new Date(o.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                <span className="display-font text-sm text-stone-700 truncate pr-2">{o.merchant}</span>
+                                <span className="mono-font text-xs text-stone-800 truncate pr-2 font-medium">{o.merchant}</span>
                                 <span className="mono-font text-xs text-stone-600">{o.amount}</span>
                                 <div className="pr-2">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -11744,7 +11744,7 @@ ${'═'.repeat(64)}`
                   <div className="grid items-center px-5 py-3" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
                     <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
                     <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}{o.filedBy && <span className="ml-1 text-stone-300" title="Filed by">[{o.filedBy}]</span>}</span>
-                    <span className="display-font text-sm text-stone-800 truncate">{o.merchant||'—'}</span>
+                    <span className="mono-font text-[11px] text-stone-800 truncate font-medium">{o.merchant||'—'}</span>
                     <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
                     <span className="mono-font text-[10px] font-bold" style={{color:netColor}}>{(o.network||'—').toUpperCase().substring(0,4)}</span>
                     <div className="flex gap-1">
@@ -11752,7 +11752,7 @@ ${'═'.repeat(64)}`
                       {(o.docs||[]).length > 0 && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-stone-700 text-stone-50">{(o.docs||[]).length}📎</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 mt-2 flex-wrap">
+                  <div className="flex items-center gap-1 px-5 pb-2 flex-wrap">
                     {CB_STAGES.map((s, i) => {
                       const isPast = curIdx > i && !isTerminal
                       const isCurrent = curIdx === i && !isTerminal
