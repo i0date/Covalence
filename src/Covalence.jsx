@@ -11571,7 +11571,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                 <div className="px-5 py-3 flex items-center gap-3 flex-wrap">
                   <input type="checkbox" checked={selectedIds.includes(o.id)} onChange={()=>toggleSelect(o.id)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#1C1917',flexShrink:0}}/>
                   <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
-                  <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                  <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 truncate">{o.merchant || '—'}</span>
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g,' ')}</span>
                   <span className="mono-font text-[9px] text-stone-400">{o.date?new Date(o.date).toLocaleDateString('en-CA'):''}</span>
@@ -11668,7 +11668,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
               <div key={o.id}>
                 <div className="px-5 py-3 flex items-center gap-4 flex-wrap">
                   <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
-                  <span className="display-font text-stone-900 text-sm flex-1">{o.merchant || '—'}</span>
+                  <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 truncate">{o.merchant || '—'}</span>
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
                   <button onClick={() => setActiveSection('desk')} className="mono-font text-[9px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors">REVIEW</button>
