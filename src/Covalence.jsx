@@ -482,8 +482,8 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
   const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
-  const inProg   = active.filter(o => ['filed','representment','pre_arb'].includes(o.status))
-  const pending  = active.filter(o => o.status === 'pending' || o.status === 'queued')
+  const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
+  const pending  = active.filter(o => ['pending','queued','received'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
   const urgent   = recent.filter(o => o.mode !== 'merchant' && o.provCreditDate && !['won','lost','withdrawn'].includes(o.status)).filter(o => {
     const d = daysUntil(addBusinessDays(o.provCreditDate, 45)); return d !== null && d >= 0 && d <= 7
@@ -496,7 +496,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
   const stats = [
     { label:'OPEN CASES',  value: (pending.length + inProg.length).toString(), sub:'last 60 days' },
     { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—',       sub: resolved.length + ' resolved' },
-    { label:'IN PROGRESS', value: inProg.length.toString(),                     sub:'filed / representment' },
+    { label:'IN PROGRESS', value: inProg.length.toString(),                     sub: platformMode === 'merchant' ? 'rebuttal prep / submitted' : 'filed / representment' },
     { label:'RESOLVED',    value: resolved.length.toString(),                   sub:'won + lost' },
   ]
 
@@ -775,6 +775,7 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
 
   // ── 02 Claim & context ──────────────────────────────────────────────────────
   const [flaggedBy, setFlaggedBy]           = useState('')
+  const [claimType, setClaimType]           = useState('')
   const [customerReason, setCustomerReason] = useState('')
 
   // ── 03 Risk signals — cardholder ────────────────────────────────────────────
@@ -1102,6 +1103,7 @@ ACCOUNT & TRANSACTION:
 
 CLAIM:
 - How flagged: ${flaggedBy || 'Not provided'}
+- Claim type (agent hint): ${claimType || 'Not specified'}
 - Customer's stated reason: ${customerReason}
 
 CARDHOLDER RISK SIGNALS:
@@ -1831,6 +1833,37 @@ Return ONLY valid JSON:
                   <option>System alert (fraud detection)</option>
                   <option>Proactive outreach (bank contacted customer first)</option>
                   <option>Chargeback / representment queue</option>
+                </select>
+              </div>
+              <div>
+                <label className="input-label">Dispute / Claim Type <span className="mono-font text-[9px] text-stone-400">(optional — helps AI routing)</span></label>
+                <select value={claimType} onChange={e => setClaimType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
+                  <option value="">Not specified — let AI determine</option>
+                  <optgroup label="Unauthorized / Fraud">
+                    <option value="unauth_card_present">Unauthorized — card present (lost / stolen)</option>
+                    <option value="unauth_cnp">Unauthorized — card not present (online / CNP)</option>
+                    <option value="ato">Account takeover (ATO)</option>
+                    <option value="counterfeit">Counterfeit / skimming</option>
+                  </optgroup>
+                  <optgroup label="Consumer Dispute">
+                    <option value="non_receipt">Non-receipt of goods or services</option>
+                    <option value="not_as_described">Item not as described / misrepresentation</option>
+                    <option value="cancelled_sub">Cancelled subscription / credit not processed</option>
+                    <option value="billing_error">Billing / processing error</option>
+                    <option value="duplicate_charge">Duplicate charge</option>
+                  </optgroup>
+                  <optgroup label="Scam / APP Fraud">
+                    <option value="romance_scam">Romance scam</option>
+                    <option value="investment_scam">Investment / pig-butchering scam</option>
+                    <option value="impersonation">Impersonation scam (bank / gov / tech support)</option>
+                    <option value="fake_invoice">Fake invoice / supplier fraud</option>
+                    <option value="grandparent_scam">Grandparent / emergency scam</option>
+                    <option value="other_app">Other authorized push payment (APP) scam</option>
+                  </optgroup>
+                  <optgroup label="First-Party">
+                    <option value="fp_friendly_fraud">Suspected friendly fraud / chargeback abuse</option>
+                    <option value="fp_return_abuse">Return abuse</option>
+                  </optgroup>
                 </select>
               </div>
               <div>
@@ -5339,19 +5372,27 @@ Return ONLY valid JSON:
             <div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <span className="mono-font text-xs text-stone-500">{platformMode === 'merchant' ? '05' : '07'}</span>
-                <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Dispute Tracker</h2>
+                <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>
+                  {platformMode === 'merchant' ? 'Chargeback Tracker' : 'Dispute Tracker'}
+                </h2>
                 <div className="flex items-center gap-3 ml-auto flex-wrap">
                   <span className="mono-font text-xs text-stone-400">{settings.trackerWindowDays || 60}-DAY WINDOW · {filteredTrackerOutcomes.length}{trackerFilter !== 'all' || trackerSearch ? ` / ${trackerOutcomes.length}` : ''} CASE{filteredTrackerOutcomes.length !== 1 ? 'S' : ''}</span>
-                  <button onClick={() => setShowSettings(v => !v)} className={`mono-font text-[10px] tracking-widest px-2.5 py-1 border transition-colors ${showSettings ? 'border-stone-900 bg-stone-900 text-stone-50' : 'border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700'}`}>
-                    ⚙ THRESHOLDS
-                  </button>
+                  {platformMode !== 'merchant' && (
+                    <button onClick={() => setShowSettings(v => !v)} className={`mono-font text-[10px] tracking-widest px-2.5 py-1 border transition-colors ${showSettings ? 'border-stone-900 bg-stone-900 text-stone-50' : 'border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700'}`}>
+                      ⚙ THRESHOLDS
+                    </button>
+                  )}
                 </div>
               </div>
 
               {trackerOutcomes.length === 0 && (
                 <div className="border border-dashed border-stone-300 py-10 text-center mt-6" style={{ background: '#FAF7F1' }}>
                   <p className="mono-font text-xs tracking-widest text-stone-400 mb-2">NO CASES LOGGED YET</p>
-                  <p className="display-font text-stone-500 italic text-sm">Outcomes recorded in the Dispute Desk will appear here once logged.</p>
+                  <p className="display-font text-stone-500 italic text-sm">
+                    {platformMode === 'merchant'
+                      ? 'Log a chargeback received from your acquirer above — it will appear here for tracking.'
+                      : 'Outcomes recorded in the Dispute Desk will appear here once logged.'}
+                  </p>
                 </div>
               )}
 
@@ -5413,10 +5454,10 @@ Return ONLY valid JSON:
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
-                  { label: 'TOTAL (60 DAYS)', value: trackerOutcomes.length,                         sub: 'cases analyzed'                            },
-                  { label: 'IN PROGRESS',      value: inProgressCount,                               sub: `filed / invstg / repmt / pre-arb`         },
+                  { label: 'TOTAL (60 DAYS)', value: trackerOutcomes.length,                         sub: platformMode === 'merchant' ? 'chargebacks received' : 'cases analyzed' },
+                  { label: 'IN PROGRESS',      value: inProgressCount,                               sub: platformMode === 'merchant' ? 'rebuttal prep / submitted' : 'filed / invstg / repmt / pre-arb' },
                   { label: 'WIN RATE',         value: winRate !== null ? `${winRate}%` : '—',        sub: `${resolvedCount} closed`                   },
-                  { label: 'WON / LOST',       value: `${wonCount} / ${lostCount}`,                  sub: `${withdrawnCount} wd · ${resolvedStatusCount} resolved` },
+                  { label: platformMode === 'merchant' ? 'WON / LOST' : 'WON / LOST', value: `${wonCount} / ${lostCount}`, sub: platformMode === 'merchant' ? `${withdrawnCount} conceded · ${resolvedStatusCount} resolved` : `${withdrawnCount} wd · ${resolvedStatusCount} resolved` },
                 ].map(s => (
                   <div key={s.label} className="border border-stone-200 p-4" style={{ background: '#FAF7F1' }}>
                     <div className="mono-font text-xs tracking-widest text-stone-400 mb-1">{s.label}</div>
@@ -5528,14 +5569,22 @@ Return ONLY valid JSON:
               {/* Filter / search bar */}
               <div className="mb-3 flex items-center gap-2 flex-wrap">
                 <div className="flex border border-stone-200 overflow-x-auto" style={{ borderRadius: 0, WebkitOverflowScrolling: 'touch' }}>
-                  {[
-                    { id: 'all',         label: 'ALL' },
-                    { id: 'queued',      label: 'IN QUEUE' },
-                    { id: 'in_progress', label: 'IN PROGRESS' },
-                    { id: 'won',         label: 'WON' },
-                    { id: 'lost',        label: 'LOST' },
-                    { id: 'fundable',    label: '★ FUNDABLE' },
-                  ].map(tab => (
+                  {(platformMode === 'merchant'
+                    ? [
+                        { id: 'all',          label: 'ALL' },
+                        { id: 'in_progress',  label: 'IN PROGRESS' },
+                        { id: 'won',          label: 'WON' },
+                        { id: 'lost',         label: 'LOST' },
+                      ]
+                    : [
+                        { id: 'all',          label: 'ALL' },
+                        { id: 'queued',       label: 'IN QUEUE' },
+                        { id: 'in_progress',  label: 'IN PROGRESS' },
+                        { id: 'won',          label: 'WON' },
+                        { id: 'lost',         label: 'LOST' },
+                        { id: 'fundable',     label: '★ FUNDABLE' },
+                      ]
+                  ).map(tab => (
                     <button
                       key={tab.id}
                       onClick={() => setTrackerFilter(tab.id)}
