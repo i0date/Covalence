@@ -141,7 +141,23 @@ function detectNetwork(code) {
 
 // ─── Shared storage ───────────────────────────────────────────────────────────
 function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
-function saveOutcomes(o) { try { localStorage.setItem('cov_outcomes', JSON.stringify(o)); if (typeof window._covRefreshMulti === 'function') window._covRefreshMulti() } catch {} }
+function saveOutcomes(o) {
+  try {
+    // Merge with whatever another tab may have written concurrently (last-updatedAt wins per case)
+    const current = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+    const merged = mergeCases(current, o)
+    window._covSaving = true
+    localStorage.setItem('cov_outcomes', JSON.stringify(merged))
+    // Notify all same-tab subscribers (cross-tab gets the storage event automatically)
+    if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
+    setTimeout(() => { window._covSaving = false }, 0)
+  } catch { window._covSaving = false }
+}
+function registerOutcomeSubscriber(fn) {
+  if (!window._covSubscribers) window._covSubscribers = new Set()
+  window._covSubscribers.add(fn)
+  return () => window._covSubscribers.delete(fn)
+}
 function loadDeskSession() { try { return JSON.parse(sessionStorage.getItem('cov_desk_session') || 'null') || {} } catch { return {} } }
 function loadSettings()  { try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } } }
 function saveSettings(s) { try { localStorage.setItem('cov_settings', JSON.stringify(s)) } catch {} }
@@ -308,7 +324,7 @@ function LoginGate({ onLogin }) {
         body: JSON.stringify({ id: crypto.randomUUID(), name:userData.name, email:userData.email, entered_at:userData.at, user_agent:navigator.userAgent }),
       }).catch(() => {})
     }
-    try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); localStorage.setItem('cov_outcomes', JSON.stringify(mergeCases(local,remote))) } } catch {}
+    try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); saveOutcomes(mergeCases(local,remote)) } } catch {}
     localStorage.setItem('cov_user', JSON.stringify(userData))
     setLoading(false)
     onLogin(userData)
@@ -360,10 +376,25 @@ export default function Covalence() {
   const [dfaQueue,      setDfaQueue]      = useState([])
   const [duoHandoff,    setDuoHandoff]    = useState(null)
 
+  // Guard: if outcomes came from a localStorage read, don't write back (avoids circular loop)
+  const _skipSaveRef = useRef(false)
   useEffect(() => {
+    if (_skipSaveRef.current) { _skipSaveRef.current = false; return }
     saveOutcomes(outcomes)
     if (SUPA_URL && SUPA_KEY && outcomes.length > 0) pushCasesToSupa(outcomes).catch(()=>{})
   }, [outcomes])
+  // Subscribe to outcomes changes from any view in this tab + cross-tab storage events
+  useEffect(() => {
+    const refresh = (merged) => {
+      const fresh = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      _skipSaveRef.current = true
+      setOutcomes(fresh)
+    }
+    const unregister = registerOutcomeSubscriber(refresh)
+    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
+    window.addEventListener('storage', storageHandler)
+    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
+  }, [])
   useEffect(() => { saveSettings(settings) }, [settings])
   useEffect(() => {
     if (!SUPA_URL || !SUPA_KEY) return
@@ -10671,29 +10702,22 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [outcomes, setLiveOutcomes] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return _propOutcomes || [] }
   })
-  // Sync immediately via storage event, plus 30s fallback poll
+  // Subscribe to all outcome changes (same-tab and cross-tab)
   React.useEffect(() => {
-    const refresh = () => {
-      try {
-        const fresh = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-        setLiveOutcomes(fresh)
-      } catch {}
+    const refresh = (merged) => {
+      const fresh = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      setLiveOutcomes(fresh)
     }
-    // Same-tab writes don't fire storage events, so we also expose a manual trigger
-    window._covRefreshMulti = refresh
-    window.addEventListener('storage', (e) => { if (e.key === 'cov_outcomes') refresh() })
-    const id = setInterval(refresh, 30000)
-    return () => {
-      clearInterval(id)
-      window.removeEventListener('storage', refresh)
-      delete window._covRefreshMulti
-    }
+    const unregister = registerOutcomeSubscriber(refresh)
+    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
+    window.addEventListener('storage', storageHandler)
+    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
   }, [])
   // Wrapper that keeps localStorage + App state in sync
   const setOutcomes = React.useCallback((updater) => {
     setLiveOutcomes(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      try { localStorage.setItem('cov_outcomes', JSON.stringify(next)); if (typeof window._covRefreshMulti === 'function') window._covRefreshMulti() } catch {}
+      try { saveOutcomes(next) } catch {}
       if (setAppOutcomes) setAppOutcomes(next)
       return next
     })
@@ -11455,17 +11479,24 @@ function FileView({ setActiveSection, setAppOutcomes }) {
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
 
   React.useEffect(() => {
-    try {
-      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-      setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
-    } catch {}
+    const refresh = (merged) => {
+      try {
+        const all = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+        setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      } catch {}
+    }
+    refresh() // initial load
+    const unregister = registerOutcomeSubscriber(refresh)
+    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
+    window.addEventListener('storage', storageHandler)
+    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
   }, [])
 
   const updateOutcome = (id, newStatus, patch = {}) => {
     try {
       const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString(), ...patch } : o)
-      localStorage.setItem('cov_outcomes', JSON.stringify(updated))
+      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...patch } : o)
+      saveOutcomes(updated)
       if (setAppOutcomes) setAppOutcomes(updated)
       setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
       if (SUPA_URL && SUPA_KEY) pushCasesToSupa(updated).catch(()=>{})
