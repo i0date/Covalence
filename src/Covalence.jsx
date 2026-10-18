@@ -143,14 +143,19 @@ function detectNetwork(code) {
 function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
 function saveOutcomes(o) {
   try {
-    // Merge with whatever another tab may have written concurrently (last-updatedAt wins per case)
     const current = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
     const merged = mergeCases(current, o)
     window._covSaving = true
     localStorage.setItem('cov_outcomes', JSON.stringify(merged))
-    // Notify all same-tab subscribers (cross-tab gets the storage event automatically)
     if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
     setTimeout(() => { window._covSaving = false }, 0)
+    // ── Supabase as PRIMARY write (not backup) ─────────────────────────────
+    if (SUPA_URL && SUPA_KEY) {
+      if (window._covSyncStatus) window._covSyncStatus('syncing')
+      pushCasesToSupa(merged)
+        .then(() => { if (window._covSyncStatus) window._covSyncStatus('synced') })
+        .catch(() => { if (window._covSyncStatus) window._covSyncStatus('error') })
+    }
   } catch { window._covSaving = false }
 }
 function registerOutcomeSubscriber(fn) {
@@ -383,6 +388,12 @@ export default function Covalence() {
     saveOutcomes(outcomes)
     if (SUPA_URL && SUPA_KEY && outcomes.length > 0) pushCasesToSupa(outcomes).catch(()=>{})
   }, [outcomes])
+  const [globalSyncStatus, setGlobalSyncStatus] = useState('idle') // idle|syncing|synced|error
+  // Register global sync status hook so saveOutcomes can update nav indicator
+  useEffect(() => {
+    window._covSyncStatus = setGlobalSyncStatus
+    return () => { delete window._covSyncStatus }
+  }, [])
   // Subscribe to outcomes changes from any view in this tab + cross-tab storage events
   useEffect(() => {
     const refresh = (merged) => {
@@ -442,6 +453,13 @@ export default function Covalence() {
               ))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
+              {SUPA_URL && SUPA_KEY && globalSyncStatus !== 'idle' && (
+                <span className="mono-font" style={{fontSize:'8px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
+                  color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
+                  borderColor: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669'}}>
+                  {globalSyncStatus==='syncing'?'↻ SYNC':globalSyncStatus==='error'?'✗ SYNC ERROR':'✓ LIVE'}
+                </span>
+              )}
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
               {covUser&&<div className="mono-font" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
                 <span style={{color:'#A8A29E',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>{covUser.name}</span>
@@ -478,7 +496,7 @@ export default function Covalence() {
           <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />
         </div>
         <div style={{ display: activeSection === 'dfa' ? 'block' : 'none' }}>
-          <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} />
+          <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} historicalOutcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'duo' ? 'block' : 'none' }}>
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
@@ -799,6 +817,7 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
   const [merchant, setMerchant]               = useState('')
+  const [supaPriorCases, setSupaPriorCases]   = useState([]) // enriched from Supabase
   const [amount, setAmount]                   = useState('')
   const [currency, setCurrency]               = useState('CAD')
   const [transactionDate, setTransactionDate] = useState('')
@@ -1027,6 +1046,16 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
                                   { bg: '#374151', text: '#D1D5DB' }
 
   // ── CE computed values ───────────────────────────────────────────────────────
+  // Enrich prior disputes from Supabase when result + merchant are available
+  React.useEffect(() => {
+    if (!result || !merchant || merchant === '—' || !SUPA_URL || !SUPA_KEY) { setSupaPriorCases([]); return }
+    const norm = merchant.replace(/[^a-z0-9]/gi, '').toLowerCase()
+    if (norm.length < 3) return
+    pullCasesFromSupa()
+      .then(cases => setSupaPriorCases(cases))
+      .catch(() => {})
+  }, [result, merchant])
+
   const isCE           = triageChannelMode === 'ce'
   const ceDaysSince    = ceTxDate ? Math.floor((Date.now() - new Date(ceTxDate).getTime()) / 86400000) : null
   const ceAmountNum    = parseFloat(ceAmount) || 0
@@ -2513,15 +2542,24 @@ Return ONLY valid JSON:
                 const matchedTriage = thisMerchant.length >= 3
                   ? [...triageCases, ...triageArchive].filter(o => normMerchant(o.merchant||o.inputs?.merchant).includes(thisMerchant) || thisMerchant.includes(normMerchant((o.merchant||o.inputs?.merchant||'').substring(0,6))))
                   : []
-                const total = matchedDesk.length + matchedTriage.length
+                // Merge Supabase results (deduplicate by id, only new ones)
+                const localIds = new Set([...matchedDesk, ...matchedTriage].map(o => o.id))
+                const matchedSupa = thisMerchant.length >= 3
+                  ? supaPriorCases.filter(o => {
+                      const nm = normMerchant(o.merchant||'')
+                      return !localIds.has(o.id) && (nm.includes(thisMerchant) || thisMerchant.includes(nm.substring(0,6)))
+                    })
+                  : []
+                const total = matchedDesk.length + matchedTriage.length + matchedSupa.length
                 if (total === 0) return null
                 const VERDICT_COLORS = { TRUE_FRAUD:'#7F1D1D', FIRST_PARTY_FRAUD:'#78350F', CONSUMER_DISPUTE:'#1E3A5F', AUTHORIZED_PUSH_PAYMENT:'#4C1D95' }
                 const VERDICT_BG     = { TRUE_FRAUD:'#FEE2E2', FIRST_PARTY_FRAUD:'#FEF3C7', CONSUMER_DISPUTE:'#DBEAFE', AUTHORIZED_PUSH_PAYMENT:'#EDE9FE' }
                 const VERDICT_SHORT  = { TRUE_FRAUD:'TRUE FRAUD', FIRST_PARTY_FRAUD:'1P FRAUD', CONSUMER_DISPUTE:'CONSUMER DISPUTE', AUTHORIZED_PUSH_PAYMENT:'APP FRAUD' }
-                // Aggregate signals
+                // Aggregate signals (local + Supabase)
                 const allVerdicts = [
                   ...matchedTriage.map(o => o.verdict || o.correctedVerdict),
-                  ...matchedDesk.map(o => o.verdict)
+                  ...matchedDesk.map(o => o.verdict),
+                  ...matchedSupa.map(o => o.verdict)
                 ].filter(Boolean)
                 const fraudCount   = allVerdicts.filter(v => v === 'TRUE_FRAUD' || v === 'AUTHORIZED_PUSH_PAYMENT').length
                 const pattern = fraudCount >= 2 ? 'REPEAT FRAUD' : fraudCount === 1 ? 'PRIOR FRAUD' : matchedDesk.filter(o=>o.status==='won').length > 0 ? 'PRIOR WIN' : 'PRIOR HISTORY'
@@ -2548,6 +2586,7 @@ Return ONLY valid JSON:
                             <span className="mono-font text-[9px] text-stone-500">{o.amount}</span>
                             {o.verdict && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
                             <span className="mono-font text-[8px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
+                            {o.dfaScore && <span className="mono-font text-[8px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
                             <span className="mono-font text-[8px] text-stone-300">DESK</span>
                           </div>
                         )
@@ -2563,6 +2602,23 @@ Return ONLY valid JSON:
                             {v && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[v]||'#E7E2D9', color: VERDICT_COLORS[v]||'#57534E' }}>{VERDICT_SHORT[v]||v}</span>}
                             {o.outcome && o.outcome !== 'pending' && <span className="mono-font text-[8px] font-bold uppercase text-stone-500">{o.outcome}</span>}
                             <span className="mono-font text-[8px] text-stone-300">TRIAGE</span>
+                          </div>
+                        )
+                      })}
+                      {matchedSupa.slice(0,3).map((o, i) => {
+                        const net = (o.network||'').toUpperCase().substring(0,4)
+                        const st = o.status || '—'
+                        const stColor = st === 'won' ? '#064E3B' : st === 'lost' ? '#7F1D1D' : '#57534E'
+                        return (
+                          <div key={'s'+i} className="flex items-center gap-3 px-4 py-2 flex-wrap" style={{background:'#F0F7FF'}}>
+                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">{net}</span>
+                            <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant}</span>
+                            <span className="mono-font text-[9px] text-stone-500">{o.amount}</span>
+                            {o.verdict && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
+                            <span className="mono-font text-[8px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
+                            {o.dfaScore && <span className="mono-font text-[8px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
+                            <span className="mono-font text-[8px] font-bold" style={{color:'#1E40AF'}}>☁ CLOUD</span>
                           </div>
                         )
                       })}
@@ -2988,6 +3044,7 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   const [commsError, setCommsError]                         = useState(null)
   const [commsCopied, setCommsCopied]                       = useState(false)
   const [editableLetterBody, setEditableLetterBody]         = useState(_sess.editableLetterBody || '')
+  const [letterDraftModified, setLetterDraftModified]       = useState(false) // true if agent edited the generated letter
   const [editableDocsSection,  setEditableDocsSection]         = useState('')
   const [editableNextSteps,    setEditableNextSteps]           = useState('')
   const [docRequestCopied, setDocRequestCopied]             = useState(false)
@@ -3277,6 +3334,7 @@ CONSUMER DISPUTES:
     setResult(null)
     setRebuttal(null)
     setComms(null)
+    setLetterDraftModified(false)
     setChecked({})
 
     const prompt = `You are an experienced ${network === 'visa' ? 'Visa' : 'Mastercard'} dispute analyst. You write dispute summaries in a tight, operational voice: flowing prose, NO first-person pronouns (no "I"), warm but professional, concise. Real dispute summaries are typically 3-5 sentences, around 80-120 words. Avoid legal-brief language, avoid hedging, avoid repetition.
@@ -3438,6 +3496,7 @@ Return ONLY valid JSON:
     setCommsLoading(true)
     setCommsError(null)
     setComms(null)
+    setLetterDraftModified(false)
 
     const outcomeContext = (result.category === 'fraud' || result.category === 'mc_fraud')
       ? 'This is a confirmed fraud dispute. The cardholder did not authorize the transaction. The bank files through network rules — no merchant contact is involved.'
@@ -3508,7 +3567,8 @@ Return ONLY valid JSON:
         .trim()
       const parsed = JSON.parse(text)
       setComms(parsed)
-      setEditableLetterBody(parsed.body || '')
+      // Don't overwrite if agent has edited the draft — preserve their work
+      if (!letterDraftModified) setEditableLetterBody(parsed.body || '')
       // Pre-populate editable docs from current evidence
       try {
         const ev = getEvidencePackage(result?.recommended_reason_code, result?.category)
@@ -5308,10 +5368,18 @@ Return ONLY valid JSON:
 
                   {/* Letter body — editable textarea */}
                   <div className="bg-white p-6 border-b border-stone-200">
-                    <p className="display-font text-stone-400 text-[12px] italic mb-3">Dear Valued Cardholder,</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="display-font text-stone-400 text-[12px] italic">Dear Valued Cardholder,</p>
+                      {letterDraftModified && comms?.body && (
+                        <button onClick={() => { setEditableLetterBody(comms.body); setLetterDraftModified(false) }}
+                          className="mono-font text-[8px] tracking-widest px-2 py-1 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
+                          ↺ RESET TO AI DRAFT
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       value={editableLetterBody}
-                      onChange={e => setEditableLetterBody(e.target.value)}
+                      onChange={e => { setEditableLetterBody(e.target.value); setLetterDraftModified(true) }}
                       rows={10}
                       className="w-full display-font text-stone-900 text-[15px] leading-relaxed border border-stone-200 rounded-none p-3 focus:outline-none focus:border-stone-500 resize-vertical"
                       style={{ fontFamily: 'inherit', background: '#FAFAF9' }}
@@ -5945,6 +6013,7 @@ Return ONLY valid JSON:
                                     {o.mode === 'merchant' && o.winProb && (
                                       <span className={'mono-font text-[8px] tracking-widest px-1.5 py-0.5 ' + (o.winProb === 'HIGH' ? 'bg-emerald-900 text-emerald-50' : o.winProb === 'LOW' ? 'bg-red-900 text-red-50' : 'bg-amber-800 text-amber-50')}>{o.winProb}</span>
                                     )}
+                                    {o.dfaScore && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}} title="DFA Fundability Score">DFA {o.dfaScore}</span>}
                                   </div>
                                   {o.notes && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{o.notes}</p>}
                                   {o.mode === 'merchant' && o.submitDate && (
@@ -6766,7 +6835,7 @@ function computeAmountScore(a) {
   return 0.70
 }
 
-function scoreClaim(c, winRateOverrides) {
+function scoreClaim(c, effectiveWinRates) {
   const stageMod         = computeStageModifier(c.cycleStage)
   const baseProb         = computeRecoveryProb(c, winRateOverrides)
   const recoveryProb     = parseFloat(Math.max(0.05, Math.min(0.96, baseProb + stageMod.probMod)).toFixed(2))
@@ -7079,7 +7148,25 @@ const CRYPTO_MANUAL_DEFAULTS = {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 003 DFA VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
+function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }) {
+  // ── Compute actual win rates from historical resolved cases ──────────────
+  const historicalWinRates = React.useMemo(() => {
+    const outcomes = historicalOutcomes || []
+    const resolved = outcomes.filter(o => (o.status === 'won' || o.status === 'lost') && o.reasonCode)
+    if (resolved.length < 3) return {}  // not enough data yet
+    const byCode = {}
+    resolved.forEach(o => {
+      const code = String(o.reasonCode).split(/[\s–—]/)[0].trim()
+      if (!byCode[code]) byCode[code] = { won: 0, total: 0 }
+      byCode[code].total++
+      if (o.status === 'won') byCode[code].won++
+    })
+    const rates = {}
+    Object.entries(byCode).forEach(([code, { won, total }]) => {
+      if (total >= 2) rates[code] = parseFloat((won / total).toFixed(2))  // min 2 cases to override
+    })
+    return rates
+  }, [historicalOutcomes])
   const [selected, setSelected]             = useState(null)
   const [sortCol, setSortCol]               = useState("fundability")
   const [sortDir, setSortDir]               = useState("desc")
@@ -7138,6 +7225,8 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
   }, [holdingDays])
 
   // Win rate overrides (Task 2) — user-tunable per reason code
+  // Effective rates: base → historical → user manual overrides (each layer wins over previous)
+  const effectiveWinRates = React.useMemo(() => ({ ...historicalWinRates, ...winRateOverrides }), [historicalWinRates, winRateOverrides])
   const [winRateOverrides, setWinRateOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dfa_win_overrides') || '{}') } catch { return {} }
   })
@@ -7197,7 +7286,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
       merchantCBR:parseFloat(draft.merchantCBR)||0.5, priorClaims:parseInt(draft.priorClaims)||0,
       note:draft.note, source:"manual",
     }
-    setManualClaims(prev => [...prev, { ...c, ...scoreClaim(c, winRateOverrides) }])
+    setManualClaims(prev => [...prev, { ...c, ...scoreClaim(c, effectiveWinRates) }])
     setDraft({ ...MANUAL_DEFAULTS }); setShowAddForm(false)
   }
 
@@ -7284,12 +7373,23 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         cycleStage: o.cycleStage || '1cb',
         issuer: o.issuer || '',
       }
-      return { ...c, ...scoreClaim(c, winRateOverrides) }
+      return { ...c, ...scoreClaim(c, effectiveWinRates) }
     })
     setManualClaims(prev => {
       const existingIds = new Set(prev.map(c => c.id))
       return [...prev, ...mapped.filter(c => !existingIds.has(c.id))]
     })
+    // ── Reverse flow: annotate source cases in cov_outcomes with DFA score ──
+    try {
+      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const mappedIds = new Set(mapped.map(c => c.id))
+      const updated = all.map(o => {
+        if (!mappedIds.has(o.id)) return o
+        const scored = mapped.find(c => c.id === o.id)
+        return scored ? { ...o, dfaScore: scored.grade, dfaFundability: scored.fundabilityScore, dfaScoredAt: new Date().toISOString() } : o
+      })
+      if (updated.some((o, i) => o !== all[i])) saveOutcomes(updated)
+    } catch {}
     setDfaQueue([])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dfaQueue])
@@ -7316,7 +7416,14 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo }) {
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
-            <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 005 — DFA</div>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 005 — DFA</div>
+              {Object.keys(historicalWinRates).length > 0 && (
+                <span className="mono-font text-[9px] tracking-widest px-2 py-0.5 border border-emerald-700 text-emerald-700">
+                  ✓ {Object.keys(historicalWinRates).length} WIN RATE{Object.keys(historicalWinRates).length!==1?'S':''} CALIBRATED FROM YOUR HISTORY
+                </span>
+              )}
+            </div>
             <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString("en-US",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase()}</div>
           </div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:"clamp(36px,6vw,80px)", letterSpacing:"-0.03em" }}>
