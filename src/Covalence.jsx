@@ -381,6 +381,8 @@ export default function Covalence() {
   const [dfaQueue,      setDfaQueue]      = useState([])
   const [duoHandoff,    setDuoHandoff]    = useState(null)
 
+  const [globalSyncStatus, setGlobalSyncStatus] = useState('idle') // idle|syncing|synced|error
+
   // Guard: if outcomes came from a localStorage read, don't write back (avoids circular loop)
   const _skipSaveRef = useRef(false)
   useEffect(() => {
@@ -388,7 +390,6 @@ export default function Covalence() {
     saveOutcomes(outcomes)
     if (SUPA_URL && SUPA_KEY && outcomes.length > 0) pushCasesToSupa(outcomes).catch(()=>{})
   }, [outcomes])
-  const [globalSyncStatus, setGlobalSyncStatus] = useState('idle') // idle|syncing|synced|error
   // Register global sync status hook so saveOutcomes can update nav indicator
   useEffect(() => {
     window._covSyncStatus = setGlobalSyncStatus
