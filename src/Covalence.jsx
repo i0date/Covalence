@@ -7466,10 +7466,10 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }) {
 
   // Win rate overrides (Task 2) — user-tunable per reason code
   // Effective rates: base → historical → user manual overrides (each layer wins over previous)
-  const effectiveWinRates = React.useMemo(() => ({ ...historicalWinRates, ...winRateOverrides }), [historicalWinRates, winRateOverrides])
   const [winRateOverrides, setWinRateOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dfa_win_overrides') || '{}') } catch { return {} }
   })
+  const effectiveWinRates = React.useMemo(() => ({ ...historicalWinRates, ...winRateOverrides }), [historicalWinRates, winRateOverrides])
   useEffect(() => {
     try { localStorage.setItem('dfa_win_overrides', JSON.stringify(winRateOverrides)) } catch {}
   }, [winRateOverrides])
