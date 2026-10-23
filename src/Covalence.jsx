@@ -608,12 +608,12 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
             detail:'A document uploaded in Desk travels with the case into Multi, into filing, into the audit log.' },
           { num:'003', name:'Multi', section:'multi', color:'#064E3B',
             problem:'One dispute costs roughly the same to work whether the recovery is forty dollars or four thousand. Fixed operational cost against variable recovery — that asymmetry is the core economics problem in dispute management.',
-            tool:'Multi is the batch operations layer. It groups cases by network — Visa, Mastercard, Amex, Discover — and surfaces fraud and service queues separately. Analysts file as a group or generate packages case by case.',
-            detail:'The batch summary bar shows total dollar exposure queued and countdown to the next auto-file window.' },
+            tool:'Multi is the batch operations layer. It groups cases by network and surfaces fraud and service queues separately for group filing or case-by-case package generation. My Queue lets each analyst work their own assigned cases. Intel surfaces portfolio intelligence — win rates by reason code, merchant dispute patterns, team throughput, and DFA calibration — all derived from your live case log.',
+            detail:'The batch summary bar shows total dollar exposure queued and countdown to the next auto-file window. Portfolio Analytics now lives in Intel, not buried in a collapse.' },
           { num:'004', name:'File', section:'file', color:'#92400E',
             problem:'Filing a chargeback is not the end of a case. The network receives the package, a timer starts, and if the merchant representments — a response is required, grounded in the original submission.',
-            tool:'File is a submission history log and lifecycle tracker. Every case filed through Covalence leaves a record here. The CB pipeline runs from 1st CB through NTW INVSTG → Merchant Resp → Pre-Arb → Arbitration → Won/Lost.',
-            detail:'Cases that advance to any post-filing stage stay visible here. Filter by All / Active / Won / Lost.' },
+            tool:'File is a submission history log and lifecycle tracker. Every case filed through Covalence leaves a record here. The CB pipeline runs from 1st CB through NTW INVSTG → Merchant Resp → Pre-Arb → Arbitration → Won/Lost. Connect lives here — import disputes directly from Visa Resolve Online or Mastercard Connect via CSV, and configure live API access once network credentials are available.',
+            detail:'Cases that advance to any post-filing stage stay visible here. Filter by All / Active / Won / Lost. Network integrations (Visa DMS, Mastercard MDRI, Ethoca, Verifi) are built and waiting on credentials.' },
           { num:'005', name:'DFA', section:'dfa', color:'#1A1814',
             problem:'A dispute portfolio is an asset. The right to recover from a filed chargeback has economic value before it is won. But the pricing of a dispute portfolio is opaque and often tilted against the institution selling.',
             tool:'The Dispute Funding Analyzer scores individual claims across recovery rate, filing window proximity, reason code strength, and documentation quality — graded A through D with estimated advance rates.',
@@ -12459,8 +12459,7 @@ function IntelView({ outcomes, platformMode, covUser }) {
       <div className="mb-6 pb-5" style={{borderBottom:'1px solid #D4CCBC'}}>
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}}>
           <div>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2" style={{letterSpacing:'0.18em'}}>◈ SIGNAL · 003 MULTI</div>
-            <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
+                <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
               <span style={{fontWeight:700}}>In</span><span style={{fontStyle:'italic',fontWeight:500}}>tel</span>
             </h1>
             <p className="display-font text-stone-500 mt-2" style={{fontSize:'clamp(12px,1.6vw,14px)',lineHeight:'1.5',maxWidth:'480px'}}>
@@ -12773,7 +12772,6 @@ function ConnectView({ outcomes, setOutcomes, covUser }) {
   return (
     <div style={{maxWidth:'960px',margin:'0 auto',padding:'24px 16px 80px'}}>
       <div className="mb-6 pb-5" style={{borderBottom:'1px solid #D4CCBC'}}>
-        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2" style={{letterSpacing:'0.18em'}}>◈ CHANNEL · 004 FILE</div>
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
           <span style={{fontWeight:700}}>Con</span><span style={{fontStyle:'italic',fontWeight:500}}>nect</span>
         </h1>
