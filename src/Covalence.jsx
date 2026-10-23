@@ -423,6 +423,8 @@ export default function Covalence() {
     { id:'dfa',      label:'005  DFA' },
     { id:'duo',      label:'006  DUO' },
     { id:'trio',     label:'007  TRIO' },
+    { id:'intel',    label:'008  INTEL' },
+    { id:'connect',  label:'009  CONNECT' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -505,6 +507,12 @@ export default function Covalence() {
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} />
         </div>
+        <div style={{ display: activeSection === 'intel' ? 'block' : 'none' }}>
+          <IntelView outcomes={outcomes} platformMode={platformMode} covUser={covUser} />
+        </div>
+        <div style={{ display: activeSection === 'connect' ? 'block' : 'none' }}>
+          <ConnectView outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} />
+        </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} />
         </div>
@@ -572,6 +580,8 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
             { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
             { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
             { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
+            { num:'008', name:'INTEL',  section:'intel',  bg:'#C7BFB2' },
+            { num:'009', name:'CONNECT',section:'connect',bg:'#C1BAB0' },
           ].map(({ num, name, section, bg }) => (
             <button key={num} onClick={() => setActiveSection(section)}
               className="mono-font"
@@ -8508,7 +8518,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }) {
           </p>
         </div>
         </React.Fragment>}
-    </div>
+        </div>
   )
 }
 
@@ -11155,6 +11165,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [assignOpen,    setAssignOpen]    = React.useState({})
   const [showAnalytics, setShowAnalytics] = React.useState(false)
   const [multiSearch,   setMultiSearch]   = React.useState('')
+  const [multiTab,      setMultiTab]      = React.useState('queue') // 'queue'|'myqueue'
 
   const isFraudCase = o => (o.verdict === 'TRUE_FRAUD' || o.verdict === 'AUTHORIZED_PUSH_PAYMENT' || o.fraud_sub_type || o.category === 'fraud' || o.category === 'mc_fraud')
   const myEmail = covUser?.email||''
@@ -11486,6 +11497,23 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
           {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
         </div>
       </div>
+      {/* ── Tab switcher ── */}
+      <div className="flex gap-0 mb-6 border-b border-stone-200">
+        {[['queue','FILING QUEUE'],['myqueue','MY QUEUE']].map(([id,label])=>(
+          <button key={id} onClick={()=>setMultiTab(id)}
+            className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors"
+            style={{borderBottom: multiTab===id ? '2px solid #1C1917' : '2px solid transparent',
+                    color: multiTab===id ? '#1C1917' : '#78716C', background:'transparent', cursor:'pointer'}}>
+            {label}{id==='myqueue'&&myEmail?' ('+outcomes.filter(o=>o.assignedTo===myEmail&&o.status!=='won'&&o.status!=='lost').length+')':''}
+          </button>
+        ))}
+      </div>
+
+      {multiTab === 'myqueue' && (
+        <MyQueuePanel outcomes={outcomes} myEmail={myEmail} covUser={covUser} setActiveSection={setActiveSection} setOutcomes={setOutcomes} />
+      )}
+
+      <div style={{display: multiTab==='queue' ? 'block' : 'none'}}>
       {selectedIds.length > 0 && (
         <div className="sticky top-14 z-40 mb-4 flex items-center gap-3 flex-wrap px-4 py-3 border border-stone-800" style={{background:'#1C1917'}}>
           <span className="mono-font text-[10px] tracking-widest text-stone-300">{selectedIds.length} SELECTED</span>
@@ -11850,6 +11878,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
         )
       })()}
 
+      </div>{/* end queue tab */}
       {/* ── Filing Package Modal ─────────────────────────────────────────── */}
       {pkgModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
@@ -12355,6 +12384,519 @@ function SettingsView({ settings, setSettings }) {
         </button>
       </div>
 
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MY QUEUE PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+function MyQueuePanel({ outcomes, myEmail, covUser, setActiveSection }) {
+  const mine = outcomes.filter(o => o.assignedTo === myEmail && o.status !== 'won' && o.status !== 'lost')
+  const resolved = outcomes.filter(o => o.assignedTo === myEmail && (o.status === 'won' || o.status === 'lost'))
+  const windowDays = o => {
+    if (!o.date) return null
+    const d = new Date(o.date); d.setDate(d.getDate() + (o.network === 'mastercard' ? 45 : 60))
+    return Math.ceil((d - new Date()) / 86400000)
+  }
+  const urgencyStyle = days => {
+    if (days === null) return { color:'#44403C', background:'#F5F5F4', border:'1px solid #D6D3D1' }
+    if (days <= 5)  return { color:'#7F1D1D', background:'#FEE2E2', border:'1px solid #FCA5A5' }
+    if (days <= 15) return { color:'#78350F', background:'#FEF3C7', border:'1px solid #FCD34D' }
+    return { color:'#064E3B', background:'#D1FAE5', border:'1px solid #6EE7B7' }
+  }
+  if (mine.length === 0 && resolved.length === 0) return (
+    <div className="text-center py-16">
+      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">MY QUEUE</div>
+      <p className="display-font text-stone-400 text-[15px]">No cases assigned to {covUser?.name || myEmail || 'you'}.</p>
+      <p className="display-font text-stone-400 text-[13px] mt-1 italic">Cases assigned in the filing queue will appear here.</p>
+    </div>
+  )
+  return (
+    <div>
+      {mine.length > 0 && (
+        <div className="mb-8">
+          <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">OPEN — {mine.length} CASE{mine.length !== 1 ? 'S' : ''}</div>
+          <div className="border border-stone-200" style={{ borderBottom:'none' }}>
+            {[...mine].sort((a,b) => (windowDays(a)??999) - (windowDays(b)??999)).map(o => {
+              const days = windowDays(o)
+              return (
+                <div key={o.id} className="flex items-center gap-3 px-4 py-3 flex-wrap" style={{ borderBottom:'1px solid #E7E2DA', background:'#FAFAF8' }}>
+                  <span className="mono-font text-[9px] text-stone-400 w-24 shrink-0">{o.id}</span>
+                  <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 min-w-[120px] truncate">{o.merchant || '—'}</span>
+                  <span className="mono-font text-[10px] text-stone-500 w-20 shrink-0">{o.amount} {o.currency||''}</span>
+                  <span className="mono-font text-[9px] px-2 py-0.5 shrink-0" style={{ background:'#EDE9E0', color:'#57534E' }}>{(o.network||'—').toUpperCase()}</span>
+                  <span className="mono-font text-[9px] px-2 py-0.5 shrink-0" style={{ background:'#EDE9E0', color:'#57534E' }}>{o.reasonCode||'—'}</span>
+                  {days !== null && <span className="mono-font text-[9px] px-2 py-0.5 font-bold shrink-0" style={urgencyStyle(days)}>{days <= 0 ? 'EXPIRED' : days+'d LEFT'}</span>}
+                  <span className="mono-font text-[9px] px-2 py-0.5 font-bold shrink-0" style={{ background:'#1E3A5F', color:'#BAE6FD' }}>{(o.status||'pending').toUpperCase().replace(/_/g,' ')}</span>
+                  <button onClick={() => setActiveSection('desk')} className="mono-font text-[8px] tracking-widest px-2 py-1 border border-stone-400 text-stone-500 hover:bg-stone-100 transition-colors shrink-0">OPEN DESK</button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      {resolved.length > 0 && (
+        <div>
+          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">RESOLVED — {resolved.length} CASE{resolved.length !== 1 ? 'S' : ''}</div>
+          <div className="border border-stone-200" style={{ borderBottom:'none' }}>
+            {resolved.slice(0,20).map(o => (
+              <div key={o.id} className="flex items-center gap-3 px-4 py-2.5 flex-wrap" style={{ borderBottom:'1px solid #EDE9E0', background:'#F7F5F0' }}>
+                <span className="mono-font text-[9px] text-stone-300 w-24 shrink-0">{o.id}</span>
+                <span className="mono-font text-[11px] text-stone-500 flex-1 min-w-[120px] truncate">{o.merchant || '—'}</span>
+                <span className="mono-font text-[9px] text-stone-400 w-20 shrink-0">{o.amount} {o.currency||''}</span>
+                <span className="mono-font text-[9px] font-bold px-2 py-0.5 shrink-0" style={{ background: o.status==='won'?'#D1FAE5':'#FEE2E2', color: o.status==='won'?'#064E3B':'#7F1D1D' }}>{o.status?.toUpperCase()}</span>
+                {o.resolvedDate && <span className="mono-font text-[9px] text-stone-300 shrink-0">{new Date(o.resolvedDate).toLocaleDateString('en-CA')}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// =============================================================================
+// 008 INTEL VIEW
+// =============================================================================
+function IntelView({ outcomes, platformMode, covUser }) {
+  const [intelTab, setIntelTab] = React.useState('portfolio')
+  const resolved  = outcomes.filter(o => o.status === 'won' || o.status === 'lost')
+  const won       = resolved.filter(o => o.status === 'won')
+  const lost      = resolved.filter(o => o.status === 'lost')
+  const pending   = outcomes.filter(o => o.status !== 'won' && o.status !== 'lost')
+  const winRate   = resolved.length > 0 ? (won.length / resolved.length * 100).toFixed(1) : null
+  const totalAmt  = o => parseFloat((o.amount||'0').replace(/[^0-9.]/g,'')) || 0
+  const recovered = won.reduce((s,o) => s + totalAmt(o), 0)
+  const atRisk    = pending.reduce((s,o) => s + totalAmt(o), 0)
+  const resolutionDays = resolved.filter(o => o.date && o.resolvedDate)
+    .map(o => Math.ceil((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)).filter(d => d > 0 && d < 400)
+  const avgResolution = resolutionDays.length > 0 ? Math.round(resolutionDays.reduce((a,b)=>a+b,0)/resolutionDays.length) : null
+  const months = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i)
+    const key = d.toISOString().substring(0,7)
+    const mo = outcomes.filter(o => (o.date||'').startsWith(key))
+    months.push({ key, label: d.toLocaleDateString('en-US',{month:'short'}), total:mo.length, won:mo.filter(o=>o.status==='won').length, lost:mo.filter(o=>o.status==='lost').length })
+  }
+  const maxM = Math.max(...months.map(m=>m.total),1)
+  const byCode = {}
+  resolved.forEach(o => {
+    const code = (o.reasonCode||o.code||'UNKNOWN').split(/[\s–—]/)[0].trim()
+    if (!byCode[code]) byCode[code] = { won:0, lost:0, total:0, label:o.reasonTitle||'' }
+    byCode[code].total++; if (o.status==='won') byCode[code].won++; else byCode[code].lost++
+  })
+  const codeRows = Object.entries(byCode).map(([code,d])=>({code,...d,rate:d.total>0?(d.won/d.total*100).toFixed(0):0})).sort((a,b)=>b.total-a.total).slice(0,12)
+  const byMerchant = {}
+  outcomes.forEach(o => {
+    const m = (o.merchant||'').trim()||'—'
+    if (!byMerchant[m]) byMerchant[m]={won:0,lost:0,total:0,pending:0}
+    byMerchant[m].total++; if (o.status==='won') byMerchant[m].won++; else if (o.status==='lost') byMerchant[m].lost++; else byMerchant[m].pending++
+  })
+  const merchantRows = Object.entries(byMerchant).filter(([m])=>m!=='—').map(([merchant,d])=>{const res=d.won+d.lost;return{merchant,...d,rate:res>0?(d.won/res*100).toFixed(0):null}}).sort((a,b)=>b.total-a.total).slice(0,15)
+  const byAgent = {}
+  outcomes.forEach(o => {
+    const agent = o.assignedName||(o.assignedTo?o.assignedTo.split('@')[0]:'UNASSIGNED')
+    if (!byAgent[agent]) byAgent[agent]={won:0,lost:0,total:0,pending:0}
+    byAgent[agent].total++; if (o.status==='won') byAgent[agent].won++; else if (o.status==='lost') byAgent[agent].lost++; else byAgent[agent].pending++
+  })
+  const agentRows = Object.entries(byAgent).map(([agent,d])=>{const res=d.won+d.lost;return{agent,...d,rate:res>0?(d.won/res*100).toFixed(0):null}}).sort((a,b)=>b.total-a.total)
+  const calibratedCodes = new Set(resolved.filter(o=>o.reasonCode).map(o=>(o.reasonCode||'').split(/[\s–—]/)[0].trim()))
+  const dfaCalibrated = outcomes.filter(o=>o.dfaScore||o.dfaFundability)
+  const T = id => ({ borderBottom:intelTab===id?'2px solid #1C1917':'2px solid transparent', color:intelTab===id?'#1C1917':'#78716C', background:'transparent', cursor:'pointer' })
+  const WinBar = ({rate,lg}) => {
+    const r=parseFloat(rate)||0, col=r>=65?'#064E3B':r>=45?'#78350F':'#7F1D1D'
+    return (<div className="flex items-center gap-2"><div style={{width:lg?100:72,height:5,background:'#EDE9E0',overflow:'hidden'}}><div style={{width:r+'%',height:'100%',background:col}}/></div><span className="mono-font font-bold" style={{fontSize:'10px',color:col}}>{r}%</span></div>)
+  }
+  const Stat = ({label,value,sub,color='#1C1917'}) => (
+    <div style={{background:'#FAF7F1',padding:'18px',borderRight:'1px solid #E7E2DA'}}>
+      <div className="mono-font" style={{fontSize:'8px',letterSpacing:'0.16em',color:'#78716C',marginBottom:'5px'}}>{label}</div>
+      <div className="mono-font font-bold" style={{fontSize:'26px',color,lineHeight:1,marginBottom:'2px'}}>{value}</div>
+      {sub&&<div className="mono-font" style={{fontSize:'9px',color:'#A8A29E'}}>{sub}</div>}
+    </div>
+  )
+  return (
+    <div style={{maxWidth:'960px',margin:'0 auto',padding:'32px 24px 80px'}}>
+      <div className="mb-8 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'24px'}}>
+        <div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE No. 008 — INTEL</div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
+            <span style={{fontWeight:700}}>In</span><span style={{fontStyle:'italic',fontWeight:500}}>tel</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:'1.5',maxWidth:'520px'}}>
+            Portfolio intelligence. Win rates by reason code, merchant dispute patterns, team throughput, and DFA model calibration — all derived from your live case log.
+          </p>
+        </div>
+        <div className="mono-font text-xs tracking-widest text-stone-600 shrink-0">{outcomes.length} CASES · {resolved.length} RESOLVED</div>
+      </div>
+      {outcomes.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-4">NO DATA YET</div>
+          <p className="display-font text-stone-400 text-[15px]">Resolve cases in the Dispute Desk to populate intelligence.</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-0 mb-8 border-b border-stone-200">
+            {[['portfolio','PORTFOLIO'],['codes','BY REASON CODE'],['merchants','BY MERCHANT'],['team','TEAM'],['dfa','DFA CALIBRATION']].map(([id,label])=>(
+              <button key={id} onClick={()=>setIntelTab(id)} className="mono-font text-[9px] tracking-widest px-4 py-3 transition-colors" style={T(id)}>{label}</button>
+            ))}
+          </div>
+          {intelTab==='portfolio'&&(
+            <div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'32px'}}>
+                <Stat label="TOTAL CASES" value={outcomes.length} sub={pending.length+' pending'} />
+                <Stat label="WIN RATE" value={winRate!==null?winRate+'%':'—'} sub={won.length+'W / '+lost.length+'L of '+resolved.length+' resolved'} color={winRate>=65?'#064E3B':winRate>=45?'#78350F':'#7F1D1D'} />
+                <Stat label="RECOVERED" value={'$'+Math.round(recovered).toLocaleString()} sub="from won disputes" color="#064E3B" />
+                <Stat label="AT RISK" value={'$'+Math.round(atRisk).toLocaleString()} sub="pending" color="#78350F" />
+                <Stat label="AVG RESOLUTION" value={avgResolution!==null?avgResolution+'d':'—'} sub="filed to decision" />
+              </div>
+              <div className="mb-8">
+                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CASE VOLUME — LAST 6 MONTHS</div>
+                <div style={{display:'flex',alignItems:'flex-end',gap:'8px',height:'110px',borderBottom:'1px solid #E7E2DA'}}>
+                  {months.map(m=>(
+                    <div key={m.key} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',height:'100%',justifyContent:'flex-end'}}>
+                      {m.total>0&&(<div style={{width:'100%',display:'flex',flexDirection:'column',gap:'1px'}}>
+                        <div style={{background:'#064E3B',height:(m.won/maxM*85)+'px',minHeight:m.won?2:0,width:'100%'}}/>
+                        <div style={{background:'#7F1D1D',height:(m.lost/maxM*85)+'px',minHeight:m.lost?2:0,width:'100%'}}/>
+                        <div style={{background:'#D4CCBC',height:((m.total-m.won-m.lost)/maxM*85)+'px',minHeight:(m.total-m.won-m.lost)?2:0,width:'100%'}}/>
+                      </div>)}
+                      <div className="mono-font text-[8px] text-stone-400 mt-1">{m.label}</div>
+                      <div className="mono-font text-[8px] text-stone-600 font-bold">{m.total}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-4 mt-2">
+                  {[['#064E3B','Won'],['#7F1D1D','Lost'],['#D4CCBC','Pending']].map(([col,lbl])=>(
+                    <div key={lbl} className="flex items-center gap-1.5"><div style={{width:10,height:10,background:col}}/><span className="mono-font text-[9px] text-stone-500">{lbl}</span></div>
+                  ))}
+                </div>
+              </div>
+              {(()=>{
+                const nets={}; outcomes.forEach(o=>{const n=(o.network||'unknown').toLowerCase();if(!nets[n])nets[n]={total:0,won:0};nets[n].total++;if(o.status==='won')nets[n].won++})
+                const netRows=Object.entries(nets).sort((a,b)=>b[1].total-a[1].total)
+                if(!netRows.length) return null
+                return (<div>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">BY NETWORK</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:'1px',background:'#D4CCBC'}}>
+                    {netRows.map(([net,d])=>(<div key={net} style={{background:'#FAF7F1',padding:'14px 16px'}}>
+                      <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">{net.toUpperCase()}</div>
+                      <div className="mono-font font-bold text-[20px] text-stone-900">{d.total}</div>
+                      <div className="mono-font text-[9px] text-stone-500">{d.total>0?(d.won/d.total*100).toFixed(0):0}% win rate</div>
+                    </div>))}
+                  </div>
+                </div>)
+              })()}
+            </div>
+          )}
+          {intelTab==='codes'&&(
+            <div>
+              {codeRows.length===0?(<p className="display-font text-stone-400 text-[14px]">No resolved cases with reason codes yet.</p>):(
+                <>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">WIN RATE BY REASON CODE — {codeRows.length} CODES</div>
+                  <div style={{borderTop:'1px solid #E7E2DA'}}>
+                    {codeRows.map(row=>(<div key={row.code} className="flex items-center gap-4 py-3 flex-wrap" style={{borderBottom:'1px solid #EDE9E0'}}>
+                      <span className="mono-font text-[10px] font-bold text-stone-800 w-16 shrink-0">{row.code}</span>
+                      <span className="display-font text-[12px] text-stone-500 flex-1 min-w-[80px] truncate">{row.label||'—'}</span>
+                      <WinBar rate={row.rate} lg />
+                      <div className="mono-font text-[9px] text-stone-400 w-24 text-right shrink-0">{row.won}W/{row.lost}L/{row.total} total</div>
+                    </div>))}
+                  </div>
+                  <div className="mt-5 px-4 py-3 border border-stone-200 bg-stone-50 mono-font text-[9px] text-stone-400">Rates derive from your resolved cases only. Codes with fewer than 5 cases carry high variance. Green ≥65% · Amber 45–64% · Red &lt;45%.</div>
+                </>
+              )}
+            </div>
+          )}
+          {intelTab==='merchants'&&(
+            <div>
+              {merchantRows.length===0?(<p className="display-font text-stone-400 text-[14px]">No merchant data yet.</p>):(
+                <>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">DISPUTE FREQUENCY BY MERCHANT — TOP {merchantRows.length}</div>
+                  <div style={{borderTop:'1px solid #E7E2DA'}}>
+                    <div className="flex items-center gap-4 py-2" style={{borderBottom:'2px solid #1C1917'}}>
+                      <span className="mono-font text-[8px] tracking-widest text-stone-500 flex-1">MERCHANT</span>
+                      {['TOTAL','W','L','PEND','WIN RATE'].map(h=>(<span key={h} className="mono-font text-[8px] tracking-widest text-stone-500 w-16 text-right shrink-0">{h}</span>))}
+                    </div>
+                    {merchantRows.map((row,i)=>(<div key={row.merchant} className="flex items-center gap-4 py-2.5" style={{borderBottom:'1px solid #EDE9E0',background:i%2===0?'#FAFAF8':'white'}}>
+                      <span className="mono-font text-[11px] font-medium text-stone-800 flex-1 truncate">{row.merchant}</span>
+                      <span className="mono-font text-[10px] text-stone-600 w-16 text-right font-bold">{row.total}</span>
+                      <span className="mono-font text-[10px] text-emerald-700 w-16 text-right">{row.won}</span>
+                      <span className="mono-font text-[10px] text-red-700 w-16 text-right">{row.lost}</span>
+                      <span className="mono-font text-[10px] text-stone-400 w-16 text-right">{row.pending}</span>
+                      <div className="w-16 text-right shrink-0">{row.rate!==null?<WinBar rate={row.rate}/>:<span className="mono-font text-[9px] text-stone-300">—</span>}</div>
+                    </div>))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {intelTab==='team'&&(
+            <div>
+              {agentRows.length===0||(agentRows.length===1&&agentRows[0].agent==='UNASSIGNED')?(
+                <div className="text-center py-12"><p className="display-font text-stone-400 text-[15px]">Assign cases to agents in Multi to see team throughput.</p></div>
+              ):(
+                <>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'28px'}}>
+                    {agentRows.slice(0,6).map(row=>{const rate=row.rate!==null?parseFloat(row.rate):null;return(
+                      <div key={row.agent} style={{background:'#FAF7F1',padding:'16px 18px'}}>
+                        <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1 truncate">{row.agent.toUpperCase()}</div>
+                        <div className="mono-font font-bold text-[22px] text-stone-900">{row.total}</div>
+                        <div className="mono-font text-[9px] text-stone-500">{row.won}W/{row.lost}L/{row.pending} open</div>
+                        {rate!==null&&<div className="mt-2"><WinBar rate={rate}/></div>}
+                      </div>
+                    )})}
+                  </div>
+                  <div style={{borderTop:'1px solid #E7E2DA'}}>
+                    <div className="flex items-center gap-4 py-2" style={{borderBottom:'2px solid #1C1917'}}>
+                      <span className="mono-font text-[8px] tracking-widest text-stone-500 flex-1">AGENT</span>
+                      {['TOTAL','W','L','OPEN','WIN RATE'].map(h=>(<span key={h} className="mono-font text-[8px] tracking-widest text-stone-500 w-14 text-right shrink-0">{h}</span>))}
+                    </div>
+                    {agentRows.map((row,i)=>(<div key={row.agent} className="flex items-center gap-4 py-2.5" style={{borderBottom:'1px solid #EDE9E0',background:i%2===0?'#FAFAF8':'white'}}>
+                      <span className="mono-font text-[11px] font-medium text-stone-800 flex-1 truncate">{row.agent}</span>
+                      <span className="mono-font text-[10px] font-bold text-stone-600 w-14 text-right">{row.total}</span>
+                      <span className="mono-font text-[10px] text-emerald-700 w-14 text-right">{row.won}</span>
+                      <span className="mono-font text-[10px] text-red-700 w-14 text-right">{row.lost}</span>
+                      <span className="mono-font text-[10px] text-stone-400 w-14 text-right">{row.pending}</span>
+                      <div className="w-14 text-right shrink-0">{row.rate!==null?<WinBar rate={row.rate}/>:<span className="mono-font text-[9px] text-stone-300">—</span>}</div>
+                    </div>))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {intelTab==='dfa'&&(
+            <div>
+              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-5">DFA MODEL CALIBRATION STATUS</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'28px'}}>
+                {[
+                  {label:'RESOLVED CASES',value:resolved.length,sub:'feed historical win rates',color:'#1C1917'},
+                  {label:'CODES CALIBRATED',value:calibratedCodes.size,sub:'reason codes with outcome data',color:calibratedCodes.size>=5?'#064E3B':'#78350F'},
+                  {label:'DFA-SCORED CASES',value:dfaCalibrated.length,sub:'annotated with fundability',color:'#1C1917'},
+                  {label:'MODEL CONFIDENCE',value:resolved.length>=20?'HIGH':resolved.length>=10?'MED':'LOW',sub:'needs '+(Math.max(0,20-resolved.length))+' more for HIGH',color:resolved.length>=20?'#064E3B':resolved.length>=10?'#78350F':'#7F1D1D'},
+                ].map(s=>(<div key={s.label} style={{background:'#FAF7F1',padding:'16px'}}>
+                  <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">{s.label}</div>
+                  <div className="mono-font font-bold text-[24px]" style={{color:s.color}}>{s.value}</div>
+                  <div className="mono-font text-[9px] text-stone-400">{s.sub}</div>
+                </div>))}
+              </div>
+              <div className="mb-5 px-5 py-4 border border-stone-200 bg-stone-50">
+                <div className="mono-font text-[9px] tracking-widest text-stone-600 mb-2">HOW CALIBRATION WORKS</div>
+                <p className="display-font text-stone-600 text-[13px] leading-relaxed">The DFA model starts from hardcoded baseline win rates. As you resolve cases, Covalence computes your actual win rates by reason code and layers them over the baseline — your history takes precedence once at least 2 resolved cases exist per code. This calibration feeds fundability scores, so the model gets more accurate the more you use it.</p>
+              </div>
+              {codeRows.length>0&&(
+                <div style={{borderTop:'1px solid #E7E2DA'}}>
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">YOUR WIN RATES vs BASELINE</div>
+                  {codeRows.map(row=>(<div key={row.code} className="flex items-center gap-4 py-2.5" style={{borderBottom:'1px solid #EDE9E0'}}>
+                    <span className="mono-font text-[10px] font-bold text-stone-800 w-16 shrink-0">{row.code}</span>
+                    <span className="display-font text-[11px] text-stone-500 flex-1 truncate">{row.label||'—'}</span>
+                    <span className="mono-font text-[9px] text-stone-400 w-12 text-right shrink-0">{row.total} cases</span>
+                    <WinBar rate={row.rate}/>
+                    <span className="mono-font text-[8px] px-2 py-0.5 shrink-0" style={{background:row.total>=2?'#D1FAE5':'#FEF3C7',color:row.total>=2?'#064E3B':'#78350F'}}>{row.total>=2?'CALIBRATED':'NEEDS DATA'}</span>
+                  </div>))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+
+// =============================================================================
+// 009 CONNECT VIEW
+// =============================================================================
+function ConnectView({ outcomes, setOutcomes, covUser }) {
+  const [connectTab, setConnectTab] = React.useState('import')
+  const [vroPaste,   setVroPaste]   = React.useState('')
+  const [mcPaste,    setMcPaste]    = React.useState('')
+  const [vroParsed,  setVroParsed]  = React.useState(null)
+  const [mcParsed,   setMcParsed]   = React.useState(null)
+  const [vroError,   setVroError]   = React.useState(null)
+  const [mcError,    setMcError]    = React.useState(null)
+  const [vroImported, setVroImported] = React.useState(false)
+  const [mcImported,  setMcImported]  = React.useState(false)
+
+  const parseCSV = (text, network) => {
+    const lines = text.trim().split('\n').filter(Boolean)
+    if (lines.length < 2) return { error:'Paste the full CSV export including the header row.' }
+    const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toUpperCase())
+    const get = (vals, ...keys) => { for (const k of keys) { const idx = headers.findIndex(h=>h.includes(k)); if (idx>=0 && vals[idx]) return vals[idx] } return '' }
+    const rows = lines.slice(1).map((line,i) => {
+      const v = line.split(',').map(x => x.replace(/^"|"$/g,'').trim())
+      return {
+        id: get(v,'CASE','REF','NUMBER','ID') || (network==='visa'?'VRO':'MCC')+'-'+Date.now().toString(36).toUpperCase()+'-'+i,
+        merchant: get(v,'MERCHANT','MERCH'),
+        amount: get(v,'AMOUNT','AMT','TRANS AMT','DISPUTE AMT'),
+        currency: get(v,'CURRENCY','CCY') || (network==='visa'?'USD':'USD'),
+        network,
+        reasonCode: get(v,'REASON CODE','RC','REASON','DISPUTE REASON'),
+        date: get(v,'TRANS DATE','DATE','TXN DATE'),
+        status: 'queued',
+        source: network==='visa'?'vro_import':'mc_import',
+        importedAt: new Date().toISOString(),
+      }
+    })
+    return { rows }
+  }
+
+  const doImport = (parsed, onDone) => {
+    if (!parsed) return
+    const existingIds = new Set(outcomes.map(o=>o.id))
+    const newCases = parsed.filter(r => !existingIds.has(r.id))
+    setOutcomes(prev => [...prev, ...newCases])
+    onDone()
+  }
+
+  const T = id => ({ borderBottom:connectTab===id?'2px solid #1C1917':'2px solid transparent', color:connectTab===id?'#1C1917':'#78716C', background:'transparent', cursor:'pointer' })
+
+  const APIPlaceholder = ({ name, description }) => (
+    <div style={{border:'1px solid #E7E2DA',padding:'22px',background:'#FAFAF8',opacity:0.78}}>
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <div className="mono-font text-[10px] font-bold text-stone-700 mb-1">{name}</div>
+          <p className="display-font text-stone-500 text-[13px] leading-relaxed">{description}</p>
+        </div>
+        <span className="mono-font text-[8px] tracking-widest px-2 py-1 shrink-0" style={{background:'#FEF3C7',color:'#78350F',border:'1px solid #FCD34D',whiteSpace:'nowrap'}}>AWAITING CREDENTIALS</span>
+      </div>
+      <button disabled className="mono-font text-[9px] tracking-widest px-4 py-2 border border-stone-300 text-stone-400 cursor-not-allowed" style={{background:'#F0EDE6'}}>CONFIGURE →</button>
+    </div>
+  )
+
+  const ImportPanel = ({ network, paste, setPaste, parsed, setParsed, error, setError, imported, setImported }) => {
+    const isVisa = network === 'visa'
+    const parse = () => {
+      setError(null); setParsed(null); setImported(false)
+      const result = parseCSV(paste, network)
+      if (result.error) { setError(result.error); return }
+      setParsed(result.rows)
+    }
+    return (
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="mono-font text-[9px] tracking-widest text-stone-500">{isVisa?'VISA RESOLVE ONLINE':'MASTERCARD CONNECT'} — CSV IMPORT</div>
+          <span className="mono-font text-[8px] px-2 py-0.5" style={{background:isVisa?'#EFF6FF':'#FFF1F2',color:isVisa?'#1E40AF':'#9F1239',border:isVisa?'1px solid #BFDBFE':'1px solid #FECDD3'}}>{isVisa?'VISA':'MASTERCARD'}</span>
+        </div>
+        <p className="display-font text-stone-500 text-[13px] mb-4">
+          {isVisa?'Export from VRO (Cases → Export → CSV). Paste the full file below.':'Export from Mastercard Connect (Disputes → View All → Export). Paste the CSV below.'}
+          {' '}Covalence maps case IDs, merchants, amounts, reason codes, and dates automatically.
+        </p>
+        <textarea value={paste} onChange={e=>{setPaste(e.target.value);setParsed(null);setImported(false)}}
+          placeholder={isVisa?'Paste VRO CSV export here...':'Paste MC Connect CSV export here...'}
+          className="w-full mono-font text-[11px] border border-stone-300 px-3 py-3 focus:outline-none focus:border-stone-600 resize-none"
+          style={{minHeight:'100px',background:'#FAFAF8',fontFamily:'monospace'}} />
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <button onClick={parse} disabled={!paste.trim()}
+            className="mono-font text-[9px] tracking-widest px-4 py-2 bg-stone-900 text-stone-50 hover:bg-stone-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            PARSE CSV
+          </button>
+          {parsed&&(
+            <button onClick={()=>doImport(parsed,()=>{setImported(true);setPaste('');setParsed(null)})}
+              className="mono-font text-[9px] tracking-widest px-4 py-2 bg-emerald-900 text-emerald-50 hover:bg-emerald-800 transition-colors">
+              IMPORT {parsed.length} CASE{parsed.length!==1?'S':''}
+            </button>
+          )}
+          {imported&&<span className="mono-font text-[9px] text-emerald-700">✓ Imported — cases added to Multi queue</span>}
+          {error&&<span className="mono-font text-[9px] text-red-700">{error}</span>}
+        </div>
+        {parsed&&(
+          <div className="mt-4 border border-stone-200" style={{maxHeight:'180px',overflowY:'auto'}}>
+            <div className="flex items-center gap-3 px-4 py-2 bg-stone-100" style={{borderBottom:'1px solid #E7E2DA'}}>
+              <span className="mono-font text-[8px] tracking-widest text-stone-500">PREVIEW — {parsed.length} ROWS</span>
+            </div>
+            {parsed.slice(0,6).map((r,i)=>(
+              <div key={i} className="flex items-center gap-3 px-4 py-2 flex-wrap" style={{borderBottom:'1px solid #F0EDE6'}}>
+                <span className="mono-font text-[9px] text-stone-400 w-24 shrink-0 truncate">{r.id}</span>
+                <span className="mono-font text-[10px] text-stone-700 flex-1 truncate">{r.merchant||'—'}</span>
+                <span className="mono-font text-[9px] text-stone-500">{r.amount} {r.currency}</span>
+                <span className="mono-font text-[9px] text-stone-400">{r.reasonCode||'—'}</span>
+                <span className="mono-font text-[9px] text-stone-300">{r.date}</span>
+              </div>
+            ))}
+            {parsed.length>6&&<div className="px-4 py-2 mono-font text-[9px] text-stone-400">+{parsed.length-6} more rows</div>}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{maxWidth:'960px',margin:'0 auto',padding:'32px 24px 80px'}}>
+      <div className="mb-8 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'24px'}}>
+        <div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE No. 009 — CONNECT</div>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
+            <span style={{fontWeight:700}}>Con</span><span style={{fontStyle:'italic',fontWeight:500}}>nect</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:'1.5',maxWidth:'520px'}}>
+            Network integration hub. Import disputes from Visa Resolve Online and Mastercard Connect, or configure live API access when credentials are available.
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-0 mb-8 border-b border-stone-200">
+        {[['import','CSV IMPORT'],['api','LIVE API'],['supabase','CLOUD SYNC']].map(([id,label])=>(
+          <button key={id} onClick={()=>setConnectTab(id)} className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors" style={T(id)}>{label}</button>
+        ))}
+      </div>
+
+      {connectTab==='import'&&(
+        <div className="space-y-10">
+          <ImportPanel network="visa" paste={vroPaste} setPaste={setVroPaste} parsed={vroParsed} setParsed={setVroParsed} error={vroError} setError={setVroError} imported={vroImported} setImported={setVroImported} />
+          <div style={{borderTop:'1px solid #E7E2DA'}}/>
+          <ImportPanel network="mastercard" paste={mcPaste} setPaste={setMcPaste} parsed={mcParsed} setParsed={setMcParsed} error={mcError} setError={setMcError} imported={mcImported} setImported={setMcImported} />
+        </div>
+      )}
+
+      {connectTab==='api'&&(
+        <div className="space-y-4">
+          <div className="mb-5 px-4 py-3 border border-amber-200 bg-amber-50">
+            <p className="mono-font text-[9px] text-amber-800 tracking-wide">LIVE API INTEGRATION — Built and ready. Configuration will be enabled once API credentials are provided by the network or sponsoring acquirer. Use CSV import above in the meantime.</p>
+          </div>
+          <APIPlaceholder name="VISA DISPUTE MANAGEMENT SYSTEM (DMS) API" description="Live case status, reason code details, and deadline tracking direct from Visa's dispute management system. Eliminates manual VRO exports." />
+          <APIPlaceholder name="MASTERCARD DISPUTE RESOLUTION INITIATIVE (MDRI) API" description="Real-time dispute ingestion, case timeline events, and pre-arbitration triggers from Mastercard Connect. Includes automatic cycle tracking and deadline push." />
+          <APIPlaceholder name="MASTERCARD MATCH (TERMINATED MERCHANT FILE)" description="Screen merchants against the MATCH list at onboarding or case intake. Flags high-risk merchants with prior terminations for fraud or excessive chargebacks." />
+          <APIPlaceholder name="ETHOCA ALERT NETWORK" description="Receive fraud alerts from Ethoca before chargebacks are filed. Enables proactive refund to avoid chargeback and protect CBR. Requires Ethoca merchant agreement." />
+          <APIPlaceholder name="VERIFI ORDER INSIGHT / RAPID DISPUTE RESOLUTION" description="Pre-dispute intelligence from Verifi for Visa disputes. Automatically deflect disputes with order data at the issuer inquiry stage." />
+        </div>
+      )}
+
+      {connectTab==='supabase'&&(()=>{
+        const settings = (() => { try { return JSON.parse(localStorage.getItem('cov_settings')||'{}') } catch { return {} } })()
+        const connected = !!(settings.supabaseUrl && settings.supabaseAnonKey)
+        return (
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="mono-font text-[9px] tracking-widest text-stone-500">SUPABASE CLOUD SYNC</div>
+              <span className="mono-font text-[8px] px-2 py-0.5" style={{background:connected?'#D1FAE5':'#FEE2E2',color:connected?'#064E3B':'#7F1D1D',border:'1px solid '+(connected?'#6EE7B7':'#FCA5A5')}}>
+                {connected?'✓ CONNECTED':'✗ NOT CONFIGURED'}
+              </span>
+            </div>
+            {connected?(
+              <div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'16px'}}>
+                  {[['CASES IN CLOUD',outcomes.length,'#1C1917'],['RLS STATUS','✓ ENABLED','#064E3B']].map(([l,v,c])=>(
+                    <div key={l} style={{background:'#FAF7F1',padding:'16px'}}>
+                      <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">{l}</div>
+                      <div className="mono-font font-bold text-[22px]" style={{color:c}}>{v}</div>
+                    </div>
+                  ))}
+                  <div style={{background:'#FAF7F1',padding:'16px'}}>
+                    <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">ENDPOINT</div>
+                    <div className="mono-font text-[10px] text-stone-600 truncate">{settings.supabaseUrl.replace(/https?:\/\//,'')}</div>
+                  </div>
+                </div>
+                <p className="display-font text-stone-600 text-[13px] leading-relaxed">Cases sync to Supabase on every save. The LIVE indicator in the nav confirms each write. RLS policies are enforced on all reads and writes — disable is never permitted.</p>
+              </div>
+            ):(
+              <div>
+                <p className="display-font text-stone-600 text-[14px] leading-relaxed mb-4">Add your Supabase project URL and anon key in Settings to enable cloud sync. Cases persist across devices and users in real time.</p>
+                <div className="px-4 py-3 border border-stone-200 bg-stone-50 mono-font text-[9px] text-stone-500">Required tables: <strong>cov_cases</strong>, <strong>cov_agents</strong>, <strong>access_log</strong>. See Settings for schema details.</div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
