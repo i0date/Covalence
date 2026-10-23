@@ -12807,15 +12807,17 @@ function IntelView({ outcomes, platformMode, covUser }) {
 // 009 CONNECT VIEW
 // =============================================================================
 function ConnectView({ outcomes, setOutcomes, covUser }) {
-  const [connectTab, setConnectTab] = React.useState('import')
-  const [vroPaste,   setVroPaste]   = React.useState('')
-  const [mcPaste,    setMcPaste]    = React.useState('')
-  const [vroParsed,  setVroParsed]  = React.useState(null)
-  const [mcParsed,   setMcParsed]   = React.useState(null)
-  const [vroError,   setVroError]   = React.useState(null)
-  const [mcError,    setMcError]    = React.useState(null)
-  const [vroImported, setVroImported] = React.useState(false)
-  const [mcImported,  setMcImported]  = React.useState(false)
+  const [connectTab,   setConnectTab]  = React.useState('network')
+  const [vroPaste,     setVroPaste]    = React.useState('')
+  const [mcPaste,      setMcPaste]     = React.useState('')
+  const [vroParsed,    setVroParsed]   = React.useState(null)
+  const [mcParsed,     setMcParsed]    = React.useState(null)
+  const [vroError,     setVroError]    = React.useState(null)
+  const [mcError,      setMcError]     = React.useState(null)
+  const [vroImported,  setVroImported] = React.useState(false)
+  const [mcImported,   setMcImported]  = React.useState(false)
+  const [repFilter,    setRepFilter]   = React.useState('pending')
+  const [lastChecked,  setLastChecked] = React.useState(null)
 
   const parseCSV = (text, network) => {
     const lines = text.trim().split('\n').filter(Boolean)
@@ -12926,75 +12928,162 @@ function ConnectView({ outcomes, setOutcomes, covUser }) {
         <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
           <span style={{fontWeight:700}}>Con</span><span style={{fontStyle:'italic',fontWeight:500}}>nect</span>
         </h1>
-        <p className="display-font text-stone-500 mt-2" style={{fontSize:'clamp(12px,1.6vw,14px)',lineHeight:'1.5',maxWidth:'480px'}}>
-          Network integration hub — import from VRO or Mastercard Connect, or configure live API access.
+        <p className="display-font text-stone-500 mt-2" style={{fontSize:'clamp(12px,1.6vw,14px)',lineHeight:'1.5',maxWidth:'520px'}}>
+          Direct API layer to Visa and Mastercard dispute systems. Track incoming representments. Fall back to CSV while credentials are pending.
         </p>
       </div>
       <div style={{overflowX:'auto',marginBottom:'24px',borderBottom:'1px solid #E7E2DA'}}>
         <div className="flex gap-0" style={{minWidth:'max-content'}}>
-          {[['import','CSV IMPORT'],['api','LIVE API'],['supabase','CLOUD SYNC']].map(([id,label])=>(
+          {[['network','NETWORK API'],['representments','REPRESENTMENTS'],['import','CSV IMPORT']].map(([id,label])=>(
             <button key={id} onClick={()=>setConnectTab(id)} className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors whitespace-nowrap" style={T(id)}>{label}</button>
           ))}
         </div>
       </div>
 
-      {connectTab==='import'&&(
-        <div className="space-y-10">
-          <ImportPanel network="visa" paste={vroPaste} setPaste={setVroPaste} parsed={vroParsed} setParsed={setVroParsed} error={vroError} setError={setVroError} imported={vroImported} setImported={setVroImported} />
-          <div style={{borderTop:'1px solid #E7E2DA'}}/>
-          <ImportPanel network="mastercard" paste={mcPaste} setPaste={setMcPaste} parsed={mcParsed} setParsed={setMcParsed} error={mcError} setError={setMcError} imported={mcImported} setImported={setMcImported} />
-        </div>
-      )}
-
-      {connectTab==='api'&&(
-        <div className="space-y-4">
-          <div className="mb-5 px-4 py-3 border border-amber-200 bg-amber-50">
-            <p className="mono-font text-[9px] text-amber-800 tracking-wide">LIVE API INTEGRATION — Built and ready. Configuration will be enabled once API credentials are provided by the network or sponsoring acquirer. Use CSV import above in the meantime.</p>
+      {/* ── NETWORK API TAB ── */}
+      {connectTab==='network'&&(
+        <div>
+          <div className="mb-5 px-4 py-3" style={{border:'1px solid #FCD34D',background:'#FFFBEB'}}>
+            <div className="mono-font text-[9px] tracking-widest text-amber-800 mb-1">AWAITING CREDENTIALS</div>
+            <p className="mono-font text-[9px] text-amber-700">The API layer is built and ready. Once network credentials are issued by your sponsoring acquirer or directly by Visa/Mastercard, configure each integration below. CSV import remains available in the meantime.</p>
           </div>
-          <APIPlaceholder name="VISA DISPUTE MANAGEMENT SYSTEM (DMS) API" description="Live case status, reason code details, and deadline tracking direct from Visa's dispute management system. Eliminates manual VRO exports." />
-          <APIPlaceholder name="MASTERCARD DISPUTE RESOLUTION INITIATIVE (MDRI) API" description="Real-time dispute ingestion, case timeline events, and pre-arbitration triggers from Mastercard Connect. Includes automatic cycle tracking and deadline push." />
-          <APIPlaceholder name="MASTERCARD MATCH (TERMINATED MERCHANT FILE)" description="Screen merchants against the MATCH list at onboarding or case intake. Flags high-risk merchants with prior terminations for fraud or excessive chargebacks." />
-          <APIPlaceholder name="ETHOCA ALERT NETWORK" description="Receive fraud alerts from Ethoca before chargebacks are filed. Enables proactive refund to avoid chargeback and protect CBR. Requires Ethoca merchant agreement." />
-          <APIPlaceholder name="VERIFI ORDER INSIGHT / RAPID DISPUTE RESOLUTION" description="Pre-dispute intelligence from Verifi for Visa disputes. Automatically deflect disputes with order data at the issuer inquiry stage." />
+          <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+            {[
+              { id:'visa_dms',   net:'VISA',        name:'VISA DISPUTE MANAGEMENT SYSTEM (DMS)',         scope:'Dispute submission, case status, deadline tracking, and reason code details direct from Visa. Replaces manual VRO exports. Cases filed through Covalence will push directly and receive status callbacks.',     cred:'Visa DMS Client ID + Secret (via acquirer)' },
+              { id:'mc_mdri',    net:'MASTERCARD',  name:'MASTERCARD DISPUTE RESOLUTION INITIATIVE (MDRI)',scope:'Real-time dispute ingestion, case lifecycle events, pre-arbitration triggers, and cycle deadline management from Mastercard. Incoming representments surface automatically in the Representments tab.',         cred:'MC MDRI API Key + Merchant ID (via acquirer)' },
+              { id:'mc_match',   net:'MASTERCARD',  name:'MASTERCARD MATCH — TERMINATED MERCHANT FILE',  scope:'Screen merchants against the MATCH list at onboarding or case intake. Flags prior terminations for fraud or excessive chargebacks before disputes are worked.',                                                  cred:'MC MATCH API Key' },
+              { id:'ethoca',     net:'ETHOCA',      name:'ETHOCA ALERT NETWORK',                         scope:'Receive fraud alerts from Ethoca before chargebacks are filed. Enables proactive refund to avoid the chargeback and protect your chargeback ratio. Alerts arrive in the Representments tab as actionable items.',cred:'Ethoca Merchant Token + Alert endpoint URL' },
+              { id:'verifi',     net:'VERIFI',      name:'VERIFI ORDER INSIGHT / RAPID DISPUTE RESOLUTION',scope:'Pre-dispute intelligence for Visa disputes. Automatically deflect disputes with order data at the issuer inquiry stage, before a chargeback is raised. Requires Verifi merchant agreement.',                cred:'Verifi Client ID + Secret + Merchant ID' },
+            ].map(({id,net,name,scope,cred})=>(
+              <div key={id} style={{border:'1px solid #E7E2DA',padding:'20px',background:'#FAFAF8'}}>
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div style={{flex:1}}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="mono-font text-[8px] px-1.5 py-0.5" style={{background:net==='VISA'?'#EFF6FF':net==='MASTERCARD'?'#FFF1F2':'#F0FDF4',color:net==='VISA'?'#1E40AF':net==='MASTERCARD'?'#9F1239':'#166534',border:'1px solid '+(net==='VISA'?'#BFDBFE':net==='MASTERCARD'?'#FECDD3':'#BBF7D0')}}>{net}</span>
+                      <span className="mono-font text-[10px] font-bold text-stone-700">{name}</span>
+                    </div>
+                    <p className="display-font text-stone-500 text-[13px] leading-relaxed mb-2">{scope}</p>
+                    <div className="mono-font text-[8px] tracking-widest text-stone-400">REQUIRED: {cred}</div>
+                  </div>
+                  <span className="mono-font text-[8px] tracking-widest px-2 py-1 shrink-0" style={{background:'#FEF3C7',color:'#78350F',border:'1px solid #FCD34D',whiteSpace:'nowrap'}}>AWAITING CREDENTIALS</span>
+                </div>
+                <button disabled className="mono-font text-[9px] tracking-widest px-4 py-2" style={{background:'#F0EDE6',border:'1px solid #D4CCBC',color:'#A8A29E',cursor:'not-allowed'}}>CONFIGURE →</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {connectTab==='supabase'&&(()=>{
-        const settings = (() => { try { return JSON.parse(localStorage.getItem('cov_settings')||'{}') } catch { return {} } })()
-        const connected = !!(settings.supabaseUrl && settings.supabaseAnonKey)
+      {/* ── REPRESENTMENTS TAB ── */}
+      {connectTab==='representments'&&(()=>{
+        const repCases = outcomes.filter(c => ['merchant_resp','pre_arb','arbitration'].includes(c.cbStage)||c.status==='merchant_resp')
+        const pending  = repCases.filter(c => !c.repReceivedAt)
+        const received = repCases.filter(c =>  c.repReceivedAt)
+        const view     = repFilter==='pending' ? pending : repFilter==='received' ? received : repCases
+        const daysSince = (dateStr) => { if(!dateStr) return null; const d=Math.floor((Date.now()-new Date(dateStr))/(1000*60*60*24)); return d }
         return (
           <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="mono-font text-[9px] tracking-widest text-stone-500">SUPABASE CLOUD SYNC</div>
-              <span className="mono-font text-[8px] px-2 py-0.5" style={{background:connected?'#D1FAE5':'#FEE2E2',color:connected?'#064E3B':'#7F1D1D',border:'1px solid '+(connected?'#6EE7B7':'#FCA5A5')}}>
-                {connected?'✓ CONNECTED':'✗ NOT CONFIGURED'}
-              </span>
+            <div className="mb-5">
+              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">WHAT THIS TRACKS</div>
+              <p className="display-font text-stone-600 text-[13px] leading-relaxed">After a chargeback is filed, the merchant has a window to respond — usually 20–45 days depending on network and reason code. Once MDRI and Ethoca are live, incoming responses will appear here automatically and update the case in Desk. Until then this view reads from cases in the CB pipeline that are awaiting a merchant response.</p>
             </div>
-            {connected?(
-              <div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'16px'}}>
-                  {[['CASES IN CLOUD',outcomes.length,'#1C1917'],['RLS STATUS','✓ ENABLED','#064E3B']].map(([l,v,c])=>(
-                    <div key={l} style={{background:'#FAF7F1',padding:'16px'}}>
-                      <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">{l}</div>
-                      <div className="mono-font font-bold text-[22px]" style={{color:c}}>{v}</div>
-                    </div>
-                  ))}
-                  <div style={{background:'#FAF7F1',padding:'16px'}}>
-                    <div className="mono-font text-[8px] tracking-widest text-stone-500 mb-1">ENDPOINT</div>
-                    <div className="mono-font text-[10px] text-stone-600 truncate">{settings.supabaseUrl.replace(/https?:\/\//,'')}</div>
+
+            <div className="mb-5 px-4 py-3" style={{border:'1px solid #E7E2DA',background:'#FAFAF8'}}>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <div className="mono-font text-[8px] tracking-widest text-stone-400 mb-0.5">AWAITING RESPONSE</div>
+                    <div className="mono-font font-bold text-[22px] text-stone-800">{pending.length}</div>
+                  </div>
+                  <div>
+                    <div className="mono-font text-[8px] tracking-widest text-stone-400 mb-0.5">RESPONSE RECEIVED</div>
+                    <div className="mono-font font-bold text-[22px] text-emerald-700">{received.length}</div>
+                  </div>
+                  <div>
+                    <div className="mono-font text-[8px] tracking-widest text-stone-400 mb-0.5">TOTAL IN PIPELINE</div>
+                    <div className="mono-font font-bold text-[22px] text-stone-500">{repCases.length}</div>
                   </div>
                 </div>
-                <p className="display-font text-stone-600 text-[13px] leading-relaxed">Cases sync to Supabase on every save. The LIVE indicator in the nav confirms each write. RLS policies are enforced on all reads and writes — disable is never permitted.</p>
+                <button onClick={()=>setLastChecked(new Date().toLocaleTimeString())}
+                  className="mono-font text-[9px] tracking-widest px-4 py-2"
+                  style={{background:'#1C1917',color:'#F5F1EA',border:'none',cursor:'pointer'}}>
+                  ↻ CHECK FOR UPDATES
+                </button>
+              </div>
+              {lastChecked&&<div className="mono-font text-[8px] text-stone-400 mt-2">Last checked: {lastChecked} — live polling active once MDRI/Ethoca credentials are configured</div>}
+            </div>
+
+            <div style={{display:'flex',gap:'2px',marginBottom:'14px'}}>
+              {[['pending','AWAITING'],['received','RECEIVED'],['all','ALL']].map(([v,l])=>(
+                <button key={v} onClick={()=>setRepFilter(v)} className="mono-font text-[9px] tracking-widest px-4 py-2"
+                  style={{background:repFilter===v?'#1C1917':'transparent',color:repFilter===v?'#F5F1EA':'#78716C',border:'1px solid '+(repFilter===v?'#1C1917':'#D4CCBC'),cursor:'pointer'}}>
+                  {l} ({v==='pending'?pending.length:v==='received'?received.length:repCases.length})
+                </button>
+              ))}
+            </div>
+
+            {view.length===0?(
+              <div className="mono-font text-[9px] py-10 text-center" style={{color:'#A8A29E',border:'1px solid #E7E2DA'}}>
+                {repCases.length===0
+                  ? 'No cases in the merchant response stage yet. Cases filed through Desk move here once they reach the CB pipeline.'
+                  : 'No cases match this filter.'}
               </div>
             ):(
-              <div>
-                <p className="display-font text-stone-600 text-[14px] leading-relaxed mb-4">Add your Supabase project URL and anon key in Settings to enable cloud sync. Cases persist across devices and users in real time.</p>
-                <div className="px-4 py-3 border border-stone-200 bg-stone-50 mono-font text-[9px] text-stone-500">Required tables: <strong>cov_cases</strong>, <strong>cov_agents</strong>, <strong>access_log</strong>. See Settings for schema details.</div>
+              <div style={{border:'1px solid #E7E2DA'}}>
+                <div className="flex items-center gap-3 px-4 py-2" style={{borderBottom:'1px solid #E7E2DA',background:'#F5F1EA'}}>
+                  <span className="mono-font text-[8px] tracking-widest text-stone-400 flex-1">CASE</span>
+                  <span className="mono-font text-[8px] tracking-widest text-stone-400 w-24 shrink-0">STAGE</span>
+                  <span className="mono-font text-[8px] tracking-widest text-stone-400 w-20 text-right shrink-0">AMOUNT</span>
+                  <span className="mono-font text-[8px] tracking-widest text-stone-400 w-24 text-right shrink-0">FILED</span>
+                  <span className="mono-font text-[8px] tracking-widest text-stone-400 w-20 text-right shrink-0">STATUS</span>
+                </div>
+                {view.map((c,i)=>{
+                  const age = daysSince(c.filedAt||c.date)
+                  const overdue = age!=null && age>30
+                  return (
+                    <div key={c.id||i} className="flex items-center gap-3 px-4 py-3" style={{borderTop:i>0?'1px solid #F0EDE6':'none',background:'#FAFAF8'}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div className="mono-font text-[8px] text-stone-400 mb-0.5">{c.id||'—'}</div>
+                        <div className="display-font text-[13px] text-stone-700 truncate">{c.merchant||c.description||'—'}</div>
+                      </div>
+                      <div className="mono-font text-[9px] w-24 shrink-0" style={{color:'#78716C'}}>{(c.cbStage||c.status||'—').replace(/_/g,' ').toUpperCase()}</div>
+                      <div className="mono-font text-[9px] w-20 text-right shrink-0 text-stone-600">{c.amount?'$'+c.amount:'—'}</div>
+                      <div className="mono-font text-[9px] w-24 text-right shrink-0" style={{color:overdue?'#B45309':'#A8A29E'}}>
+                        {age!=null?age+'d ago':'—'}{overdue?' ⚠':''}
+                      </div>
+                      <div className="w-20 text-right shrink-0">
+                        <span className="mono-font text-[8px] px-2 py-0.5" style={{background:c.repReceivedAt?'#D1FAE5':'#FEF3C7',color:c.repReceivedAt?'#064E3B':'#78350F',border:'1px solid '+(c.repReceivedAt?'#6EE7B7':'#FCD34D')}}>
+                          {c.repReceivedAt?'RECEIVED':'PENDING'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
+
+            <div className="mt-6 px-4 py-3" style={{border:'1px solid #E7E2DA',background:'#FAFAF8'}}>
+              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">ONCE MDRI + ETHOCA ARE LIVE</div>
+              <p className="display-font text-stone-500 text-[13px] leading-relaxed">Merchant responses will arrive via webhook. Covalence will update the case stage in Desk automatically, flag responses that need attention, and surface pre-dispute alerts from Ethoca and Verifi here for action before a chargeback is raised.</p>
+            </div>
           </div>
         )
       })()}
+
+      {/* ── CSV IMPORT TAB ── */}
+      {connectTab==='import'&&(
+        <div>
+          <div className="mb-5 px-4 py-3" style={{border:'1px solid #E7E2DA',background:'#FAFAF8'}}>
+            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">CSV IMPORT — INTERIM METHOD</div>
+            <p className="display-font text-stone-500 text-[13px] leading-relaxed">Export from VRO or Mastercard Connect and paste below. Cases are mapped and added to the Multi queue. Once Network API credentials are configured, this step is replaced by automatic ingestion.</p>
+          </div>
+          <div className="space-y-10">
+            <ImportPanel network="visa" paste={vroPaste} setPaste={setVroPaste} parsed={vroParsed} setParsed={setVroParsed} error={vroError} setError={setVroError} imported={vroImported} setImported={setVroImported} />
+            <div style={{borderTop:'1px solid #E7E2DA'}}/>
+            <ImportPanel network="mastercard" paste={mcPaste} setPaste={setMcPaste} parsed={mcParsed} setParsed={setMcParsed} error={mcError} setError={setMcError} imported={mcImported} setImported={setMcImported} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
