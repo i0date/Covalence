@@ -423,8 +423,6 @@ export default function Covalence() {
     { id:'dfa',      label:'005  DFA' },
     { id:'duo',      label:'006  DUO' },
     { id:'trio',     label:'007  TRIO' },
-    { id:'intel',    label:'008  INTEL' },
-    { id:'connect',  label:'009  CONNECT' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -507,12 +505,6 @@ export default function Covalence() {
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} />
         </div>
-        <div style={{ display: activeSection === 'intel' ? 'block' : 'none' }}>
-          <IntelView outcomes={outcomes} platformMode={platformMode} covUser={covUser} />
-        </div>
-        <div style={{ display: activeSection === 'connect' ? 'block' : 'none' }}>
-          <ConnectView outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} />
-        </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} />
         </div>
@@ -580,8 +572,7 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
             { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
             { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
             { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
-            { num:'008', name:'INTEL',  section:'intel',  bg:'#C7BFB2' },
-            { num:'009', name:'CONNECT',section:'connect',bg:'#C1BAB0' },
+
           ].map(({ num, name, section, bg }) => (
             <button key={num} onClick={() => setActiveSection(section)}
               className="mono-font"
@@ -11499,7 +11490,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
       </div>
       {/* ── Tab switcher ── */}
       <div className="flex gap-0 mb-6 border-b border-stone-200">
-        {[['queue','FILING QUEUE'],['myqueue','MY QUEUE']].map(([id,label])=>(
+        {[['queue','FILING QUEUE'],['myqueue','MY QUEUE'],['intel','INTEL']].map(([id,label])=>(
           <button key={id} onClick={()=>setMultiTab(id)}
             className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors"
             style={{borderBottom: multiTab===id ? '2px solid #1C1917' : '2px solid transparent',
@@ -11511,6 +11502,10 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
 
       {multiTab === 'myqueue' && (
         <MyQueuePanel outcomes={outcomes} myEmail={myEmail} covUser={covUser} setActiveSection={setActiveSection} setOutcomes={setOutcomes} />
+      )}
+
+      {multiTab === 'intel' && (
+        <IntelView outcomes={outcomes} platformMode={null} covUser={covUser} />
       )}
 
       <div style={{display: multiTab==='queue' ? 'block' : 'none'}}>
@@ -11929,6 +11924,7 @@ function FileView({ setActiveSection, setAppOutcomes }) {
   const [fileNetFilter, setFileNetFilter] = React.useState('') // '' | 'visa' | 'master' | 'amex' | 'discover'
   const [fileNoteOpen, setFileNoteOpen] = React.useState(null)
   const [fileNoteDraft, setFileNoteDraft] = React.useState('')
+  const [fileTab, setFileTab]     = React.useState('cases') // 'cases'|'connect'
   const settings = React.useMemo(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}') } catch { return {} } }, [])
 
   React.useEffect(() => {
@@ -12005,6 +12001,23 @@ ${'═'.repeat(64)}`
         </div>
         <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
       </div>
+
+      {/* ── Tab switcher ── */}
+      <div className="flex gap-0 mb-8 border-b border-stone-200">
+        {[['cases','FILED CASES'],['connect','CONNECT']].map(([id,label])=>(
+          <button key={id} onClick={()=>setFileTab(id)}
+            className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors"
+            style={{borderBottom:fileTab===id?'2px solid #1C1917':'2px solid transparent',color:fileTab===id?'#1C1917':'#78716C',background:'transparent',cursor:'pointer'}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {fileTab==='connect'&&(
+        <ConnectView outcomes={filedCases} setOutcomes={setAppOutcomes||(() => {})} covUser={null} />
+      )}
+
+      {fileTab==='cases'&&<>
 
       {/* Network cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
@@ -12193,6 +12206,9 @@ ${'═'.repeat(64)}`
       </div>
 
       {/* Package re-download modal */}
+      </>
+      }{/* end cases tab */}
+
       {pkgModal2 && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'24px'}}>
           <div style={{background:'#FAF7F1',maxWidth:'760px',width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',border:'2px solid #1C1917'}}>
