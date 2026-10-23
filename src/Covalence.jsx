@@ -11154,7 +11154,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
   const [assignFilter,  setAssignFilter]  = React.useState('all')
   const [agentList,     setAgentList]     = React.useState([])
   const [assignOpen,    setAssignOpen]    = React.useState({})
-  const [showAnalytics, setShowAnalytics] = React.useState(false)
+  // Portfolio Analytics moved into Intel tab
   const [multiSearch,   setMultiSearch]   = React.useState('')
   const [multiTab,      setMultiTab]      = React.useState('queue') // 'queue'|'myqueue'
 
@@ -11792,86 +11792,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
         </div>
       </div>
 
-      {/* ── Portfolio Analytics — collapsible, bottom of Multi ──────────── */}
-      {(() => {
-        const resolved = outcomes.filter(o => ['won','lost','withdrawn'].includes(o.status))
-        const won      = resolved.filter(o => o.status === 'won')
-        const winRate  = resolved.length > 0 ? Math.round((won.length / resolved.length) * 100) : null
-        const now = new Date()
-        const months = Array.from({length:6}, (_,i) => {
-          const d = new Date(now.getFullYear(), now.getMonth() - (5-i), 1)
-          return { label: d.toLocaleDateString('en-US',{month:'short',year:'2-digit'}), key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` }
-        })
-        const volumeByMonth = months.map(m => ({ ...m, count: outcomes.filter(o => o.date && o.date.startsWith(m.key)).length }))
-        const maxVol = Math.max(...volumeByMonth.map(m => m.count), 1)
-        const cats = {}
-        resolved.forEach(o => {
-          const c = (o.category || (o.verdict?.includes('FRAUD') ? 'fraud' : 'other')).replace('mc_','')
-          if (!cats[c]) cats[c] = {won:0,total:0}
-          cats[c].total++
-          if (o.status === 'won') cats[c].won++
-        })
-        const withDays = resolved.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
-        const avgDays = withDays.length > 0 ? Math.round(withDays.reduce((a,b)=>a+b,0)/withDays.length) : null
-        const openExposure = outcomes.filter(o=>['queued','filed','investigating','representment','pre_arb'].includes(o.status)).reduce((s,o)=>s+(parseFloat(o.amount)||0),0)
-        if (outcomes.length === 0) return null
-        return (
-          <div className="mt-6 border border-stone-300" style={{background:'#FAF7F1'}}>
-            <button onClick={() => setShowAnalytics(p => !p)} className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-stone-100 transition-colors">
-              <span className="mono-font text-[10px] tracking-widest text-stone-600">PORTFOLIO ANALYTICS</span>
-              <span className="mono-font text-[10px] text-stone-400">{showAnalytics ? '▲ COLLAPSE' : '▼ EXPAND'}</span>
-            </button>
-            {showAnalytics && (
-              <div className="border-t border-stone-200 px-5 py-5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                  {[
-                    {label:'TOTAL CASES',    value: outcomes.length},
-                    {label:'WIN RATE',       value: winRate !== null ? `${winRate}%` : '—',   sub:`${resolved.length} resolved`},
-                    {label:'AVG DAYS',       value: avgDays !== null ? `${avgDays}d` : '—',   sub:'to resolution'},
-                    {label:'OPEN EXPOSURE',  value: openExposure > 0 ? `$${openExposure.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—', sub:'in-progress'},
-                  ].map(({label,value,sub}) => (
-                    <div key={label}>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
-                      <div className="display-font font-bold text-stone-900" style={{fontSize:'clamp(20px,3vw,28px)',letterSpacing:'-0.02em'}}>{value}</div>
-                      {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-6">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CASE VOLUME — LAST 6 MONTHS</div>
-                  <div className="flex items-end gap-2" style={{height:'64px'}}>
-                    {volumeByMonth.map(m => (
-                      <div key={m.key} className="flex flex-col items-center flex-1 gap-1">
-                        <div className="w-full transition-all" style={{background:'#1C1917',height:`${Math.max(4,Math.round((m.count/maxVol)*52))}px`}} title={`${m.count} cases`} />
-                        <span className="mono-font text-[8px] text-stone-400">{m.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {Object.keys(cats).length > 0 && (
-                  <div>
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">WIN RATE BY CATEGORY</div>
-                    <div className="space-y-2">
-                      {Object.entries(cats).sort((a,b)=>b[1].total-a[1].total).map(([cat,{won:w,total:t}]) => {
-                        const pct = Math.round((w/t)*100)
-                        return (
-                          <div key={cat} className="flex items-center gap-3">
-                            <span className="mono-font text-[9px] text-stone-500 shrink-0" style={{width:'120px'}}>{cat.replace(/_/g,' ').toUpperCase()}</span>
-                            <div className="flex-1 h-2" style={{background:'#E7E3DB'}}>
-                              <div style={{width:`${pct}%`,height:'100%',background:pct>=70?'#064E3B':pct>=50?'#92400E':'#7F1D1D',transition:'width 0.3s'}} />
-                            </div>
-                            <span className="mono-font text-[9px] text-stone-600 shrink-0" style={{width:'48px',textAlign:'right'}}>{pct}% ({t})</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })()}
+      {/* Portfolio Analytics consolidated into Intel tab */}
 
       </div>{/* end queue tab */}
       {/* ── Filing Package Modal ─────────────────────────────────────────── */}
@@ -12478,6 +12399,7 @@ function MyQueuePanel({ outcomes, myEmail, covUser, setActiveSection }) {
 // =============================================================================
 function IntelView({ outcomes, platformMode, covUser }) {
   const [intelTab, setIntelTab] = React.useState('portfolio')
+  const [chartMonths, setChartMonths] = React.useState(6)
   const resolved  = outcomes.filter(o => o.status === 'won' || o.status === 'lost')
   const won       = resolved.filter(o => o.status === 'won')
   const lost      = resolved.filter(o => o.status === 'lost')
@@ -12490,7 +12412,7 @@ function IntelView({ outcomes, platformMode, covUser }) {
     .map(o => Math.ceil((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)).filter(d => d > 0 && d < 400)
   const avgResolution = resolutionDays.length > 0 ? Math.round(resolutionDays.reduce((a,b)=>a+b,0)/resolutionDays.length) : null
   const months = []
-  for (let i = 5; i >= 0; i--) {
+  for (let i = chartMonths - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i)
     const key = d.toISOString().substring(0,7)
     const mo = outcomes.filter(o => (o.date||'').startsWith(key))
@@ -12533,18 +12455,20 @@ function IntelView({ outcomes, platformMode, covUser }) {
     </div>
   )
   return (
-    <div style={{maxWidth:'960px',margin:'0 auto',padding:'32px 24px 80px'}}>
-      <div className="mb-8 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'24px'}}>
-        <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE No. 008 — INTEL</div>
-          <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
-            <span style={{fontWeight:700}}>In</span><span style={{fontStyle:'italic',fontWeight:500}}>tel</span>
-          </h1>
-          <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:'1.5',maxWidth:'520px'}}>
-            Portfolio intelligence. Win rates by reason code, merchant dispute patterns, team throughput, and DFA model calibration — all derived from your live case log.
-          </p>
+    <div style={{maxWidth:'960px',margin:'0 auto',padding:'24px 16px 80px'}}>
+      <div className="mb-6 pb-5" style={{borderBottom:'1px solid #D4CCBC'}}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}}>
+          <div>
+            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2" style={{letterSpacing:'0.18em'}}>◈ SIGNAL · 003 MULTI</div>
+            <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
+              <span style={{fontWeight:700}}>In</span><span style={{fontStyle:'italic',fontWeight:500}}>tel</span>
+            </h1>
+            <p className="display-font text-stone-500 mt-2" style={{fontSize:'clamp(12px,1.6vw,14px)',lineHeight:'1.5',maxWidth:'480px'}}>
+              Portfolio intelligence — win rates, merchant patterns, team throughput, DFA calibration.
+            </p>
+          </div>
+          <div className="mono-font text-[9px] tracking-widest text-stone-500 shrink-0 mt-1">{outcomes.length} CASES · {resolved.length} RESOLVED</div>
         </div>
-        <div className="mono-font text-xs tracking-widest text-stone-600 shrink-0">{outcomes.length} CASES · {resolved.length} RESOLVED</div>
       </div>
       {outcomes.length === 0 ? (
         <div className="text-center py-20">
@@ -12553,14 +12477,16 @@ function IntelView({ outcomes, platformMode, covUser }) {
         </div>
       ) : (
         <>
-          <div className="flex gap-0 mb-8 border-b border-stone-200">
-            {[['portfolio','PORTFOLIO'],['codes','BY REASON CODE'],['merchants','BY MERCHANT'],['team','TEAM'],['dfa','DFA CALIBRATION']].map(([id,label])=>(
-              <button key={id} onClick={()=>setIntelTab(id)} className="mono-font text-[9px] tracking-widest px-4 py-3 transition-colors" style={T(id)}>{label}</button>
-            ))}
+          <div style={{overflowX:'auto',marginBottom:'24px',borderBottom:'1px solid #E7E2DA'}}>
+            <div className="flex gap-0" style={{minWidth:'max-content'}}>
+              {[['portfolio','PORTFOLIO'],['codes','BY CODE'],['merchants','BY MERCHANT'],['team','TEAM'],['dfa','DFA']].map(([id,label])=>(
+                <button key={id} onClick={()=>setIntelTab(id)} className="mono-font text-[9px] tracking-widest px-4 py-3 transition-colors whitespace-nowrap" style={T(id)}>{label}</button>
+              ))}
+            </div>
           </div>
           {intelTab==='portfolio'&&(
             <div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'32px'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:'1px',background:'#D4CCBC',marginBottom:'28px'}}>
                 <Stat label="TOTAL CASES" value={outcomes.length} sub={pending.length+' pending'} />
                 <Stat label="WIN RATE" value={winRate!==null?winRate+'%':'—'} sub={won.length+'W / '+lost.length+'L of '+resolved.length+' resolved'} color={winRate>=65?'#064E3B':winRate>=45?'#78350F':'#7F1D1D'} />
                 <Stat label="RECOVERED" value={'$'+Math.round(recovered).toLocaleString()} sub="from won disputes" color="#064E3B" />
@@ -12568,10 +12494,17 @@ function IntelView({ outcomes, platformMode, covUser }) {
                 <Stat label="AVG RESOLUTION" value={avgResolution!==null?avgResolution+'d':'—'} sub="filed to decision" />
               </div>
               <div className="mb-8">
-                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CASE VOLUME — LAST 6 MONTHS</div>
-                <div style={{display:'flex',alignItems:'flex-end',gap:'8px',height:'110px',borderBottom:'1px solid #E7E2DA'}}>
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                  <div className="mono-font text-[9px] tracking-widest text-stone-500">CASE VOLUME</div>
+                  <div className="flex gap-1">
+                    {[3,6,12].map(n=>(
+                      <button key={n} onClick={()=>setChartMonths(n)} className="mono-font text-[8px] tracking-widest px-2 py-1 transition-colors" style={{background:chartMonths===n?'#1C1917':'transparent',color:chartMonths===n?'#F5F1EA':'#78716C',border:'1px solid '+(chartMonths===n?'#1C1917':'#D4CCBC'),cursor:'pointer'}}>{n}M</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{display:'flex',alignItems:'flex-end',gap:'6px',height:'110px',borderBottom:'1px solid #E7E2DA',overflowX:'auto'}}>
                   {months.map(m=>(
-                    <div key={m.key} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',height:'100%',justifyContent:'flex-end'}}>
+                    <div key={m.key} style={{flex:1,minWidth:'24px',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px',height:'100%',justifyContent:'flex-end'}}>
                       {m.total>0&&(<div style={{width:'100%',display:'flex',flexDirection:'column',gap:'1px'}}>
                         <div style={{background:'#064E3B',height:(m.won/maxM*85)+'px',minHeight:m.won?2:0,width:'100%'}}/>
                         <div style={{background:'#7F1D1D',height:(m.lost/maxM*85)+'px',minHeight:m.lost?2:0,width:'100%'}}/>
@@ -12582,7 +12515,7 @@ function IntelView({ outcomes, platformMode, covUser }) {
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-4 mt-2 flex-wrap">
                   {[['#064E3B','Won'],['#7F1D1D','Lost'],['#D4CCBC','Pending']].map(([col,lbl])=>(
                     <div key={lbl} className="flex items-center gap-1.5"><div style={{width:10,height:10,background:col}}/><span className="mono-font text-[9px] text-stone-500">{lbl}</span></div>
                   ))}
@@ -12838,22 +12771,22 @@ function ConnectView({ outcomes, setOutcomes, covUser }) {
   }
 
   return (
-    <div style={{maxWidth:'960px',margin:'0 auto',padding:'32px 24px 80px'}}>
-      <div className="mb-8 pb-6" style={{borderBottom:'1px solid #D4CCBC',display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'24px'}}>
-        <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE No. 009 — CONNECT</div>
-          <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(48px,8vw,96px)',letterSpacing:'-0.03em'}}>
-            <span style={{fontWeight:700}}>Con</span><span style={{fontStyle:'italic',fontWeight:500}}>nect</span>
-          </h1>
-          <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:'1.5',maxWidth:'520px'}}>
-            Network integration hub. Import disputes from Visa Resolve Online and Mastercard Connect, or configure live API access when credentials are available.
-          </p>
-        </div>
+    <div style={{maxWidth:'960px',margin:'0 auto',padding:'24px 16px 80px'}}>
+      <div className="mb-6 pb-5" style={{borderBottom:'1px solid #D4CCBC'}}>
+        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2" style={{letterSpacing:'0.18em'}}>◈ CHANNEL · 004 FILE</div>
+        <h1 className="display-font font-bold text-stone-900 leading-none" style={{fontSize:'clamp(28px,5vw,52px)',letterSpacing:'-0.03em'}}>
+          <span style={{fontWeight:700}}>Con</span><span style={{fontStyle:'italic',fontWeight:500}}>nect</span>
+        </h1>
+        <p className="display-font text-stone-500 mt-2" style={{fontSize:'clamp(12px,1.6vw,14px)',lineHeight:'1.5',maxWidth:'480px'}}>
+          Network integration hub — import from VRO or Mastercard Connect, or configure live API access.
+        </p>
       </div>
-      <div className="flex gap-0 mb-8 border-b border-stone-200">
-        {[['import','CSV IMPORT'],['api','LIVE API'],['supabase','CLOUD SYNC']].map(([id,label])=>(
-          <button key={id} onClick={()=>setConnectTab(id)} className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors" style={T(id)}>{label}</button>
-        ))}
+      <div style={{overflowX:'auto',marginBottom:'24px',borderBottom:'1px solid #E7E2DA'}}>
+        <div className="flex gap-0" style={{minWidth:'max-content'}}>
+          {[['import','CSV IMPORT'],['api','LIVE API'],['supabase','CLOUD SYNC']].map(([id,label])=>(
+            <button key={id} onClick={()=>setConnectTab(id)} className="mono-font text-[9px] tracking-widest px-5 py-3 transition-colors whitespace-nowrap" style={T(id)}>{label}</button>
+          ))}
+        </div>
       </div>
 
       {connectTab==='import'&&(
