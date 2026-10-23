@@ -8539,6 +8539,11 @@ function TrioView({ outcomes: _parentOutcomes }) {
   const [strategyNotes,     setStrategyNotes]     = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_trio_strategy_notes') || '{}') } catch { return {} } })
   const [strategyDraft,     setStrategyDraft]     = React.useState('')
   const [briefCopied,       setBriefCopied]       = React.useState(false)
+  const [playbooks,         setPlaybooks]         = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_trio_playbooks')||'[]') } catch { return [] } })
+  const [playbookIncId,     setPlaybookIncId]     = React.useState(null)
+  const [structuredDebriefs,setStructuredDebriefs]= React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_trio_debriefs')||'{}') } catch { return {} } })
+  const [structDraft,       setStructDraft]       = React.useState({})
+  const [showPlaybooks,     setShowPlaybooks]     = React.useState(false)
   const [caseFilter,        setCaseFilter]        = React.useState('all')   // all | fraud | service | won | open
   const [globalNoteDraft,   setGlobalNoteDraft]   = React.useState('')
   const [globalNotes,       setGlobalNotes]       = React.useState(() => { try { return JSON.parse(localStorage.getItem('cov_strategy_global_notes') || '[]') } catch { return [] } })
@@ -8827,19 +8832,67 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
           typeCount[i.type||'unknown'] = (typeCount[i.type||'unknown']||0)+1;
           (i.affectedFis||[]).forEach(f => { fiCount[f.name] = (fiCount[f.name]||0)+1 })
         })
-        const topTypes = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])
-        const topFis   = Object.entries(fiCount).sort((a,b)=>b[1]-a[1]).slice(0,6)
+        const topTypes   = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])
+        const topFis     = Object.entries(fiCount).sort((a,b)=>b[1]-a[1]).slice(0,6)
         const totalCases = allIncs.reduce((s,i)=>s+(i.linkedCaseIds||[]).length,0)
         const openCount  = allIncs.filter(i=>i.status==='active').length
         const contCount  = allIncs.filter(i=>i.status==='contained').length
         const closeCount = closed.length
+        // Exposure + SAR
+        const allOutcomesS  = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes')||'[]') } catch { return [] } })()
+        const sarThresholdV = parseFloat(settings?.sarThreshold)||5000
+        const incidentSAR   = allIncs.map(inc => {
+          const linked   = allOutcomesS.filter(c => (inc.linkedCaseIds||[]).includes(c.id))
+          const exposure = linked.reduce((s,c) => s+(parseFloat(c.amount)||0), 0)
+          return { ...inc, exposure, sarTriggered: exposure >= sarThresholdV, linkedCount: linked.length }
+        })
+        const totalExposure = incidentSAR.reduce((s,i)=>s+i.exposure,0)
+        const sarHits       = incidentSAR.filter(i=>i.sarTriggered).length
+        // 12-month timeline
+        const nowD = new Date()
+        const incTimeline = Array.from({length:12}, (_,idx) => {
+          const d   = new Date(nowD.getFullYear(), nowD.getMonth()-(11-idx), 1)
+          const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+          return { label: d.toLocaleDateString('en-US',{month:'short'}), key, count: allIncs.filter(i=>(i.detectionDate||'').startsWith(key)).length }
+        })
+        const maxInc = Math.max(...incTimeline.map(m=>m.count),1)
+        // Playbook helpers
+        const PLAYBOOK_STEPS = {
+          fraud_wave:        { immediate:['Freeze approvals on flagged BIN range','Alert BSA Officer — SAR threshold assessment','Notify card operations to monitor velocity'], containment:['Block compromised BIN range at auth layer','Issue replacement cards to affected cardholders','Coordinate with network fraud desk'], recovery:['File chargebacks for confirmed fraud transactions','Submit fraud dispute batch through Covalence Multi','Pursue cross-institutional recovery via Duo if applicable'] },
+          account_takeover:  { immediate:['Lock affected accounts pending re-authentication','Alert cardholder via registered contact','Engage identity verification for re-access'], containment:['Reset credentials and MFA on all compromised accounts','Audit recent transactions for unauthorized activity','Flag associated devices/IPs in fraud rules'], recovery:['Initiate provisional credits for unauthorized transactions','File representments for all confirmed ATO-linked disputes','Document for SAR filing if threshold met'] },
+          social_engineering:{ immediate:['Brief front-line staff on active social engineering pattern','Issue internal alert with attack vector description','Escalate to compliance if customer funds were transferred'], containment:['Freeze any accounts involved in mule activity','Alert receiving institutions via Duo coordination','Enhance verification on affected account types'], recovery:['Pursue wire recall if transfer is recent','File SARs on mule accounts','Coordinate with LEA if losses exceed reporting threshold'] },
+          merchant_breach:   { immediate:['Identify full cardholder population at risk from breach','Alert affected cardholders with reissuance guidance','Report to network via compromise management program'], containment:['Reissue compromised cards — prioritize high-balance accounts','Enhance monitoring on exposed PANs','File CAMS report with card networks'], recovery:['Track dispute rate on compromised cards for 90 days','File chargebacks for confirmed fraud from breach window','Recover from merchant or acquirer where applicable'] },
+        }
+        const getSteps = (type) => PLAYBOOK_STEPS[type] || { immediate:['Assess scope and affected accounts','Alert relevant teams','Engage BSA Officer for SAR review'], containment:['Isolate affected accounts or channels','Enhance transaction monitoring'], recovery:['File chargebacks for confirmed losses','Document for regulatory reporting'] }
+        const generatePlaybookText = (inc) => {
+          const steps = getSteps(inc.type)
+          const sd    = structuredDebriefs[inc.id]||{}
+          const notes = (strategyNotes[inc.id]||[]).map(n=>n.text).join('\n')
+          const incCasesP = allOutcomesS.filter(c=>(inc.linkedCaseIds||[]).includes(c.id))
+          const exposureP = incCasesP.reduce((s,c)=>s+(parseFloat(c.amount)||0),0)
+          return 'TRIO RESPONSE PLAYBOOK\n======================================================\nFRAUD TYPE:      '+(inc.type||'UNKNOWN').replace(/_/g,' ').toUpperCase()+'\nSEVERITY:        '+(inc.severity||'--')+'\nSOURCE INCIDENT: '+inc.name+'  ('+inc.id+')\nGENERATED:       '+new Date().toLocaleString()+'\n\nTRIGGER SIGNALS\n------------------------------------------------------\n'+(sd.detection?'• Detection: '+sd.detection:'• (Complete structured debrief to populate)')+(sd.firstFailure?'\n• First failure: '+sd.firstFailure:'')+'\n\nIMMEDIATE ACTIONS (first 2 hours)\n------------------------------------------------------\n'+steps.immediate.map((s,i)=>(i+1)+'. '+s).join('\n')+'\n\nESCALATION PATH\n------------------------------------------------------\n1. Fraud Operations Lead — immediate\n2. BSA/AML Officer — SAR assessment within 24h\n3. Risk Committee — if exposure exceeds $'+sarThresholdV.toLocaleString()+'\n4. Legal/Compliance — if LEA referral required\n\nCONTAINMENT STEPS\n------------------------------------------------------\n'+steps.containment.map((s,i)=>(i+1)+'. '+s).join('\n')+(sd.slowedContainment?'\n\nNote — what slowed containment last time:\n'+sd.slowedContainment:'')+'\n\nRECOVERY STEPS\n------------------------------------------------------\n'+steps.recovery.map((s,i)=>(i+1)+'. '+s).join('\n')+'\n\nREGULATORY CHECKLIST\n------------------------------------------------------\n[ ] SAR/STR if cumulative exposure >= $'+sarThresholdV.toLocaleString()+'\n[ ] SAR filing deadline: 30 days from detection date\n[ ] Document all SAR decisions with rationale\n[ ] LEA referral if losses exceed institution threshold\n[ ] Network compromise report if card data involved\n'+(exposureP>0?'\nSource incident exposure: $'+Math.round(exposureP).toLocaleString()+' across '+incCasesP.length+' cases\n':'')+'\nWHAT WORKED\n------------------------------------------------------\n'+(sd.whatWorked||'(Complete structured debrief to populate)')+'\n\nRECOMMENDED CONTROL CHANGES\n------------------------------------------------------\n'+(sd.controlChange||'(Complete structured debrief to populate)')+'\n\nSTRATEGIC OBSERVATIONS\n------------------------------------------------------\n'+(notes||'(No annotations recorded)')+'\n\n======================================================\nCOVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL'
+        }
+        const savePlaybook = (inc) => {
+          const pb = { id: crypto.randomUUID(), incidentId: inc.id, incidentName: inc.name, type: inc.type, createdAt: new Date().toISOString(), text: generatePlaybookText(inc) }
+          const updated = [pb, ...playbooks]
+          setPlaybooks(updated)
+          try { localStorage.setItem('cov_trio_playbooks', JSON.stringify(updated)) } catch {}
+          setShowPlaybooks(true)
+        }
+        const DEBRIEF_QUESTIONS = [
+          { key:'detection',         label:'HOW WAS THIS DETECTED?',              ph:'e.g. Customer complaint spike, velocity alert, partner notification...' },
+          { key:'firstFailure',      label:'WHAT WAS THE FIRST CONTROL FAILURE?', ph:'e.g. Velocity threshold too high, no cross-channel monitoring...' },
+          { key:'slowedContainment', label:'WHAT SLOWED CONTAINMENT?',            ph:'e.g. Approval chains, system access limits, coordination delays...' },
+          { key:'whatWorked',        label:'WHAT WORKED WELL?',                   ph:'e.g. War room speed, early cardholder notification, network liaison...' },
+          { key:'controlChange',     label:'RECOMMENDED CONTROL CHANGE',          ph:'e.g. Lower BIN velocity threshold, add cross-channel linking rule...' },
+        ]
 
         return (
           <div>
             {/* ── Strategy header ── */}
             <div className="mb-6 px-4 py-3" style={{ background:'#1A1814', border:'1px solid #44403C' }}>
               <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>TRIO — STRATEGY MODE</div>
-              <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Post directives · Review patterns · Debrief closed incidents</div>
+              <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Post directives · Aggregate risk exposure · Debrief closed incidents · Build response playbooks</div>
             </div>
 
             {/* ── Strategy directives — broadcast to all analysts ── */}
@@ -8880,19 +8933,35 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             {/* ── Pattern layer ── */}
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ PATTERN LAYER — ALL INCIDENTS</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:'12px', marginBottom:'20px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:'1px', background:'#2D2922', marginBottom:'20px' }}>
                 {[
-                  ['TOTAL INCIDENTS', allIncs.length],
-                  ['ACTIVE',          openCount,  '#991B1B'],
-                  ['CONTAINED',       contCount,  '#92400E'],
-                  ['CLOSED',          closeCount, '#78716C'],
-                  ['LINKED CASES',    totalCases],
+                  ['TOTAL INCIDENTS', allIncs.length,    null],
+                  ['ACTIVE',          openCount,         '#991B1B'],
+                  ['CONTAINED',       contCount,         '#92400E'],
+                  ['CLOSED',          closeCount,        '#57534E'],
+                  ['LINKED CASES',    totalCases,        null],
+                  ['TOTAL EXPOSURE',  totalExposure>0?'$'+Math.round(totalExposure).toLocaleString():'—', totalExposure>0?'#D97706':null],
+                  ['SAR FLAGS',       sarHits,           sarHits>0?'#991B1B':null],
                 ].map(([label,val,col]) => (
-                  <div key={label} style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'12px' }}>
+                  <div key={label} style={{ background:'#1E1C18', padding:'14px' }}>
                     <div className="mono-font text-[8px] tracking-widest mb-1" style={{ color:'#57534E' }}>{label}</div>
-                    <div className="mono-font font-bold" style={{ fontSize:'22px', color: col||'#D4CCBC' }}>{val}</div>
+                    <div className="mono-font font-bold" style={{ fontSize:'20px', color: col||'#D4CCBC' }}>{val}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* 12-month timeline */}
+              <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px', marginBottom:'16px' }}>
+                <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT FREQUENCY — LAST 12 MONTHS</div>
+                <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:'56px', borderBottom:'1px solid #2D2922' }}>
+                  {incTimeline.map(m => (
+                    <div key={m.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'2px', height:'100%', justifyContent:'flex-end' }}>
+                      {m.count>0 && <div style={{ width:'100%', background:'#7F1D1D', height:(m.count/maxInc*48)+'px', minHeight:'4px' }}/>}
+                      <div className="mono-font" style={{ fontSize:'7px', color:'#3D3A35', marginTop:'2px' }}>{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {allIncs.length===0 && <div className="mono-font text-[9px] mt-2" style={{ color:'#3D3A35' }}>No incidents recorded yet.</div>}
               </div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', flexWrap:'wrap' }}>
@@ -8923,96 +8992,178 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               </div>
             </div>
 
+            {/* ── SAR Aggregation ── */}
+            <div className="mb-6">
+              <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ SAR AGGREGATION — REGULATORY EXPOSURE BY INCIDENT</div>
+              {incidentSAR.length === 0 ? (
+                <div className="mono-font text-[9px]" style={{ color:'#3D3A35' }}>No incidents recorded. SAR assessment populates as incidents are created and cases linked.</div>
+              ) : (
+                <>
+                  <div style={{ border:'1px solid #2D2922' }}>
+                    <div className="flex items-center gap-3 px-4 py-2" style={{ borderBottom:'1px solid #2D2922', background:'#141210' }}>
+                      <span className="mono-font text-[8px] tracking-widest flex-1" style={{ color:'#3D3A35' }}>INCIDENT</span>
+                      <span className="mono-font text-[8px] tracking-widest w-14 text-right shrink-0" style={{ color:'#3D3A35' }}>CASES</span>
+                      <span className="mono-font text-[8px] tracking-widest w-24 text-right shrink-0" style={{ color:'#3D3A35' }}>EXPOSURE</span>
+                      <span className="mono-font text-[8px] tracking-widest w-20 text-right shrink-0" style={{ color:'#3D3A35' }}>SAR</span>
+                    </div>
+                    {incidentSAR.map((inc,i) => (
+                      <div key={inc.id} className="flex items-center gap-3 px-4 py-3" style={{ borderTop:i>0?'1px solid #2D2922':'none', background:'#1A1814' }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{inc.id} · {(inc.status||'active').toUpperCase()}</div>
+                          <div className="display-font truncate" style={{ fontSize:'12px', color:'#D4CCBC' }}>{inc.name}</div>
+                        </div>
+                        <div className="mono-font text-[10px] w-14 text-right shrink-0" style={{ color:'#78716C' }}>{inc.linkedCount}</div>
+                        <div className="mono-font text-[10px] w-24 text-right shrink-0 font-bold" style={{ color:inc.sarTriggered?'#F59E0B':'#57534E' }}>
+                          {inc.exposure>0?'$'+Math.round(inc.exposure).toLocaleString():'—'}
+                        </div>
+                        <div className="w-20 text-right shrink-0">
+                          <span className="mono-font text-[8px] px-2 py-0.5" style={{ background:inc.sarTriggered?'#7F1D1D':'#1E2A3A', color:inc.sarTriggered?'#FEE2E2':'#93C5FD' }}>
+                            {inc.sarTriggered?'REVIEW':'BELOW'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mono-font text-[8px] mt-2" style={{ color:'#3D3A35' }}>
+                    SAR threshold: ${sarThresholdV.toLocaleString()} (configurable in Settings) · {sarHits} incident{sarHits!==1?'s':''} at or above threshold
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* ── Post-incident debrief ── */}
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ POST-INCIDENT DEBRIEF</div>
-              {closed.length === 0 && (
+              {closed.length === 0 ? (
                 <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No closed incidents yet. Close an incident in operational mode to begin debrief.</div>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {closed.map(i => {
+                    const sdI = structuredDebriefs[i.id]||{}
+                    const completedFields = DEBRIEF_QUESTIONS.filter(q=>sdI[q.key]?.trim()).length
+                    return (
+                      <button key={i.id} onClick={() => setStrategyIncId(strategyIncId===i.id ? null : i.id)}
+                        className="w-full text-left px-4 py-3"
+                        style={{ background: strategyIncId===i.id?'#252320':'#1E1C18', border:`1px solid ${strategyIncId===i.id?'#78716C':'#2D2922'}`, cursor:'pointer' }}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id} · CLOSED</div>
+                            <div className="display-font" style={{ color:'#E7E4DF', fontSize:'13px' }}>{i.name}</div>
+                          </div>
+                          <div className="mono-font text-[8px] text-right" style={{ color:'#57534E' }}>
+                            <div>{completedFields}/5 debrief · {(strategyNotes[i.id]||[]).length} notes</div>
+                            <div>{strategyIncId===i.id?'▲':'▼'}</div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               )}
-              <div className="space-y-2 mb-4">
-                {closed.map(i => (
-                  <button key={i.id} onClick={() => setStrategyIncId(strategyIncId===i.id ? null : i.id)}
-                    className="w-full text-left px-4 py-3 transition-colors"
-                    style={{ background: strategyIncId===i.id?'#252320':'#1E1C18', border:`1px solid ${strategyIncId===i.id?'#78716C':'#2D2922'}` }}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id} · CLOSED</div>
-                        <div className="display-font" style={{ color:'#E7E4DF', fontSize:'13px' }}>{i.name}</div>
-                      </div>
-                      <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>
-                        {(strategyNotes[i.id]||[]).length} annotations · {strategyIncId===i.id?'▲':'▼'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
 
               {/* Debrief panel */}
-              {debriefInc && (
-                <div style={{ background:'#1A1814', border:'1px solid #44403C', padding:'20px' }}>
-                  <div className="mono-font text-[9px] tracking-widest mb-4" style={{ color:'#78716C' }}>DEBRIEF — {debriefInc.name.toUpperCase()}</div>
+              {debriefInc && (() => {
+                const sdD = structuredDebriefs[debriefInc.id]||{}
+                const updateSD = (key, val) => {
+                  const updated = { ...structuredDebriefs, [debriefInc.id]: { ...(structuredDebriefs[debriefInc.id]||{}), [key]:val } }
+                  setStructuredDebriefs(updated)
+                  try { localStorage.setItem('cov_trio_debriefs', JSON.stringify(updated)) } catch {}
+                }
+                const incCasesD = allOutcomesS.filter(c=>(debriefInc.linkedCaseIds||[]).includes(c.id))
+                const exposureD = incCasesD.reduce((s,c)=>s+(parseFloat(c.amount)||0),0)
+                return (
+                  <div style={{ background:'#1A1814', border:'1px solid #44403C', padding:'20px' }}>
+                    <div className="mono-font text-[9px] tracking-widest mb-4" style={{ color:'#78716C' }}>DEBRIEF — {debriefInc.name.toUpperCase()}</div>
 
-                  {/* Incident summary row */}
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'10px', marginBottom:'20px' }}>
-                    {[
-                      ['TYPE',      (debriefInc.type||'—').replace(/_/g,' ').toUpperCase()],
-                      ['SEVERITY',  debriefInc.severity||'—'],
-                      ['DETECTED',  debriefInc.detectionDate||'—'],
-                      ['CASES',     (debriefInc.linkedCaseIds||[]).length],
-                      ['AGENTS',    (debriefInc.participants||[]).length],
-                      ['FIs',       (debriefInc.affectedFis||[]).length],
-                    ].map(([k,v]) => (
-                      <div key={k}>
-                        <div className="mono-font text-[8px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>{k}</div>
-                        <div className="mono-font text-[10px]" style={{ color:'#D4CCBC' }}>{v}</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:'10px', marginBottom:'20px' }}>
+                      {[['TYPE',(debriefInc.type||'—').replace(/_/g,' ').toUpperCase()],['SEVERITY',debriefInc.severity||'—'],['DETECTED',debriefInc.detectionDate||'—'],['CASES',(debriefInc.linkedCaseIds||[]).length],['AGENTS',(debriefInc.participants||[]).length],['EXPOSURE',exposureD>0?'$'+Math.round(exposureD).toLocaleString():'—']].map(([k,v])=>(
+                        <div key={k}>
+                          <div className="mono-font text-[8px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>{k}</div>
+                          <div className="mono-font text-[10px]" style={{ color:'#D4CCBC' }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Structured debrief questions */}
+                    <div className="mb-5">
+                      <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E', borderBottom:'1px solid #2D2922', paddingBottom:'6px' }}>STRUCTURED DEBRIEF</div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+                        {DEBRIEF_QUESTIONS.map(q => (
+                          <div key={q.key}>
+                            <div className="mono-font text-[8px] tracking-widest mb-1" style={{ color:'#78716C' }}>{q.label}</div>
+                            <textarea value={sdD[q.key]||''} onChange={e=>updateSD(q.key,e.target.value)} placeholder={q.ph} rows={2}
+                              style={{ width:'100%', background:'#252320', border:'1px solid '+(sdD[q.key]?'#78716C':'#3D3A35'), color:'#E7E4DF', padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', boxSizing:'border-box' }} />
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
 
-                  {/* Strategic annotations */}
-                  <div className="mb-4">
-                    <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>STRATEGIC ANNOTATIONS</div>
-                    {(strategyNotes[debriefInc.id]||[]).length === 0 && (
-                      <div className="mono-font text-[9px] mb-3" style={{ color:'#3D3A35' }}>No annotations yet. Add your pattern observations below.</div>
-                    )}
-                    {(strategyNotes[debriefInc.id]||[]).map((n,idx) => (
-                      <div key={idx} className="mb-2 px-3 py-2" style={{ background:'#252320', borderLeft:'2px solid #78716C' }}>
-                        <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
-                        <div className="display-font text-sm" style={{ color:'#D4CCBC' }}>{n.text}</div>
-                      </div>
-                    ))}
-                    <textarea
-                      value={strategyDraft}
-                      onChange={e => setStrategyDraft(e.target.value)}
-                      placeholder="Add strategic observation — pattern, recommended control change, escalation note..."
-                      rows={3}
-                      style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginTop:'8px' }}
-                    />
-                    <button onClick={() => { if(strategyDraft.trim()) saveStrategyNote(debriefInc.id, strategyDraft.trim()) }}
-                      disabled={!strategyDraft.trim()}
-                      className="mono-font text-[9px] tracking-widest mt-2 px-4 py-2"
-                      style={{ background: strategyDraft.trim()?'#D4CCBC':'transparent', color: strategyDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: strategyDraft.trim()?'pointer':'default' }}>
-                      + ADD ANNOTATION
-                    </button>
-                  </div>
-
-                  {/* Threat brief */}
-                  <div style={{ borderTop:'1px solid #2D2922', paddingTop:'16px' }}>
-                    <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>THREAT BRIEF</div>
-                    <div className="mono-font text-[9px] mb-3" style={{ color:'#3D3A35' }}>Generates a structured brief from all incident data and your strategic annotations. Ready for Risk Committee or compliance reporting.</div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => { navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
-                        className="mono-font text-[9px] tracking-widest px-5 py-2.5"
-                        style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
-                        {briefCopied ? '✓ COPIED' : '◈ COPY THREAT BRIEF'}
+                    {/* Strategic annotations */}
+                    <div className="mb-5">
+                      <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>STRATEGIC ANNOTATIONS</div>
+                      {(strategyNotes[debriefInc.id]||[]).length===0&&<div className="mono-font text-[9px] mb-2" style={{ color:'#3D3A35' }}>No annotations yet.</div>}
+                      {(strategyNotes[debriefInc.id]||[]).map((n,idx)=>(
+                        <div key={idx} className="mb-2 px-3 py-2" style={{ background:'#252320', borderLeft:'2px solid #78716C' }}>
+                          <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                          <div className="display-font text-sm" style={{ color:'#D4CCBC' }}>{n.text}</div>
+                        </div>
+                      ))}
+                      <textarea value={strategyDraft} onChange={e=>setStrategyDraft(e.target.value)}
+                        placeholder="Add strategic observation — pattern, anomaly, open question..."
+                        rows={2} style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginTop:'6px' }} />
+                      <button onClick={()=>{ if(strategyDraft.trim()) saveStrategyNote(debriefInc.id,strategyDraft.trim()) }} disabled={!strategyDraft.trim()}
+                        className="mono-font text-[9px] tracking-widest mt-2 px-4 py-2"
+                        style={{ background:strategyDraft.trim()?'#D4CCBC':'transparent', color:strategyDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor:strategyDraft.trim()?'pointer':'default' }}>
+                        + ADD ANNOTATION
                       </button>
-                      <button onClick={() => { const txt = generateThreatBrief(debriefInc); const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(txt); a.download=`TRIO-BRIEF-${(debriefInc.title||'incident').replace(/\s+/g,'-').toUpperCase()}-${new Date().toISOString().split('T')[0]}.txt`; a.click() }}
-                        className="mono-font text-[9px] tracking-widest px-5 py-2.5"
-                        style={{ background:'transparent', border:'1px solid #78716C', color:'#78716C', cursor:'pointer' }}>
-                        ↓ DOWNLOAD .TXT
+                    </div>
+
+                    {/* Actions row */}
+                    <div style={{ borderTop:'1px solid #2D2922', paddingTop:'16px', display:'flex', gap:'8px', flexWrap:'wrap' }}>
+                      <button onClick={()=>{ navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
+                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
+                        {briefCopied?'✓ COPIED':'◈ COPY THREAT BRIEF'}
+                      </button>
+                      <button onClick={()=>{ const txt=generateThreatBrief(debriefInc); const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(txt); a.download='TRIO-BRIEF-'+debriefInc.id+'-'+new Date().toISOString().split('T')[0]+'.txt'; a.click() }}
+                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        style={{ background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
+                        ↓ THREAT BRIEF .TXT
+                      </button>
+                      <button onClick={()=>savePlaybook(debriefInc)}
+                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        style={{ background:'#7F1D1D', border:'none', color:'#FEE2E2', cursor:'pointer' }}>
+                        ◈ BUILD RESPONSE PLAYBOOK
                       </button>
                     </div>
                   </div>
+                )
+              })()}
+            </div>
+
+            {/* ── Playbook Library ── */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3" style={{ borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>
+                <div className="mono-font text-[10px] tracking-widest" style={{ color:'#78716C' }}>◈ RESPONSE PLAYBOOK LIBRARY ({playbooks.length})</div>
+                {playbooks.length>0&&<button onClick={()=>setShowPlaybooks(p=>!p)} className="mono-font text-[9px]" style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer' }}>{showPlaybooks?'▲ COLLAPSE':'▼ EXPAND'}</button>}
+              </div>
+              {playbooks.length===0 ? (
+                <div className="mono-font text-[9px]" style={{ color:'#3D3A35' }}>No playbooks yet. Complete a debrief and click "Build Response Playbook" to create the first one.</div>
+              ) : showPlaybooks && (
+                <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                  {playbooks.map((pb,i)=>(
+                    <div key={pb.id||i} style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'14px', display:'flex', alignItems:'center', gap:'12px' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{(pb.type||'').replace(/_/g,' ').toUpperCase()} · {new Date(pb.createdAt).toLocaleDateString()}</div>
+                        <div className="display-font truncate" style={{ color:'#E7E4DF', fontSize:'13px' }}>{pb.incidentName}</div>
+                      </div>
+                      <button onClick={()=>{ const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(pb.text); a.download='TRIO-PLAYBOOK-'+(pb.incidentName||'').replace(/\s+/g,'-').toUpperCase()+'-'+new Date(pb.createdAt).toISOString().split('T')[0]+'.txt'; a.click() }}
+                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 shrink-0"
+                        style={{ background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
+                        ↓ DOWNLOAD
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
