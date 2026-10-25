@@ -3,6 +3,8 @@ import { FileText, AlertCircle, Loader2, Copy, Check, ArrowRight, CheckSquare, S
          Shield, MessageSquare, ClipboardList, Download, Pencil, Upload,
          ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, Plus, X,
          Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink } from 'lucide-react'
+import { CasePanel, CaseSearch, CaseLink, MobileMenu, PipelineDots, StatusChip, allThreadCases, stageOf,
+         useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, seedDemoIfFirstVisit, isDemoCase } from './CaseThread.jsx'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -132,6 +134,23 @@ function estimateFundingGrade(reasonCode, amountStr, signals) {
   return { label, bg, text: 'text-stone-50', score }
 }
 
+// Case → DFA claim shape (shared by the Desk tracker's →DFA button and the case panel)
+function toDfaClaim(o) {
+  return {
+    ...o,
+    code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
+    filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
+    windowDays: 45,
+    avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
+    deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
+    pinVerified: false, isVFMP: !!o.isVFMP,
+    strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
+    merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
+    note: `From Dispute Desk: ${o.merchant || ''}`,
+    source: 'desk',
+  }
+}
+
 function detectNetwork(code) {
   const c = String(code)
   if (c.startsWith('10') || c.startsWith('11') || c.startsWith('12') || c.startsWith('13')) return 'Visa'
@@ -140,11 +159,39 @@ function detectNetwork(code) {
 }
 
 // ─── Shared storage ───────────────────────────────────────────────────────────
+// Case notes exist in two shapes: Desk stored a free-text string, Multi a list of
+// { text, ts, author }. Read them through these so neither tool crashes on the other's.
+function notesList(n) {
+  if (Array.isArray(n)) return n.filter(x => x && x.text)
+  if (typeof n === 'string' && n.trim()) return [{ text: n, ts: null, author: '' }]
+  return []
+}
+function notesText(n) { return notesList(n).map(x => x.text).join(' · ') }
+
 function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
+// Case thread: any tool that changes a case gets an updatedAt stamp and, on a
+// status change, a history entry — so every case carries its own timeline
+// across Triage → Desk → Multi → File without each tool having to log it.
+// (Without the stamp, mergeCases kept the stored copy and silently dropped edits.)
+function stampCaseChanges(current, next) {
+  const byId = new Map(current.map(c => [c.id, c]))
+  const now = new Date().toISOString()
+  let who = 'Agent'
+  try { who = JSON.parse(localStorage.getItem('cov_user') || 'null')?.name || who } catch {}
+  return next.map(c => {
+    const ex = byId.get(c.id)
+    if (ex && new Date(c.updatedAt || 0) > new Date(ex.updatedAt || 0)) return c
+    if (ex && JSON.stringify(ex) === JSON.stringify(c)) return c
+    const history = [...(c.history || ex?.history || [])]
+    if (!ex) history.push({ ts: c.date || now, event: 'created', status: c.status, by: who })
+    else if (ex.status !== c.status) history.push({ ts: now, event: 'status', from: ex.status, status: c.status, by: who })
+    return { ...c, history, updatedAt: now }
+  })
+}
 function saveOutcomes(o) {
   try {
     const current = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-    const merged = mergeCases(current, o)
+    const merged = mergeCases(current, stampCaseChanges(current, o))
     window._covSaving = true
     localStorage.setItem('cov_outcomes', JSON.stringify(merged))
     if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
@@ -299,6 +346,8 @@ const GLOBAL_CSS = `
     .mob-1col         { grid-template-columns:1fr !important; }
     /* platform toggles: no wrap */
     .platform-toggle-btn { white-space:nowrap !important; padding:10px 14px !important; }
+    /* mobile menu sits inside the nav but needs full-size tap targets */
+    .cov-nav-inner .cov-mobile-menu button { font-size:11px !important; padding:15px 20px !important; }
   }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `
@@ -372,7 +421,12 @@ function LoginGate({ onLogin }) {
 // ROOT — Covalence
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Covalence() {
-  const [covUser,       setCovUser]       = useState(() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })
+  const [covUser,       setCovUser]       = useState(() => {
+    let u = null
+    try { u = JSON.parse(localStorage.getItem('cov_user') || 'null') } catch {}
+    if (u) seedDemoIfFirstVisit(u.email) // runs before the outcomes initializer below reads storage
+    return u
+  })
   const [activeSection, setActiveSection] = useState('home')
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
   const [settings,      setSettings]      = useState(loadSettings)
@@ -380,6 +434,16 @@ export default function Covalence() {
   const [triageHandoff, setTriageHandoff] = useState(null)
   const [dfaQueue,      setDfaQueue]      = useState([])
   const [duoHandoff,    setDuoHandoff]    = useState(null)
+  // Case thread
+  const [openCaseId,      setOpenCaseId]      = useState(null)
+  const [searchOpen,      setSearchOpen]      = useState(false)
+  const [deskOpenRequest, setDeskOpenRequest] = useState(null)
+  const [dataVersion,     setDataVersion]     = useState(0) // bump to remount tools after demo load/clear
+  useOpenCaseListener(setOpenCaseId)
+
+  const loadDemo  = () => { loadDemoInstitution(setOutcomes, covUser?.email); setDataVersion(v => v + 1) }
+  const clearDemo = () => { clearDemoInstitution(setOutcomes); setDataVersion(v => v + 1) }
+  const handleLogin = (u) => { if (seedDemoIfFirstVisit(u?.email)) setOutcomes(loadOutcomes()); setCovUser(u) }
 
   const [globalSyncStatus, setGlobalSyncStatus] = useState('idle') // idle|syncing|synced|error
 
@@ -426,7 +490,7 @@ export default function Covalence() {
     { id:'settings', label:'SETTINGS' },
   ]
 
-  if (!covUser) return <LoginGate onLogin={setCovUser} />
+  if (!covUser) return <LoginGate onLogin={handleLogin} />
 
   return (
     <ErrorBoundary>
@@ -454,6 +518,11 @@ export default function Covalence() {
               ))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
+              <button onClick={() => setSearchOpen(true)} title="Search cases (⌘K / Ctrl+K)" className="mono-font"
+                style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',padding:'4px 10px',cursor:'pointer',fontSize:'9px',letterSpacing:'0.12em',whiteSpace:'nowrap'}}>
+                ⌕ <span className="desktop-only">CASES</span>
+              </button>
+              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} />
               {SUPA_URL && SUPA_KEY && globalSyncStatus !== 'idle' && (
                 <span className="mono-font" style={{fontSize:'8px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
                   color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
@@ -470,9 +539,29 @@ export default function Covalence() {
           </div>
         </div>
 
+        {/* ── Case thread: panel + search, available from every tool ── */}
+        {openCaseId && (
+          <CasePanel caseId={openCaseId} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser}
+            onClose={() => setOpenCaseId(null)}
+            onGo={setActiveSection}
+            onDeskOpen={(c) => { setDeskOpenRequest({ case: c, t: Date.now() }); setActiveSection('desk') }}
+            onTriageHandoff={(c) => {
+              setTriageHandoff({ caseId: c.id, classification: c.verdict, confidence: c.confidence || 'MEDIUM',
+                headline: (c.verdict || '').replace(/_/g, ' '), merchant: c.merchant || '', amount: String(c.amount || '').split(' ')[0],
+                network: (c.network || '').toLowerCase(), complaint: c._complaint || '' })
+              setActiveSection('desk')
+            }}
+            onScoreInDfa={(c) => { setDfaQueue([toDfaClaim(c)]); setActiveSection('dfa') }}
+            onSendToDuo={(c) => { setDuoHandoff(c); setActiveSection('duo') }}
+          />
+        )}
+        <CaseSearch outcomes={outcomes} open={searchOpen} setOpen={setSearchOpen} />
+
         {/* ── Section views — all kept mounted (display:none when inactive) to preserve local state ── */}
+        <React.Fragment key={dataVersion}>
         <div style={{ display: activeSection === 'home' ? 'block' : 'none' }}>
-          <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode} />
+          <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode}
+            onLoadDemo={loadDemo} onClearDemo={clearDemo} />
         </div>
         <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
           <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
@@ -488,6 +577,7 @@ export default function Covalence() {
             onGoToDuo={() => setActiveSection('duo')}
             platformMode={platformMode} setPlatformMode={setPlatformMode}
             covUser={covUser}
+            deskOpenRequest={deskOpenRequest}
           />
         </div>
         <div style={{ display: activeSection === 'multi' ? 'block' : 'none' }}>
@@ -508,6 +598,7 @@ export default function Covalence() {
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} />
         </div>
+        </React.Fragment>
       </div>
     </ErrorBoundary>
   )
@@ -516,12 +607,27 @@ export default function Covalence() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, platformMode }) {
-  // Always read fresh from localStorage so stats reflect Desk additions without page reload
-  const [outcomes] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
-  })
+function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo }) {
+  // outcomes comes from the root, which stays in sync with every tool via the outcome subscribers
   const [tourOpen, setTourOpen] = React.useState(false)
+  // Adaptive Brief: full intro for the first few visits, then a one-line version that can be expanded
+  const [briefOpen, setBriefOpen] = React.useState(() => {
+    try {
+      const pref = localStorage.getItem('cov_brief_open')
+      if (pref !== null) return pref === '1'
+      // One visit per browser session (Home remounts on demo load and in dev StrictMode)
+      let visits = parseInt(localStorage.getItem('cov_home_visits') || '0')
+      if (!sessionStorage.getItem('cov_visit_counted')) {
+        visits += 1
+        localStorage.setItem('cov_home_visits', String(visits))
+        sessionStorage.setItem('cov_visit_counted', '1')
+      }
+      return visits <= 3
+    } catch { return true }
+  })
+  const toggleBrief = () => setBriefOpen(o => { try { localStorage.setItem('cov_brief_open', o ? '0' : '1') } catch {} ; return !o })
+  const [caseFilter, setCaseFilter] = React.useState('open')
+  const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
   const settings = React.useMemo(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
@@ -552,14 +658,36 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
 
   return (
     <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
-        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
-          The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
-        </h1>
-        <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-          From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
-        </p>
-      </div>
+      {briefOpen ? (
+        <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
+          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
+            The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
+          </h1>
+          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
+            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
+          </p>
+          <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'9px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
+            COLLAPSE INTRO ↑
+          </button>
+        </div>
+      ) : (
+        <div className="mb-6 pb-4" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'baseline', gap:'14px', flexWrap:'wrap' }}>
+          <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'32px', letterSpacing:'-0.02em', lineHeight:1 }}>
+            The <span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
+          </h1>
+          <span className="display-font text-stone-500" style={{ fontSize:'14px' }}>Seven tools, one workflow.</span>
+          <button onClick={toggleBrief} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
+            SHOW INTRO ↓
+          </button>
+        </div>
+      )}
+
+      {hasDemo && (
+        <div className="mb-6 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', border:'1px dashed #B8B0A4', padding:'10px 14px', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
+          <span>DEMO INSTITUTION LOADED — fictional cases across every stage. They stay in this browser and are never shared.</span>
+          <button onClick={onClearDemo} style={{ background:'none', border:'1px solid #78716C', color:'#57534E', padding:'4px 10px', cursor:'pointer', fontFamily:'inherit', fontSize:'9px', letterSpacing:'0.12em' }}>CLEAR DEMO DATA</button>
+        </div>
+      )}
 
       {/* ── Tool buttons ── */}
       <div className="mb-8">
@@ -756,39 +884,72 @@ function HomeView({ outcomes: _parentOutcomes, settings: _ps, setActiveSection, 
         )
       })()}
 
-      {active.length > 0 ? (
-        <div>
-          <div className="mono-font text-stone-400 mb-3" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>RECENT CASES</div>
-          <div className="border border-stone-200">
-            {active.slice(0, 8).map((o, i) => (
-              <div key={o.id} onClick={() => setActiveSection('desk')}
-                className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
-                style={{ borderTop: i > 0 ? '1px solid #E7E2D9' : 'none' }}>
-                <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'88px', flexShrink:0 }}>{o.id}</span>
-                <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px' }}>{o.merchant}</span>
-                <span className="mono-font text-stone-500" style={{ fontSize:'11px' }}>{o.amount}</span>
-                <span className="mono-font" style={{
-                  fontSize:'9px', padding:'2px 6px',
-                  background: o.status === 'won' ? '#064E3B' : o.status === 'lost' ? '#7F1D1D' : o.status === 'pending' ? '#E7E2D9' : o.status === 'queued' ? '#4C1D95' : '#92400E',
-                  color: (o.status === 'pending') ? '#4B4540' : '#F9FAFB',
-                }}>{o.status.toUpperCase()}</span>
-                <span className="mono-font text-stone-400 desktop-only" style={{ fontSize:'10px' }}>
-                  {new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-                </span>
-              </div>
-            ))}
+      {/* ── Cases: every case across all seven tools, with where it sits in the pipeline ── */}
+      {(() => {
+        const thread = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const FILTERS = [
+          { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
+          { id:'action', label:'NEEDS ACTION',  test: o => ['triage','desk'].includes(stageOf(o)) || (o.nextRespDate && (new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000 <= 7 && stageOf(o) !== 'closed') },
+          { id:'mine',   label:'MINE',          test: o => { try { const me = JSON.parse(localStorage.getItem('cov_user')||'null')?.email; return !!me && o.assignedTo === me } catch { return false } } },
+          { id:'closed', label:'CLOSED',        test: o => stageOf(o) === 'closed' },
+          { id:'all',    label:'ALL',           test: () => true },
+        ]
+        const f = FILTERS.find(x => x.id === caseFilter) || FILTERS[0]
+        const rows = thread.filter(f.test)
+        if (thread.length === 0) return (
+          <div className="border border-stone-200 px-6 py-8" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
+            <div>
+              <div className="display-font text-stone-500 italic" style={{ fontSize:'17px' }}>No cases yet.</div>
+              <div className="mono-font text-stone-400" style={{ fontSize:'10px', marginTop:'4px' }}>Start with a triage, or load a demo institution to see every tool with data in it.</div>
+            </div>
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+              <button onClick={onLoadDemo} className="cov-btn" style={{ padding:'10px 16px', fontSize:'10px' }}>LOAD DEMO INSTITUTION</button>
+              <button onClick={() => setActiveSection('triage')} className="upload-btn">START A TRIAGE →</button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="border border-stone-200 px-6 py-12 text-center" style={{ background:'#FAF7F1' }}>
-          <div className="display-font text-stone-400 italic" style={{ fontSize:'18px' }}>No cases in the last {settings.snapshotDays || 60} days</div>
-          <button onClick={() => setActiveSection('triage')}
-            className="mono-font text-stone-500 mt-4 hover:text-stone-800 transition-colors"
-            style={{ fontSize:'10px', letterSpacing:'0.12em', background:'none', border:'none', cursor:'pointer', display:'block', margin:'16px auto 0' }}>
-            START A TRIAGE {'→'}
-          </button>
-        </div>
-      )}
+        )
+        return (
+          <div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', marginBottom:'10px' }}>
+              <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>CASES · {rows.length}</div>
+              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+                {FILTERS.map(x => (
+                  <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'9px' }}>
+                    {x.label} {thread.filter(x.test).length}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="border border-stone-200" style={{ background:'#FAF7F1' }}>
+              {rows.length === 0 ? (
+                <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 16px' }}>Nothing here.</div>
+              ) : rows.slice(0, 25).map((o, i) => {
+                const due = o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
+                return (
+                  <div key={o.id} onClick={() => window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } }))}
+                    className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
+                    style={{ borderTop: i > 0 ? '1px solid #E7E2D9' : 'none' }}>
+                    <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
+                    <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px', minWidth:0 }}>{o.merchant}</span>
+                    <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
+                    <PipelineDots c={o} />
+                    {due !== null && (
+                      <span className="mono-font desktop-only" style={{ fontSize:'9px', color: due < 0 ? '#B91C1C' : due <= 3 ? '#92400E' : '#78716C', whiteSpace:'nowrap' }}>
+                        {due < 0 ? `OVERDUE ${-due}d` : due === 0 ? 'DUE TODAY' : `DUE ${due}d`}
+                      </span>
+                    )}
+                    <StatusChip status={o.status} />
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mono-font text-stone-400" style={{ fontSize:'9px', letterSpacing:'0.1em', marginTop:'8px', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+              <span>● TRIAGE · DESK · MULTI · FILE · DFA — click a case for its full record</span>
+              {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'9px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -3021,7 +3182,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser, setOutcomes: setRootOutcomes }) {
+function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser, setOutcomes: setRootOutcomes, deskOpenRequest }) {
   // Restore previous session so navigation away doesn't wipe in-progress analysis
   const _sess = React.useRef(loadDeskSession()).current
   const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
@@ -3218,8 +3379,33 @@ function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, o
   // ── Triage handoff — triageHandoff + setTriageHandoff come as props ────
   const showHandoffBanner = triageHandoff !== null
   const dismissHandoffBanner = () => setTriageHandoff(null)
+  // COV- number the next analysis should reuse (set by a Triage handoff or by opening a tracked case)
+  const pendingCaseIdRef = useRef(null)
+  // Case panel → "Open in Desk": pre-fill the form from the case (no automatic AI re-run)
+  useEffect(() => {
+    const o = deskOpenRequest?.case
+    if (!o) return
+    if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
+    if (o.amount && o.amount !== '—') {
+      const pts = String(o.amount).split(' ')
+      if (pts[0]) setAmount(pts[0])
+      if (pts[1]) setCurrency(pts[1])
+    }
+    if (o.network) setNetwork(String(o.network).toLowerCase().includes('visa') ? 'visa' : 'mastercard')
+    if (o._transactionDate) setTransactionDate(o._transactionDate)
+    if (o._cardType) setCardType(o._cardType)
+    if (o._complaint) setComplaint(o._complaint)
+    if (o.cbStage) setCbCycleStage(o.cbStage)
+    if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
+    setCurrentDeskCaseId(o.id)
+    pendingCaseIdRef.current = o.id
+    setResult(null); setRebuttal(null); setError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deskOpenRequest])
   useEffect(() => {
     if (!triageHandoff) return
+    pendingCaseIdRef.current = /^COV-/.test(triageHandoff.caseId || '') ? triageHandoff.caseId : null
     if (triageHandoff.merchant)         setMerchant(triageHandoff.merchant)
     if (triageHandoff.amount)           setAmount(triageHandoff.amount)
     if (triageHandoff.currency)         setCurrency(triageHandoff.currency)
@@ -3407,19 +3593,26 @@ Return ONLY a valid JSON object:
         .trim()
       const parsed = JSON.parse(text)
       setResult(parsed)
-      // Save to outcome log with behavioral signals for DFA
-      const _newCaseId = 'COV-' + Date.now().toString(36).toUpperCase().slice(-6)
+      // Save to outcome log with behavioral signals for DFA.
+      // A case opened from Triage or the tracker keeps its COV- number, so the
+      // same record travels Triage → Desk → Multi → File → DFA.
+      const _reuseId = pendingCaseIdRef.current
+      pendingCaseIdRef.current = null
+      const _newCaseId = _reuseId || 'COV-' + Date.now().toString(36).toUpperCase().slice(-6)
       setCurrentDeskCaseId(_newCaseId)
-      setOutcomes(prev => [{
+      setOutcomes(prev => { const prior = prev.find(p => p.id === _newCaseId); return [{
+        ...(prior || {}),
         id: _newCaseId,
-        date: new Date().toISOString(),
+        date: prior?.date || new Date().toISOString(),
         merchant: merchant || '—',
         amount: amount ? amount + ' ' + currency : '—',
         network: network === 'visa' ? 'VISA' : 'MC',
         reasonCode: parsed.recommended_reason_code,
         reasonTitle: parsed.reason_code_title,
-        status: 'queued',
-        resolvedDate: null,
+        // Re-running a case that has already moved on (filed, won…) must not pull it back to the queue
+        status: prior?.status && !['received','pending'].includes(prior.status) ? prior.status : 'queued',
+        resolvedDate: prior?.resolvedDate || null,
+        ai: { summary: parsed.dispute_summary || '', rationale: parsed.rationale || '', missing: parsed.missing_information || [], ts: new Date().toISOString() },
         threeDSStatus: threeDSStatus,
         confidence: parsed.confidence,
         category: parsed.category,
@@ -3430,7 +3623,7 @@ Return ONLY a valid JSON object:
         _transactionDate: transactionDate,
         _cardType: cardType,
         _currency: currency,
-      }, ...prev])
+      }, ...prev.filter(p => p.id !== _newCaseId)] })
     } catch (e) {
       setError(`Analysis failed: ${e.message}`)
     } finally {
@@ -3893,11 +4086,14 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
   const startEdit = (o) => { // pre-populate draft from outcome row
     setEditingRow(o.id)
-    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: o.notes || '', submitDate: o.submitDate || '', trackingRef: o.trackingRef || '', nextRespDate: o.nextRespDate || '' })
+    setEditDraft({ merchant: o.merchant, amount: o.amount, reasonCode: o.reasonCode, reasonTitle: o.reasonTitle, notes: notesText(o.notes), submitDate: o.submitDate || '', trackingRef: o.trackingRef || '', nextRespDate: o.nextRespDate || '' })
   }
   const cancelEdit = () => { setEditingRow(null); setEditDraft({}) }
   const saveEdit = (id) => {
-    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, ...editDraft } : o))
+    // Notes stay a list: untouched text keeps the existing entries, rewritten text becomes one new entry
+    setOutcomes(prev => prev.map(o => o.id === id ? { ...o, ...editDraft,
+      notes: (editDraft.notes || '') === notesText(o.notes) ? o.notes
+        : (editDraft.notes || '').trim() ? [{ text: editDraft.notes.trim(), ts: new Date().toISOString(), author: covUser?.name || 'Agent' }] : [] } : o))
     setEditingRow(null)
     setEditDraft({})
   }
@@ -4159,7 +4355,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
         (o.id || '').toLowerCase().includes(q) ||
         (o.merchant || '').toLowerCase().includes(q) ||
         (o.reasonCode || '').toLowerCase().includes(q) ||
-        (o.notes || '').toLowerCase().includes(q)
+        notesText(o.notes).toLowerCase().includes(q)
       )
     }
     return list
@@ -6256,7 +6452,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     )}
                                     {o.dfaScore && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}} title="DFA Fundability Score">DFA {o.dfaScore}</span>}
                                   </div>
-                                  {o.notes && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{o.notes}</p>}
+                                  {notesText(o.notes) && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{notesText(o.notes)}</p>}
                                   {o.mode === 'merchant' && o.submitDate && (
                                     <p className="mono-font text-[10px] text-emerald-700 mt-0.5">
                                       REPMT FILED {new Date(o.submitDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
@@ -6421,19 +6617,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 <div className="flex flex-wrap items-center gap-1 justify-end" style={{minWidth:0}}>
                                     {o.mode !== 'merchant' && onScoreInDfa && (
                                       <button
-                                        onClick={() => onScoreInDfa([{
-                                          ...o,
-                                          code: parseFloat((o.reasonCode || '').replace(/[^0-9.]/g, '')) || 0,
-                                          filedDaysAgo: Math.max(0, Math.round((Date.now() - new Date(o.date)) / 86400000)),
-                                          windowDays: 45,
-                                          avsMismatch: !!o.avsMismatch, no3DS: !o.threeDSStatus || o.threeDSStatus === 'none',
-                                          deliveryConf: !!o.deliveryConfirmed, merchantAck: false,
-                                          pinVerified: false, isVFMP: !!o.isVFMP,
-                                          strongDocs: (o.confidence === 'HIGH' || o.winProb === 'HIGH'),
-                                          merchantCBR: 0.5, priorClaims: parseInt(o.priorClaims) || 0,
-                                          note: `From Dispute Desk: ${o.merchant || ''}`,
-                                          source: 'desk',
-                                        }])}
+                                        onClick={() => onScoreInDfa([toDfaClaim(o)])}
                                         className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap"
                                         title="Send to DFA for funding assessment"
                                       >→DFA</button>
@@ -6461,6 +6645,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       if (o.cbStage) setCbCycleStage(o.cbStage)
                                       if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
                                       setCurrentDeskCaseId(o.id)
+                                      pendingCaseIdRef.current = o.id
                                       setResult(null); setRebuttal(null); setError(null)
                                       if (onGoToDesk) onGoToDesk()
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -6688,10 +6873,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     </div>
                                   ))}
                                 </div>
-                                {o.notes && (
+                                {notesText(o.notes) && (
                                   <div className="mt-3 pt-3 border-t border-stone-200">
                                     <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
-                                    <div className="display-font text-sm text-stone-600 italic">{o.notes}</div>
+                                    <div className="display-font text-sm text-stone-600 italic">{notesText(o.notes)}</div>
                                   </div>
                                 )}
                                 <button onClick={() => setCase360Id(null)} className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors mt-3">✕ CLOSE 360</button>
@@ -7627,7 +7812,7 @@ function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }) {
       const updated = all.map(o => {
         if (!mappedIds.has(o.id)) return o
         const scored = mapped.find(c => c.id === o.id)
-        return scored ? { ...o, dfaScore: scored.grade, dfaFundability: scored.fundabilityScore, dfaScoredAt: new Date().toISOString() } : o
+        return scored ? { ...o, dfaScore: grade(scored.fundability).label, dfaFundability: Math.round(scored.fundability), dfaScoredAt: new Date().toISOString() } : o
       })
       if (updated.some((o, i) => o !== all[i])) saveOutcomes(updated)
     } catch {}
@@ -9480,7 +9665,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 <div className="divide-y divide-stone-200">
                   {linkedCases.length > 0 && linkedCases.map(c => (
                     <div key={c.id} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
-                      <span className="mono-font text-[10px] text-stone-500 w-24 shrink-0">{c.id}</span>
+                      <span className="mono-font text-[10px] text-stone-500 w-24 shrink-0"><CaseLink id={c.id} /></span>
                       <span className="display-font text-sm text-stone-800 flex-1 truncate">{c.merchant||'—'}</span>
                       <span className="mono-font text-[10px] text-stone-600">{c.amount||'—'}</span>
                       <span className="mono-font text-[9px] px-1.5 py-0.5"
@@ -9857,32 +10042,93 @@ function genDuoCode() {
 function supaH() {
   return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }
 }
+// ── RPC layer ────────────────────────────────────────────────────────────────
+// Tables are closed to the public key (see supabase_rls.sql); the app calls
+// SECURITY DEFINER functions instead. If a function isn't deployed yet
+// (PostgREST 404 / PGRST202) we fall back to the legacy direct-table call so
+// the app keeps working until the SQL has been run.
+const _rpcMissing = new Set()
+async function supaRpc(fn, args, fallback) {
+  if (!_rpcMissing.has(fn)) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, { method:'POST', headers: supaH(), body: JSON.stringify(args) })
+    if (r.ok) { const t = await r.text(); return t ? JSON.parse(t) : null }
+    if (r.status !== 404 || !fallback) throw new Error(await r.text())
+    _rpcMissing.add(fn)
+  }
+  return fallback()
+}
+const firstRow = d => Array.isArray(d) ? (d[0] || null) : d
+// Workspace = institution entered at sign-in; scopes the shared case pool.
+function covWorkspace() {
+  try {
+    const u = JSON.parse(localStorage.getItem('cov_user') || 'null')
+    const s = JSON.parse(localStorage.getItem('cov_settings') || '{}')
+    return (u?.institution || s.duoInstitutionName || '').trim().toLowerCase()
+  } catch { return '' }
+}
+
 async function duoGet(id) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}&select=*`, { headers: supaH() })
-  if (!r.ok) throw new Error(await r.text())
-  const d = await r.json(); return d[0] || null
+  return firstRow(await supaRpc('duo_get', { p_id: id }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}&select=*`, { headers: supaH() })
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  }))
 }
 async function duoCreate(obj) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions`, { method:'POST', headers: supaH(), body: JSON.stringify(obj) })
-  if (!r.ok) throw new Error(await r.text())
-  const d = await r.json(); return Array.isArray(d) ? d[0] : d
+  return firstRow(await supaRpc('duo_create', { p: obj }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions`, { method:'POST', headers: supaH(), body: JSON.stringify(obj) })
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  }))
 }
 async function duoPatch(id, updates) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}`, { method:'PATCH', headers: supaH(), body: JSON.stringify({ ...updates, updated_at: new Date().toISOString() }) })
-  if (!r.ok) throw new Error(await r.text())
-  const d = await r.json(); return Array.isArray(d) ? d[0] : d
+  return firstRow(await supaRpc('duo_update', { p_id: id, p: updates }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?id=eq.${id}`, { method:'PATCH', headers: supaH(), body: JSON.stringify({ ...updates, updated_at: new Date().toISOString() }) })
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  }))
+}
+async function duoFind(institution) {
+  return await supaRpc('duo_find', { p_institution: institution }, async () => {
+    const q = encodeURIComponent(institution)
+    const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?or=(institution_a.ilike.*${q}*,institution_b.ilike.*${q}*)&order=created_at.desc&limit=10`, { headers: supaH() })
+    return r.json()
+  }) || []
+}
+async function caseLinkCreate(body) {
+  return firstRow(await supaRpc('case_link_create', { p: body }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links`, { method:'POST', headers: supaH(), body: JSON.stringify(body) })
+    if (!r.ok) throw new Error(await r.text())
+    return r.json()
+  }))
+}
+async function caseLinkActivity(token) {
+  const d = await supaRpc('case_link_activity', { p_token: token }, async () => {
+    const h = { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+    const [responses, access] = await Promise.all([
+      fetch(`${SUPA_URL}/rest/v1/case_link_responses?token=eq.${token}&order=responded_at.desc`, { headers: h }).then(r => r.json()),
+      fetch(`${SUPA_URL}/rest/v1/case_link_access_log?token=eq.${token}&order=accessed_at.desc`, { headers: h }).then(r => r.json()),
+    ])
+    return { responses, access }
+  })
+  return { responses: Array.isArray(d?.responses) ? d.responses : [], access: Array.isArray(d?.access) ? d.access : [] }
 }
 // ── Supabase shared-pool sync helpers ─────────────────────────────────────────
 async function pushCasesToSupa(cases) {
-  if (!SUPA_URL || !SUPA_KEY || !cases?.length) return
-  const rows = cases.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
-  await fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) })
+  // Demo cases stay in this browser — they never reach the shared pool
+  const real = (cases || []).filter(c => !isDemoCase(c))
+  if (!SUPA_URL || !SUPA_KEY || !real.length) return
+  const rows = real.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
+  await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
+    fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
 }
 async function pullCasesFromSupa() {
   if (!SUPA_URL || !SUPA_KEY) return []
-  const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
-  if (!r.ok) return []
-  return (await r.json()||[]).map(r=>r.data).filter(Boolean)
+  const d = await supaRpc('cov_pull_cases', { p_workspace: covWorkspace() }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
+    return r.ok ? r.json() : []
+  }).catch(() => [])
+  return (d||[]).map(r=>r.data).filter(Boolean)
 }
 function mergeCases(local, remote) {
   const map = {}
@@ -9892,28 +10138,34 @@ function mergeCases(local, remote) {
 }
 async function upsertAgent(a) {
   if (!SUPA_URL||!SUPA_KEY) return
-  await fetch(`${SUPA_URL}/rest/v1/cov_agents`, {method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({email:a.email, name:a.name, institution:a.institution||'', last_login:new Date().toISOString()})})
+  await supaRpc('cov_upsert_agent', { p_email:a.email, p_name:a.name, p_institution:a.institution||'' }, () =>
+    fetch(`${SUPA_URL}/rest/v1/cov_agents`, {method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({email:a.email, name:a.name, institution:a.institution||'', last_login:new Date().toISOString()})}))
 }
 async function fetchAgents() {
   if (!SUPA_URL||!SUPA_KEY) return []
-  const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
-  return r.ok ? await r.json() : []
+  return await supaRpc('cov_list_agents', { p_institution: covWorkspace() }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
+    return r.ok ? r.json() : []
+  }).catch(() => []) || []
 }
 
 async function pushTrioToSupa(incidents) {
   if (!SUPA_URL || !SUPA_KEY || !incidents?.length) return
   const rows = incidents.map(i => ({ id: i.id, data: i, updated_at: i.updatedAt || new Date().toISOString() }))
-  await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents`, {
-    method: 'POST',
-    headers: { ...supaH(), Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(rows),
-  })
+  await supaRpc('cov_push_trio', { p_workspace: covWorkspace(), p_rows: rows }, () =>
+    fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents`, {
+      method: 'POST',
+      headers: { ...supaH(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+    }))
 }
 async function pullTrioFromSupa() {
   if (!SUPA_URL || !SUPA_KEY) return []
-  const r = await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents?select=data,updated_at&order=updated_at.desc&limit=100`, { headers: supaH() })
-  if (!r.ok) return []
-  return (await r.json() || []).map(r => r.data).filter(Boolean)
+  const d = await supaRpc('cov_pull_trio', { p_workspace: covWorkspace() }, async () => {
+    const r = await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents?select=data,updated_at&order=updated_at.desc&limit=100`, { headers: supaH() })
+    return r.ok ? r.json() : []
+  }).catch(() => [])
+  return (d || []).map(r => r.data).filter(Boolean)
 }
 function mergeTrioIncidents(local, remote) {
   const map = {}
@@ -10009,12 +10261,9 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     if (phase !== 'link-ready' || !linkToken || !configured) { clearInterval(linkPollRef.current); return }
     const load = async () => {
       try {
-        const [resp, access] = await Promise.all([
-          fetch(`${SUPA_URL}/rest/v1/case_link_responses?token=eq.${linkToken}&order=responded_at.desc`, { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }).then(r => r.json()),
-          fetch(`${SUPA_URL}/rest/v1/case_link_access_log?token=eq.${linkToken}&order=accessed_at.desc`, { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }).then(r => r.json()),
-        ])
-        setLinkResponses(Array.isArray(resp) ? resp : [])
-        setLinkAccessLog(Array.isArray(access) ? access : [])
+        const { responses, access } = await caseLinkActivity(linkToken)
+        setLinkResponses(responses)
+        setLinkAccessLog(access)
         setLinkRespSync(new Date())
       } catch {}
     }
@@ -10032,14 +10281,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       const payload = linkType === 'crypto'
         ? { case_ref: linkPayload.case_ref, report_type: linkPayload.report_type, incident_date: linkPayload.incident_date, nature: linkPayload.nature, summary: linkPayload.summary, asset_type: linkPayload.asset_type, amount: linkPayload.amount, amount_usd: linkPayload.amount_usd, chain_analytics_link: linkPayload.chain_analytics_link, wallet_addresses: linkPayload.wallet_addresses.split('\n').map(s => s.trim()).filter(Boolean), transaction_ids: linkPayload.transaction_ids.split('\n').map(s => s.trim()).filter(Boolean) }
         : { case_ref: linkPayload.case_ref, report_type: linkPayload.report_type, incident_date: linkPayload.incident_date, amount: linkPayload.amount, currency: linkPayload.currency, nature: linkPayload.nature, summary: linkPayload.summary }
-      const r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links`, {
-        method: 'POST',
-        headers: { ...supaH(), 'Prefer': 'return=representation' },
-        body: JSON.stringify({ case_type: linkType, sender_institution: myInstitution.trim(), payload })
-      })
-      if (!r.ok) throw new Error(await r.text())
-      const d = await r.json()
-      const row = Array.isArray(d) ? d[0] : d
+      const row = await caseLinkCreate({ case_type: linkType, sender_institution: myInstitution.trim(), payload })
       setLinkToken(row.token)
       setPhase('link-ready')
     } catch (e) { setError(e.message) }
@@ -10068,8 +10310,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight
   }, [session && session.notes_a, session && session.notes_b])
 
-  const persistSession = (id, role, institution, status) => {
-    const next = [{ id, role, myInstitution: institution, joinedAt: new Date().toISOString(), lastStatus: status || 'active' },
+  const persistSession = (id, role, institution, status, caseId) => {
+    const prevEntry = mySessions.find(s => s.id === id)
+    const next = [{ id, role, myInstitution: institution, joinedAt: prevEntry?.joinedAt || new Date().toISOString(), lastStatus: status || 'active',
+                    caseId: caseId || prevEntry?.caseId || null },
                   ...mySessions.filter(s => s.id !== id)]
     setMySessions(next); saveMyDuoSessions(next)
   }
@@ -10083,11 +10327,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
     if (!recoverQuery.trim() || !configured) return
     setRecoverLoading(true); setRecoverResults(null)
     try {
-      const q = encodeURIComponent(recoverQuery.trim())
-      const r = await fetch(`${SUPA_URL}/rest/v1/duo_sessions?or=(institution_a.ilike.*${q}*,institution_b.ilike.*${q}*)&order=created_at.desc&limit=10`, {
-        headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
-      })
-      const data = await r.json()
+      const data = await duoFind(recoverQuery.trim())
       setRecoverResults(Array.isArray(data) ? data : [])
     } catch { setRecoverResults([]) }
     setRecoverLoading(false)
@@ -10124,7 +10364,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       const created = await duoCreate({ id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '[]', notes_b: '[]', status: 'active' })
       const sess = created || { id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '[]', notes_b: '[]', status: 'active' }
       setSession(sess); setMyRole('a'); setLastSync(new Date())
-      persistSession(id, 'a', myInstitution.trim(), 'active')
+      persistSession(id, 'a', myInstitution.trim(), 'active', claim.caseId)
       if (setDuoHandoff) setDuoHandoff(null)
       setPhase('session')
     } catch (e) { setError(e.message) }
@@ -10143,7 +10383,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       const updated = await duoPatch(sess.id, { institution_b: myInstitution.trim() })
       const final = updated || { ...sess, institution_b: myInstitution.trim() }
       setSession(final); setMyRole('b'); setLastSync(new Date())
-      persistSession(final.id, 'b', myInstitution.trim(), final.status)
+      persistSession(final.id, 'b', myInstitution.trim(), final.status, final.claim?.caseId)
       setPhase('session')
     } catch (e) { setError(e.message) }
     setLoading(false)
@@ -11613,7 +11853,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
     const text = (noteDraft[id] || '').trim()
     setOutcomes(prev => prev.map(o => o.id === id
       ? { ...o, notes: [
-            ...(o.notes || []),
+            ...notesList(o.notes),
             { text, ts: new Date().toISOString(), author: localStorage.getItem('cov_agent_name') || 'Agent' }
           ].filter(n => n.text)
         }
@@ -11744,7 +11984,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
               <div key={o.id}>
                 <div className="px-5 py-3 flex items-center gap-3 flex-wrap">
                   <input type="checkbox" checked={selectedIds.includes(o.id)} onChange={()=>toggleSelect(o.id)} style={{width:'13px',height:'13px',cursor:'pointer',accentColor:'#1C1917',flexShrink:0}}/>
-                  <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                  <span className="mono-font text-[10px] text-stone-400"><CaseLink id={o.id} /></span>
                   <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 truncate">{o.merchant || '—'}</span>
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 bg-stone-800 text-stone-100">{o.verdict?.replace(/_/g,' ')}</span>
@@ -11761,7 +12001,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                   )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
-                    {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
+                    {notesList(o.notes).length > 0 ? `📝 ${notesList(o.notes).length}` : '+ NOTE'}
                   </button>
                   <button
                     onClick={() => generateFilingPackage(o)}
@@ -11770,11 +12010,11 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                     title="Generate network-formatted filing package"
                   >↓ PKG{(o.docs||[]).length > 0 ? ` · ${(o.docs||[]).length} DOC${(o.docs||[]).length!==1?'S':''}` : ''}</button>
                 </div>
-                {o.notes?.length > 0 && !noteOpen[o.id] && (
+                {notesList(o.notes).length > 0 && !noteOpen[o.id] && (
                   <div className="px-5 pb-2 space-y-1">
-                    {o.notes.map((n,i) => (
+                    {notesList(o.notes).map((n,i) => (
                       <div key={i} className="mono-font text-[9px] text-stone-500 flex gap-2">
-                        <span className="text-stone-400">{new Date(n.ts).toLocaleDateString('en-CA')} {n.author}</span>
+                        <span className="text-stone-400">{n.ts ? new Date(n.ts).toLocaleDateString('en-CA') : ''} {n.author}</span>
                         <span className="text-stone-600">{n.text}</span>
                       </div>
                     ))}
@@ -11841,7 +12081,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
             {queuedService.map(o => (
               <div key={o.id}>
                 <div className="px-5 py-3 flex items-center gap-4 flex-wrap">
-                  <span className="mono-font text-[10px] text-stone-400">{o.id}</span>
+                  <span className="mono-font text-[10px] text-stone-400"><CaseLink id={o.id} /></span>
                   <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 truncate">{o.merchant || '—'}</span>
                   <span className="mono-font text-[11px] text-stone-600">{o.amount} {o.currency || ''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 bg-amber-800 text-amber-50">{(o.verdict || 'CONSUMER DISPUTE')?.replace(/_/g, ' ')}</span>
@@ -11858,7 +12098,7 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                   )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
-                    {(o.notes?.length || 0) > 0 ? `📝 ${o.notes.length}` : '+ NOTE'}
+                    {notesList(o.notes).length > 0 ? `📝 ${notesList(o.notes).length}` : '+ NOTE'}
                   </button>
                   <button
                     onClick={() => generateFilingPackage(o)}
@@ -11878,11 +12118,11 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                     FILE ✓
                   </button>
                 </div>
-                {o.notes?.length > 0 && !noteOpen[o.id] && (
+                {notesList(o.notes).length > 0 && !noteOpen[o.id] && (
                   <div className="px-5 pb-2 space-y-1">
-                    {o.notes.map((n,i) => (
+                    {notesList(o.notes).map((n,i) => (
                       <div key={i} className="mono-font text-[9px] text-stone-500 flex gap-2">
-                        <span className="text-stone-400">{new Date(n.ts).toLocaleDateString('en-CA')} {n.author}</span>
+                        <span className="text-stone-400">{n.ts ? new Date(n.ts).toLocaleDateString('en-CA') : ''} {n.author}</span>
                         <span className="text-stone-600">{n.text}</span>
                       </div>
                     ))}
@@ -12203,7 +12443,7 @@ ${'═'.repeat(64)}`
               return (
                 <div key={o.id} className="border-b border-stone-100">
                   <div className="grid items-center px-5 py-3" style={{gridTemplateColumns:'100px 60px minmax(0,1fr) 90px 50px auto',gap:'8px'}}>
-                    <span className="mono-font text-[10px] text-stone-500">{o.id}</span>
+                    <span className="mono-font text-[10px] text-stone-500"><CaseLink id={o.id} /></span>
                     <span className="mono-font text-[10px] text-stone-400">{o.filedAt ? new Date(o.filedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}{o.filedBy && <span className="ml-1 text-stone-300" title="Filed by">[{o.filedBy}]</span>}</span>
                     <span className="mono-font text-[11px] text-stone-800 truncate font-medium">{o.merchant||'—'}</span>
                     <span className="mono-font text-[10px] text-stone-600">{o.amount||'—'}</span>
@@ -12510,7 +12750,7 @@ function MyQueuePanel({ outcomes, myEmail, covUser, setActiveSection }) {
               const days = windowDays(o)
               return (
                 <div key={o.id} className="flex items-center gap-3 px-4 py-3 flex-wrap" style={{ borderBottom:'1px solid #E7E2DA', background:'#FAFAF8' }}>
-                  <span className="mono-font text-[9px] text-stone-400 w-24 shrink-0">{o.id}</span>
+                  <span className="mono-font text-[9px] text-stone-400 w-24 shrink-0"><CaseLink id={o.id} /></span>
                   <span className="mono-font text-[11px] text-stone-800 font-medium flex-1 min-w-[120px] truncate">{o.merchant || '—'}</span>
                   <span className="mono-font text-[10px] text-stone-500 w-20 shrink-0">{o.amount} {o.currency||''}</span>
                   <span className="mono-font text-[9px] px-2 py-0.5 shrink-0" style={{ background:'#EDE9E0', color:'#57534E' }}>{(o.network||'—').toUpperCase()}</span>
@@ -12530,7 +12770,7 @@ function MyQueuePanel({ outcomes, myEmail, covUser, setActiveSection }) {
           <div className="border border-stone-200" style={{ borderBottom:'none' }}>
             {resolved.slice(0,20).map(o => (
               <div key={o.id} className="flex items-center gap-3 px-4 py-2.5 flex-wrap" style={{ borderBottom:'1px solid #EDE9E0', background:'#F7F5F0' }}>
-                <span className="mono-font text-[9px] text-stone-300 w-24 shrink-0">{o.id}</span>
+                <span className="mono-font text-[9px] text-stone-300 w-24 shrink-0"><CaseLink id={o.id} /></span>
                 <span className="mono-font text-[11px] text-stone-500 flex-1 min-w-[120px] truncate">{o.merchant || '—'}</span>
                 <span className="mono-font text-[9px] text-stone-400 w-20 shrink-0">{o.amount} {o.currency||''}</span>
                 <span className="mono-font text-[9px] font-bold px-2 py-0.5 shrink-0" style={{ background: o.status==='won'?'#D1FAE5':'#FEE2E2', color: o.status==='won'?'#064E3B':'#7F1D1D' }}>{o.status?.toUpperCase()}</span>

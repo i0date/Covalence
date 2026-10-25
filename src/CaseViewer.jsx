@@ -8,9 +8,11 @@ function supaH() {
 }
 
 async function fetchCaseLink(token) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links?token=eq.${token}&select=*`, {
-    headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` }
-  })
+  const h = { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`, 'Content-Type': 'application/json' }
+  // Token lookup goes through an RPC (the table itself is closed — see supabase_rls.sql);
+  // fall back to the direct read until that SQL has been run.
+  let r = await fetch(`${SUPA_URL}/rest/v1/rpc/case_link_get`, { method: 'POST', headers: h, body: JSON.stringify({ p_token: token }) })
+  if (r.status === 404) r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links?token=eq.${token}&select=*`, { headers: h })
   if (!r.ok) throw new Error('Could not load case.')
   const d = await r.json()
   return d[0] || null
