@@ -1,5 +1,9 @@
 {
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/triage.js":  { "maxDuration": 30 },
+    "api/analyze.js": { "maxDuration": 30 }
+  }
 }
