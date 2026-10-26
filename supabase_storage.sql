@@ -8,13 +8,15 @@
 -- cannot read, list, overwrite or delete. Documents open through
 -- /api/evidence-url, which signs a 5-minute link with the service-role key.
 --
--- Order: deploy the app build with /api/evidence-url and set
--- SUPABASE_SERVICE_ROLE_KEY in Vercel FIRST, then run this. Running it first
--- breaks "View" on evidence until the new build is live.
+-- The bucket did not exist in the original project ("Bucket not found" on
+-- upload), so this creates it — private from the start, 10 MB per file.
+-- If it already exists it is switched to private.
 -- =============================================================================
 
--- 1. Make the bucket private (public object URLs stop working immediately)
-update storage.buckets set public = false where id = 'cov-evidence';
+-- 1. Create the bucket private, or make an existing one private
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('cov-evidence', 'cov-evidence', false, 10485760)
+on conflict (id) do update set public = false;
 
 -- 2. Remove every existing policy that touches this bucket
 do $$
