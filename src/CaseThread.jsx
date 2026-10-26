@@ -23,6 +23,29 @@ export function useOpenCaseListener(fn) {
 
 const readLS = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback } }
 
+// ── Evidence links ────────────────────────────────────────────────────────────
+// The evidence bucket is private: a document opens through a short-lived signed
+// link from /api/evidence-url. Older uploads stored a public URL; the storage
+// path is recovered from it so they open the same way.
+export function evidencePath(d) {
+  if (d?.path) return d.path
+  const tail = String(d?.url || '').split('/object/public/cov-evidence/')[1]
+  return tail ? decodeURIComponent(tail.split('?')[0]) : null
+}
+export async function openEvidence(d) {
+  // Open the tab synchronously (inside the click) so popup blockers allow it
+  const w = window.open('', '_blank')
+  try {
+    const r = await fetch('/api/evidence-url', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ path: evidencePath(d) }) })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`)
+    if (w) { w.opener = null; w.location.href = j.url } else window.location.href = j.url
+  } catch (e) {
+    if (w) w.close()
+    window.alert(`Could not open ${d?.name || 'document'}: ${e.message}`)
+  }
+}
+
 // ── Stage model ───────────────────────────────────────────────────────────────
 export const STAGES = [
   { id:'triage', num:'001', label:'Triage' },
@@ -274,7 +297,8 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             {(c.docs || []).length === 0
               ? <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E' }}>No documents yet — upload from the Desk tracker.</div>
               : (c.docs || []).map((d, i) => (
-                <a key={i} href={d.url} target="_blank" rel="noreferrer" className="mono-font" style={{ display:'block', fontSize:'11px', color:'#1E3A5F', padding:'4px 0' }}>{d.name}</a>
+                <button key={i} onClick={() => openEvidence(d)} title="Opens a link that expires in 5 minutes" className="mono-font"
+                  style={{ display:'block', background:'none', border:'none', textAlign:'left', cursor:'pointer', fontSize:'11px', color:'#1E3A5F', padding:'4px 0', textDecoration:'underline' }}>{d.name}</button>
               ))}
           </div>
 

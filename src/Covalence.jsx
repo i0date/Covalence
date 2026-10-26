@@ -4,7 +4,7 @@ import { FileText, AlertCircle, Loader2, Copy, Check, ArrowRight, CheckSquare, S
          ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, Plus, X,
          Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink } from 'lucide-react'
 import { CasePanel, CaseSearch, CaseLink, MobileMenu, PipelineDots, StatusChip, allThreadCases, stageOf,
-         useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, seedDemoIfFirstVisit, isDemoCase } from './CaseThread.jsx'
+         useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, seedDemoIfFirstVisit, isDemoCase, evidencePath, openEvidence } from './CaseThread.jsx'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -6805,8 +6805,8 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                         <span className="mono-font text-[10px] text-stone-600 flex-1 truncate">{d.name}</span>
                                         <span className="mono-font text-[9px] text-stone-400">{d.size ? `${(d.size/1024).toFixed(0)} KB` : ''}</span>
                                         <span className="mono-font text-[9px] text-stone-400">{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}</span>
-                                        <a href={d.url} target="_blank" rel="noopener noreferrer"
-                                          className="mono-font text-[9px] text-green-700 hover:underline whitespace-nowrap">↗ VIEW</a>
+                                        <button onClick={() => openEvidence(d)} title="Opens a link that expires in 5 minutes"
+                                          className="mono-font text-[9px] text-green-700 hover:underline whitespace-nowrap" style={{ background:'none', border:'none', cursor:'pointer', padding:0 }}>↗ VIEW</button>
                                         <button
                                           onClick={() => {
                                             if (!window.confirm(`Remove ${d.name}?`)) return
@@ -10201,8 +10201,8 @@ async function uploadEvidence(caseId, file, agentEmail) {
     body: file,
   })
   if (!r.ok) { const txt = await r.text().catch(()=>''); throw new Error(`Upload failed (${r.status}): ${txt}`) }
-  const publicUrl = `${SUPA_URL}/storage/v1/object/public/cov-evidence/${path}`
-  return { name: file.name, url: publicUrl, type: file.type || 'application/octet-stream', size: file.size, uploadedAt: new Date().toISOString(), uploadedBy: agentEmail || '' }
+  // The bucket is private: store the path, and open it later through a signed link (openEvidence)
+  return { name: file.name, path, type: file.type || 'application/octet-stream', size: file.size, uploadedAt: new Date().toISOString(), uploadedBy: agentEmail || '' }
 }
 
 function parseThread(raw) { try { return JSON.parse(raw || '[]') } catch { return raw ? [{ text: raw, ts: new Date(0).toISOString() }] : [] } }
@@ -11626,7 +11626,7 @@ function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, setti
     const agentName = localStorage.getItem('cov_agent_name') || '[AGENT NAME]'
     const docs = (o.docs || [])
     const docManifest = docs.length
-      ? docs.map((d,i) => `  ${String(i+1).padStart(2,'0')}. ${d.name} (${d.type||'unknown'}, ${d.size?`${(d.size/1024).toFixed(0)} KB`:'-'}) | ${d.uploadedAt?new Date(d.uploadedAt).toLocaleDateString('en-CA'):'-'} | ${d.uploadedBy||'-'} | ${d.url}`).join('\n')
+      ? docs.map((d,i) => `  ${String(i+1).padStart(2,'0')}. ${d.name} (${d.type||'unknown'}, ${d.size?`${(d.size/1024).toFixed(0)} KB`:'-'}) | ${d.uploadedAt?new Date(d.uploadedAt).toLocaleDateString('en-CA'):'-'} | ${d.uploadedBy||'-'} | ref ${evidencePath(d) || '-'}`).join('\n')
       : '  [NO DOCUMENTS ATTACHED — attach evidence in Dispute Desk before filing]'
 
     let body = ''
@@ -12283,7 +12283,7 @@ function FileView({ setActiveSection, setAppOutcomes }) {
     const filedDate = o.filedAt ? new Date(o.filedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
     const docs = o.docs||[]
     const docManifest = docs.length
-      ? docs.map((d,i)=>`  ${String(i+1).padStart(2,'0')}. ${d.name} — ${d.url}`).join('\n')
+      ? docs.map((d,i)=>`  ${String(i+1).padStart(2,'0')}. ${d.name} — ref ${evidencePath(d) || '-'}`).join('\n')
       : '  [NO DOCUMENTS ATTACHED]'
     const text = `${netLabel} CHARGEBACK SUBMISSION — ${o.id}
 ${'═'.repeat(64)}
