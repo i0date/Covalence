@@ -389,15 +389,25 @@ export function CaseSearch({ outcomes, open, setOpen }) {
         </div>
         <div style={{ maxHeight:'55vh', overflowY:'auto' }}>
           {hits.length === 0 ? <div className="mono-font" style={{ fontSize:'11px', color:'#A8A29E', padding:'16px' }}>No cases match.</div>
-            : hits.map(c => (
-              <button key={c.id} onClick={() => { openCase(c.id); setOpen(false) }}
+            : hits.map(c => {
+              // Second line: amount · reason code / verdict — fills the row and helps tell similar merchants apart
+              const detail = [c.amount, c.reasonCode ? `${c.network ? c.network + ' ' : ''}${c.reasonCode}` : (c.verdict || '').replace(/_/g, ' ').toLowerCase()].filter(Boolean).join(' · ')
+              return (
+              <button key={c.id} onClick={() => { openCase(c.id); setOpen(false) }} className="cov-search-row"
                 style={{ display:'flex', width:'100%', gap:'12px', alignItems:'center', padding:'10px 16px', background:'none', border:'none', borderBottom:'1px solid #EDE7DC', cursor:'pointer', textAlign:'left' }}>
-                <span className="mono-font" style={{ fontSize:'10px', color:'#78716C', width:'84px', flexShrink:0, whiteSpace:'nowrap' }}>{c.id}</span>
-                <span className="display-font" style={{ fontSize:'14px', color:'#1A1814', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
-                <span className="desktop-only"><PipelineDots c={c} /></span>
-                <StatusChip status={c.status} />
+                <span style={{ width:'84px', flexShrink:0, display:'flex', flexDirection:'column', gap:'3px' }}>
+                  <span className="mono-font" style={{ fontSize:'10px', color:'#78716C', whiteSpace:'nowrap' }}>{c.id}</span>
+                  {isDemoCase(c) && <span className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', color:'#8A7F72', border:'1px dashed #B8B0A4', padding:'0 4px', width:'fit-content' }}>DEMO</span>}
+                </span>
+                <span style={{ flex:1, minWidth:0 }}>
+                  <span className="display-font" style={{ display:'block', fontSize:'14px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
+                  {detail && <span className="mono-font" style={{ display:'block', fontSize:'10px', color:'#A8A29E', marginTop:'2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{detail}</span>}
+                </span>
+                {/* Fixed-width columns keep dots and status aligned row to row */}
+                <span className="desktop-only" style={{ width:'52px', flexShrink:0, display:'flex', justifyContent:'flex-start' }}><PipelineDots c={c} /></span>
+                <span className="cov-search-status" style={{ width:'112px', flexShrink:0, display:'flex', justifyContent:'flex-end' }}><StatusChip status={c.status} /></span>
               </button>
-            ))}
+            )})}
         </div>
         <div className="mono-font desktop-only" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#A8A29E', padding:'8px 16px' }}>ENTER TO OPEN · ESC TO CLOSE</div>
       </div>
