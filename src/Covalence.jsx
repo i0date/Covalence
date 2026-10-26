@@ -8,6 +8,7 @@ import { CasePanel, CaseSearch, CaseLink, MobileMenu, PipelineDots, StatusChip, 
 import { authAvailable, accessToken, isSignedIn, getSession, onSessionChange, getMembership, signOut,
          pendingInvite, clearPendingInvite } from './auth.js'
 import { SignInPanel, Onboarding, TeamPanel } from './AuthScreens.jsx'
+import { WelcomePage } from './Welcome.jsx'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -394,47 +395,56 @@ function LoginGate({ onLogin, startInSignIn, onCancel }) {
     onLogin(userData)
   }
 
-  if (mode === 'signin') return <SignInPanel onBack={() => { clearPendingInvite(); if (onCancel) onCancel(); else setMode('demo') }} />
+  const leaveSignIn = () => { clearPendingInvite(); if (onCancel) onCancel(); else setMode('demo') }
+  const label = { fontFamily:"'JetBrains Mono',monospace", fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px', display:'block' }
 
   return (
-    <div style={{ minHeight:'100vh', background:'#1A1814', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
-      <div style={{ width:'100%', maxWidth:'400px' }}>
-        <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
-        <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>Welcome</div>
-        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>A working prototype. Enter your details to explore with demo data.</div>
-        <form onSubmit={handleEnter}>
-          <div style={{ marginBottom:'16px' }}>
-            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>NAME</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoFocus
-              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
+    <WelcomePage>
+      {authAvailable && (
+        <div role="tablist" style={{ display:'flex', borderBottom:'1px solid #2D2922', marginBottom:'28px' }}>
+          <button role="tab" aria-selected={mode === 'demo'} className={`wl-tab ${mode === 'demo' ? 'on' : ''}`} onClick={leaveSignIn}>EXPLORE THE DEMO</button>
+          <button role="tab" aria-selected={mode === 'signin'} className={`wl-tab ${mode === 'signin' ? 'on' : ''}`} onClick={() => setMode('signin')}>SIGN IN</button>
+        </div>
+      )}
+
+      {mode === 'signin' ? <SignInPanel embedded onBack={null} /> : (
+        <>
+          <div className="wl-serif" style={{ fontSize:'26px', color:'#F5F1EA', letterSpacing:'-0.01em', marginBottom:'8px' }}>See it with real work in it.</div>
+          <div className="wl-mono" style={{ fontSize:'10px', color:'#A8A29E', letterSpacing:'0.04em', lineHeight:1.7, marginBottom:'28px' }}>
+            Loads a realistic portfolio — chargebacks, scams, crypto and merchant cases across every stage. Fictional data that never leaves your browser.
           </div>
-          <div style={{ marginBottom:'16px' }}>
-            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>EMAIL</div>
-            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@institution.com"
-              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
-          </div>
-          <div style={{ marginBottom:'24px' }}>
-            <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>INSTITUTION <span style={{color:'#57534E'}}>(optional)</span></div>
-            <input value={institution} onChange={e => setInstitution(e.target.value)} placeholder="First National Bank"
-              style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' }} />
-          </div>
-          {err && <div style={{ fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' }}>{err}</div>}
-          <button type="submit" disabled={loading}
-            style={{ width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'LOADING...' : 'EXPLORE THE DEMO →'}
-          </button>
-        </form>
-        {authAvailable && (
-          <div style={{ marginTop:'28px', borderTop:'1px solid #2D2922', paddingTop:'16px', fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.04em' }}>
-            Already have a workspace?{' '}
-            <button type="button" onClick={() => setMode('signin')}
-              style={{ background:'none', border:'none', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>
-              SIGN IN →
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+          <form onSubmit={handleEnter}>
+            <div style={{ marginBottom:'14px' }}>
+              <label style={label} htmlFor="wl-name">NAME</label>
+              <input id="wl-name" className="wl-input" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoComplete="name" />
+            </div>
+            <div style={{ marginBottom:'14px' }}>
+              <label style={label} htmlFor="wl-email">WORK EMAIL</label>
+              <input id="wl-email" className="wl-input" value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@institution.com" autoComplete="email" />
+            </div>
+            <div style={{ marginBottom:'22px' }}>
+              <label style={label} htmlFor="wl-inst">INSTITUTION <span style={{ color:'#57534E' }}>(optional)</span></label>
+              <input id="wl-inst" className="wl-input" value={institution} onChange={e => setInstitution(e.target.value)} placeholder="First National Bank" autoComplete="organization" />
+            </div>
+            {err && <div className="wl-mono" style={{ fontSize:'10px', color:'#F87171', marginBottom:'12px' }}>{err}</div>}
+            <button type="submit" className="wl-primary" disabled={loading}>{loading ? 'LOADING…' : 'EXPLORE THE DEMO →'}</button>
+          </form>
+          {authAvailable && (
+            <div className="wl-mono" style={{ marginTop:'28px', paddingTop:'18px', borderTop:'1px solid #2D2922', fontSize:'10px', color:'#78716C', lineHeight:1.7 }}>
+              Your team already uses Covalence?{' '}
+              <button type="button" onClick={() => setMode('signin')} style={{ background:'none', border:'none', color:'#E7E4DF', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.08em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>Sign in to your workspace</button>
+              <br/>Have an invite? Open the link from your email.
+            </div>
+          )}
+        </>
+      )}
+
+      {onCancel && (
+        <div style={{ marginTop:'24px' }}>
+          <button type="button" onClick={onCancel} className="wl-mono" style={{ background:'none', border:'none', color:'#78716C', fontSize:'9px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>← Back to the demo</button>
+        </div>
+      )}
+    </WelcomePage>
   )
 }
 

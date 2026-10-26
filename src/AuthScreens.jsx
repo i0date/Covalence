@@ -8,7 +8,7 @@ import { sendCode, verifyCode, signOut, createInstitution, acceptInvite, pending
 // Shared dark styles — match the welcome screen
 const gate = {
   label: { fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' },
-  input: { width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'13px', outline:'none', boxSizing:'border-box' },
+  input: { width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'16px', outline:'none', boxSizing:'border-box' },
   btn:   { width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:'pointer' },
   link:  { background:'none', border:'none', color:'#78716C', fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' },
   err:   { fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' },
@@ -26,10 +26,15 @@ export function GateShell({ title, subtitle, children }) {
     </div>
   )
 }
+// Inside the welcome page's right-hand panel the sign-in form sits without its own full-screen shell
+function Shell({ embedded, title, subtitle, children }) {
+  if (!embedded) return <GateShell title={title} subtitle={subtitle}>{children}</GateShell>
+  return <div>{subtitle && <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#A8A29E', letterSpacing:'0.04em', lineHeight:1.6, marginBottom:'24px' }}>{subtitle}</div>}{children}</div>
+}
 const Field = ({ label, children }) => <div style={{ marginBottom:'16px' }}><div style={gate.label}>{label}</div>{children}</div>
 
 // ── Sign in with an emailed code ──────────────────────────────────────────────
-export function SignInPanel({ onBack }) {
+export function SignInPanel({ onBack, embedded }) {
   const [step,    setStep]    = useState('email')   // email | code
   const [email,   setEmail]   = useState('')
   const [code,    setCode]    = useState('')
@@ -54,7 +59,7 @@ export function SignInPanel({ onBack }) {
   }
 
   return (
-    <GateShell title="Sign in"
+    <Shell embedded={embedded} title="Sign in"
       subtitle={invited ? 'You’ve been invited to a Covalence workspace. Sign in with the email address the invite was sent to.'
         : 'Sign in to share cases with your team, use Duo and case links, and attach evidence.'}>
       {step === 'email' ? (
@@ -85,7 +90,7 @@ export function SignInPanel({ onBack }) {
       {onBack && <div style={{ marginTop:'28px', borderTop:'1px solid #2D2922', paddingTop:'16px' }}>
         <button type="button" style={gate.link} onClick={onBack}>← Just explore the demo instead</button>
       </div>}
-    </GateShell>
+    </Shell>
   )
 }
 
