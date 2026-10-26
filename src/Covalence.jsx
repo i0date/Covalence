@@ -5,6 +5,9 @@ import { FileText, AlertCircle, Loader2, Copy, Check, ArrowRight, CheckSquare, S
          Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink } from 'lucide-react'
 import { CasePanel, CaseSearch, CaseLink, MobileMenu, PipelineDots, StatusChip, allThreadCases, stageOf,
          useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, seedDemoIfFirstVisit, isDemoCase, evidencePath, openEvidence } from './CaseThread.jsx'
+import { authAvailable, accessToken, isSignedIn, getSession, onSessionChange, getMembership, signOut,
+         pendingInvite, clearPendingInvite } from './auth.js'
+import { SignInPanel, Onboarding, TeamPanel } from './AuthScreens.jsx'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component {
@@ -197,7 +200,7 @@ function saveOutcomes(o) {
     if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
     setTimeout(() => { window._covSaving = false }, 0)
     // ── Supabase as PRIMARY write (not backup) ─────────────────────────────
-    if (SUPA_URL && SUPA_KEY) {
+    if (SUPA_URL && SUPA_KEY && isSignedIn()) {
       if (window._covSyncStatus) window._covSyncStatus('syncing')
       pushCasesToSupa(merged)
         .then(() => { if (window._covSyncStatus) window._covSyncStatus('synced') })
@@ -355,7 +358,9 @@ const GLOBAL_CSS = `
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
 // ═══════════════════════════════════════════════════════════════════════════════
-function LoginGate({ onLogin }) {
+function LoginGate({ onLogin, startInSignIn, onCancel }) {
+  // Two ways in: explore the demo (local data, visit logged), or sign in to a real workspace
+  const [mode,        setMode]        = useState(() => (startInSignIn || pendingInvite()) && authAvailable ? 'signin' : 'demo')
   const [name,        setName]        = useState('')
   const [email,       setEmail]       = useState('')
   const [institution, setInstitution] = useState('')
@@ -378,18 +383,19 @@ function LoginGate({ onLogin }) {
         body: JSON.stringify({ id: crypto.randomUUID(), name:userData.name, email:userData.email, entered_at:userData.at, user_agent:navigator.userAgent }),
       }).catch(() => {})
     }
-    try { await upsertAgent(userData); const remote = await pullCasesFromSupa(); if(remote.length){ const local=(() => {try{return JSON.parse(localStorage.getItem('cov_outcomes')||'[]')}catch{return[]}})(); saveOutcomes(mergeCases(local,remote)) } } catch {}
     localStorage.setItem('cov_user', JSON.stringify(userData))
     setLoading(false)
     onLogin(userData)
   }
+
+  if (mode === 'signin') return <SignInPanel onBack={() => { clearPendingInvite(); if (onCancel) onCancel(); else setMode('demo') }} />
 
   return (
     <div style={{ minHeight:'100vh', background:'#1A1814', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
       <div style={{ width:'100%', maxWidth:'400px' }}>
         <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
         <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>Welcome</div>
-        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>A working prototype. Enter your details to explore.</div>
+        <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px' }}>A working prototype. Enter your details to explore with demo data.</div>
         <form onSubmit={handleEnter}>
           <div style={{ marginBottom:'16px' }}>
             <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' }}>NAME</div>
@@ -409,9 +415,18 @@ function LoginGate({ onLogin }) {
           {err && <div style={{ fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' }}>{err}</div>}
           <button type="submit" disabled={loading}
             style={{ width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'LOADING...' : 'ENTER →'}
+            {loading ? 'LOADING...' : 'EXPLORE THE DEMO →'}
           </button>
         </form>
+        {authAvailable && (
+          <div style={{ marginTop:'28px', borderTop:'1px solid #2D2922', paddingTop:'16px', fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.04em' }}>
+            Already have a workspace?{' '}
+            <button type="button" onClick={() => setMode('signin')}
+              style={{ background:'none', border:'none', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>
+              SIGN IN →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -421,12 +436,23 @@ function LoginGate({ onLogin }) {
 // ROOT — Covalence
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function Covalence() {
-  const [covUser,       setCovUser]       = useState(() => {
+  // Demo visitor (welcome-screen details, local demo data) — used when not signed in
+  const [demoUser,      setDemoUser]      = useState(() => {
     let u = null
     try { u = JSON.parse(localStorage.getItem('cov_user') || 'null') } catch {}
     if (u) seedDemoIfFirstVisit(u.email) // runs before the outcomes initializer below reads storage
     return u
   })
+  // Signed-in user (Supabase Auth) and their institution membership
+  const [authReady,     setAuthReady]     = useState(!authAvailable)
+  const [session,       setSession]       = useState(null)
+  const [membership,    setMembership]    = useState(null)
+  const [membershipChecked, setMembershipChecked] = useState(false)
+  const [showSignIn,    setShowSignIn]    = useState(() => authAvailable && !!pendingInvite()) // invite links go straight to sign-in
+  const covUser = membership
+    ? { name: membership.display_name || membership.email, email: membership.email, institution: membership.institution_name,
+        institutionId: membership.institution_id, role: membership.role, authed: true }
+    : demoUser
   const [activeSection, setActiveSection] = useState('home')
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
   const [settings,      setSettings]      = useState(loadSettings)
@@ -443,7 +469,28 @@ export default function Covalence() {
 
   const loadDemo  = () => { loadDemoInstitution(setOutcomes, covUser?.email); setDataVersion(v => v + 1) }
   const clearDemo = () => { clearDemoInstitution(setOutcomes); setDataVersion(v => v + 1) }
-  const handleLogin = (u) => { if (seedDemoIfFirstVisit(u?.email)) setOutcomes(loadOutcomes()); setCovUser(u) }
+  const handleLogin = (u) => { if (seedDemoIfFirstVisit(u?.email)) setOutcomes(loadOutcomes()); setDemoUser(u) }
+  const handleSignOut = async () => {
+    await signOut(); setSession(null); setMembership(null); setMembershipChecked(false)
+    setDataVersion(v => v + 1) // tools re-read local data as a demo visitor
+  }
+
+  // Restore the session on load, follow sign-in / sign-out, and load the membership
+  useEffect(() => {
+    if (!authAvailable) return
+    getSession().then(s => { setSession(s); setAuthReady(true) }).catch(() => setAuthReady(true))
+    return onSessionChange(s => setSession(s))
+  }, [])
+  const sessionUserId = session?.user?.id || null
+  useEffect(() => {
+    if (!sessionUserId) { setMembership(null); setMembershipChecked(false); return }
+    setMembershipChecked(false)
+    getMembership().then(m => { setMembership(m); setShowSignIn(false) })
+      .catch(() => setMembership(null))
+      .finally(() => setMembershipChecked(true))
+  }, [sessionUserId])
+  // Notes, filings and assignments are signed with the user's name
+  useEffect(() => { if (covUser?.name) try { localStorage.setItem('cov_agent_name', covUser.name) } catch {} }, [covUser?.name])
 
   const [globalSyncStatus, setGlobalSyncStatus] = useState('idle') // idle|syncing|synced|error
 
@@ -473,10 +520,10 @@ export default function Covalence() {
   }, [])
   useEffect(() => { saveSettings(settings) }, [settings])
   useEffect(() => {
-    if (!SUPA_URL || !SUPA_KEY) return
+    if (!SUPA_URL || !SUPA_KEY || !membership) return
     const pull = () => pullCasesFromSupa().then(r => { if(r.length) setOutcomes(l => mergeCases(l,r)) }).catch(()=>{})
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
-  }, [])
+  }, [membership?.institution_id])
 
   const NAV = [
     { id:'home',     label:'HOME' },
@@ -490,6 +537,10 @@ export default function Covalence() {
     { id:'settings', label:'SETTINGS' },
   ]
 
+  if (!authReady) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
+  if (session && !membershipChecked) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
+  if (session && !membership) return <Onboarding email={session.user?.email || ''} onDone={m => { setMembership(m); setShowSignIn(false); setDataVersion(v => v + 1) }} />
+  if (showSignIn && !session) return <LoginGate startInSignIn onLogin={handleLogin} onCancel={() => setShowSignIn(false)} />
   if (!covUser) return <LoginGate onLogin={handleLogin} />
 
   return (
@@ -523,7 +574,7 @@ export default function Covalence() {
                 ⌕ <span className="desktop-only">CASES</span>
               </button>
               <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} />
-              {SUPA_URL && SUPA_KEY && globalSyncStatus !== 'idle' && (
+              {SUPA_URL && SUPA_KEY && covUser?.authed && globalSyncStatus !== 'idle' && (
                 <span className="mono-font" style={{fontSize:'8px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
                   color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
                   borderColor: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669'}}>
@@ -532,8 +583,16 @@ export default function Covalence() {
               )}
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
               {covUser&&<div className="mono-font" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
-                <span style={{color:'#A8A29E',maxWidth:'120px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>{covUser.name}</span>
-                <button onClick={()=>{localStorage.removeItem('cov_user');setCovUser(null)}} style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
+                <span style={{color:'#A8A29E',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>
+                  {covUser.name}{covUser.authed && <span className="desktop-only" style={{color:'#57534E'}}> · {covUser.institution}</span>}
+                </span>
+                {!covUser.authed && authAvailable && (
+                  <button onClick={() => setShowSignIn(true)} title="Sign in to share cases with your team"
+                    style={{background:'transparent',border:'1px solid #D6CFC4',color:'#E7E4DF',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>SIGN IN</button>
+                )}
+                <button onClick={() => { if (covUser.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }}
+                  title={covUser.authed ? 'Sign out' : 'Leave the demo'}
+                  style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
             </div>
           </div>
@@ -590,13 +649,13 @@ export default function Covalence() {
           <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} historicalOutcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'duo' ? 'block' : 'none' }}>
-          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} />
+          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
-          <SettingsView settings={settings} setSettings={setSettings} />
+          <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} />
         </div>
         </React.Fragment>
       </div>
@@ -10047,7 +10106,8 @@ function genDuoCode() {
   return c
 }
 function supaH() {
-  return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }
+  // Signed in → the user's token, so the database scopes every call to their institution
+  return { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${accessToken() || SUPA_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }
 }
 // ── RPC layer ────────────────────────────────────────────────────────────────
 // Tables are closed to the public key (see supabase_rls.sql); the app calls
@@ -10124,13 +10184,13 @@ async function caseLinkActivity(token) {
 async function pushCasesToSupa(cases) {
   // Demo cases stay in this browser — they never reach the shared pool
   const real = (cases || []).filter(c => !isDemoCase(c))
-  if (!SUPA_URL || !SUPA_KEY || !real.length) return
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !real.length) return
   const rows = real.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
   await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
     fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
 }
 async function pullCasesFromSupa() {
-  if (!SUPA_URL || !SUPA_KEY) return []
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn()) return []
   const d = await supaRpc('cov_pull_cases', { p_workspace: covWorkspace() }, async () => {
     const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
     return r.ok ? r.json() : []
@@ -10143,13 +10203,9 @@ function mergeCases(local, remote) {
   remote.forEach(c=>{ const ex=map[c.id]; if(!ex){map[c.id]=c;return} if(new Date(c.updatedAt||0)>new Date(ex.updatedAt||0)) map[c.id]=c })
   return Object.values(map)
 }
-async function upsertAgent(a) {
-  if (!SUPA_URL||!SUPA_KEY) return
-  await supaRpc('cov_upsert_agent', { p_email:a.email, p_name:a.name, p_institution:a.institution||'' }, () =>
-    fetch(`${SUPA_URL}/rest/v1/cov_agents`, {method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify({email:a.email, name:a.name, institution:a.institution||'', last_login:new Date().toISOString()})}))
-}
+// Team list = members of the signed-in user's institution (memberships, see supabase_auth.sql)
 async function fetchAgents() {
-  if (!SUPA_URL||!SUPA_KEY) return []
+  if (!SUPA_URL||!SUPA_KEY||!isSignedIn()) return []
   return await supaRpc('cov_list_agents', { p_institution: covWorkspace() }, async () => {
     const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
     return r.ok ? r.json() : []
@@ -10157,7 +10213,7 @@ async function fetchAgents() {
 }
 
 async function pushTrioToSupa(incidents) {
-  if (!SUPA_URL || !SUPA_KEY || !incidents?.length) return
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !incidents?.length) return
   const rows = incidents.map(i => ({ id: i.id, data: i, updated_at: i.updatedAt || new Date().toISOString() }))
   await supaRpc('cov_push_trio', { p_workspace: covWorkspace(), p_rows: rows }, () =>
     fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents`, {
@@ -10167,7 +10223,7 @@ async function pushTrioToSupa(incidents) {
     }))
 }
 async function pullTrioFromSupa() {
-  if (!SUPA_URL || !SUPA_KEY) return []
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn()) return []
   const d = await supaRpc('cov_pull_trio', { p_workspace: covWorkspace() }, async () => {
     const r = await fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents?select=data,updated_at&order=updated_at.desc&limit=100`, { headers: supaH() })
     return r.ok ? r.json() : []
@@ -10187,6 +10243,7 @@ function mergeTrioIncidents(local, remote) {
 
 async function uploadEvidence(caseId, file, agentEmail) {
   if (!SUPA_URL || !SUPA_KEY) throw new Error('Supabase not configured')
+  if (!isSignedIn()) throw new Error('Sign in to attach evidence — demo cases stay in this browser')
   const ts = Date.now()
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const path = `${caseId}/${ts}-${safeName}`
@@ -10194,7 +10251,7 @@ async function uploadEvidence(caseId, file, agentEmail) {
     method: 'POST',
     headers: {
       'apikey': SUPA_KEY,
-      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Authorization': `Bearer ${accessToken()}`,
       'Content-Type': file.type || 'application/octet-stream',
       'x-upsert': 'false',
     },
@@ -10225,7 +10282,7 @@ const DUO_STATUS = {
 const DUO_STATUS_ORDER         = ['active','in_discussion','agreed','closed']
 const DUO_STATUS_ORDER_CRYPTO  = ['active','freeze_requested','freeze_confirmed','closed']
 
-function DuoView({ duoHandoff, setDuoHandoff }) {
+function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }) {
   const [phase,         setPhase]        = useState('dashboard')
   const [myRole,        setMyRole]       = useState(null)
   const [session,       setSession]      = useState(null)
@@ -10331,10 +10388,10 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
   }
 
   const recoverSessions = async () => {
-    if (!recoverQuery.trim() || !configured) return
+    if ((!recoverQuery.trim() && !authInstitution) || !configured) return
     setRecoverLoading(true); setRecoverResults(null)
     try {
-      const data = await duoFind(recoverQuery.trim())
+      const data = await duoFind(recoverQuery.trim() || authInstitution)
       setRecoverResults(Array.isArray(data) ? data : [])
     } catch { setRecoverResults([]) }
     setRecoverLoading(false)
@@ -10473,9 +10530,18 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
           </div>
         </div>
       )}
-      <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginBottom:'40px' }}>
-        <BtnPrimary onClick={() => { setError(''); setMyInstitution(''); setPhase('creating') }}>CREATE SESSION</BtnPrimary>
-        <BtnSecondary onClick={() => { setError(''); setMyInstitution(''); setJoinCode(''); setPhase('joining') }}>JOIN SESSION</BtnSecondary>
+      {configured && !authInstitution && (
+        <div className="flex gap-3 items-center justify-between flex-wrap border border-stone-800 p-4 mb-8" style={{ maxWidth:'560px', background:'#FAF7F1' }}>
+          <div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-800 mb-1">SIGN IN TO USE DUO</div>
+            <p className="display-font text-stone-600 text-[13px] leading-relaxed">Duo sessions are shared with another institution, so they run under your institution’s signed-in workspace — not the demo.</p>
+          </div>
+          {onSignIn && <BtnPrimary onClick={onSignIn}>SIGN IN</BtnPrimary>}
+        </div>
+      )}
+      <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginBottom:'40px', ...(configured && !authInstitution ? { opacity:0.4, pointerEvents:'none' } : {}) }}>
+        <BtnPrimary onClick={() => { setError(''); setMyInstitution(authInstitution || ''); setPhase('creating') }}>CREATE SESSION</BtnPrimary>
+        <BtnSecondary onClick={() => { setError(''); setMyInstitution(authInstitution || ''); setJoinCode(''); setPhase('joining') }}>JOIN SESSION</BtnSecondary>
         <button onClick={() => { setError(''); setPhase('link-setup') }} className="mono-font"
           style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'10px 16px', background:'transparent', border:'1px solid #B45309', color:'#92400E', cursor:'pointer' }}>
           SEND EXTERNAL LINK
@@ -10522,15 +10588,15 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
       {configured && (
         <div style={{ marginTop:'40px', paddingTop:'32px', borderTop:'1px solid #E8E3DA', maxWidth:'560px' }}>
           <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">RECOVER SESSIONS</div>
-          <p className="display-font text-stone-500 text-[13px] mb-4">Switched computers or cleared your browser? Find sessions by institution name.</p>
+          <p className="display-font text-stone-500 text-[13px] mb-4">{authInstitution ? `Switched computers or cleared your browser? List every session ${authInstitution} is part of.` : 'Switched computers or cleared your browser? Find sessions by institution name.'}</p>
           <div style={{ display:'flex', gap:'8px' }}>
-            <input className="cov-input mono-font flex-1" style={{ fontSize:'13px' }}
+            {!authInstitution && <input className="cov-input mono-font flex-1" style={{ fontSize:'13px' }}
               placeholder="Enter your institution name…"
               value={recoverQuery} onChange={e => setRecoverQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && recoverSessions()} />
+              onKeyDown={e => e.key === 'Enter' && recoverSessions()} />}
             <button onClick={recoverSessions} disabled={recoverLoading}
               className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
-              {recoverLoading ? '…' : 'SEARCH'}
+              {recoverLoading ? '…' : authInstitution ? 'SHOW MY SESSIONS' : 'SEARCH'}
             </button>
           </div>
           {recoverResults !== null && (
@@ -10547,7 +10613,8 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
                           <div className="display-font text-stone-600 text-[13px] flex-1">{s.institution_a} · {s.institution_b}</div>
                           <div className="mono-font text-[9px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg }}>{st.label}</div>
                           <button onClick={() => {
-                            const entry = { id: s.id, myInstitution: s.institution_a, lastStatus: s.status }
+                            const mine = authInstitution && s.institution_b === authInstitution ? 'b' : 'a'
+                            const entry = { id: s.id, role: mine, myInstitution: mine === 'b' ? s.institution_b : s.institution_a, lastStatus: s.status }
                             if (!already) { const next = [...mySessions, entry]; setMySessions(next); saveMyDuoSessions(next) }
                             openSession(entry)
                           }} className="mono-font shrink-0" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
@@ -10605,7 +10672,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
 
         <div>
           <label className="cov-label">YOUR INSTITUTION NAME</label>
-          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)} readOnly={!!authInstitution} title={authInstitution ? 'From your signed-in workspace' : undefined}
             placeholder="First Community Credit Union" style={{ fontSize:'14px' }} />
         </div>
 
@@ -10671,7 +10738,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         </div>
         <div>
           <label className="cov-label">YOUR INSTITUTION NAME</label>
-          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+          <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)} readOnly={!!authInstitution} title={authInstitution ? 'From your signed-in workspace' : undefined}
             placeholder="Riverside Federal Credit Union" style={{ fontSize:'14px' }} />
         </div>
         <ErrBox />
@@ -10956,7 +11023,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         <div style={{ maxWidth:'560px', display:'grid', gap:'18px' }}>
           <div>
             <label className="cov-label">YOUR INSTITUTION NAME</label>
-            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)} readOnly={!!authInstitution} title={authInstitution ? 'From your signed-in workspace' : undefined}
               placeholder="First Community Credit Union" style={{ fontSize:'13px' }} />
           </div>
           {linkType === 'standard' ? (
@@ -11250,7 +11317,7 @@ function DuoView({ duoHandoff, setDuoHandoff }) {
         <div style={{ maxWidth:'560px', display:'grid', gap:'18px' }}>
           <div>
             <label className="cov-label">YOUR INSTITUTION NAME</label>
-            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)}
+            <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)} readOnly={!!authInstitution} title={authInstitution ? 'From your signed-in workspace' : undefined}
               placeholder="First Community Credit Union" style={{ fontSize:'13px' }} />
           </div>
           {linkType === 'standard' ? (
@@ -12553,7 +12620,7 @@ ${'═'.repeat(64)}`
   )
 }
 
-function SettingsView({ settings, setSettings }) {
+function SettingsView({ settings, setSettings, covUser }) {
   const [saved, setSaved] = React.useState(false)
   const set = (key, val) => {
     setSettings(prev => ({ ...prev, [key]: val }))
@@ -12630,6 +12697,9 @@ function SettingsView({ settings, setSettings }) {
           )}
         </div>
       </div>
+
+      {/* Team — members, invites (admins). Signed-in users only. */}
+      {covUser?.authed && <TeamPanel covUser={covUser} />}
 
       {/* Two-column grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start' }}>

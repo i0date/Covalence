@@ -2,6 +2,8 @@
 // The cov-evidence bucket is private (see supabase_storage.sql), so files are only reachable
 // through links signed here with the service-role key, which never leaves the server.
 // Security hardening:
+//   • Caller must send a valid Supabase Auth token, and the case in the path must
+//     belong to the caller's institution (memberships / cov_cases, supabase_auth.sql)
 //   • Path must match the shape the app uploads: <caseId>/<timestamp>-<safeName>
 //   • Links expire after SIGNED_URL_TTL_S seconds
 //   • Per-IP rate limit: 60 requests / 60 s (in-memory; resets per function instance)
@@ -31,7 +33,7 @@ module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://covalence.vercel.app'
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Vary', 'Origin')
   res.setHeader('Cache-Control', 'no-store')
 
@@ -51,6 +53,24 @@ module.exports = async function handler(req, res) {
   const { path } = req.body || {}
   if (typeof path !== 'string' || !PATH_RE.test(path)) {
     return res.status(400).json({ error: 'Invalid evidence path' })
+  }
+
+  // Caller must be signed in, and the case must belong to their institution
+  const userToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+  if (!userToken) return res.status(401).json({ error: 'Sign in to open evidence' })
+  const svc = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
+  const userRes = await fetch(`${supaUrl}/auth/v1/user`, { headers: { apikey: serviceKey, Authorization: `Bearer ${userToken}` } })
+  const user = userRes.ok ? await userRes.json().catch(() => null) : null
+  if (!user?.id) return res.status(401).json({ error: 'Session expired — sign in again' })
+  const caseId = path.split('/')[0]
+  const [mRes, cRes] = await Promise.all([
+    fetch(`${supaUrl}/rest/v1/memberships?user_id=eq.${encodeURIComponent(user.id)}&select=institution_id`, { headers: svc }),
+    fetch(`${supaUrl}/rest/v1/cov_cases?id=eq.${encodeURIComponent(caseId)}&select=institution_id`, { headers: svc }),
+  ])
+  const member = mRes.ok ? (await mRes.json())[0] : null
+  const owner  = cRes.ok ? (await cRes.json())[0] : null
+  if (!member?.institution_id || !owner?.institution_id || member.institution_id !== owner.institution_id) {
+    return res.status(403).json({ error: 'This document belongs to another institution’s case' })
   }
 
   const upstream = await fetch(`${supaUrl}/storage/v1/object/sign/${BUCKET}/${path}`, {
