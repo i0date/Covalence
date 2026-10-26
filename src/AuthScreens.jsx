@@ -63,11 +63,13 @@ export function SignInPanel({ onBack }) {
             <input value={email} onChange={e => setEmail(e.target.value)} type="email" autoFocus placeholder="you@institution.com" style={gate.input} />
           </Field>
           {err && <div style={gate.err}>{err}</div>}
-          <button type="submit" disabled={loading} style={{ ...gate.btn, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'SENDING…' : 'EMAIL ME A CODE →'}</button>
+          <button type="submit" disabled={loading} style={{ ...gate.btn, cursor: loading ? 'not-allowed' : 'pointer' }}>{loading ? 'SENDING…' : 'EMAIL ME A SIGN-IN LINK →'}</button>
         </form>
       ) : (
         <form onSubmit={verify}>
-          <div style={gate.note}>We sent a sign-in code to <span style={{ color:'#E7E4DF' }}>{email.trim().toLowerCase()}</span>. It expires in an hour. If the email has a link instead, clicking it signs you in too.</div>
+          {/* Supabase's built-in sender only sends the link; the code appears once custom SMTP + template are set up */}
+          <div style={gate.note}>Check <span style={{ color:'#E7E4DF' }}>{email.trim().toLowerCase()}</span> and <span style={{ color:'#E7E4DF' }}>click the sign-in link</span> in the email — it signs you in here. It expires in an hour.</div>
+          <div style={{ ...gate.note, marginBottom:'12px', color:'#78716C' }}>If your email shows a code instead, enter it:</div>
           <Field label="CODE">
             <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} inputMode="numeric" autoComplete="one-time-code" autoFocus placeholder="123456"
               style={{ ...gate.input, letterSpacing:'0.4em', fontSize:'18px' }} />
