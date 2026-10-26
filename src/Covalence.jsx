@@ -333,8 +333,12 @@ const GLOBAL_CSS = `
   .grade-tab:hover:not(.active) { border-color:#78716c; color:#1A1814; }
   input[type=range] { accent-color:#1A1814; }
 
+  /* ── Case search rows ─────────────────────────────────────────────────── */
+  .cov-search-row:hover { background:#EEE9E0 !important; }
+
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   @media(max-width:767px) {
+    .cov-search-status { width:auto !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */
     .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 8px !important; flex-wrap:nowrap !important; }
@@ -558,7 +562,12 @@ export default function Covalence() {
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflowY:'hidden', overflowX:'auto' }}>
           <div className="cov-nav-inner" style={{ maxWidth:'1320px', margin:'0 auto', display:'flex', alignItems:'center', gap:'20px', padding:'0 24px' }}>
             <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
-              <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
+              <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1, display:'flex', alignItems:'center', gap:'10px' }}>
+                COVALENCE
+                {/* Not signed in → everything here is local demo data; say so */}
+                {!covUser?.authed && <span title="You're exploring with demo data. Sign in to use your institution's workspace."
+                  style={{ fontSize:'8px', letterSpacing:'0.16em', color:'#D6CFC4', border:'1px dashed #78716C', padding:'2px 6px' }}>DEMO</span>}
+              </div>
             </div>
             <span className="mobile-only mono-font cov-nav-current">{(NAV.find(n => n.id === activeSection)?.label || '').replace(/\s+/g, ' ')}</span>
             <div className="cov-nav-buttons" style={{ display:'flex', alignItems:'center' }}>
