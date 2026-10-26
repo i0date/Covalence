@@ -355,8 +355,8 @@ const GLOBAL_CSS = `
     .cov-nav-current  { font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-inner .cov-nav-icon { padding:0 !important; width:34px; height:34px; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
     /* mobile menu sits inside the nav but needs full-size tap targets */
-    .cov-nav-inner .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }
-    .cov-nav-inner .cov-mobile-menu .cov-mobile-acct { font-size:10px !important; padding:8px 12px !important; }
+    .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }
+    .cov-mobile-menu .cov-mobile-acct { font-size:10px !important; padding:8px 12px !important; }
   }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `

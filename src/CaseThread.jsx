@@ -10,6 +10,7 @@
 //   • <MobileMenu>   — the full tool list on small screens
 //   • buildDemoInstitution() — a realistic portfolio for first-time visitors
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { accessToken } from './auth.js'
 
 const OPEN_EVENT = 'cov:open-case'
@@ -371,26 +372,34 @@ export function CaseSearch({ outcomes, open, setOpen }) {
   const term = q.trim().toLowerCase()
   const hits = (term ? cases.filter(c => [c.id, c.merchant, c.cardholderName, c.reasonCode, c.amount].some(v => String(v || '').toLowerCase().includes(term))) : cases).slice(0, 12)
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:9500, background:'rgba(26,24,20,0.55)', display:'flex', justifyContent:'center', alignItems:'flex-start', padding:'10vh 16px 16px' }}
+    <div role="dialog" aria-label="Search cases" style={{ position:'fixed', inset:0, zIndex:9500, background:'rgba(26,24,20,0.55)', display:'flex', justifyContent:'center', alignItems:'flex-start', padding:'max(12px, 8vh) 12px 12px' }}
       onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}>
-      <div style={{ width:'100%', maxWidth:'600px', background:'#F5F1EA', border:'1px solid #1A1814' }}>
-        <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} className="cov-input"
-          placeholder="Search cases — number, merchant, cardholder, reason code"
-          onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { openCase(hits[0].id); setOpen(false) } }}
-          style={{ border:'none', borderBottom:'1px solid #D4CCBC', fontSize:'16px' }} />
+      <div style={{ width:'100%', maxWidth:'600px', background:'#F5F1EA', border:'1px solid #1A1814', minWidth:0 }}>
+        <div style={{ display:'flex', alignItems:'center', borderBottom:'1px solid #D4CCBC' }}>
+          {/* 16px text stops iOS zooming into the field */}
+          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} className="cov-input" type="search" enterKeyHint="go"
+            placeholder="Search cases…" aria-label="Search cases"
+            onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { openCase(hits[0].id); setOpen(false) } }}
+            style={{ border:'none', fontSize:'16px', flex:1, minWidth:0 }} />
+          <button onClick={() => setOpen(false)} aria-label="Close search" title="Close (Esc)"
+            style={{ flexShrink:0, width:'48px', height:'48px', background:'none', border:'none', borderLeft:'1px solid #D4CCBC', color:'#57534E', fontSize:'18px', cursor:'pointer' }}>✕</button>
+        </div>
+        <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', color:'#A8A29E', padding:'6px 16px', borderBottom:'1px solid #EDE7DC' }}>
+          CASE NUMBER · MERCHANT · CARDHOLDER · REASON CODE
+        </div>
         <div style={{ maxHeight:'55vh', overflowY:'auto' }}>
           {hits.length === 0 ? <div className="mono-font" style={{ fontSize:'11px', color:'#A8A29E', padding:'16px' }}>No cases match.</div>
             : hits.map(c => (
               <button key={c.id} onClick={() => { openCase(c.id); setOpen(false) }}
                 style={{ display:'flex', width:'100%', gap:'12px', alignItems:'center', padding:'10px 16px', background:'none', border:'none', borderBottom:'1px solid #EDE7DC', cursor:'pointer', textAlign:'left' }}>
-                <span className="mono-font" style={{ fontSize:'10px', color:'#78716C', width:'92px', flexShrink:0 }}>{c.id}</span>
+                <span className="mono-font" style={{ fontSize:'10px', color:'#78716C', width:'84px', flexShrink:0, whiteSpace:'nowrap' }}>{c.id}</span>
                 <span className="display-font" style={{ fontSize:'14px', color:'#1A1814', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
-                <PipelineDots c={c} />
+                <span className="desktop-only"><PipelineDots c={c} /></span>
                 <StatusChip status={c.status} />
               </button>
             ))}
         </div>
-        <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#A8A29E', padding:'8px 16px' }}>ENTER TO OPEN · ESC TO CLOSE</div>
+        <div className="mono-font desktop-only" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#A8A29E', padding:'8px 16px' }}>ENTER TO OPEN · ESC TO CLOSE</div>
       </div>
     </div>
   )
@@ -399,6 +408,14 @@ export function CaseSearch({ outcomes, open, setOpen }) {
 // ── Mobile menu ───────────────────────────────────────────────────────────────
 export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut }) {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const k = e => { if (e.key === 'Escape') setOpen(false) }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', k)
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', k) }
+  }, [open])
   const item = (isActive) => ({ display:'block', width:'100%', textAlign:'left', padding:'14px 20px', background: isActive ? '#2D2922' : 'transparent',
     color: isActive ? '#F5F1EA' : '#A8A29E', border:'none', borderBottom:'1px solid #2D2922', fontSize:'11px', letterSpacing:'0.14em', cursor:'pointer' })
   return (
@@ -407,7 +424,7 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut })
         className="mono-font cov-nav-icon" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', cursor:'pointer' }}>
         {open ? '✕' : '☰'}
       </button>
-      {open && (
+      {open && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:'48px 0 0 0', background:'rgba(26,24,20,0.45)', zIndex:59 }} />
           <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, maxHeight:'calc(100vh - 48px)', overflowY:'auto', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
@@ -430,7 +447,8 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut })
               </div>
             )}
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
