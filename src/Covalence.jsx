@@ -1084,11 +1084,12 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
   const [showArchived, setShowArchived] = useState(false)
   const [verdictFilter, setVerdictFilter] = useState('all')
 
+  // Archives only the log currently shown (FI or Crypto Exchange)
   const archiveAll = () => {
-    if (!outcomes.length) return
-    if (!window.confirm(`Archive all ${outcomes.length} triage record${outcomes.length !== 1 ? 's' : ''}? They'll be hidden from the active log but recoverable.`)) return
-    setArchivedOutcomes(prev => [...outcomes.map(o => ({ ...o, archivedAt: new Date().toISOString() })), ...prev])
-    setOutcomes([])
+    if (!logOutcomes.length) return
+    if (!window.confirm(`Archive all ${logOutcomes.length} ${logLabel} triage record${logOutcomes.length !== 1 ? 's' : ''}? They'll be hidden from the active log but recoverable.`)) return
+    setArchivedOutcomes(prev => [...logOutcomes.map(o => ({ ...o, archivedAt: new Date().toISOString() })), ...prev])
+    setOutcomes(prev => prev.filter(o => !inLogMode(o)))
   }
 
   const archiveOne = (id) => {
@@ -1266,14 +1267,19 @@ function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
 
   const cfg = result ? classConfig[result.classification] : null
 
-  const resolved       = outcomes.filter(o => o.outcome !== 'pending')
-  const confirmedCount = outcomes.filter(o => o.outcome === 'confirmed').length
+  // The outcome log follows the FI / Crypto Exchange toggle — each mode has its own log and stats
+  const inLogMode      = o => isCE ? o.accountType === 'crypto_exchange' : o.accountType !== 'crypto_exchange'
+  const logOutcomes    = outcomes.filter(inLogMode)
+  const logArchived    = archivedOutcomes.filter(inLogMode)
+  const logLabel       = isCE ? 'Crypto Exchange' : 'FI'
+  const resolved       = logOutcomes.filter(o => o.outcome !== 'pending')
+  const confirmedCount = logOutcomes.filter(o => o.outcome === 'confirmed').length
   const accuracy       = resolved.length > 0 ? Math.round((confirmedCount / resolved.length) * 100) : null
   const vcounts = {
-    TRUE_FRAUD:              outcomes.filter(o => o.verdict === 'TRUE_FRAUD').length,
-    FIRST_PARTY_FRAUD:       outcomes.filter(o => o.verdict === 'FIRST_PARTY_FRAUD').length,
-    CONSUMER_DISPUTE:        outcomes.filter(o => o.verdict === 'CONSUMER_DISPUTE').length,
-    AUTHORIZED_PUSH_PAYMENT: outcomes.filter(o => o.verdict === 'AUTHORIZED_PUSH_PAYMENT').length,
+    TRUE_FRAUD:              logOutcomes.filter(o => o.verdict === 'TRUE_FRAUD').length,
+    FIRST_PARTY_FRAUD:       logOutcomes.filter(o => o.verdict === 'FIRST_PARTY_FRAUD').length,
+    CONSUMER_DISPUTE:        logOutcomes.filter(o => o.verdict === 'CONSUMER_DISPUTE').length,
+    AUTHORIZED_PUSH_PAYMENT: logOutcomes.filter(o => o.verdict === 'AUTHORIZED_PUSH_PAYMENT').length,
   }
   const leadingVerdict = Object.entries(vcounts).sort((a, b) => b[1] - a[1])[0]
   const leadingLabel   = leadingVerdict[1] > 0
@@ -2833,18 +2839,19 @@ Return ONLY valid JSON:
       </div>
 
       {/* ── Section 05: Outcome Log ──────────────────────────────────────────── */}
-      {outcomes.length > 0 && (
+      {(logOutcomes.length > 0 || logArchived.length > 0) && (
         <div className="mt-12 sm:mt-16">
           <hr className="tri-section-rule" style={{ margin: '0 0 28px 0' }} />
           <div className="flex items-baseline gap-3 mb-6 flex-wrap">
             <span className="mono-font text-xs text-stone-400">05</span>
             <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Outcome Log</h2>
-            <span className="mono-font text-xs text-stone-400 ml-auto">{outcomes.length} CASE{outcomes.length !== 1 ? 'S' : ''} CLASSIFIED</span>
+            <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background: isCE ? '#1E3A5F' : '#1A1814', color:'#F5F1EA' }}>{isCE ? 'CRYPTO EXCHANGE' : 'FINANCIAL INSTITUTION'}</span>
+            <span className="mono-font text-xs text-stone-400 ml-auto">{logOutcomes.length} CASE{logOutcomes.length !== 1 ? 'S' : ''} CLASSIFIED</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[
-              { label: 'TOTAL',           value: outcomes.length,                           sub: 'classified' },
+              { label: 'TOTAL',           value: logOutcomes.length,                        sub: 'classified' },
               { label: 'ACCURACY',        value: accuracy !== null ? `${accuracy}%` : '—',  sub: `${resolved.length} resolved` },
               { label: 'LEADING VERDICT', value: leadingLabel,                              sub: leadingVerdict[1] > 0 ? `${leadingVerdict[1]} case${leadingVerdict[1] !== 1 ? 's' : ''}` : '' },
             ].map(s => (
@@ -2880,7 +2887,7 @@ Return ONLY valid JSON:
               <option value="AUTHORIZED_PUSH_PAYMENT">AUTH. PUSH PAYMENT</option>
             </select>
             <div style={{ marginLeft:'auto', display:'flex', gap:'8px', alignItems:'center' }}>
-              {!showArchived && outcomes.length > 0 && (
+              {!showArchived && logOutcomes.length > 0 && (
                 <button onClick={archiveAll}
                   className="mono-font"
                   style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background:'none', border:'1px solid #D4CCBC', color:'#78716C', cursor:'pointer' }}
@@ -2891,7 +2898,7 @@ Return ONLY valid JSON:
               <button onClick={() => setShowArchived(v => !v)}
                 className="mono-font"
                 style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background: showArchived ? '#2D2922' : 'none', color: showArchived ? '#E8E3DC' : '#78716C', border:'1px solid ' + (showArchived ? '#2D2922' : '#D4CCBC'), cursor:'pointer' }}>
-                {showArchived ? '← ACTIVE LOG' : `ARCHIVED (${archivedOutcomes.length})`}
+                {showArchived ? '← ACTIVE LOG' : `ARCHIVED (${logArchived.length})`}
               </button>
             </div>
           </div>
@@ -2905,7 +2912,7 @@ Return ONLY valid JSON:
                   ))}
                 </div>
                 <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                  {(showArchived ? archivedOutcomes : outcomes).filter(o => {
+                  {(showArchived ? logArchived : logOutcomes).filter(o => {
                     const matchSearch = (() => {
                       if (!triageSearch.trim()) return true
                       const q = triageSearch.toLowerCase()
@@ -3041,21 +3048,21 @@ Return ONLY valid JSON:
           <div className="mt-3 flex justify-between items-center">
             <div className="mono-font text-[9px] tracking-widest text-stone-400">
               {showArchived
-                ? `${archivedOutcomes.length} archived record${archivedOutcomes.length !== 1 ? 's' : ''}`
-                : `${outcomes.length} active record${outcomes.length !== 1 ? 's' : ''}`}
+                ? `${logArchived.length} archived ${logLabel} record${logArchived.length !== 1 ? 's' : ''}`
+                : `${logOutcomes.length} active ${logLabel} record${logOutcomes.length !== 1 ? 's' : ''}`}
             </div>
             <div className="flex gap-3">
-              {showArchived && archivedOutcomes.length > 0 && (
+              {showArchived && logArchived.length > 0 && (
                 <button
-                  onClick={() => { if (window.confirm(`Permanently delete all ${archivedOutcomes.length} archived records? This cannot be undone.`)) setArchivedOutcomes([]) }}
+                  onClick={() => { if (window.confirm(`Permanently delete all ${logArchived.length} archived ${logLabel} records? This cannot be undone.`)) setArchivedOutcomes(prev => prev.filter(o => !inLogMode(o))) }}
                   className="mono-font text-[10px] tracking-widest text-red-400 hover:text-red-600 transition-colors"
                   style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                   ✕ CLEAR ARCHIVE
                 </button>
               )}
-              {!showArchived && outcomes.length > 0 && (
+              {!showArchived && logOutcomes.length > 0 && (
                 <button
-                  onClick={() => { if (window.confirm(`Permanently delete all ${outcomes.length} active triage records? Consider archiving instead.`)) setOutcomes([]) }}
+                  onClick={() => { if (window.confirm(`Permanently delete all ${logOutcomes.length} active ${logLabel} triage records? Consider archiving instead.`)) setOutcomes(prev => prev.filter(o => !inLogMode(o))) }}
                   className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-red-500 transition-colors"
                   style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                   ✕ CLEAR ACTIVE LOG
@@ -8996,10 +9003,10 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         </div>
       </div>
 
-      {/* ── Under construction banner ── */}
-      <div className="mb-6 px-4 py-2.5 flex items-center gap-3" style={{ background:'#FEF3C7', border:'1px solid #D97706' }}>
-        <span className="mono-font text-[9px] tracking-widest text-amber-800">⚠ UNDER CONSTRUCTION</span>
-        <span className="display-font text-[12px] text-amber-700">Features are being activated gradually. Data is stored locally — cross-institutional sync coming in a later phase.</span>
+      {/* ── Early access banner — Trio is still growing, and says so ── */}
+      <div className="mb-6 px-4 py-2.5 flex items-center gap-3 flex-wrap" style={{ background:'#FAF7F1', border:'1px solid #7F1D1D' }}>
+        <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background:'#7F1D1D', color:'#FEF2F2' }}>EARLY ACCESS</span>
+        <span className="display-font text-[12px] text-stone-700">Trio is live and growing — new incident command capabilities are rolling out in phases, with cross-institutional coordination next.</span>
       </div>
 
       {/* ══════════════════════════════════════════════════════════

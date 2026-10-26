@@ -397,7 +397,7 @@ export function MobileMenu({ nav, active, onSelect }) {
 // Fictional merchants and cardholders. Demo cases are flagged isDemo and are
 // never pushed to the shared Supabase pool. The COV-DEMO prefix is reserved, so
 // a case Desk builds from a demo triage record still counts as demo.
-export const isDemoCase = c => !!c && (c.isDemo || /^COV-DEMO/.test(c.id || ''))
+export const isDemoCase = c => !!c && (c.isDemo || /^(COV|MCH)-DEMO/.test(c.id || ''))
 export function buildDemoInstitution(userEmail) {
   const day = 86400000
   const iso = d => new Date(Date.now() - d * day).toISOString()
@@ -431,8 +431,18 @@ export function buildDemoInstitution(userEmail) {
     { id:'COV-DEMO12', date:iso(57), merchant:'Solace Wellness', amount:'720.00 USD', network:'VISA', status:'lost', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.3', reasonTitle:'Not as Described or Defective', cardholderName:'N. Kowalski', filedAt:iso(53), resolvedDate:iso(14),
       notes:[{ text:'Lost on representment — merchant produced signed service agreement. Customer informed.', ts:iso(14), author:'Demo Analyst' }],
       history:h([57,'received'],[55,'queued','received'],[53,'filed','queued'],[30,'representment','filed'],[14,'lost','representment']) },
+    // Merchant / acquirer side — chargebacks received against the merchant (Desk merchant mode)
+    { id:'MCH-DEMO01', mode:'merchant', date:iso(3),  merchant:'Northwind Electronics', amount:'689.00 USD', network:'VISA', status:'received', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, winProb:'HIGH', history:h([3,'received']) },
+    { id:'MCH-DEMO02', mode:'merchant', date:iso(11), merchant:'Northwind Electronics', amount:'1249.99 USD', network:'VISA', status:'rebuttal_prep', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, liabilityShift:true, winProb:'HIGH', nextRespDate:ymd(4),
+      notes:[{ text:'3DS authenticated — liability shift applies. Pulling delivery photo and IP match for rebuttal.', ts:iso(1), author:'Demo Analyst' }],
+      history:h([11,'received'],[2,'rebuttal_prep','received']) },
+    { id:'MCH-DEMO03', mode:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
+    { id:'MCH-DEMO04', mode:'merchant', date:iso(45), merchant:'Northwind Electronics', amount:'98.00 USD', network:'VISA', status:'won', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', resolvedDate:iso(18), winProb:'HIGH', history:h([45,'received'],[41,'rebuttal_prep','received'],[37,'submitted','rebuttal_prep'],[18,'won','submitted']) },
   ].map(c => ({ ...base, ...c, updatedAt: iso(0) }))
   const triage = [
+    // Crypto Exchange triage log (Triage → Crypto Exchange mode)
+    { id:'COV-DEMO15', date:iso(1), merchant:'Unhosted wallet 0x7a3f…c91e', amount:'2.4 ETH', accountType:'crypto_exchange', network:'Ethereum', verdict:'AUTHORIZED_PUSH_PAYMENT', confidence:'HIGH', routing:'ACCOUNT_FREEZE', outcome:'pending', isDemo:true },
+    { id:'COV-DEMO16', date:iso(4), merchant:'Halcyon Exchange', amount:'18,500 USDT', accountType:'crypto_exchange', network:'Tron', verdict:'TRUE_FRAUD', confidence:'MEDIUM', routing:'ACCOUNT_FREEZE', outcome:'confirmed', isDemo:true },
     { id:'COV-DEMO13', date:iso(0), merchant:'Veridian Crypto Exchange', amount:'4200 USD', accountType:'debit', network:'', verdict:'AUTHORIZED_PUSH_PAYMENT', confidence:'HIGH', routing:'ACCOUNT_FREEZE', outcome:'pending', fraud_sub_type:'investment_scam', isDemo:true },
     { id:'COV-DEMO14', date:iso(0), merchant:'Keystone Tutoring', amount:'380 USD', accountType:'credit', network:'visa', verdict:'CONSUMER_DISPUTE', confidence:'MEDIUM', routing:'CARD_CHARGEBACK', outcome:'pending', isDemo:true },
     // Triage records for cases that have since moved on, so their pipeline shows Triage ✓
@@ -449,15 +459,20 @@ function writeDemoToStorage(userEmail) {
   try {
     localStorage.setItem('triage_outcomes', JSON.stringify([...triage, ...readLS('triage_outcomes', []).filter(t => !isDemoCase(t))]))
     localStorage.setItem('cov_outcomes', JSON.stringify([...cases, ...readLS('cov_outcomes', []).filter(o => !isDemoCase(o))]))
-    localStorage.setItem('cov_demo_loaded', '1')
+    localStorage.setItem('cov_demo_loaded', DEMO_VERSION)
   } catch {}
   return cases
 }
+
+// Bump when the demo set changes; browsers holding an older set get it refreshed.
+const DEMO_VERSION = '3'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.
 export function seedDemoIfFirstVisit(userEmail) {
   try {
+    const loaded = localStorage.getItem('cov_demo_loaded')
+    if (loaded && loaded !== DEMO_VERSION) { writeDemoToStorage(userEmail); return true }
     if (localStorage.getItem('cov_demo_offered')) return false
     localStorage.setItem('cov_demo_offered', '1')
     if (readLS('cov_outcomes', []).length > 0 || readLS('triage_outcomes', []).length > 0) return false
