@@ -10,6 +10,7 @@
 //   • <MobileMenu>   — the full tool list on small screens
 //   • buildDemoInstitution() — a realistic portfolio for first-time visitors
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { accessToken } from './auth.js'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -36,7 +37,9 @@ export async function openEvidence(d) {
   // Open the tab synchronously (inside the click) so popup blockers allow it
   const w = window.open('', '_blank')
   try {
-    const r = await fetch('/api/evidence-url', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ path: evidencePath(d) }) })
+    const token = accessToken()
+    if (!token) throw new Error('sign in to open evidence')
+    const r = await fetch('/api/evidence-url', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` }, body: JSON.stringify({ path: evidencePath(d) }) })
     const j = await r.json().catch(() => ({}))
     if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`)
     if (w) { w.opener = null; w.location.href = j.url } else window.location.href = j.url
