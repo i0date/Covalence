@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { FileText, AlertCircle, Loader2, Copy, Check, ArrowRight, CheckSquare, Square,
          Shield, MessageSquare, ClipboardList, Download, Pencil, Upload,
          ChevronDown, ChevronUp, AlertTriangle, CheckCircle, XCircle, Plus, X,
-         Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink } from 'lucide-react'
+         Clipboard, BarChart2, Bitcoin, Send, Lock, ExternalLink, Search } from 'lucide-react'
 import { CasePanel, CaseSearch, CaseLink, MobileMenu, PipelineDots, StatusChip, allThreadCases, stageOf,
          useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, seedDemoIfFirstVisit, isDemoCase, evidencePath, openEvidence } from './CaseThread.jsx'
 import { authAvailable, accessToken, isSignedIn, getSession, onSessionChange, getMembership, signOut,
@@ -349,8 +349,14 @@ const GLOBAL_CSS = `
     .mob-1col         { grid-template-columns:1fr !important; }
     /* platform toggles: no wrap */
     .platform-toggle-btn { white-space:nowrap !important; padding:10px 14px !important; }
+    /* phone top bar: logo · current page · search · sync dot · menu (tabs live in the menu) */
+    .cov-nav-buttons  { display:none !important; }
+    .cov-nav-inner    { min-height:48px; gap:10px !important; padding:0 12px !important; }
+    .cov-nav-current  { font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+    .cov-nav-inner .cov-nav-icon { padding:0 !important; width:34px; height:34px; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
     /* mobile menu sits inside the nav but needs full-size tap targets */
-    .cov-nav-inner .cov-mobile-menu button { font-size:11px !important; padding:15px 20px !important; }
+    .cov-nav-inner .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }
+    .cov-nav-inner .cov-mobile-menu .cov-mobile-acct { font-size:10px !important; padding:8px 12px !important; }
   }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }
 `
@@ -550,39 +556,42 @@ export default function Covalence() {
 
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflowY:'hidden', overflowX:'auto' }}>
-          <div className="cov-nav-inner" style={{ maxWidth:'1280px', margin:'0 auto', display:'flex', alignItems:'center', gap:'32px', padding:'0 24px' }}>
+          <div className="cov-nav-inner" style={{ maxWidth:'1320px', margin:'0 auto', display:'flex', alignItems:'center', gap:'20px', padding:'0 24px' }}>
             <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1 }}>COVALENCE</div>
             </div>
+            <span className="mobile-only mono-font cov-nav-current">{(NAV.find(n => n.id === activeSection)?.label || '').replace(/\s+/g, ' ')}</span>
             <div className="cov-nav-buttons" style={{ display:'flex', alignItems:'center' }}>
               {NAV.map(({ id, label }) => (
                 <button key={id} onClick={() => setActiveSection(id)}
                   style={{
                     fontFamily:"'JetBrains Mono',monospace", fontSize:'9px', letterSpacing:'0.12em',
-                    padding:'14px 16px', background:'transparent', border:'none',
+                    padding:'14px 12px', background:'transparent', border:'none',
                     borderBottom: activeSection === id ? '2px solid #D6CFC4' : '2px solid transparent',
                     color: activeSection === id ? '#F5F1EA' : '#7A7068',
-                    cursor:'pointer', textTransform:'uppercase', transition:'all 0.15s',
+                    cursor:'pointer', textTransform:'uppercase', transition:'all 0.15s', whiteSpace:'nowrap',
                   }}>
                   {label}
                 </button>
               ))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
-              <button onClick={() => setSearchOpen(true)} title="Search cases (⌘K / Ctrl+K)" className="mono-font"
+              <button onClick={() => setSearchOpen(true)} title="Search cases (⌘K / Ctrl+K)" aria-label="Search cases" className="mono-font cov-nav-icon"
                 style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',padding:'4px 10px',cursor:'pointer',fontSize:'9px',letterSpacing:'0.12em',whiteSpace:'nowrap'}}>
-                ⌕ <span className="desktop-only">CASES</span>
+                <span className="desktop-only">⌕ CASES</span>
+                <Search className="mobile-only" size={15} strokeWidth={1.75} />
               </button>
-              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} />
+
               {SUPA_URL && SUPA_KEY && covUser?.authed && globalSyncStatus !== 'idle' && (
                 <span className="mono-font" style={{fontSize:'8px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
                   color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
                   borderColor: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669'}}>
-                  {globalSyncStatus==='syncing'?'↻ SYNC':globalSyncStatus==='error'?'✗ SYNC ERROR':'✓ LIVE'}
+                  <span className="desktop-only">{globalSyncStatus==='syncing'?'↻ SYNC':globalSyncStatus==='error'?'✗ SYNC ERROR':'✓ LIVE'}</span>
+                  <span className="mobile-only" title={globalSyncStatus==='error'?'Sync error':globalSyncStatus==='syncing'?'Syncing':'Live'}>●</span>
                 </span>
               )}
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
-              {covUser&&<div className="mono-font" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+              {covUser&&<div className="mono-font desktop-only" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
                 <span style={{color:'#A8A29E',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>
                   {covUser.name}{covUser.authed && <span className="desktop-only" style={{color:'#57534E'}}> · {covUser.institution}</span>}
                 </span>
@@ -594,6 +603,9 @@ export default function Covalence() {
                   title={covUser.authed ? 'Sign out' : 'Leave the demo'}
                   style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
+              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser}
+                onSignIn={!covUser?.authed && authAvailable ? () => setShowSignIn(true) : null}
+                onSignOut={() => { if (covUser?.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }} />
             </div>
           </div>
         </div>

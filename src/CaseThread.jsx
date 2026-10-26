@@ -397,24 +397,40 @@ export function CaseSearch({ outcomes, open, setOpen }) {
 }
 
 // ── Mobile menu ───────────────────────────────────────────────────────────────
-export function MobileMenu({ nav, active, onSelect }) {
+export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut }) {
   const [open, setOpen] = useState(false)
+  const item = (isActive) => ({ display:'block', width:'100%', textAlign:'left', padding:'14px 20px', background: isActive ? '#2D2922' : 'transparent',
+    color: isActive ? '#F5F1EA' : '#A8A29E', border:'none', borderBottom:'1px solid #2D2922', fontSize:'11px', letterSpacing:'0.14em', cursor:'pointer' })
   return (
     <div className="mobile-only">
       <button onClick={() => setOpen(o => !o)} aria-label="Menu" aria-expanded={open}
-        className="mono-font" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', padding:'6px 10px', fontSize:'12px', cursor:'pointer' }}>
+        className="mono-font cov-nav-icon" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', cursor:'pointer' }}>
         {open ? '✕' : '☰'}
       </button>
       {open && (
-        <div className="cov-mobile-menu" style={{ position:'fixed', top:'44px', left:0, right:0, background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
-          {nav.map(({ id, label }) => (
-            <button key={id} onClick={() => { onSelect(id); setOpen(false) }}
-              className="mono-font" style={{ display:'block', width:'100%', textAlign:'left', padding:'14px 20px', background: active === id ? '#2D2922' : 'transparent',
-                color: active === id ? '#F5F1EA' : '#A8A29E', border:'none', borderBottom:'1px solid #2D2922', fontSize:'11px', letterSpacing:'0.14em', cursor:'pointer' }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <>
+          <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:'48px 0 0 0', background:'rgba(26,24,20,0.45)', zIndex:59 }} />
+          <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, maxHeight:'calc(100vh - 48px)', overflowY:'auto', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
+            {nav.map(({ id, label }) => (
+              <button key={id} onClick={() => { onSelect(id); setOpen(false) }} className="mono-font cov-mobile-item" style={item(active === id)}>
+                {label.replace(/\s+/g, ' ')}
+              </button>
+            ))}
+            {/* Account — moved here from the top bar on phones */}
+            {user && (
+              <div style={{ padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', borderTop:'1px solid #3D3A35' }}>
+                <div style={{ minWidth:0 }}>
+                  <div className="mono-font" style={{ fontSize:'11px', color:'#E7E4DF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</div>
+                  <div className="mono-font" style={{ fontSize:'9px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
+                </div>
+                <div style={{ display:'flex', gap:'8px', flexShrink:0 }}>
+                  {onSignIn && <button onClick={() => { setOpen(false); onSignIn() }} className="mono-font cov-mobile-acct" style={{ background:'transparent', border:'1px solid #D6CFC4', color:'#E7E4DF', padding:'8px 12px', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer' }}>SIGN IN</button>}
+                  <button onClick={() => { setOpen(false); onSignOut() }} className="mono-font cov-mobile-acct" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#A8A29E', padding:'8px 12px', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer' }}>{user.authed ? 'SIGN OUT' : 'LEAVE DEMO'}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
