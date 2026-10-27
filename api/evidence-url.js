@@ -82,5 +82,12 @@ module.exports = async function handler(req, res) {
   if (!upstream.ok || !data.signedURL) {
     return res.status(upstream.status === 400 || upstream.status === 404 ? 404 : 502).json({ error: 'Document not found' })
   }
+  // Audit: who opened which document (supabase_workspace_audit.sql). Best-effort — never blocks the link.
+  await fetch(`${supaUrl}/rest/v1/audit_log`, {
+    method: 'POST',
+    headers: { ...svc, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ institution_id: member.institution_id, actor_id: user.id, actor_email: (user.email || '').toLowerCase(),
+      action: 'evidence.opened', entity: 'case', entity_id: caseId, detail: { file: path.split('/').slice(1).join('/') } }),
+  }).catch(() => {})
   return res.status(200).json({ url: `${supaUrl}/storage/v1${data.signedURL}`, expiresIn: SIGNED_URL_TTL_S })
 }

@@ -4,6 +4,7 @@ import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDe
 import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership } from './auth.js'
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
+import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
 import { DeskView } from './tools/Desk.jsx'
@@ -142,7 +143,7 @@ export default function Covalence() {
   const handleLogin = (u) => { if (seedDemoIfFirstVisit(u?.email)) setOutcomes(loadOutcomes()); setDemoUser(u) }
   const handleSignOut = async () => {
     await signOut(); setSession(null); setMembership(null); setMembershipChecked(false)
-    setDataVersion(v => v + 1) // tools re-read local data as a demo visitor
+    // (the sessionUserId effect below removes the workspace's data from this browser)
   }
 
   // Restore the session on load, follow sign-in / sign-out, and load the membership
@@ -152,13 +153,38 @@ export default function Covalence() {
     return onSessionChange(s => setSession(s))
   }, [])
   const sessionUserId = session?.user?.id || null
+  const signedInBefore = useRef(false)
   useEffect(() => {
-    if (!sessionUserId) { setMembership(null); setMembershipChecked(false); return }
+    if (!sessionUserId) {
+      setMembership(null); setMembershipChecked(false)
+      // Signed out (button, expiry, or another tab): take the workspace's data off this browser
+      if (signedInBefore.current) {
+        signedInBefore.current = false
+        stopWorkspaceSync()
+        setOutcomes(loadOutcomes()); setSettings(loadSettings()); setDataVersion(v => v + 1)
+      }
+      return
+    }
+    signedInBefore.current = true
     setMembershipChecked(false)
     getMembership().then(m => { setMembership(m); setShowSignIn(false) })
       .catch(() => setMembership(null))
       .finally(() => setMembershipChecked(true))
   }, [sessionUserId])
+  // Workspace data (settings, Triage log, DFA, Trio playbooks, Duo list, Desk history):
+  // pull it before the tools mount, then keep it synced while signed in
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  useEffect(() => {
+    if (!membership?.institution_id) { setWorkspaceReady(false); return }
+    let cancelled = false
+    const giveUp = setTimeout(() => { if (!cancelled) setWorkspaceReady(true) }, 5000) // slow network: open with local data
+    startWorkspaceSync(membership.institution_id).finally(() => {
+      if (cancelled) return
+      clearTimeout(giveUp)
+      setSettings(loadSettings()); setDataVersion(v => v + 1); setWorkspaceReady(true)
+    })
+    return () => { cancelled = true; clearTimeout(giveUp) }
+  }, [membership?.institution_id])
   // Notes, filings and assignments are signed with the user's name
   useEffect(() => { if (covUser?.name) try { localStorage.setItem('cov_agent_name', covUser.name) } catch {} }, [covUser?.name])
 
@@ -209,6 +235,11 @@ export default function Covalence() {
 
   if (!authReady) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
   if (session && !membershipChecked) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
+  if (session && membership && !workspaceReady) return (
+    <div style={{ minHeight:'100vh', background:'#1A1814', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.2em', color:'#78716C' }}>LOADING {String(membership.institution_name || '').toUpperCase()}…</div>
+    </div>
+  )
   if (session && !membership) return <Onboarding email={session.user?.email || ''} onDone={m => { setMembership(m); setShowSignIn(false); setDataVersion(v => v + 1) }} />
   if (showSignIn && !session) return <LoginGate startInSignIn onLogin={handleLogin} onCancel={() => setShowSignIn(false)} />
   if (!covUser) return <LoginGate onLogin={handleLogin} />

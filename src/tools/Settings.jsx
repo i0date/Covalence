@@ -2,6 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
 import { TeamPanel } from '../AuthScreens.jsx'
+import { AuditPanel } from '../AuditPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 
 export function SettingsView({ settings, setSettings, covUser }) {
@@ -84,6 +85,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
 
       {/* Team — members, invites (admins). Signed-in users only. */}
       {covUser?.authed && <TeamPanel covUser={covUser} />}
+      {covUser?.authed && <AuditPanel covUser={covUser} />}
 
       {/* Two-column grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start' }}>
