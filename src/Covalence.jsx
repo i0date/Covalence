@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
-import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch } from './CaseThread.jsx'
-import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership } from './auth.js'
+import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch, isDemoCase } from './CaseThread.jsx'
+import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership, setCurrentRole, purgedCaseIds } from './auth.js'
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
@@ -122,7 +122,7 @@ export default function Covalence() {
   const [showSignIn,    setShowSignIn]    = useState(() => authAvailable && !!pendingInvite()) // invite links go straight to sign-in
   const covUser = membership
     ? { name: membership.display_name || membership.email, email: membership.email, institution: membership.institution_name,
-        institutionId: membership.institution_id, role: membership.role, authed: true }
+        institutionId: membership.institution_id, role: membership.role === 'member' ? 'analyst' : membership.role, authed: true }
     : demoUser
   const [activeSection, setActiveSection] = useState('home')
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
@@ -161,13 +161,14 @@ export default function Covalence() {
       if (signedInBefore.current) {
         signedInBefore.current = false
         stopWorkspaceSync()
+        setCurrentRole(null)
         setOutcomes(loadOutcomes()); setSettings(loadSettings()); setDataVersion(v => v + 1)
       }
       return
     }
     signedInBefore.current = true
     setMembershipChecked(false)
-    getMembership().then(m => { setMembership(m); setShowSignIn(false) })
+    getMembership().then(m => { setCurrentRole(m?.role); setMembership(m); setShowSignIn(false) })
       .catch(() => setMembership(null))
       .finally(() => setMembershipChecked(true))
   }, [sessionUserId])
@@ -217,7 +218,23 @@ export default function Covalence() {
   useEffect(() => { saveSettings(settings) }, [settings])
   useEffect(() => {
     if (!SUPA_URL || !SUPA_KEY || !membership) return
-    const pull = () => pullCasesFromSupa().then(r => { if(r.length) setOutcomes(l => mergeCases(l,r)) }).catch(()=>{})
+    const pull = async () => {
+      // Cases purged under the retention policy: drop this browser's copies so they can't come back
+      try {
+        const purged = new Set(await purgedCaseIds())
+        if (purged.size) {
+          const keep = loadOutcomes().filter(o => !purged.has(o.id))
+          localStorage.setItem('cov_outcomes', JSON.stringify(keep))
+          setOutcomes(l => l.filter(o => !purged.has(o.id)))
+        }
+      } catch {}
+      try {
+        const r = await pullCasesFromSupa()
+        // Auditors can't change anything, so the workspace's copy simply replaces theirs (demo rows stay)
+        if (membership?.role === 'auditor') setOutcomes(l => [...r, ...l.filter(isDemoCase)])
+        else if (r.length) setOutcomes(l => mergeCases(l, r))
+      } catch {}
+    }
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
   }, [membership?.institution_id])
 
@@ -313,6 +330,13 @@ export default function Covalence() {
             </div>
           </div>
         </div>
+
+        {/* Auditors: read-only, and say so on every page */}
+        {covUser?.role === 'auditor' && (
+          <div className="mono-font" role="status" style={{ background:'#1E3A5F', color:'#DBEAFE', fontSize:'10px', letterSpacing:'0.12em', padding:'8px 24px', textAlign:'center' }}>
+            READ-ONLY · AUDITOR ACCESS — you can view cases, the audit log and exports. Changes you make on screen aren’t saved.
+          </div>
+        )}
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (

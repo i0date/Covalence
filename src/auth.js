@@ -86,7 +86,30 @@ export async function createInstitution(name, displayName) {
 export async function acceptInvite(code, displayName) {
   const d = await rpc('accept_invite', { p_code: code, p_display_name: displayName }); return d && d[0]
 }
-export const createInvite = (email, role) => rpc('create_invite', { p_email: email, p_role: role || 'member' })
+export const createInvite = (email, role) => rpc('create_invite', { p_email: email, p_role: role || 'analyst' })
+export const setMemberRole = (userId, role) => rpc('set_member_role', { p_user_id: userId, p_role: role })
+
+// ── Roles (enforced in the database; mirrored here so the UI can follow) ──────
+//   admin · reviewer · analyst · auditor (read-only)
+export const ROLES = {
+  admin:    { label: 'Admin',    help: 'Everything, including team, roles, retention and purge' },
+  reviewer: { label: 'Reviewer', help: 'Works cases, changes settings, places legal holds' },
+  analyst:  { label: 'Analyst',  help: 'Works cases' },
+  auditor:  { label: 'Auditor',  help: 'Read-only: sees cases, the audit log and exports' },
+}
+let _role = null
+export function setCurrentRole(r) { _role = r === 'member' ? 'analyst' : (r || null) }
+export const currentRole  = () => _role
+export const canWrite     = () => !_role || _role !== 'auditor'          // demo visitors work locally
+export const canConfigure = () => !_role || _role === 'admin' || _role === 'reviewer'
+
+// ── Legal holds and retention ────────────────────────────────────────────────
+export const legalHoldSet   = (caseId, on, reason) => rpc('legal_hold_set', { p_case_id: caseId, p_on: on, p_reason: reason || '' })
+export const legalHoldsList = () => rpc('legal_holds_list').then(d => d || [])
+export const retentionGet   = () => rpc('retention_get').then(d => (d && d[0]) || null)
+export const retentionSet   = (days) => rpc('retention_set', { p_days: days })
+export const retentionCandidates = () => rpc('retention_candidates').then(d => d || [])
+export const purgedCaseIds  = () => rpc('cov_purged_ids').then(d => (d || []).map(r => r.case_id))
 export const listTeam     = () => rpc('list_team').then(d => d || [])
 export const listInvites  = () => rpc('list_invites').then(d => d || [])
 export const revokeInvite = (code) => rpc('revoke_invite', { p_code: code })

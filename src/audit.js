@@ -36,6 +36,8 @@ export const AUDIT_LABELS = {
   'invite.accepted': 'Invite accepted', 'duo.created': 'Duo session opened', 'duo.joined': 'Duo session joined',
   'duo.status_changed': 'Duo status changed', 'case_link.created': 'Case link sent', 'settings.changed': 'Settings changed',
   'workspace.updated': 'Workspace data updated', 'audit.exported': 'Audit log exported',
+  'case.exported': 'Case file exported', 'case.legal_hold_on': 'Legal hold placed', 'case.legal_hold_off': 'Legal hold lifted',
+  'case.purged': 'Case purged (retention)', 'retention.policy_changed': 'Retention period changed', 'retention.purged': 'Retention purge run',
 }
 export function describeAudit(e) {
   const d = e.detail || {}

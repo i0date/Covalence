@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 import React, { useEffect, useState } from 'react'
 import { sendCode, verifyCode, signOut, createInstitution, acceptInvite, pendingInvite, clearPendingInvite,
-         createInvite, listTeam, listInvites, revokeInvite, removeMember, inviteLink } from './auth.js'
+         createInvite, listTeam, listInvites, revokeInvite, removeMember, inviteLink, setMemberRole, ROLES } from './auth.js'
 
 // Shared dark styles — match the welcome screen
 const gate = {
@@ -158,7 +158,7 @@ export function TeamPanel({ covUser }) {
   const [team,    setTeam]    = useState([])
   const [invites, setInvites] = useState([])
   const [email,   setEmail]   = useState('')
-  const [role,    setRole]    = useState('member')
+  const [role,    setRole]    = useState('analyst')
   const [newLink, setNewLink] = useState('')
   const [copied,  setCopied]  = useState(false)
   const [err,     setErr]     = useState('')
@@ -181,14 +181,22 @@ export function TeamPanel({ covUser }) {
     <div className="border border-stone-300 mb-6" style={{ background:'#FAF7F1' }}>
       <div className="mono-font px-5 py-3" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#6B5F4D', borderBottom:'1px solid #D4CCBC', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
         <span>TEAM · {(covUser?.institution || '').toUpperCase()}</span>
-        <span style={{ color:'#A8A29E' }}>{isAdmin ? 'YOU ARE AN ADMIN' : 'MEMBER'}</span>
+        <span style={{ color:'#A8A29E' }}>YOU ARE {(ROLES[covUser?.role]?.label || covUser?.role || '').toUpperCase()}</span>
       </div>
       <div className="px-5 py-4">
         {team.map(m => (
           <div key={m.user_id} style={row}>
             <span className="display-font" style={{ fontSize:'14px', color:'#1A1814', flex:1, minWidth:0 }}>{m.display_name || m.email}</span>
             <span style={{ ...small, color:'#78716C' }} className="desktop-only">{m.email}</span>
-            <span style={{ ...small, fontSize:'9px', letterSpacing:'0.1em', color: m.role === 'admin' ? '#7F1D1D' : '#78716C' }}>{m.role.toUpperCase()}</span>
+            {isAdmin ? (
+              <select aria-label={`Role for ${m.display_name || m.email}`} value={m.role === 'member' ? 'analyst' : m.role}
+                onChange={e => setMemberRole(m.user_id, e.target.value).then(refresh).catch(x => setErr(x.message))}
+                style={{ ...small, fontSize:'10px', padding:'3px 6px', border:'1px solid #D4CCBC', background:'#fff', color: m.role === 'admin' ? '#7F1D1D' : '#1A1814' }}>
+                {Object.entries(ROLES).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
+              </select>
+            ) : (
+              <span style={{ ...small, fontSize:'9px', letterSpacing:'0.1em', color: m.role === 'admin' ? '#7F1D1D' : '#78716C' }}>{(ROLES[m.role]?.label || m.role).toUpperCase()}</span>
+            )}
             {isAdmin && m.email !== covUser.email && (
               <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }}
                 onClick={() => { if (window.confirm(`Remove ${m.display_name || m.email} from ${covUser.institution}?`)) removeMember(m.user_id).then(refresh).catch(e => setErr(e.message)) }}>REMOVE</button>
@@ -201,11 +209,13 @@ export function TeamPanel({ covUser }) {
             <form onSubmit={invite} style={{ display:'flex', gap:'8px', marginTop:'16px', flexWrap:'wrap' }}>
               <input className="cov-input" style={{ padding:'9px 12px', fontSize:'14px', flex:'1 1 220px' }} type="email" placeholder="colleague@institution.com" value={email} onChange={e => setEmail(e.target.value)} />
               <select className="input-field" style={{ padding:'9px 10px', fontSize:'13px', width:'auto' }} value={role} onChange={e => setRole(e.target.value)}>
-                <option value="member">Member</option>
-                <option value="admin">Admin</option>
+                {Object.entries(ROLES).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
               </select>
               <button className="cov-btn" style={{ padding:'9px 16px', fontSize:'10px' }} disabled={!email.trim()}>INVITE</button>
             </form>
+            <div style={{ ...small, color:'#8A7F72', marginTop:'8px', lineHeight:1.7 }}>
+              {Object.entries(ROLES).map(([k, r]) => <div key={k}><b style={{ color:'#57534E', fontWeight:500 }}>{r.label}</b> — {r.help}</div>)}
+            </div>
             {newLink && (
               <div className="mt-3 p-3" style={{ border:'1px solid #065F46', background:'#ECFDF5' }}>
                 <div style={{ ...small, color:'#065F46', marginBottom:'6px' }}>Invite created. Send this link to them — it works only for that email address and expires in 14 days.</div>
@@ -221,7 +231,7 @@ export function TeamPanel({ covUser }) {
                 {invites.map(i => (
                   <div key={i.code} style={row}>
                     <span style={{ ...small, color:'#1A1814', flex:1, minWidth:0 }}>{i.email}</span>
-                    <span style={{ ...small, fontSize:'9px', color:'#78716C' }}>{i.role.toUpperCase()} · expires {new Date(i.expires_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                    <span style={{ ...small, fontSize:'9px', color:'#78716C' }}>{(ROLES[i.role]?.label || i.role).toUpperCase()} · expires {new Date(i.expires_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
                     <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#1E3A5F', cursor:'pointer' }} onClick={() => copy(inviteLink(i.code))}>COPY LINK</button>
                     <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }} onClick={() => revokeInvite(i.code).then(refresh).catch(e => setErr(e.message))}>REVOKE</button>
                   </div>

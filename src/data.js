@@ -1,7 +1,7 @@
 // Data layer: Supabase RPC calls, case/Trio sync, Duo sessions, case links, evidence upload
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { isDemoCase } from './CaseThread.jsx'
-import { accessToken, isSignedIn } from './auth.js'
+import { accessToken, isSignedIn, canWrite } from './auth.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 005 DUO VIEW — multi-institutional real-time collaboration
@@ -95,7 +95,7 @@ export async function caseLinkActivity(token) {
 export async function pushCasesToSupa(cases) {
   // Demo cases stay in this browser — they never reach the shared pool
   const real = (cases || []).filter(c => !isDemoCase(c))
-  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !real.length) return
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !canWrite() || !real.length) return  // auditors are read-only
   const rows = real.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
   await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
     fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
@@ -124,7 +124,7 @@ export async function fetchAgents() {
 }
 
 export async function pushTrioToSupa(incidents) {
-  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !incidents?.length) return
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !canWrite() || !incidents?.length) return
   const rows = incidents.map(i => ({ id: i.id, data: i, updated_at: i.updatedAt || new Date().toISOString() }))
   await supaRpc('cov_push_trio', { p_workspace: covWorkspace(), p_rows: rows }, () =>
     fetch(`${SUPA_URL}/rest/v1/cov_trio_incidents`, {

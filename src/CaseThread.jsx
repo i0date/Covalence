@@ -11,7 +11,8 @@
 //   • buildDemoInstitution() — a realistic portfolio for first-time visitors
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { accessToken } from './auth.js'
+import { accessToken, legalHoldsList, legalHoldSet, canWrite, canConfigure } from './auth.js'
+import { exportCaseFile } from './caseExport.js'
 import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 
 const OPEN_EVENT = 'cov:open-case'
@@ -149,6 +150,8 @@ function nextAction(c) {
 export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDeskOpen, onTriageHandoff, onScoreInDfa, onSendToDuo, covUser }) {
   const [note, setNote] = useState('')
   const [trail, setTrail] = useState(null)
+  const [hold, setHold] = useState(null)        // legal hold on this case, if any
+  const [exporting, setExporting] = useState(false)
   const c = useMemo(() => allThreadCases(outcomes).find(x => x.id === caseId), [caseId, outcomes])
   useEffect(() => {
     const k = e => { if (e.key === 'Escape') onClose() }
@@ -161,6 +164,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     if (!audited) return
     auditWrite('case.viewed', 'case', caseId)
     auditList(caseId, 100).then(setTrail).catch(() => setTrail([]))
+    legalHoldsList().then(h => setHold(h.find(x => x.case_id === caseId) || null)).catch(() => setHold(null))
   }, [caseId, audited])
   if (!caseId) return null
 
@@ -233,6 +237,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           </div>}
           {c && <div style={{ marginTop:'10px', display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
             <StatusChip status={c.status} />
+            {hold && <span className="mono-font" title={hold.reason || 'Legal hold'} style={{ fontSize:'9px', letterSpacing:'0.08em', padding:'2px 6px', background:'#7F1D1D', color:'#FEF2F2' }}>LEGAL HOLD</span>}
             {c.reasonCode && <span className="mono-font" style={{ fontSize:'10px', color:'#D6CFC4' }}>{c.network ? `${c.network} ` : ''}{c.reasonCode}{c.reasonTitle ? ` · ${c.reasonTitle}` : ''}</span>}
           </div>}
         </div>
@@ -276,6 +281,30 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             {!c._triageOnly && <button className="upload-btn" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
             <button className="upload-btn" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
             <button className="upload-btn" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
+            {/* Case file for regulators / legal — every role, demo included */}
+            <button className="upload-btn" disabled={exporting} onClick={async () => {
+              setExporting(true)
+              try {
+                await exportCaseFile(c, { timeline, trail: trail || [], hold, exportedBy: covUser?.email || covUser?.name || '',
+                  institution: covUser?.authed ? covUser.institution : 'Demo institution', isDemo: isDemoCase(c) })
+              } finally { setExporting(false) }
+            }}>{exporting ? 'Exporting…' : 'Export case file'}</button>
+            {/* Legal hold: admins and reviewers, real cases only. Held cases are never purged. */}
+            {audited && covUser?.authed && canConfigure() && (
+              <button className="upload-btn" style={hold ? { borderColor:'#7F1D1D', color:'#7F1D1D' } : undefined} onClick={async () => {
+                try {
+                  if (hold) {
+                    if (!window.confirm(`Lift the legal hold on ${caseId}? It will become eligible for retention purge again.`)) return
+                    await legalHoldSet(caseId, false); setHold(null)
+                  } else {
+                    const reason = window.prompt(`Reason for the legal hold on ${caseId} (e.g. litigation, regulator request):`, '')
+                    if (reason === null) return
+                    await legalHoldSet(caseId, true, reason); setHold({ case_id: caseId, reason, set_at: new Date().toISOString() })
+                  }
+                  auditList(caseId, 100).then(setTrail).catch(() => {})
+                } catch (e) { window.alert(e.message) }
+              }}>{hold ? 'Lift legal hold' : 'Place legal hold'}</button>
+            )}
           </div>
 
           {/* AI analysis */}
@@ -363,7 +392,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           </div>
 
           {/* Note */}
-          {!c._triageOnly && (
+          {!c._triageOnly && canWrite() && (
             <div>
               <Label>ADD NOTE</Label>
               <div style={{ display:'flex', gap:'8px' }}>
