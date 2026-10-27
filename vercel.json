@@ -4,6 +4,10 @@
   ],
   "functions": {
     "api/triage.js":  { "maxDuration": 30 },
-    "api/analyze.js": { "maxDuration": 30 }
-  }
+    "api/analyze.js": { "maxDuration": 30 },
+    "api/reminders.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/reminders", "schedule": "0 12 * * 1-5" }
+  ]
 }

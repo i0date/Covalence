@@ -15,6 +15,7 @@ import { accessToken, legalHoldsList, legalHoldSet, canWrite, canConfigure } fro
 import { exportCaseFile } from './caseExport.js'
 import { demoFileUrl, clearDemoBackend } from './demoBackend.js'
 import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
+import { CLOSED_STATUSES, FILE_STAGE_STATUSES, caseClocks, sortClocks } from './clocks.mjs'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -68,8 +69,6 @@ export const STAGES = [
   { id:'file',   num:'004', label:'File'   },
   { id:'dfa',    num:'005', label:'DFA'    },
 ]
-const FILE_STAGE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','pending_arb','rebuttal_prep','submitted']
-const CLOSED_STATUSES     = ['won','lost','withdrawn','resolved','closed']
 
 export function stageOf(c) {
   if (!c) return 'triage'
@@ -155,7 +154,7 @@ function nextAction(c) {
 }
 
 // ── Case panel ────────────────────────────────────────────────────────────────
-export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDeskOpen, onTriageHandoff, onScoreInDfa, onSendToDuo, covUser }) {
+export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDeskOpen, onTriageHandoff, onScoreInDfa, onSendToDuo, covUser, settings }) {
   const [note, setNote] = useState('')
   const [trail, setTrail] = useState(null)
   const [hold, setHold] = useState(null)        // legal hold on this case, if any
@@ -191,8 +190,11 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
   if (c) {
     const t = c._triageRecord
     if (t) timeline.push({ ts:t.date, kind:'TRIAGE', text:`Classified ${(t.verdict||'').replace(/_/g,' ').toLowerCase() || '—'}${t.routing ? ` · routed to ${t.routing.replace(/_/g,' ').toLowerCase()}` : ''}${t.confidence ? ` · ${t.confidence} confidence` : ''}` })
-    ;(c.history || []).forEach(h => timeline.push({ ts:h.ts, kind: h.event === 'created' ? 'OPENED' : 'STATUS',
-      text: h.event === 'created' ? `Case opened (${STATUS_LABEL(h.status).toLowerCase()})` : `${STATUS_LABEL(h.from).toLowerCase()} → ${STATUS_LABEL(h.status).toLowerCase()}`, by:h.by }))
+    ;(c.history || []).forEach(h => timeline.push(
+      h.event === 'assigned'  ? { ts:h.ts, kind:'ASSIGNED',  text:`Assigned to ${h.to}`, by:h.by } :
+      h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
+      { ts:h.ts, kind: h.event === 'created' ? 'OPENED' : 'STATUS',
+        text: h.event === 'created' ? `Case opened (${STATUS_LABEL(h.status).toLowerCase()})` : `${STATUS_LABEL(h.from).toLowerCase()} → ${STATUS_LABEL(h.status).toLowerCase()}`, by:h.by }))
     if (c.ai?.ts) timeline.push({ ts:c.ai.ts, kind:'AI', text:`Desk analysis · ${c.reasonCode || ''} ${c.reasonTitle || ''}`.trim() })
     if (c.filedAt && !(c.history||[]).some(h => h.status === 'filed')) timeline.push({ ts:c.filedAt, kind:'FILED', text:`Filed${c.filedBy ? ` by ${c.filedBy}` : ''}` })
     if (c.dfaScoredAt) timeline.push({ ts:c.dfaScoredAt, kind:'DFA', text:`Scored for funding · grade ${c.dfaScore}${c.dfaFundability ? ` · ${c.dfaFundability}/100` : ''}` })
@@ -336,6 +338,32 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
               {!c.ai?.summary && c._triageRecord && <p className="display-font" style={{ fontSize:'13px', color:'#57534E', margin:0 }}>Triage verdict: {(c._triageRecord.verdict || '—').replace(/_/g,' ').toLowerCase()} ({c._triageRecord.confidence || '—'} confidence).</p>}
             </div>
           )}
+
+          {/* Clocks — SLA targets and deadlines (Settings → Workflow) */}
+          {c && (() => {
+            const clocks = sortClocks(caseClocks(c, settings))
+            if (!clocks.length && !c.escalatedTo) return null
+            const COLOR = { breached:'#991B1B', soon:'#92400E', ok:'#1E3A5F', met:'#065F46' }
+            return (
+              <div>
+                <Label>CLOCKS</Label>
+                {c.escalatedTo && (
+                  <div className="mono-font" style={{ fontSize:'11px', color:'#7F1D1D', background:'#FEF2F2', border:'1px solid #FCA5A5', padding:'6px 10px', marginBottom:'8px' }}>
+                    ESCALATED to {c.escalatedTo} — {c.escalationReason}
+                  </div>
+                )}
+                {clocks.map(k => (
+                  <div key={k.key} className="mono-font" style={{ display:'flex', justifyContent:'space-between', gap:'12px', fontSize:'11px', padding:'5px 0', borderBottom:'1px solid #EDE7DC' }}>
+                    <span style={{ color:'#3F3A35' }}>{k.label}</span>
+                    <span style={{ color:COLOR[k.state], fontWeight:500, whiteSpace:'nowrap' }}>
+                      {k.state === 'met' ? '✓ done' : k.text}
+                      {k.state !== 'met' && <span style={{ color:'#6B6259', fontWeight:400 }}> · {new Date(k.due).toLocaleDateString('en-US', { month:'short', day:'numeric' })}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
 
           {/* Parties & details */}
           <div>

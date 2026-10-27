@@ -4,6 +4,7 @@ import React from 'react'
 import { isSignedIn } from './auth.js'
 import { recordDemoCaseEvent } from './demoBackend.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
+import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 export class ErrorBoundary extends React.Component {
@@ -49,27 +50,12 @@ export const DEFAULT_SETTINGS = {
   // Home snapshot
   snapshotEnabled:      true,
   snapshotDays:         60,
+  // Workflow — SLA targets, auto-assignment, escalation, reminders (Settings → Workflow)
+  ...WORKFLOW_DEFAULTS,
 }
 
-// ─── Business-day helpers ─────────────────────────────────────────────────────
-const HOLIDAYS = new Set([
-  '2024-01-01','2024-01-15','2024-02-19','2024-05-27','2024-06-19','2024-07-04',
-  '2024-09-02','2024-10-14','2024-11-11','2024-11-28','2024-12-25',
-  '2025-01-01','2025-01-20','2025-02-17','2025-05-26','2025-06-19','2025-07-04',
-  '2025-09-01','2025-10-13','2025-11-11','2025-11-27','2025-12-25',
-  '2026-01-01','2026-01-19','2026-02-16','2026-05-25','2026-06-19','2026-07-03',
-  '2026-09-07','2026-10-12','2026-11-11','2026-11-26','2026-12-25',
-])
-function isBusinessDay(d) {
-  const day = d.getDay()
-  if (day === 0 || day === 6) return false
-  return !HOLIDAYS.has(d.toISOString().split('T')[0])
-}
-export function addBusinessDays(startStr, n) {
-  let d = new Date(startStr); let added = 0
-  while (added < n) { d.setDate(d.getDate() + 1); if (isBusinessDay(d)) added++ }
-  return d
-}
+// ─── Business-day helpers (src/clocks.mjs, shared with the reminder emails) ──
+export { addBusinessDays } from './clocks.mjs'
 export function daysUntil(date) {
   if (!date) return null
   return Math.ceil((new Date(date) - new Date()) / 86400000)

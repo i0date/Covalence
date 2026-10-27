@@ -7,6 +7,7 @@ import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
+import { useTeam, useWorkflow, RemindersBell } from './workflow.jsx'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
 import { DeskView } from './tools/Desk.jsx'
@@ -148,6 +149,19 @@ export default function Covalence() {
   useOpenCaseListener(setOpenCaseId)
   const openSearch = React.useCallback(() => setSearchOpen(true), [])
   const { help: shortcutsOpen, setHelp: setShortcutsOpen } = useShortcuts({ setActiveSection, openSearch, activeSection, enabled: !!(demoUser || membership) })
+  // Workflow: auto-assignment and escalation rules run on the case pool (Settings → Workflow)
+  const team = useTeam(covUser)
+  useWorkflow({ outcomes, setOutcomes, settings, covUser, team })
+  // Links in reminder emails: /?open=COV-123 opens that case once the app is ready
+  useEffect(() => {
+    if (!covUser) return
+    try {
+      const u = new URL(window.location.href), id = u.searchParams.get('open')
+      if (!id) return
+      u.searchParams.delete('open'); window.history.replaceState(null, '', u.toString())
+      setTimeout(() => setOpenCaseId(id), 0)
+    } catch {}
+  }, [!!covUser])
 
   const loadDemo  = () => { loadDemoInstitution(setOutcomes, covUser?.email); setDataVersion(v => v + 1) }
   const clearDemo = () => { clearDemoInstitution(setOutcomes); setDataVersion(v => v + 1) }
@@ -355,6 +369,7 @@ export default function Covalence() {
                   title={covUser.authed ? 'Sign out' : 'Leave the demo'}
                   style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'10px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
+              <RemindersBell cases={outcomes} covUser={covUser} settings={settings} />
               <button onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="mono-font desktop-only cov-nav-collapse"
                 style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',width:'28px',height:'28px',cursor:'pointer',fontSize:'12px'}}>?</button>
               <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole}
@@ -373,7 +388,7 @@ export default function Covalence() {
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (
-          <CasePanel caseId={openCaseId} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser}
+          <CasePanel caseId={openCaseId} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} settings={settings}
             onClose={() => setOpenCaseId(null)}
             onGo={setActiveSection}
             onDeskOpen={(c) => { setDeskOpenRequest({ case: c, t: Date.now() }); setActiveSection('desk') }}
@@ -429,7 +444,7 @@ export default function Covalence() {
           <TrioView outcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
-          <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} />
+          <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} outcomes={outcomes} team={team} />
         </div>
         </React.Fragment>
       </div>
