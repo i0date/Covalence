@@ -367,7 +367,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
                 </div>
                 {drafts.length > 0 && (
                   <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', marginTop:'8px', lineHeight:1.7 }}>
-                    {drafts.map(d => <div key={d.id}>AI DRAFT · {d.task} · {d.model} · {new Date(d.ts).toLocaleDateString('en-US', { month:'short', day:'numeric' })} · {d.by}</div>)}
+                    {drafts.map(d => <div key={d.id}>AI DRAFT · {d.task.replace(/ \(draft\)$/, '')} · {new Date(d.ts).toLocaleDateString('en-US', { month:'short', day:'numeric' })} · {d.by}</div>)}
                   </div>
                 )}
                 {c._triageOnly && <div className="mono-font" style={{ fontSize:'10px', color:'#6B6259', marginTop:'6px' }}>Open the case in Desk to record whether you agree.</div>}

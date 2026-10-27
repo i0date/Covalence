@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // Renders an AI record (ai.js): the factors behind the answer, the options it
 // ruled out, what it assumed, what would change its mind, what it was given,
-// and which model and prompt produced it. With onReview, a person can record
+// (the model and prompt are kept on the record, not shown). With onReview, a person can record
 // whether they agree; disagreeing needs a reason. Reviews feed QA (Settings →
 // Quality review).
 import React, { useState } from 'react'
@@ -17,14 +17,10 @@ function H({ children }) {
   return <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', margin:'14px 0 6px' }}>{children}</div>
 }
 
-// One line naming the model and prompt behind a draft; shown above AI-written letters and plans
+// Marks AI-written letters and plans. The model and prompt stay on the record (case file, audit) but aren't shown.
 export function AiDraftNote({ record }) {
   if (!record) return null
-  return (
-    <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', letterSpacing:'0.04em', margin:'6px 0' }}>
-      AI DRAFT · {record.model} · {record.prompt} · {when(record.ts)} — read and edit before it goes anywhere. <a href="/ai" target="_blank" rel="noopener" style={{ color:'#1E3A5F' }}>How the AI works</a>
-    </div>
-  )
+  return <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', letterSpacing:'0.08em', margin:'6px 0' }}>AI DRAFT</div>
 }
 
 export function AiExplain({ record, review, onReview, title = 'WHY THE AI SAID THIS', defaultOpen = true }) {
@@ -105,10 +101,6 @@ export function AiExplain({ record, review, onReview, title = 'WHY THE AI SAID T
           </div>
         )}
 
-        <div className="mono-font" style={{ fontSize:'10px', color:'#6B6259', marginTop:'12px', lineHeight:1.6 }}>
-          {r.task} · {r.model} · prompt {r.prompt} · run by {r.by} · {when(r.ts)}
-          <br />The AI recommends; a person decides. Card numbers, ID numbers, emails and phone numbers are removed before the AI sees the case. <a href="/ai" target="_blank" rel="noopener" style={{ color:'#1E3A5F' }}>How the AI works</a>
-        </div>
 
         {(review || onReview) && (
           <div style={{ borderTop:'1px solid #E7E2D9', marginTop:'12px', paddingTop:'10px' }}>

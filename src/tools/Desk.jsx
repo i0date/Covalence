@@ -2932,18 +2932,18 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             <span className="mono-font text-[10px] tracking-widest text-stone-500">NET RECOVERY ESTIMATE</span>
                           </div>
                           {fightCalc && (
-                            <div className="grid grid-cols-4 divide-x divide-stone-200 border-b border-stone-300">
-                              <div className="p-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-stone-300 border-b border-stone-300">
+                              <div className="p-3" style={{ background: '#EEE9E0' }}>
                                 <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
                                 <div className="display-font font-bold text-xl text-stone-900">{fightCalc.winProb}%</div>
                                 <div className="mono-font text-[10px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal ? ' + REBUTTAL' : ''}</div>
                               </div>
-                              <div className="p-3">
+                              <div className="p-3" style={{ background: '#EEE9E0' }}>
                                 <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
                                 <div className="display-font font-bold text-xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
                                 <div className="mono-font text-[10px] text-stone-400 mt-0.5">amt × win prob</div>
                               </div>
-                              <div className="p-3">
+                              <div className="p-3" style={{ background: '#EEE9E0' }}>
                                 <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">WRITE-OFF RISK</div>
                                 <div className="display-font font-bold text-xl text-red-800">${fightCalc.writeOffRisk.toFixed(2)}</div>
                                 <div className="mono-font text-[10px] text-stone-400 mt-0.5">if lost + ~${fightCalc.netFee} fee</div>
