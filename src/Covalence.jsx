@@ -276,10 +276,14 @@ export default function Covalence() {
               ))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
-              <button onClick={() => setSearchOpen(true)} title="Search cases (⌘K / Ctrl+K)" aria-label="Search cases" className="mono-font cov-nav-icon"
-                style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',padding:'4px 10px',cursor:'pointer',fontSize:'9px',letterSpacing:'0.12em',whiteSpace:'nowrap'}}>
-                <span className="desktop-only">⌕ CASES</span>
-                <Search className="mobile-only" size={15} strokeWidth={1.75} />
+              {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
+              <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search"
+                style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'5px 8px 5px 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
+                <Search size={13} strokeWidth={1.75} style={{flexShrink:0}} />
+                <span className="desktop-only cov-nav-search-label" style={{flex:1,textAlign:'left'}}>Search cases</span>
+                <kbd className="desktop-only" style={{fontFamily:'inherit',fontSize:'9px',color:'#78716C',border:'1px solid #3D3A35',padding:'1px 5px',lineHeight:1.4}}>
+                  {/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K'}
+                </kbd>
               </button>
 
               {SUPA_URL && SUPA_KEY && covUser?.authed && globalSyncStatus !== 'idle' && (
