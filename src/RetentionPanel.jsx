@@ -74,7 +74,7 @@ export function RetentionPanel({ covUser }) {
 
         {holds.length > 0 && (
           <div>
-            <div style={{ ...mono, fontSize:'9px', letterSpacing:'0.15em', color:'#8A7F72', marginBottom:'4px' }}>ON LEGAL HOLD</div>
+            <div style={{ ...mono, fontSize:'10px', letterSpacing:'0.15em', color:'#8A7F72', marginBottom:'4px' }}>ON LEGAL HOLD</div>
             {holds.map(h => (
               <div key={h.case_id} style={{ ...mono, fontSize:'11px', display:'flex', gap:'10px', padding:'5px 0', borderBottom:'1px solid #EDE7DC', flexWrap:'wrap' }}>
                 <CaseLink id={h.case_id} />
@@ -88,7 +88,7 @@ export function RetentionPanel({ covUser }) {
 
         {isAdmin && (
           <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-            <button className="upload-btn" onClick={preview}>PREVIEW ELIGIBLE CASES</button>
+            <button className="cov-btn-secondary" onClick={preview}>PREVIEW ELIGIBLE CASES</button>
             {cands && (cands.length === 0
               ? <span style={{ ...mono, fontSize:'11px', color:'#065F46' }}>Nothing to purge.</span>
               : <button className="cov-btn" style={{ padding:'8px 14px', fontSize:'10px', background:'#7F1D1D' }} disabled={busy} onClick={purge}>

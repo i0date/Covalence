@@ -261,6 +261,212 @@ export const GLOBAL_CSS = `
   .display-font { font-family:'Fraunces',Georgia,serif; }
   .mono-font    { font-family:'JetBrains Mono',monospace; }
 
+  /* ── Readability layer ─────────────────────────────────────────────────
+     The palette's light greys (#A8A29E, #D6D3D1, #78716C) fall below the
+     4.5:1 contrast needed for small text on the cream surfaces, and some
+     dim greys are too dark on the black panels. These rules correct them
+     everywhere, without touching each component: darker warm grey on light
+     surfaces, lighter warm grey inside dark panels. */
+  .text-stone-300, .text-stone-400 { color:#6B6259 !important; }
+  .text-stone-500 { color:#625B53 !important; }
+  [style^="color: rgb(168, 162, 158)"], [style*="; color: rgb(168, 162, 158)"],
+  [style^="color: rgb(214, 211, 209)"], [style*="; color: rgb(214, 211, 209)"],
+  [style^="color: rgb(120, 113, 108)"], [style*="; color: rgb(120, 113, 108)"],
+  [style^="color: rgb(122, 112, 104)"], [style*="; color: rgb(122, 112, 104)"] { color:#6B6259 !important; }
+  [style*="background: rgb(26, 24, 20)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(26, 24, 20)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(26, 24, 20)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(26, 24, 20)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(26, 24, 20)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(26, 24, 20)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(35, 32, 25)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(35, 32, 25)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(35, 32, 25)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(35, 32, 25)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(35, 32, 25)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(35, 32, 25)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(45, 41, 34)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(45, 41, 34)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(45, 41, 34)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(45, 41, 34)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(45, 41, 34)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(45, 41, 34)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(41, 37, 36)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(41, 37, 36)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(41, 37, 36)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(41, 37, 36)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(41, 37, 36)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(41, 37, 36)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(37, 35, 32)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(37, 35, 32)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(37, 35, 32)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(37, 35, 32)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(37, 35, 32)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(37, 35, 32)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(28, 25, 23)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(28, 25, 23)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(28, 25, 23)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(28, 25, 23)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(28, 25, 23)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(28, 25, 23)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(41, 37, 30)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background: rgb(41, 37, 30)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background: rgb(41, 37, 30)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background: rgb(41, 37, 30)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background: rgb(41, 37, 30)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background: rgb(41, 37, 30)"] [style*="; color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style^="color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style*="; color: rgb(120, 113, 108)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style^="color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style*="; color: rgb(122, 112, 104)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style^="color: rgb(87, 83, 78)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style*="; color: rgb(87, 83, 78)"],
+  .bg-stone-900 [style^="color: rgb(120, 113, 108)"],
+  .bg-stone-900 [style*="; color: rgb(120, 113, 108)"],
+  .bg-stone-900 [style^="color: rgb(122, 112, 104)"],
+  .bg-stone-900 [style*="; color: rgb(122, 112, 104)"],
+  .bg-stone-900 [style^="color: rgb(87, 83, 78)"],
+  .bg-stone-900 [style*="; color: rgb(87, 83, 78)"],
+  .bg-stone-800 [style^="color: rgb(120, 113, 108)"],
+  .bg-stone-800 [style*="; color: rgb(120, 113, 108)"],
+  .bg-stone-800 [style^="color: rgb(122, 112, 104)"],
+  .bg-stone-800 [style*="; color: rgb(122, 112, 104)"],
+  .bg-stone-800 [style^="color: rgb(87, 83, 78)"],
+  .bg-stone-800 [style*="; color: rgb(87, 83, 78)"],
+  [style*="background: rgb(26, 24, 20)"] .text-stone-300, [style*="background: rgb(26, 24, 20)"] .text-stone-400, [style*="background: rgb(26, 24, 20)"] .text-stone-500,
+  [style*="background: rgb(26, 24, 20)"] .text-stone-600,
+  [style*="background-color: rgb(26, 24, 20)"] .text-stone-300, [style*="background-color: rgb(26, 24, 20)"] .text-stone-400, [style*="background-color: rgb(26, 24, 20)"] .text-stone-500,
+  [style*="background-color: rgb(26, 24, 20)"] .text-stone-600,
+  [style*="background: rgb(35, 32, 25)"] .text-stone-300, [style*="background: rgb(35, 32, 25)"] .text-stone-400, [style*="background: rgb(35, 32, 25)"] .text-stone-500,
+  [style*="background: rgb(35, 32, 25)"] .text-stone-600,
+  [style*="background-color: rgb(35, 32, 25)"] .text-stone-300, [style*="background-color: rgb(35, 32, 25)"] .text-stone-400, [style*="background-color: rgb(35, 32, 25)"] .text-stone-500,
+  [style*="background-color: rgb(35, 32, 25)"] .text-stone-600,
+  [style*="background: rgb(45, 41, 34)"] .text-stone-300, [style*="background: rgb(45, 41, 34)"] .text-stone-400, [style*="background: rgb(45, 41, 34)"] .text-stone-500,
+  [style*="background: rgb(45, 41, 34)"] .text-stone-600,
+  [style*="background-color: rgb(45, 41, 34)"] .text-stone-300, [style*="background-color: rgb(45, 41, 34)"] .text-stone-400, [style*="background-color: rgb(45, 41, 34)"] .text-stone-500,
+  [style*="background-color: rgb(45, 41, 34)"] .text-stone-600,
+  [style*="background: rgb(41, 37, 36)"] .text-stone-300, [style*="background: rgb(41, 37, 36)"] .text-stone-400, [style*="background: rgb(41, 37, 36)"] .text-stone-500,
+  [style*="background: rgb(41, 37, 36)"] .text-stone-600,
+  [style*="background-color: rgb(41, 37, 36)"] .text-stone-300, [style*="background-color: rgb(41, 37, 36)"] .text-stone-400, [style*="background-color: rgb(41, 37, 36)"] .text-stone-500,
+  [style*="background-color: rgb(41, 37, 36)"] .text-stone-600,
+  [style*="background: rgb(37, 35, 32)"] .text-stone-300, [style*="background: rgb(37, 35, 32)"] .text-stone-400, [style*="background: rgb(37, 35, 32)"] .text-stone-500,
+  [style*="background: rgb(37, 35, 32)"] .text-stone-600,
+  [style*="background-color: rgb(37, 35, 32)"] .text-stone-300, [style*="background-color: rgb(37, 35, 32)"] .text-stone-400, [style*="background-color: rgb(37, 35, 32)"] .text-stone-500,
+  [style*="background-color: rgb(37, 35, 32)"] .text-stone-600,
+  [style*="background: rgb(28, 25, 23)"] .text-stone-300, [style*="background: rgb(28, 25, 23)"] .text-stone-400, [style*="background: rgb(28, 25, 23)"] .text-stone-500,
+  [style*="background: rgb(28, 25, 23)"] .text-stone-600,
+  [style*="background-color: rgb(28, 25, 23)"] .text-stone-300, [style*="background-color: rgb(28, 25, 23)"] .text-stone-400, [style*="background-color: rgb(28, 25, 23)"] .text-stone-500,
+  [style*="background-color: rgb(28, 25, 23)"] .text-stone-600,
+  [style*="background: rgb(41, 37, 30)"] .text-stone-300, [style*="background: rgb(41, 37, 30)"] .text-stone-400, [style*="background: rgb(41, 37, 30)"] .text-stone-500,
+  [style*="background: rgb(41, 37, 30)"] .text-stone-600,
+  [style*="background-color: rgb(41, 37, 30)"] .text-stone-300, [style*="background-color: rgb(41, 37, 30)"] .text-stone-400, [style*="background-color: rgb(41, 37, 30)"] .text-stone-500,
+  [style*="background-color: rgb(41, 37, 30)"] .text-stone-600,
+  .bg-stone-900 .text-stone-300, .bg-stone-900 .text-stone-400, .bg-stone-900 .text-stone-500,
+  .bg-stone-900 .text-stone-600,
+  .bg-stone-800 .text-stone-300, .bg-stone-800 .text-stone-400, .bg-stone-800 .text-stone-500,
+  .bg-stone-800 .text-stone-600 { color:#A39A8F !important; }
+  /* …but light greys that already read well on the dark panels keep their colour there */
+  [style*="background: rgb(26, 24, 20)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(26, 24, 20)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(35, 32, 25)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(35, 32, 25)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(45, 41, 34)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(45, 41, 34)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(41, 37, 36)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(41, 37, 36)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(37, 35, 32)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(37, 35, 32)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(28, 25, 23)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(28, 25, 23)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background: rgb(41, 37, 30)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background: rgb(41, 37, 30)"] [style*="; color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style^="color: rgb(168, 162, 158)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style*="; color: rgb(168, 162, 158)"],
+  .bg-stone-900 [style^="color: rgb(168, 162, 158)"],
+  .bg-stone-900 [style*="; color: rgb(168, 162, 158)"],
+  .bg-stone-800 [style^="color: rgb(168, 162, 158)"],
+  .bg-stone-800 [style*="; color: rgb(168, 162, 158)"] { color:#A8A29E !important; }
+  [style*="background: rgb(26, 24, 20)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(26, 24, 20)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(26, 24, 20)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(35, 32, 25)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(35, 32, 25)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(35, 32, 25)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(45, 41, 34)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(45, 41, 34)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(45, 41, 34)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(41, 37, 36)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(41, 37, 36)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(41, 37, 36)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(37, 35, 32)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(37, 35, 32)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(37, 35, 32)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(28, 25, 23)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(28, 25, 23)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(28, 25, 23)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background: rgb(41, 37, 30)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background: rgb(41, 37, 30)"] [style*="; color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style^="color: rgb(214, 211, 209)"],
+  [style*="background-color: rgb(41, 37, 30)"] [style*="; color: rgb(214, 211, 209)"],
+  .bg-stone-900 [style^="color: rgb(214, 211, 209)"],
+  .bg-stone-900 [style*="; color: rgb(214, 211, 209)"],
+  .bg-stone-800 [style^="color: rgb(214, 211, 209)"],
+  .bg-stone-800 [style*="; color: rgb(214, 211, 209)"] { color:#D6D3D1 !important; }
+
   /* ── Shared inputs ────────────────────────────────────────────────────── */
   .cov-input, .input-field {
     background:#FAF7F1; border:1px solid #D4CCBC; padding:14px 16px;
@@ -285,6 +491,27 @@ export const GLOBAL_CSS = `
   }
   .cov-btn:hover { background:#2D2820; }
   .cov-btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+  /* ── Shared button variants (use via <Button> in ui.jsx) ──────────────── */
+  .cov-btn-sm        { padding:8px 14px !important; font-size:10px !important; }
+  .cov-btn-secondary { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+                       padding:9px 16px; border:1px solid #1A1814; background:#FAF7F1; color:#1A1814; cursor:pointer;
+                       display:inline-flex; align-items:center; gap:6px; transition:all 0.15s; white-space:nowrap; }
+  .cov-btn-secondary:hover { background:#1A1814; color:#F5F1EA; }
+  .cov-btn-danger    { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+                       padding:9px 16px; border:1px solid #7F1D1D; background:#7F1D1D; color:#FEF2F2; cursor:pointer;
+                       display:inline-flex; align-items:center; gap:6px; transition:background 0.15s; white-space:nowrap; }
+  .cov-btn-danger:hover { background:#991B1B; }
+  .cov-btn-quiet     { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+                       padding:6px 4px; border:none; background:none; color:#57534E; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+  .cov-btn-quiet:hover { color:#1A1814; }
+  .cov-btn-secondary:disabled, .cov-btn-danger:disabled, .cov-btn-quiet:disabled { opacity:0.4; cursor:not-allowed; }
+  .cov-badge { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; padding:2px 7px; white-space:nowrap; display:inline-block; }
+
+  /* ── Keyboard focus: always visible, never on mouse clicks ────────────── */
+  :focus-visible { outline:2px solid #1E3A5F; outline-offset:2px; }
+  [style*="background: rgb(26, 24, 20)"] :focus-visible, .wl-doors :focus-visible { outline-color:#D6CFC4; }
+  kbd.cov-kbd { font-family:'JetBrains Mono',monospace; font-size:10px; border:1px solid #D4CCBC; border-bottom-width:2px; padding:1px 6px; background:#FAF7F1; color:#1A1814; }
 
   /* ── Network / mode toggle buttons ───────────────────────────────────── */
   .net-btn {
@@ -334,8 +561,20 @@ export const GLOBAL_CSS = `
   /* ── Case search rows ─────────────────────────────────────────────────── */
   .cov-search-row:hover { background:#EEE9E0 !important; }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
+  /* Top bar: the compact layout (page name + menu) is used up to 1099px — tablets and small laptops too */
+  .cov-nav-menu, .cov-nav-current { display:none; }
+  @media (max-width:1099px) {
+    .cov-nav-buttons { display:none !important; }
+    .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
+    .cov-nav-menu { display:block !important; }
+    .cov-nav-right .desktop-only { display:none !important; }
+    .cov-nav-search { min-width:0 !important; }
+    .cov-nav-search-label { display:none !important; }
+  }
   /* Laptop widths: icon + shortcut only, so the tab bar stays on one line */
-  @media (min-width:768px) and (max-width:1399px) {
+  @media (min-width:768px) and (max-width:1599px) {
+    .cov-nav-buttons button { padding:14px 8px !important; letter-spacing:0.06em !important; }
+    .cov-nav-collapse { display:none !important; }
     .cov-nav-search { min-width:0 !important; }
     .cov-nav-search-label { display:none !important; }
   }
@@ -343,12 +582,14 @@ export const GLOBAL_CSS = `
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   @media(max-width:767px) {
     .cov-search-status { width:auto !important; }
+    .cov-yourday-row { grid-template-columns:96px minmax(0,1fr) !important; padding:10px 14px !important; }
+    .cov-yourday-row > span:nth-child(2) { display:none; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */
     .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 8px !important; flex-wrap:nowrap !important; }
-    .cov-nav-inner button { flex-shrink:0; padding:14px 8px !important; font-size:7.5px !important; }
+    .cov-nav-inner button { flex-shrink:0; padding:14px 8px !important; font-size:10px !important; }
     .cov-nav-logo     { padding-right:10px !important; margin-right:0 !important; border-right:none !important; flex-shrink:0; }
-    .cov-nav-logo div { font-size:9px !important; letter-spacing:0.12em !important; }
+    .cov-nav-logo div { font-size:10px !important; letter-spacing:0.12em !important; }
     .cov-nav-buttons  { overflow-x:auto; -webkit-overflow-scrolling:touch; display:flex !important; flex-shrink:1 !important; min-width:0; }
     .cov-nav-right    { flex-shrink:0; }
     /* home stats: 2-col on mobile */

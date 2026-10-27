@@ -149,10 +149,10 @@ export default function CaseViewer({ token }) {
       {/* Header */}
       <div style={{ background:'#1A1814', padding:'16px 32px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE</div>
-          <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.12em', color:'#4B4540', marginTop:'2px' }}>SECURE CASE LINK</div>
+          <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE</div>
+          <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.12em', color:'#4B4540', marginTop:'2px' }}>SECURE CASE LINK</div>
         </div>
-        <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', color:'#4B4540' }}>
+        <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', color:'#4B4540' }}>
           EXPIRES {new Date(caseData.expires_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }).toUpperCase()}
         </div>
       </div>
@@ -204,7 +204,7 @@ export default function CaseViewer({ token }) {
                 { label:'YOUR ROLE', val: role, set: setRole, placeholder:'Fraud Analyst / Compliance Officer' },
               ].map(({ label, val, set, placeholder, type }) => (
                 <div key={label}>
-                  <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>{label}</div>
+                  <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>{label}</div>
                   <input type={type || 'text'} value={val} onChange={e => set(e.target.value)}
                     placeholder={placeholder} required
                     style={{ width:'100%', padding:'10px 12px', fontFamily:'Georgia,serif', fontSize:'14px', border:'1px solid #C8C0B0', background:'#FFFFFF', outline:'none', boxSizing:'border-box', color:'#1A1814' }} />
@@ -219,12 +219,12 @@ export default function CaseViewer({ token }) {
 
             {/* Covalence CTA */}
             <div style={{ marginTop:'32px', padding:'16px', background:'#1A1814', borderLeft:'3px solid #C9A86C' }}>
-              <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#C9A86C', marginBottom:'6px' }}>RECEIVE CASES LIKE THIS IN YOUR OWN DASHBOARD</div>
+              <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#C9A86C', marginBottom:'6px' }}>RECEIVE CASES LIKE THIS IN YOUR OWN DASHBOARD</div>
               <p style={{ fontFamily:'Georgia,serif', fontSize:'13px', color:'#C8C0B0', lineHeight:1.6, marginBottom:'12px' }}>
                 Covalence users can respond directly from their platform, track resolution across all their cases, and send case links to other institutions.
               </p>
               <a href="https://covalence.vercel.app" target="_blank" rel="noopener noreferrer"
-                style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.12em', color:'#C9A86C', textDecoration:'none' }}>
+                style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.12em', color:'#C9A86C', textDecoration:'none' }}>
                 REQUEST EARLY ACCESS →
               </a>
             </div>
@@ -240,16 +240,16 @@ export default function CaseViewer({ token }) {
       {/* Header */}
       <div style={{ background:'#1A1814', padding:'16px 32px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'8px' }}>
         <div>
-          <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE · SECURE CASE LINK</div>
+          <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE · SECURE CASE LINK</div>
           <div style={{ fontFamily:'Georgia,serif', fontSize:'15px', color:'#F5F1EA', marginTop:'2px' }}>{caseData.sender_institution || 'Institution'} → {institution}</div>
         </div>
         <div style={{ display:'flex', gap:'16px', alignItems:'center' }}>
-          <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', color:'#4B4540' }}>
+          <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', color:'#4B4540' }}>
             ACCESSED {new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }).toUpperCase()}
           </div>
           {phase === 'view' && (
             <button onClick={() => setPhase('respond')}
-              style={{ padding:'8px 16px', background:'#064E3B', color:'#F0FDF4', fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.12em', border:'none', cursor:'pointer' }}>
+              style={{ padding:'8px 16px', background:'#064E3B', color:'#F0FDF4', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.12em', border:'none', cursor:'pointer' }}>
               SUBMIT RESPONSE →
             </button>
           )}
@@ -288,7 +288,7 @@ export default function CaseViewer({ token }) {
               {!isCrypto && (payload.receiving_account || payload.receiving_account_name || payload.transaction_ref) && (
                 <>
                   <tr>
-                    <td colSpan={2} style={{ padding:'10px 20px 4px', fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.12em', color:'#B0A090', background:'#F9F7F3', borderTop:'1px solid #E8E3DA', borderBottom:'1px solid #E8E3DA' }}>TRANSACTION IDENTIFIERS</td>
+                    <td colSpan={2} style={{ padding:'10px 20px 4px', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.12em', color:'#B0A090', background:'#F9F7F3', borderTop:'1px solid #E8E3DA', borderBottom:'1px solid #E8E3DA' }}>TRANSACTION IDENTIFIERS</td>
                   </tr>
                   {payload.receiving_account && (
                     <tr style={{ borderBottom:'1px solid #F0EBE3', background:'#F9F7F3' }}>
@@ -296,7 +296,7 @@ export default function CaseViewer({ token }) {
                       <td style={{ padding:'12px 20px', display:'flex', alignItems:'center', gap:'10px' }}>
                         <code style={{ fontFamily:'Courier New,monospace', fontSize:'13px', color:'#1A1814', background:'#EDE8E0', padding:'4px 8px' }}>{payload.receiving_account}</code>
                         <button onClick={() => navigator.clipboard.writeText(payload.receiving_account)}
-                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
                       </td>
                     </tr>
                   )}
@@ -312,7 +312,7 @@ export default function CaseViewer({ token }) {
                       <td style={{ padding:'12px 20px', display:'flex', alignItems:'center', gap:'10px' }}>
                         <code style={{ fontFamily:'Courier New,monospace', fontSize:'13px', color:'#1A1814', background:'#EDE8E0', padding:'4px 8px' }}>{payload.transaction_ref}</code>
                         <button onClick={() => navigator.clipboard.writeText(payload.transaction_ref)}
-                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>COPY</button>
                       </td>
                     </tr>
                   )}
@@ -346,7 +346,7 @@ export default function CaseViewer({ token }) {
                       <div key={i} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px' }}>
                         <code style={{ fontFamily:'Courier New,monospace', fontSize:'12px', color:'#1A1814', background:'#F5F1EA', padding:'4px 8px', wordBreak:'break-all' }}>{addr}</code>
                         <button onClick={() => navigator.clipboard.writeText(addr)}
-                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>
                           COPY
                         </button>
                       </div>
@@ -362,7 +362,7 @@ export default function CaseViewer({ token }) {
                       <div key={i} style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px' }}>
                         <code style={{ fontFamily:'Courier New,monospace', fontSize:'12px', color:'#1A1814', background:'#F5F1EA', padding:'4px 8px', wordBreak:'break-all' }}>{txid}</code>
                         <button onClick={() => navigator.clipboard.writeText(txid)}
-                          style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>
+                          style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.1em', padding:'3px 8px', background:'transparent', border:'1px solid #C8C0B0', color:'#8C7B6B', cursor:'pointer', whiteSpace:'nowrap' }}>
                           COPY
                         </button>
                       </div>
@@ -392,7 +392,7 @@ export default function CaseViewer({ token }) {
             <form onSubmit={handleRespond} style={{ padding:'24px', display:'grid', gap:'20px' }}>
               {/* Disposition */}
               <div>
-                <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'8px' }}>DISPOSITION *</div>
+                <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'8px' }}>DISPOSITION *</div>
                 <div style={{ display:'grid', gap:'8px' }}>
                   {DISPOSITIONS.map(d => (
                     <label key={d.value} style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', padding:'10px 12px', border:`1px solid ${disposition === d.value ? '#1A1814' : '#E8E3DA'}`, background: disposition === d.value ? '#1A1814' : '#FAFAF8' }}>
@@ -406,7 +406,7 @@ export default function CaseViewer({ token }) {
 
               {/* Internal ref */}
               <div>
-                <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>YOUR INTERNAL CASE / TICKET REFERENCE</div>
+                <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>YOUR INTERNAL CASE / TICKET REFERENCE</div>
                 <input value={internalRef} onChange={e => setInternalRef(e.target.value)}
                   placeholder="e.g. FRAUD-2024-00892"
                   style={{ width:'100%', padding:'10px 12px', fontFamily:'Courier New,monospace', fontSize:'13px', border:'1px solid #C8C0B0', background:'#FFFFFF', outline:'none', boxSizing:'border-box', color:'#1A1814' }} />
@@ -424,7 +424,7 @@ export default function CaseViewer({ token }) {
                   </label>
                   {freezeConfirmed && (
                     <div>
-                      <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#065F46', marginBottom:'6px' }}>FREEZE / HOLD REFERENCE NUMBER</div>
+                      <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#065F46', marginBottom:'6px' }}>FREEZE / HOLD REFERENCE NUMBER</div>
                       <input value={freezeRef} onChange={e => setFreezeRef(e.target.value)}
                         placeholder="e.g. HOLD-20240115-004"
                         style={{ width:'100%', padding:'10px 12px', fontFamily:'Courier New,monospace', fontSize:'13px', border:'1px solid #6EE7B7', background:'#FFFFFF', outline:'none', boxSizing:'border-box', color:'#1A1814' }} />
@@ -435,7 +435,7 @@ export default function CaseViewer({ token }) {
 
               {/* Notes */}
               <div>
-                <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>NOTES / FINDINGS</div>
+                <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#8C7B6B', marginBottom:'6px' }}>NOTES / FINDINGS</div>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
                   placeholder="Any relevant findings, actions taken, or context for the sending institution…"
                   style={{ width:'100%', padding:'10px 12px', fontFamily:'Georgia,serif', fontSize:'14px', border:'1px solid #C8C0B0', background:'#FFFFFF', outline:'none', boxSizing:'border-box', resize:'vertical', lineHeight:1.6, color:'#1A1814' }} />
@@ -467,7 +467,7 @@ export default function CaseViewer({ token }) {
   if (phase === 'done') return (
     <div style={{ minHeight:'100vh', background:'#F9F7F3', display:'flex', flexDirection:'column' }}>
       <div style={{ background:'#1A1814', padding:'16px 32px' }}>
-        <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE · SECURE CASE LINK</div>
+        <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.18em', color:'#8C7B6B' }}>COVALENCE · SECURE CASE LINK</div>
       </div>
       <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 24px' }}>
         <div style={{ maxWidth:'520px', textAlign:'center' }}>
@@ -479,12 +479,12 @@ export default function CaseViewer({ token }) {
 
           {/* Covalence CTA */}
           <div style={{ background:'#1A1814', padding:'24px', textAlign:'left' }}>
-            <div style={{ fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', color:'#C9A86C', marginBottom:'8px' }}>RECEIVE FUTURE CASES IN YOUR OWN DASHBOARD</div>
+            <div style={{ fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', color:'#C9A86C', marginBottom:'8px' }}>RECEIVE FUTURE CASES IN YOUR OWN DASHBOARD</div>
             <p style={{ fontFamily:'Georgia,serif', fontSize:'13px', color:'#C8C0B0', lineHeight:1.6, marginBottom:'16px' }}>
               Covalence users get a full inter-institutional case management platform — send and receive case links, run live Duo sessions, track resolution, and build your compliance record automatically.
             </p>
             <a href="https://covalence.vercel.app" target="_blank" rel="noopener noreferrer"
-              style={{ display:'inline-block', padding:'10px 20px', background:'#C9A86C', color:'#1A1814', fontFamily:'Courier New,monospace', fontSize:'9px', letterSpacing:'0.14em', textDecoration:'none', fontWeight:'bold' }}>
+              style={{ display:'inline-block', padding:'10px 20px', background:'#C9A86C', color:'#1A1814', fontFamily:'Courier New,monospace', fontSize:'10px', letterSpacing:'0.14em', textDecoration:'none', fontWeight:'bold' }}>
               REQUEST EARLY ACCESS →
             </a>
           </div>

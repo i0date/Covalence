@@ -97,7 +97,7 @@ const STATUS_BG = s => s === 'won' ? '#064E3B' : s === 'lost' ? '#7F1D1D' : s ==
 const STATUS_FG = s => (['won','lost','queued'].includes(s) || FILE_STAGE_STATUSES.includes(s)) ? '#F9FAFB' : '#4B4540'
 
 export function StatusChip({ status }) {
-  return <span className="mono-font" style={{ fontSize:'9px', padding:'2px 6px', letterSpacing:'0.06em', background:STATUS_BG(status), color:STATUS_FG(status), whiteSpace:'nowrap' }}>{STATUS_LABEL(status)}</span>
+  return <span className="mono-font" style={{ fontSize:'10px', padding:'2px 6px', letterSpacing:'0.06em', background:STATUS_BG(status), color:STATUS_FG(status), whiteSpace:'nowrap' }}>{STATUS_LABEL(status)}</span>
 }
 
 // Compact five-dot pipeline for list rows
@@ -161,8 +161,16 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
   const [hold, setHold] = useState(null)        // legal hold on this case, if any
   const [exporting, setExporting] = useState(false)
   const c = useMemo(() => allThreadCases(outcomes).find(x => x.id === caseId), [caseId, outcomes])
+  const exportRef = useRef(null), noteRef = useRef(null)
   useEffect(() => {
-    const k = e => { if (e.key === 'Escape') onClose() }
+    // Esc closes; E exports; N jumps to the note box (not while typing)
+    const k = e => {
+      if (e.key === 'Escape') return onClose()
+      const t = e.target
+      if (e.metaKey || e.ctrlKey || e.altKey || t?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '')) return
+      if (e.key === 'e' || e.key === 'E') { e.preventDefault(); exportRef.current?.click() }
+      if (e.key === 'n' || e.key === 'N') { e.preventDefault(); noteRef.current?.focus() }
+    }
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k)
   }, [onClose])
   // Signed in, real case: record the view and load the case's audit trail
@@ -221,7 +229,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
 
   const st = c ? stageStates(c) : {}
   const na = c ? nextAction(c) : null
-  const Label = ({ children }) => <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.16em', color:'#8A7F72', marginBottom:'8px' }}>{children}</div>
+  const Label = ({ children }) => <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#8A7F72', marginBottom:'8px' }}>{children}</div>
   const Row = ({ k, v }) => v ? (
     <div style={{ display:'flex', justifyContent:'space-between', gap:'12px', padding:'5px 0', borderBottom:'1px solid #EDE7DC' }}>
       <span className="mono-font" style={{ fontSize:'10px', color:'#8A7F72' }}>{k}</span>
@@ -236,7 +244,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
         {/* Header */}
         <div style={{ background:'#1A1814', padding:'18px 22px 20px', position:'sticky', top:0, zIndex:1 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#8A7F72' }}>COV CASE{c?.isDemo ? ' · DEMO' : ''}</span>
+            <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#8A7F72' }}>COV CASE{c?.isDemo ? ' · DEMO' : ''}</span>
             <button onClick={onClose} aria-label="Close" style={{ background:'none', border:'none', color:'#8A7F72', fontSize:'16px', cursor:'pointer' }}>✕</button>
           </div>
           <div className="mono-font" style={{ fontSize:'18px', letterSpacing:'0.12em', color:'#F5F1EA', marginTop:'6px' }}>{caseId}</div>
@@ -245,7 +253,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           </div>}
           {c && <div style={{ marginTop:'10px', display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
             <StatusChip status={c.status} />
-            {hold && <span className="mono-font" title={hold.reason || 'Legal hold'} style={{ fontSize:'9px', letterSpacing:'0.08em', padding:'2px 6px', background:'#7F1D1D', color:'#FEF2F2' }}>LEGAL HOLD</span>}
+            {hold && <span className="mono-font" title={hold.reason || 'Legal hold'} style={{ fontSize:'10px', letterSpacing:'0.08em', padding:'2px 6px', background:'#7F1D1D', color:'#FEF2F2' }}>LEGAL HOLD</span>}
             {c.reasonCode && <span className="mono-font" style={{ fontSize:'10px', color:'#D6CFC4' }}>{c.network ? `${c.network} ` : ''}{c.reasonCode}{c.reasonTitle ? ` · ${c.reasonTitle}` : ''}</span>}
           </div>}
         </div>
@@ -265,20 +273,20 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
                 return (
                   <button key={s.id} onClick={() => stageClick(s.id)} title={`Open ${s.label}`}
                     className="mono-font" style={{ background:bg, color:fg, border:'none', padding:'9px 6px', cursor:'pointer', textAlign:'left' }}>
-                    <div style={{ fontSize:'7px', letterSpacing:'0.2em', opacity:0.7 }}>{s.num}</div>
+                    <div style={{ fontSize:'10px', letterSpacing:'0.2em', opacity:0.7 }}>{s.num}</div>
                     <div style={{ fontSize:'10px', letterSpacing:'0.08em', fontWeight:600 }}>{v === 'done' ? '✓ ' : ''}{s.label.toUpperCase()}</div>
-                    <div style={{ fontSize:'7px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v.toUpperCase()}</div>
+                    <div style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v.toUpperCase()}</div>
                   </button>
                 )
               })}
             </div>
-            {stageOf(c) === 'closed' && <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#57534E', marginTop:'6px' }}>CLOSED · {STATUS_LABEL(c.status)}{c.resolvedDate ? ` · ${new Date(c.resolvedDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : ''}</div>}
+            {stageOf(c) === 'closed' && <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E', marginTop:'6px' }}>CLOSED · {STATUS_LABEL(c.status)}{c.resolvedDate ? ` · ${new Date(c.resolvedDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}` : ''}</div>}
           </div>
 
           {/* Next action */}
           <div style={{ border:`1px solid ${na.urgent ? '#B45309' : '#1A1814'}`, background: na.urgent ? '#FFFBEB' : '#FAF7F1', padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
             <div style={{ minWidth:0 }}>
-              <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.16em', color: na.urgent ? '#B45309' : '#8A7F72' }}>NEXT ACTION</div>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.16em', color: na.urgent ? '#B45309' : '#8A7F72' }}>NEXT ACTION</div>
               <div className="display-font" style={{ fontSize:'14px', color:'#1A1814', marginTop:'3px' }}>{na.hint}</div>
             </div>
             <button className="cov-btn" style={{ padding:'10px 16px', fontSize:'10px' }} onClick={() => act(na.go)}>{na.label} →</button>
@@ -286,11 +294,11 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
 
           {/* Secondary actions */}
           <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-            {!c._triageOnly && <button className="upload-btn" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
-            <button className="upload-btn" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
-            <button className="upload-btn" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
+            {!c._triageOnly && <button className="cov-btn-secondary" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
+            <button className="cov-btn-secondary" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
+            <button className="cov-btn-secondary" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
             {/* Case file for regulators / legal — every role, demo included */}
-            <button className="upload-btn" disabled={exporting} onClick={async () => {
+            <button ref={exportRef} title="Export case file (E)" className="cov-btn-secondary" disabled={exporting} onClick={async () => {
               setExporting(true)
               try {
                 await exportCaseFile(c, { timeline, trail: trail || [], hold, exportedBy: covUser?.email || covUser?.name || '',
@@ -300,7 +308,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             }}>{exporting ? 'Exporting…' : 'Export case file'}</button>
             {/* Legal hold: admins and reviewers, real cases only. Held cases are never purged. */}
             {audited && canConfigure() && (
-              <button className="upload-btn" style={hold ? { borderColor:'#7F1D1D', color:'#7F1D1D' } : undefined} onClick={async () => {
+              <button className="cov-btn-secondary" style={hold ? { borderColor:'#7F1D1D', color:'#7F1D1D' } : undefined} onClick={async () => {
                 try {
                   if (hold) {
                     if (!window.confirm(`Lift the legal hold on ${caseId}? It will become eligible for retention purge again.`)) return
@@ -390,7 +398,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
                 {timeline.map((e, i) => (
                   <div key={i} style={{ position:'relative', padding:'0 0 12px 16px' }}>
                     <span style={{ position:'absolute', left:'-4px', top:'4px', width:'7px', height:'7px', borderRadius:'50%', background: i === 0 ? '#1A1814' : '#C9C0B2' }} />
-                    <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', color:'#8A7F72' }}>
+                    <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#8A7F72' }}>
                       {e.kind} · {e.ts ? new Date(e.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—'}{e.by ? ` · ${e.by}` : ''}
                     </div>
                     <div className="display-font" style={{ fontSize:'13px', color:'#2D2922', lineHeight:1.5 }}>{e.text}</div>
@@ -405,7 +413,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             <div>
               <Label>ADD NOTE</Label>
               <div style={{ display:'flex', gap:'8px' }}>
-                <input className="cov-input" style={{ padding:'10px 12px', fontSize:'14px' }} value={note} placeholder="Findings, calls, next steps…"
+                <input ref={noteRef} className="cov-input" style={{ padding:'10px 12px', fontSize:'14px' }} value={note} placeholder="Findings, calls, next steps… (N)"
                   onChange={e => setNote(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addNote() }} />
                 <button className="cov-btn" style={{ padding:'10px 14px' }} onClick={addNote} disabled={!note.trim()}>ADD</button>
               </div>
@@ -447,7 +455,7 @@ export function CaseSearch({ outcomes, open, setOpen }) {
           <button onClick={() => setOpen(false)} aria-label="Close search" title="Close (Esc)"
             style={{ flexShrink:0, width:'48px', height:'48px', background:'none', border:'none', borderLeft:'1px solid #D4CCBC', color:'#57534E', fontSize:'18px', cursor:'pointer' }}>✕</button>
         </div>
-        <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', color:'#A8A29E', padding:'6px 16px', borderBottom:'1px solid #EDE7DC' }}>
+        <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#A8A29E', padding:'6px 16px', borderBottom:'1px solid #EDE7DC' }}>
           CASE NUMBER · MERCHANT · CARDHOLDER · REASON CODE
         </div>
         <div style={{ maxHeight:'55vh', overflowY:'auto' }}>
@@ -460,7 +468,7 @@ export function CaseSearch({ outcomes, open, setOpen }) {
                 style={{ display:'flex', width:'100%', gap:'12px', alignItems:'center', padding:'10px 16px', background:'none', border:'none', borderBottom:'1px solid #EDE7DC', cursor:'pointer', textAlign:'left' }}>
                 <span style={{ width:'84px', flexShrink:0, display:'flex', flexDirection:'column', gap:'3px' }}>
                   <span className="mono-font" style={{ fontSize:'10px', color:'#78716C', whiteSpace:'nowrap' }}>{c.id}</span>
-                  {isDemoCase(c) && <span className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', color:'#8A7F72', border:'1px dashed #B8B0A4', padding:'0 4px', width:'fit-content' }}>DEMO</span>}
+                  {isDemoCase(c) && <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#8A7F72', border:'1px dashed #B8B0A4', padding:'0 4px', width:'fit-content' }}>DEMO</span>}
                 </span>
                 <span style={{ flex:1, minWidth:0 }}>
                   <span className="display-font" style={{ display:'block', fontSize:'14px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
@@ -472,7 +480,7 @@ export function CaseSearch({ outcomes, open, setOpen }) {
               </button>
             )})}
         </div>
-        <div className="mono-font desktop-only" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#A8A29E', padding:'8px 16px' }}>ENTER TO OPEN · ESC TO CLOSE</div>
+        <div className="mono-font desktop-only" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#A8A29E', padding:'8px 16px' }}>ENTER TO OPEN · ESC TO CLOSE</div>
       </div>
     </div>
   )
@@ -492,7 +500,7 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
   const item = (isActive) => ({ display:'block', width:'100%', textAlign:'left', padding:'14px 20px', background: isActive ? '#2D2922' : 'transparent',
     color: isActive ? '#F5F1EA' : '#A8A29E', border:'none', borderBottom:'1px solid #2D2922', fontSize:'11px', letterSpacing:'0.14em', cursor:'pointer' })
   return (
-    <div className="mobile-only">
+    <div className="cov-nav-menu">
       <button onClick={() => setOpen(o => !o)} aria-label="Menu" aria-expanded={open}
         className="mono-font cov-nav-icon" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', cursor:'pointer' }}>
         {open ? '✕' : '☰'}
@@ -511,9 +519,9 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
               <div style={{ padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', borderTop:'1px solid #3D3A35' }}>
                 <div style={{ minWidth:0 }}>
                   <div className="mono-font" style={{ fontSize:'11px', color:'#E7E4DF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</div>
-                  <div className="mono-font" style={{ fontSize:'9px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
+                  <div className="mono-font" style={{ fontSize:'10px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
                   {user.demo && roles && onRole && (
-                    <label className="mono-font" style={{ fontSize:'9px', color:'#78716C', letterSpacing:'0.1em', display:'flex', alignItems:'center', gap:'6px', marginTop:'8px' }}>
+                    <label className="mono-font" style={{ fontSize:'10px', color:'#78716C', letterSpacing:'0.1em', display:'flex', alignItems:'center', gap:'6px', marginTop:'8px' }}>
                       VIEW AS
                       <select value={user.role} onChange={e => onRole(e.target.value)} style={{ background:'#232019', border:'1px solid #3D3A35', color:'#E7E4DF', fontFamily:'inherit', fontSize:'11px', padding:'4px 6px' }}>
                         {Object.entries(roles).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}

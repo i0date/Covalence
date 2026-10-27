@@ -39,8 +39,8 @@ export function AuditPanel({ covUser }) {
       <div className="px-5 py-3" style={{ ...mono, fontSize:'10px', letterSpacing:'0.15em', color:'#6B5F4D', borderBottom:'1px solid #D4CCBC', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap', alignItems:'center' }}>
         <span>AUDIT LOG · APPEND-ONLY</span>
         <span style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-          <button className="upload-btn" style={{ padding:'5px 10px' }} onClick={verify} disabled={check === 'running'}>{check === 'running' ? 'CHECKING…' : 'VERIFY INTEGRITY'}</button>
-          <button className="upload-btn" style={{ padding:'5px 10px' }} onClick={exportCsv} disabled={!rows?.length}>EXPORT CSV</button>
+          <button className="cov-btn-secondary" style={{ padding:'5px 10px' }} onClick={verify} disabled={check === 'running'}>{check === 'running' ? 'CHECKING…' : 'VERIFY INTEGRITY'}</button>
+          <button className="cov-btn-secondary" style={{ padding:'5px 10px' }} onClick={exportCsv} disabled={!rows?.length}>EXPORT CSV</button>
         </span>
       </div>
       <div className="px-5 py-4">
@@ -76,7 +76,7 @@ export function AuditPanel({ covUser }) {
             ))}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0 0', ...mono, fontSize:'10px', color:'#A8A29E' }}>
               <span>Showing {Math.min(limit, shown.length)} of {shown.length}</span>
-              {shown.length > limit && <button className="upload-btn" style={{ padding:'4px 10px' }} onClick={() => setLimit(l => l + 25)}>SHOW MORE</button>}
+              {shown.length > limit && <button className="cov-btn-secondary" style={{ padding:'4px 10px' }} onClick={() => setLimit(l => l + 25)}>SHOW MORE</button>}
             </div>
           </div>
         )}

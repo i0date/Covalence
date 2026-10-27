@@ -1,13 +1,14 @@
 // 000 HOME — The Brief: stats, deadlines, case list
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
+import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS, addBusinessDays, daysUntil } from '../shared.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
-export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo }) {
+export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo, covUser }) {
   // outcomes comes from the root, which stays in sync with every tool via the outcome subscribers
   const [tourOpen, setTourOpen] = React.useState(false)
   // Adaptive Brief: full intro for the first few visits, then a one-line version that can be expanded
@@ -66,7 +67,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
           <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
             From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
           </p>
-          <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'9px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
+          <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             COLLAPSE INTRO ↑
           </button>
         </div>
@@ -76,7 +77,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             The <span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
           </h1>
           <span className="display-font text-stone-500" style={{ fontSize:'14px' }}>Seven tools, one workflow.</span>
-          <button onClick={toggleBrief} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
+          <button onClick={toggleBrief} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             SHOW INTRO ↓
           </button>
         </div>
@@ -85,9 +86,12 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       {hasDemo && (
         <div className="mb-6 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', border:'1px dashed #B8B0A4', padding:'10px 14px', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
           <span>DEMO INSTITUTION LOADED — fictional cases across every stage. They stay in this browser and are never shared.</span>
-          <button onClick={onClearDemo} style={{ background:'none', border:'1px solid #78716C', color:'#57534E', padding:'4px 10px', cursor:'pointer', fontFamily:'inherit', fontSize:'9px', letterSpacing:'0.12em' }}>CLEAR DEMO DATA</button>
+          <button onClick={onClearDemo} style={{ background:'none', border:'1px solid #78716C', color:'#57534E', padding:'4px 10px', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.12em' }}>CLEAR DEMO DATA</button>
         </div>
       )}
+
+      {/* ── Your day: what needs attention, most urgent first ── */}
+      <YourDay outcomes={outcomes} covUser={covUser} settings={settings} platformMode={platformMode} />
 
       {/* ── Tool buttons ── */}
       <div className="mb-8">
@@ -107,7 +111,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               style={{ background:bg, border:'none', cursor:'pointer', padding:'14px 20px', flex:'1 1 auto', textAlign:'left', transition:'background 0.12s', minWidth:'80px' }}
               onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
               onMouseLeave={e => e.currentTarget.style.background=bg}>
-              <div style={{ fontSize:'7px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
+              <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
               <div style={{ fontSize:'12px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
             </button>
           ))}
@@ -115,7 +119,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         <div style={{ textAlign:'right' }}>
           <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
             className="mono-font"
-            style={{ fontSize:'9px', letterSpacing:'0.16em', padding:'9px 20px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s' }}
+            style={{ fontSize:'10px', letterSpacing:'0.16em', padding:'9px 20px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#FAF7F1' }}
             onMouseLeave={e => { e.currentTarget.style.background='#2D2922'; e.currentTarget.style.color='#E8E3DC' }}>
             ◎ &nbsp;NEW HERE? &nbsp;START WITH THE TOUR
@@ -172,16 +176,16 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               </div>
               {/* Slide */}
               <div style={{ padding:'32px 28px', flex:1 }}>
-                <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.2em', color:'#57534E', marginBottom:'8px' }}>{slide.num} — {tourSlide+1} OF 7</div>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', marginBottom:'8px' }}>{slide.num} — {tourSlide+1} OF 7</div>
                 <div className="display-font" style={{ fontSize:'28px', fontWeight:700, color:'#F5F1EA', lineHeight:1.1, marginBottom:'24px' }}>
                   {slide.name.split('').map((c,i) => <span key={i} style={{ fontStyle: i>0&&i%3===0?'italic':'normal' }}>{c}</span>)}
                 </div>
                 <div style={{ borderLeft:`2px solid ${slide.color}`, paddingLeft:'16px', marginBottom:'16px' }}>
-                  <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE PROBLEM</div>
+                  <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE PROBLEM</div>
                   <div className="display-font" style={{ fontSize:'13px', color:'#A8A29E', lineHeight:1.7 }}>{slide.problem}</div>
                 </div>
                 <div style={{ borderLeft:`2px solid ${slide.color}`, paddingLeft:'16px', marginBottom:'16px' }}>
-                  <div className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE TOOL</div>
+                  <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>THE TOOL</div>
                   <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.7 }}>{slide.tool}</div>
                 </div>
                 <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', fontStyle:'italic', lineHeight:1.6 }}>{slide.detail}</div>
@@ -189,16 +193,16 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               {/* Footer nav */}
               <div style={{ borderTop:'1px solid #2D2922', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <button onClick={() => setTourSlide(p => Math.max(0,p-1))} disabled={tourSlide===0}
-                  className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #3D3A35', color:tourSlide===0?'#3D3A35':'#78716C', cursor:tourSlide===0?'default':'pointer' }}>
+                  className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #3D3A35', color:tourSlide===0?'#3D3A35':'#78716C', cursor:tourSlide===0?'default':'pointer' }}>
                   ← PREV
                 </button>
                 <button onClick={() => { setActiveSection(slide.section); setTourOpen(false) }}
-                  className="mono-font" style={{ fontSize:'8px', letterSpacing:'0.12em', padding:'6px 14px', background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
+                  className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'6px 14px', background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
                   OPEN {slide.name.toUpperCase()} →
                 </button>
                 {tourSlide < 6
-                  ? <button onClick={() => setTourSlide(p => p+1)} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>NEXT →</button>
-                  : <button onClick={() => setTourOpen(false)} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
+                  ? <button onClick={() => setTourSlide(p => p+1)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>NEXT →</button>
+                  : <button onClick={() => setTourOpen(false)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
                 }
               </div>
             </div>
@@ -239,7 +243,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       <div className="mb-8 home-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
         {stats.map(s => (
           <div key={s.label} className="border border-stone-300 px-5 py-5" style={{ background:'#FAF7F1' }}>
-            <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'9px', letterSpacing:'0.15em' }}>{s.label}</div>
+            <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>{s.label}</div>
             <div className="display-font font-semibold text-stone-900" style={{ fontSize:'36px', lineHeight:1 }}>{s.value}</div>
             <div className="mono-font text-stone-400 mt-2" style={{ fontSize:'10px' }}>{s.sub}</div>
           </div>
@@ -265,7 +269,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         if (recent.length === 0) return null
         return (
           <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">{snapDays}-DAY SNAPSHOT</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">{snapDays}-DAY SNAPSHOT</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 {label:'WIN RATE',       value: wr60  !== null ? `${wr60}%` : '—',  sub: `${res60.length} resolved`},
@@ -274,9 +278,9 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 {label:'TOP CATEGORY',   value: topCat ? topCat[0].replace(/_/g,' ').toUpperCase() : '—', sub: topCat ? `${topCat[1]} cases` : ''},
               ].map(({label,value,sub}) => (
                 <div key={label}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{label}</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{label}</div>
                   <div className="display-font font-semibold text-stone-900" style={{fontSize:'clamp(16px,2.5vw,22px)',letterSpacing:'-0.02em',lineHeight:1.1}}>{value}</div>
-                  {sub && <div className="mono-font text-[9px] text-stone-400 mt-0.5">{sub}</div>}
+                  {sub && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{sub}</div>}
                 </div>
               ))}
             </div>
@@ -314,7 +318,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>CASES · {rows.length}</div>
               <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                 {FILTERS.map(x => (
-                  <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'9px' }}>
+                  <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'10px' }}>
                     {x.label} {thread.filter(x.test).length}
                   </button>
                 ))}
@@ -327,6 +331,8 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 const due = o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
                 return (
                   <div key={o.id} onClick={() => window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } }))}
+                    data-case-row tabIndex={0} role="button" aria-label={`Open ${o.id} ${o.merchant || ''}`}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } })) } }}
                     className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
                     style={{ borderTop: i > 0 ? '1px solid #E7E2D9' : 'none' }}>
                     <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
@@ -334,7 +340,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                     <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
                     <PipelineDots c={o} />
                     {due !== null && (
-                      <span className="mono-font desktop-only" style={{ fontSize:'9px', color: due < 0 ? '#B91C1C' : due <= 3 ? '#92400E' : '#78716C', whiteSpace:'nowrap' }}>
+                      <span className="mono-font desktop-only" style={{ fontSize:'10px', color: due < 0 ? '#B91C1C' : due <= 3 ? '#92400E' : '#78716C', whiteSpace:'nowrap' }}>
                         {due < 0 ? `OVERDUE ${-due}d` : due === 0 ? 'DUE TODAY' : `DUE ${due}d`}
                       </span>
                     )}
@@ -343,9 +349,9 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 )
               })}
             </div>
-            <div className="mono-font text-stone-400" style={{ fontSize:'9px', letterSpacing:'0.1em', marginTop:'8px', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+            <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'8px', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
               <span>● TRIAGE · DESK · MULTI · FILE · DFA — click a case for its full record</span>
-              {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'9px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
+              {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
             </div>
           </div>
         )

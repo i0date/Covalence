@@ -25,7 +25,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
 
   const Field = ({ label, hint, children }) => (
     <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-      <label className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', textTransform:'uppercase' }}>{label}</label>
+      <label className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#78716C', textTransform:'uppercase' }}>{label}</label>
       {children}
       {hint && <p className="display-font" style={{ fontSize:'11px', color:'#A8A29E', lineHeight:1.4, margin:0 }}>{hint}</p>}
     </div>
@@ -33,7 +33,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
   const Card = ({ title, children }) => (
     <div style={{ border:'1px solid #D4CCBC', background:'#FAF7F1', overflow:'hidden' }}>
       <div style={{ background:'#EEE9E0', borderBottom:'1px solid #D4CCBC', padding:'10px 20px' }}>
-        <span className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.2em', color:'#57534E' }}>{title}</span>
+        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>{title}</span>
       </div>
       <div style={{ padding:'20px', display:'grid', gap:'18px' }}>{children}</div>
     </div>
@@ -59,7 +59,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
     <Field label="" hint={hint}>
       <button onClick={() => set(field, !settings[field])}
         style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings[field] ? '#064E3B' : '#292524', color: settings[field] ? '#D1FAE5' : '#A8A29E', borderColor: settings[field] ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
-        <span style={{ fontSize:'7px' }}>{settings[field] ? '●' : '○'}</span>
+        <span style={{ fontSize:'10px' }}>{settings[field] ? '●' : '○'}</span>
         {settings[field] ? onLabel : offLabel}
       </button>
     </Field>
@@ -71,7 +71,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
       {/* Masthead */}
       <div style={{ borderBottom:'1px solid #D4CCBC', marginBottom:'40px', paddingBottom:'24px', display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
         <div>
-          <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.25em', color:'#A8A29E', marginBottom:'12px' }}>COVALENCE · CONFIGURATION</div>
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.25em', color:'#A8A29E', marginBottom:'12px' }}>COVALENCE · CONFIGURATION</div>
           <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em', lineHeight:1 }}>
             <span style={{ fontWeight:700 }}>Set</span><span style={{ fontStyle:'italic', fontWeight:500 }}>tings</span>
           </h1>
@@ -81,12 +81,12 @@ export function SettingsView({ settings, setSettings, covUser }) {
         </div>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px' }}>
           {saved && (
-            <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.15em', color:'#065F46', background:'#ECFDF5', padding:'4px 10px', border:'1px solid #6EE7B7' }}>✓ SAVED</div>
+            <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#065F46', background:'#ECFDF5', padding:'4px 10px', border:'1px solid #6EE7B7' }}>✓ SAVED</div>
           )}
           {agent && (
             <div style={{ textAlign:'right' }}>
-              <div className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', color:'#78716C' }}>{agent.name}</div>
-              <div className="mono-font" style={{ fontSize:'8px', color:'#A8A29E' }}>{agent.email}{agent.institution ? ` · ${agent.institution}` : ''}</div>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#78716C' }}>{agent.name}</div>
+              <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E' }}>{agent.email}{agent.institution ? ` · ${agent.institution}` : ''}</div>
             </div>
           )}
         </div>
@@ -178,14 +178,14 @@ export function SettingsView({ settings, setSettings, covUser }) {
           <Field label="DFA Scoring Engine" hint="Toggle the Dispute Funding Analyzer scoring engine. Default: on.">
             <button onClick={() => set('dfaEnabled', settings.dfaEnabled === false ? true : false)}
               style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
-              <span style={{ fontSize:'7px' }}>{settings.dfaEnabled !== false ? '●' : '○'}</span>
+              <span style={{ fontSize:'10px' }}>{settings.dfaEnabled !== false ? '●' : '○'}</span>
               {settings.dfaEnabled !== false ? 'DFA ON' : 'DFA OFF'}
             </button>
           </Field>
           <Field label="Home Snapshot" hint="Show the rolling case snapshot on the home screen.">
             <button onClick={() => set('snapshotEnabled', settings.snapshotEnabled === false ? true : false)}
               style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.snapshotEnabled !== false ? '#064E3B' : '#292524', color: settings.snapshotEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.snapshotEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
-              <span style={{ fontSize:'7px' }}>{settings.snapshotEnabled !== false ? '●' : '○'}</span>
+              <span style={{ fontSize:'10px' }}>{settings.snapshotEnabled !== false ? '●' : '○'}</span>
               {settings.snapshotEnabled !== false ? 'SNAPSHOT ON' : 'SNAPSHOT OFF'}
             </button>
           </Field>
@@ -200,7 +200,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
       <div style={{ marginTop:'32px', paddingTop:'24px', borderTop:'1px solid #E8E3DA', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'12px' }}>
         <p className="display-font text-stone-400" style={{ fontSize:'12px', margin:0 }}>Settings are saved automatically as you type.</p>
         <button onClick={() => { setSettings({ ...DEFAULT_SETTINGS }); setSaved(true); setTimeout(() => setSaved(false), 1800) }}
-          className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.15em', padding:'8px 16px', border:'1px solid #D4CCBC', color:'#78716C', background:'transparent', cursor:'pointer' }}>
+          className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', padding:'8px 16px', border:'1px solid #D4CCBC', color:'#78716C', background:'transparent', cursor:'pointer' }}>
           RESET TO DEFAULTS
         </button>
       </div>
