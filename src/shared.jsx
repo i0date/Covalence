@@ -575,6 +575,8 @@ export const GLOBAL_CSS = `
     .cov-yourday-row > span:nth-child(2) { display:none; }
     .cov-comingup-row { grid-template-columns:70px minmax(0,1fr) !important; }
     .cov-comingup-row > span:nth-child(2) { display:none; }
+    .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
+    .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */
     .cov-nav-inner    { overflow-x:auto; -webkit-overflow-scrolling:touch; gap:0 !important; padding:0 8px !important; flex-wrap:nowrap !important; }

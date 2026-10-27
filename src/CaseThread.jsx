@@ -194,6 +194,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     if (t) timeline.push({ ts:t.date, kind:'TRIAGE', text:`Classified ${(t.verdict||'').replace(/_/g,' ').toLowerCase() || '—'}${t.routing ? ` · routed to ${t.routing.replace(/_/g,' ').toLowerCase()}` : ''}${t.confidence ? ` · ${t.confidence} confidence` : ''}` })
     ;(c.history || []).forEach(h => timeline.push(
       h.event === 'assigned'  ? { ts:h.ts, kind:'ASSIGNED',  text:`Assigned to ${h.to}`, by:h.by } :
+      h.event === 'imported'  ? { ts:h.ts, kind:'IMPORTED',  text:`${h.update ? 'Updated from' : 'Imported from'} ${h.file || 'a file'}`, by:h.by } :
       h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
       { ts:h.ts, kind: h.event === 'created' ? 'OPENED' : 'STATUS',
         text: h.event === 'created' ? `Case opened (${STATUS_LABEL(h.status).toLowerCase()})` : `${STATUS_LABEL(h.from).toLowerCase()} → ${STATUS_LABEL(h.status).toLowerCase()}`, by:h.by }))

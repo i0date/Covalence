@@ -96,21 +96,54 @@ export async function caseLinkActivity(token) {
   return { responses: Array.isArray(d?.responses) ? d.responses : [], access: Array.isArray(d?.access) ? d.access : [] }
 }
 // ── Supabase shared-pool sync helpers ─────────────────────────────────────────
+// What the server already holds (case id → updatedAt), so a save sends only the
+// cases that changed, 500 at a time — an import of thousands doesn't resend
+// the whole workspace on every edit. Pulls page through every case the first
+// time, then ask only for cases changed since the last pull.
+const PUSH_CHUNK = 500, PULL_PAGE = 1000
+const _synced = new Map()
+let _lastPull = null       // server timestamp of the newest case pulled
+let _syncScope = ''
+function syncScope() {     // a different person or institution starts over
+  const scope = covWorkspace() + '|' + (accessToken() ? 'in' : 'out')
+  if (scope !== _syncScope) { _syncScope = scope; _synced.clear(); _lastPull = null }
+}
 export async function pushCasesToSupa(cases) {
   // Demo cases stay in this browser — they never reach the shared pool
   const real = (cases || []).filter(c => !isDemoCase(c))
   if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !canWrite() || !real.length) return  // auditors are read-only
-  const rows = real.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
-  await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
-    fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
+  syncScope()
+  const changed = real.filter(c => _synced.get(c.id) !== (c.updatedAt || ''))
+  for (let i = 0; i < changed.length; i += PUSH_CHUNK) {
+    const chunk = changed.slice(i, i + PUSH_CHUNK)
+    const rows = chunk.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
+    await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
+      fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
+    chunk.forEach(c => _synced.set(c.id, c.updatedAt || ''))
+  }
 }
 export async function pullCasesFromSupa() {
   if (!SUPA_URL || !SUPA_KEY || !isSignedIn()) return []
-  const d = await supaRpc('cov_pull_cases', { p_workspace: covWorkspace() }, async () => {
-    const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
-    return r.ok ? r.json() : []
-  }).catch(() => [])
-  return (d||[]).map(r=>r.data).filter(Boolean)
+  syncScope()
+  const since = _lastPull, out = []
+  let newest = null, legacy = false
+  for (let offset = 0; offset < 100000; offset += PULL_PAGE) {
+    const page = await supaRpc('cov_pull_cases_page', { p_since: since, p_offset: offset, p_limit: PULL_PAGE }, async () => {
+      // Database not updated yet (supabase_import.sql): the old call, capped at 500 cases
+      legacy = true
+      return await supaRpc('cov_pull_cases', { p_workspace: covWorkspace() }, async () => {
+        const r = await fetch(`${SUPA_URL}/rest/v1/cov_cases?select=data,updated_at&order=updated_at.desc&limit=500`, {headers:supaH()})
+        return r.ok ? r.json() : []
+      })
+    }).catch(() => null)
+    if (!page) break
+    page.forEach(r => { if (r?.data) out.push(r.data); if (r?.updated_at && (!newest || r.updated_at > newest)) newest = r.updated_at })
+    if (legacy || page.length < PULL_PAGE) break
+  }
+  // Ask again from a little before the newest row, in case of rows saved mid-pull
+  if (newest && !legacy) _lastPull = new Date(new Date(newest).getTime() - 120000).toISOString()
+  out.forEach(c => _synced.set(c.id, c.updatedAt || ''))
+  return out
 }
 export function mergeCases(local, remote) {
   const map = {}

@@ -32,7 +32,7 @@ export const auditVerify = () => rpc('audit_verify').then(d => (d && d[0]) || nu
 export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
   'case.auto_assigned': 'Case auto-assigned', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
-  'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded',
+  'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported',
   'case.edited': 'Case edited', 'case.viewed': 'Case viewed', 'evidence.uploaded': 'Evidence uploaded',
   'evidence.opened': 'Evidence opened', 'member.joined': 'Member joined', 'member.removed': 'Member removed',
   'member.role_changed': 'Role changed', 'invite.created': 'Invite sent', 'invite.revoked': 'Invite revoked',
@@ -44,6 +44,7 @@ export const AUDIT_LABELS = {
 }
 export function describeAudit(e) {
   const d = e.detail || {}
+  if (e.action === 'cases.imported') return `${d.file} · ${d.created} new · ${d.updated} updated · ${d.skipped} skipped · ${d.rejected} not imported`
   if (e.action === 'ai.reviewed') return `${d.verdict === 'agree' ? 'Agreed with' : 'Disagreed with'} ${d.answer || 'the AI'}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'qa.reviewed') return `${(d.result || '').toUpperCase()} · ${d.period || ''}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'case.auto_assigned') return `to ${d.to} · balanced workload rule`
