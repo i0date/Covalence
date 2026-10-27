@@ -17,6 +17,11 @@ export function SettingsView({ settings, setSettings, covUser }) {
   // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
+  // One section at a time, so the audit log doesn't push the settings down the page
+  const TABS = [['settings', 'Institution settings'], ...(workspace ? [['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
+  const [tab, setTab] = React.useState(() => { try { return localStorage.getItem('cov_settings_tab') || 'settings' } catch { return 'settings' } })
+  const activeTab = TABS.some(([k]) => k === tab) ? tab : 'settings'
+  const pickTab = k => { setTab(k); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
 
   const Field = ({ label, hint, children }) => (
     <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
@@ -87,11 +92,24 @@ export function SettingsView({ settings, setSettings, covUser }) {
         </div>
       </div>
 
-      {/* Team — members, invites (admins). Signed-in users only. */}
-      {workspace && <TeamPanel covUser={covUser} />}
-      {workspace && <AuditPanel covUser={covUser} />}
-      {workspace && <RetentionPanel covUser={covUser} />}
+      {TABS.length > 1 && (
+        <div role="tablist" aria-label="Settings sections" className="cov-settings-tabs" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC', marginBottom:'24px', overflowX:'auto' }}>
+          {TABS.map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={activeTab === k} onClick={() => pickTab(k)} className="mono-font"
+              style={{ background:'none', border:'none', borderBottom: activeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px',
+                padding:'10px 14px', fontSize:'10px', letterSpacing:'0.14em', textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer',
+                color: activeTab === k ? '#1A1814' : '#8A7F72' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
+      {activeTab === 'team'      && <TeamPanel covUser={covUser} />}
+      {activeTab === 'audit'     && <AuditPanel covUser={covUser} />}
+      {activeTab === 'retention' && <RetentionPanel covUser={covUser} />}
+
+      {activeTab === 'settings' && (<>
       {locked && (
         <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.08em', color:'#57534E', border:'1px dashed #B8B0A4', padding:'10px 14px', marginBottom:'16px' }}>
           These are {covUser.institution}’s settings. Only admins and reviewers can change them — ask an admin if something needs updating.
@@ -187,6 +205,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
         </button>
       </div>
       </fieldset>
+      </>)}
 
     </div>
   )

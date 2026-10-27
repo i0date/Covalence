@@ -13,6 +13,7 @@ export function AuditPanel({ covUser }) {
   const [q,       setQ]       = useState('')
   const [err,     setErr]     = useState('')
   const [check,   setCheck]   = useState(null)   // null | 'running' | { ok, checked, first_bad_id }
+  const [limit,   setLimit]   = useState(25)     // newest first; "Show more" adds 25
   const load = () => auditList(null, 500).then(r => { setRows(r); setErr('') }).catch(e => { setRows([]); setErr(e.message) })
   useEffect(() => { load() }, [covUser?.institutionId])
 
@@ -43,10 +44,10 @@ export function AuditPanel({ covUser }) {
         </span>
       </div>
       <div className="px-5 py-4">
-        <p className="display-font" style={{ fontSize:'13px', color:'#57534E', lineHeight:1.6, margin:'0 0 12px' }}>
+        <p className="display-font" style={{ fontSize:'12px', color:'#78716C', lineHeight:1.5, margin:'0 0 12px' }}>
           {covUser?.demo
-            ? 'Demo Bank’s log, kept in your browser: every change you make here is recorded and fingerprinted to the entry before it, exactly as a real workspace does it in the database — where entries also can’t be edited or deleted.'
-            : 'Every change to cases, your team, invites, Duo sessions, case links and settings is recorded here by the database itself. Entries can’t be edited or deleted, and each one is fingerprinted to the one before it, so any tampering shows up when you verify.'}
+            ? 'Demo Bank’s log, kept in your browser and fingerprinted entry by entry — as a real workspace does in the database.'
+            : 'Recorded by the database; entries can’t be edited or deleted, and each is fingerprinted to the one before it.'}
         </p>
         {check && check !== 'running' && (
           <div style={{ ...mono, fontSize:'11px', padding:'8px 12px', marginBottom:'12px', border:`1px solid ${check.ok ? '#065F46' : '#B91C1C'}`, background: check.ok ? '#ECFDF5' : '#FEF2F2', color: check.ok ? '#065F46' : '#991B1B' }}>
@@ -60,19 +61,23 @@ export function AuditPanel({ covUser }) {
         {rows === null ? <div style={{ ...mono, fontSize:'10px', color:'#A8A29E' }}>Loading…</div>
           : shown.length === 0 ? <div style={{ ...mono, fontSize:'10px', color:'#A8A29E' }}>{rows.length ? 'Nothing matches.' : 'No activity recorded yet.'}</div>
           : (
-          <div style={{ maxHeight:'420px', overflowY:'auto', borderTop:'1px solid #EDE7DC' }}>
-            {shown.map(e => (
-              <div key={e.id} style={{ display:'grid', gridTemplateColumns:'minmax(96px,auto) minmax(0,1fr)', gap:'4px 14px', padding:'8px 0', borderBottom:'1px solid #EDE7DC' }}>
+          <div style={{ borderTop:'1px solid #EDE7DC' }}>
+            {shown.slice(0, limit).map(e => (
+              <div key={e.id} style={{ display:'grid', gridTemplateColumns:'minmax(96px,auto) minmax(0,1fr)', gap:'2px 14px', padding:'6px 0', borderBottom:'1px solid #EDE7DC' }}>
                 <span style={{ ...mono, fontSize:'10px', color:'#8A7F72', whiteSpace:'nowrap' }}>{fmt(e.at)}</span>
                 <span style={{ minWidth:0 }}>
                   <span className="display-font" style={{ fontSize:'13px', color:'#1A1814' }}>{AUDIT_LABELS[e.action] || e.action}</span>
                   {e.entity_id && <span style={{ ...mono, fontSize:'10px', color:'#57534E', marginLeft:'8px' }}>{e.entity === 'case' ? <CaseLink id={e.entity_id} /> : e.entity_id}</span>}
-                  <span style={{ ...mono, display:'block', fontSize:'10px', color:'#A8A29E', marginTop:'2px', overflow:'hidden', textOverflow:'ellipsis' }}>
+                  <span style={{ ...mono, display:'block', fontSize:'10px', color:'#A8A29E', marginTop:'1px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={`${e.actor_email || 'system'}${describeAudit(e) ? ` · ${describeAudit(e)}` : ''}`}>
                     {e.actor_email || 'system'}{describeAudit(e) ? ` · ${describeAudit(e)}` : ''}
                   </span>
                 </span>
               </div>
             ))}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0 0', ...mono, fontSize:'10px', color:'#A8A29E' }}>
+              <span>Showing {Math.min(limit, shown.length)} of {shown.length}</span>
+              {shown.length > limit && <button className="upload-btn" style={{ padding:'4px 10px' }} onClick={() => setLimit(l => l + 25)}>SHOW MORE</button>}
+            </div>
           </div>
         )}
       </div>
