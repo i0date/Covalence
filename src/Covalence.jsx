@@ -266,9 +266,8 @@ export default function Covalence() {
       } catch {}
       try {
         const r = await pullCasesFromSupa()
-        // Auditors can't change anything, so the workspace's copy simply replaces theirs (demo rows stay)
-        if (membership?.role === 'auditor') setOutcomes(l => [...r, ...l.filter(isDemoCase)])
-        else if (r.length) setOutcomes(l => mergeCases(l, r))
+        // Pulls after the first bring only changed cases, so everyone (auditors too) merges
+        if (r.length) setOutcomes(l => mergeCases(l, r))
       } catch {}
     }
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)

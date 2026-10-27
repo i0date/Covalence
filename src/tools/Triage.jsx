@@ -2,8 +2,8 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React, { useState, useEffect, useMemo } from 'react'
 import { Shield, AlertTriangle, MessageSquare, Send, Loader2, Bitcoin, ArrowRight, AlertCircle, Lock, Check, Copy, CheckCircle, ExternalLink } from 'lucide-react'
-import { SUPA_KEY, SUPA_URL, pullCasesFromSupa } from '../data.js'
-import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { SUPA_KEY, SUPA_URL } from '../data.js'
+import { DEFAULT_SETTINGS, loadOutcomes } from '../shared.jsx'
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 
@@ -268,9 +268,8 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
     if (!result || !merchant || merchant === '—' || !SUPA_URL || !SUPA_KEY) { setSupaPriorCases([]); return }
     const norm = merchant.replace(/[^a-z0-9]/gi, '').toLowerCase()
     if (norm.length < 3) return
-    pullCasesFromSupa()
-      .then(cases => setSupaPriorCases(cases))
-      .catch(() => {})
+    // The workspace's cases are already synced into this browser (Covalence.jsx pulls them)
+    setSupaPriorCases(loadOutcomes())
   }, [result, merchant])
 
   const isCE           = triageChannelMode === 'ce'

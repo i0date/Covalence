@@ -20,7 +20,7 @@ const SYNC_KEYS = new Set([
   'dfa_manual_claims', 'dfa_crypto_claims', 'dfa_excluded_ids', 'dfa_win_overrides',
   'dfa_refund_pct', 'dfa_recourse_type', 'dfa_holding_days', 'dfa_advance_override',
   'cov_trio_playbooks', 'cov_trio_debriefs', 'cov_trio_strategy_notes', 'cov_strategy_global_notes',
-  'duo_my_sessions',
+  'duo_my_sessions', 'cov_import_templates',
 ])
 const SYNC_PREFIXES = ['desk_cs_hist_', 'desk_cs_stage_', 'duo_audit_']
 export const isSyncedKey = k => SYNC_KEYS.has(k) || SYNC_PREFIXES.some(p => k.startsWith(p))
