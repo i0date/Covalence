@@ -7,7 +7,7 @@
 //   • PII scrub applied before forwarding to Anthropic
 
 const HARDCODED_MODEL      = 'claude-sonnet-4-6'
-const HARDCODED_MAX_TOKENS = 2400
+const HARDCODED_MAX_TOKENS = 3200   // room for the explanation block (src/ai.js)
 const RATE_LIMIT_MAX       = 20          // triage calls are expensive — tighter cap
 const RATE_LIMIT_WINDOW_MS = 60 * 1000
 const MAX_BODY_BYTES       = 64 * 1024

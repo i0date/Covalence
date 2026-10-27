@@ -113,6 +113,7 @@ export function WelcomePage({ children }) {
             {[['001','TRIAGE'],['002','DESK'],['003','MULTI'],['004','FILE'],['005','DFA'],['006','DUO'],['007','TRIO']].map(([n, l]) => <span key={n}><b>{n}</b>{l}</span>)}
           </div>
           <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#A8A29E', marginTop:'14px' }}>BUILT BY A RISK, FRAUD &amp; COMPLIANCE PRACTITIONER</div>
+          <a href="/ai" className="wl-mono" style={{ display:'inline-block', fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginTop:'8px' }}>HOW COVALENCE USES AI →</a>
         </div>
       </section>
 
