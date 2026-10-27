@@ -218,7 +218,7 @@ export function TeamPanel({ covUser }) {
             </div>
             {newLink && (
               <div className="mt-3 p-3" style={{ border:'1px solid #065F46', background:'#ECFDF5' }}>
-                <div style={{ ...small, color:'#065F46', marginBottom:'6px' }}>Invite created. Send this link to them — it works only for that email address and expires in 14 days.</div>
+                <div style={{ ...small, color:'#065F46', marginBottom:'6px' }}>{covUser?.demo ? 'Invite created (demo — no email is sent, and the link only works for a real workspace).' : 'Invite created. Send this link to them — it works only for that email address and expires in 14 days.'}</div>
                 <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                   <code style={{ ...small, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#1A1814' }}>{newLink}</code>
                   <button className="upload-btn" style={{ padding:'5px 10px' }} onClick={() => copy(newLink)}>{copied ? 'COPIED ✓' : 'COPY'}</button>

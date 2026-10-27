@@ -4,7 +4,8 @@
 // Admins set how long closed cases are kept and run the purge; everyone signed in
 // can see the policy and which cases are on legal hold.
 import React, { useEffect, useState } from 'react'
-import { retentionGet, retentionSet, retentionCandidates, legalHoldsList, accessToken } from './auth.js'
+import { retentionGet, retentionSet, retentionCandidates, legalHoldsList, accessToken, isSignedIn } from './auth.js'
+import { demoRpc } from './demoBackend.js'
 import { CaseLink } from './CaseThread.jsx'
 
 const mono = { fontFamily:"'JetBrains Mono',monospace" }
@@ -35,6 +36,14 @@ export function RetentionPanel({ covUser }) {
     if (!window.confirm(`Permanently delete ${cands.length} closed case${cands.length === 1 ? '' : 's'} and their evidence files? Cases on legal hold are kept. This can’t be undone; each deletion is recorded in the audit log.`)) return
     setBusy(true); setErr(''); setMsg('')
     try {
+      // Demo Bank: purge the demo cases in this browser and tell the open tools
+      if (!isSignedIn()) {
+        const n = await demoRpc('retention_purge', { p_case_ids: cands.map(c => c.case_id) })
+        const list = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+        ;(window._covSubscribers || []).forEach(fn => { try { fn(list) } catch {} })
+        setMsg(`Purged ${n} demo case${n === 1 ? '' : 's'} (demo evidence files are kept only for the browser session anyway).`)
+        setCands(null); load(); setBusy(false); return
+      }
       const r = await fetch('/api/retention', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${accessToken()}` }, body: JSON.stringify({ caseIds: cands.map(c => c.case_id) }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`)

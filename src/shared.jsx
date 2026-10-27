@@ -2,6 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
 import { isSignedIn } from './auth.js'
+import { recordDemoCaseEvent } from './demoBackend.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
@@ -183,6 +184,8 @@ function stampCaseChanges(current, next) {
     const history = [...(c.history || ex?.history || [])]
     if (!ex) history.push({ ts: c.date || now, event: 'created', status: c.status, by: who })
     else if (ex.status !== c.status) history.push({ ts: now, event: 'status', from: ex.status, status: c.status, by: who })
+    // Demo visitors: the in-browser audit log records what the database would for a real workspace
+    if (!isSignedIn() && history.length > (c.history || ex?.history || []).length) recordDemoCaseEvent(c.id, history[history.length - 1])
     return { ...c, history, updatedAt: now }
   })
 }

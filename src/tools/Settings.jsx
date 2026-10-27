@@ -15,7 +15,8 @@ export function SettingsView({ settings, setSettings, covUser }) {
   }
   const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
   // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
-  const locked = !!covUser?.authed && !['admin', 'reviewer'].includes(covUser.role)
+  const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
+  const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
 
   const Field = ({ label, hint, children }) => (
     <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
@@ -87,9 +88,9 @@ export function SettingsView({ settings, setSettings, covUser }) {
       </div>
 
       {/* Team — members, invites (admins). Signed-in users only. */}
-      {covUser?.authed && <TeamPanel covUser={covUser} />}
-      {covUser?.authed && <AuditPanel covUser={covUser} />}
-      {covUser?.authed && <RetentionPanel covUser={covUser} />}
+      {workspace && <TeamPanel covUser={covUser} />}
+      {workspace && <AuditPanel covUser={covUser} />}
+      {workspace && <RetentionPanel covUser={covUser} />}
 
       {locked && (
         <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.08em', color:'#57534E', border:'1px dashed #B8B0A4', padding:'10px 14px', marginBottom:'16px' }}>

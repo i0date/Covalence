@@ -2,6 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { isDemoCase } from './CaseThread.jsx'
 import { accessToken, isSignedIn, canWrite } from './auth.js'
+import { demoRpc, demoStoreFile } from './demoBackend.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 005 DUO VIEW — multi-institutional real-time collaboration
@@ -26,7 +27,10 @@ function supaH() {
 // (PostgREST 404 / PGRST202) we fall back to the legacy direct-table call so
 // the app keeps working until the SQL has been run.
 const _rpcMissing = new Set()
+// Duo and case links work for demo visitors too, against Demo Bank's in-browser backend
+const DEMO_RPCS = new Set(['duo_get', 'duo_create', 'duo_update', 'duo_find', 'case_link_create', 'case_link_activity'])
 async function supaRpc(fn, args, fallback) {
+  if (!isSignedIn() && DEMO_RPCS.has(fn)) return demoRpc(fn, args)
   if (!_rpcMissing.has(fn)) {
     const r = await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, { method:'POST', headers: supaH(), body: JSON.stringify(args) })
     if (r.ok) { const t = await r.text(); return t ? JSON.parse(t) : null }
@@ -154,7 +158,8 @@ export function mergeTrioIncidents(local, remote) {
 
 export async function uploadEvidence(caseId, file, agentEmail) {
   if (!SUPA_URL || !SUPA_KEY) throw new Error('Supabase not configured')
-  if (!isSignedIn()) throw new Error('Sign in to attach evidence — demo cases stay in this browser')
+  // Demo visitors: the file stays in this tab's memory (gone on reload) and never leaves the browser
+  if (!isSignedIn()) return { name: file.name, path: demoStoreFile(caseId, file), type: file.type || 'application/octet-stream', size: file.size, uploadedAt: new Date().toISOString(), uploadedBy: agentEmail || 'demo' }
   const ts = Date.now()
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const path = `${caseId}/${ts}-${safeName}`

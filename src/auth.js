@@ -6,6 +6,7 @@
 // institution (see supabase_auth.sql). Visitors who don't sign in keep the
 // local demo.
 import { createClient } from '@supabase/supabase-js'
+import { demoRpc } from './demoBackend.js'
 
 const SUPA_URL = import.meta.env?.VITE_SUPABASE_URL || ''
 const SUPA_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || ''
@@ -39,6 +40,8 @@ export function clearPendingInvite() {
 
 function need() { if (!supabase) throw new Error('Sign-in is not configured for this deployment') }
 async function rpc(fn, args) {
+  // Not signed in → the in-browser demo backend (Demo Bank); signed in → the real database
+  if (!_token) return demoRpc(fn, args)
   need()
   const { data, error } = await supabase.rpc(fn, args || {})
   if (error) throw new Error(error.message)
