@@ -288,7 +288,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               placeholder="Search institution or code…"
               className="mono-font" style={{ fontSize:'11px', padding:'5px 10px', border:'1px solid #D4CCBC', background:'#FFFFFF', outline:'none', flex:1, minWidth:'140px', maxWidth:'260px' }} />
             <select value={duoStatusFilter} onChange={e => setDuoStatusFilter(e.target.value)}
-              className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.08em', padding:'5px 8px', border:'1px solid #D4CCBC', background:'#FFFFFF', cursor:'pointer', outline:'none' }}>
+              className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.08em', padding:'5px 8px', border:'1px solid #D4CCBC', background:'#FFFFFF', cursor:'pointer', outline:'none' }}>
               <option value="all">ALL STATUSES</option>
               {Object.entries(DUO_STATUS).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -306,7 +306,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                   style={{ textAlign:'left', padding:'12px 16px', background:'#FFFFFF', border:'1px solid #D4CCBC', cursor:'pointer', display:'flex', alignItems:'center', gap:'16px' }}>
                   <div className="mono-font font-bold tracking-widest text-stone-900" style={{ fontSize:'14px', minWidth:'52px' }}>{saved.id}</div>
                   <div className="display-font text-stone-700 text-[13px] flex-1">{saved.myInstitution}</div>
-                  <div className="mono-font text-[9px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg, border: saved.lastStatus === 'closed' ? 'none' : `1px solid ${st.color}20` }}>{st.label}</div>
+                  <div className="mono-font text-[10px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg, border: saved.lastStatus === 'closed' ? 'none' : `1px solid ${st.color}20` }}>{st.label}</div>
                   <ArrowRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                 </button>
               )
@@ -328,7 +328,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               value={recoverQuery} onChange={e => setRecoverQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && recoverSessions()} />}
             <button onClick={recoverSessions} disabled={recoverLoading}
-              className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
+              className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
               {recoverLoading ? '…' : authInstitution ? 'SHOW MY SESSIONS' : 'SEARCH'}
             </button>
           </div>
@@ -344,13 +344,13 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                         <div key={s.id} style={{ padding:'12px 16px', background:'#FFFFFF', border:'1px solid #D4CCBC', display:'flex', alignItems:'center', gap:'16px' }}>
                           <div className="mono-font font-bold tracking-widest text-stone-900" style={{ fontSize:'14px', minWidth:'52px' }}>{s.id}</div>
                           <div className="display-font text-stone-600 text-[13px] flex-1">{s.institution_a} · {s.institution_b}</div>
-                          <div className="mono-font text-[9px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg }}>{st.label}</div>
+                          <div className="mono-font text-[10px] tracking-widest px-2 py-0.5 shrink-0" style={{ color: st.color, background: st.bg }}>{st.label}</div>
                           <button onClick={() => {
                             const mine = authInstitution && s.institution_b === authInstitution ? 'b' : 'a'
                             const entry = { id: s.id, role: mine, myInstitution: mine === 'b' ? s.institution_b : s.institution_a, lastStatus: s.status }
                             if (!already) { const next = [...mySessions, entry]; setMySessions(next); saveMyDuoSessions(next) }
                             openSession(entry)
-                          }} className="mono-font shrink-0" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                          }} className="mono-font shrink-0" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'5px 10px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
                             {already ? 'OPEN →' : 'RECOVER →'}
                           </button>
                         </div>
@@ -379,12 +379,12 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                 : `CASE PRE-FILLED FROM DESK${duoHandoff.id ? ` — ${duoHandoff.id}` : ''}${duoHandoff.merchant ? ` · ${duoHandoff.merchant}` : ''}`}
             </div>
             {duoHandoff.source === 'triage' && duoHandoff.accountType === 'crypto' && (
-              <div className="mono-font text-[9px] text-emerald-700 mt-1 leading-relaxed">
+              <div className="mono-font text-[10px] text-emerald-700 mt-1 leading-relaxed">
                 The counterparty in this session is likely an exchange or digital asset platform. Enter their name below — many exchanges have dedicated fraud/compliance contacts.
               </div>
             )}
             {duoHandoff.routing_label && (
-              <div className="mono-font text-[9px] text-emerald-700 mt-1">ROUTING: {duoHandoff.routing_label}</div>
+              <div className="mono-font text-[10px] text-emerald-700 mt-1">ROUTING: {duoHandoff.routing_label}</div>
             )}
           </div>
         </div>
@@ -396,7 +396,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           <div style={{ display:'flex', gap:'2px' }}>
             {[['standard','STANDARD'],['crypto','CRYPTO / EXCHANGE']].map(([val, label]) => (
               <button key={val} onClick={() => setSessionType(val)} className="mono-font"
-                style={{ flex:1, padding:'9px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: sessionType === val ? '#1A1814' : 'transparent', color: sessionType === val ? '#F5F1EA' : '#6B5F4D' }}>
+                style={{ flex:1, padding:'9px 0', fontSize:'10px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: sessionType === val ? '#1A1814' : 'transparent', color: sessionType === val ? '#F5F1EA' : '#6B5F4D' }}>
                 {label}
               </button>
             ))}
@@ -413,7 +413,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
         {sessionType === 'crypto' && (
           <>
             <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'16px' }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CRYPTO / DIGITAL ASSET DETAILS</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">CRYPTO / DIGITAL ASSET DETAILS</div>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
               <div>
@@ -504,8 +504,8 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
         <div className="mb-6 pb-5" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', flexWrap:'wrap', gap:'12px', alignItems:'flex-start', justifyContent:'space-between' }}>
           <div style={{ flex:1, minWidth:'200px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px', flexWrap:'wrap' }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-400">ISSUE Nº 006 — DUO</div>
-              <div className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ color: st.color, background: st.bg, border: session.status === 'closed' ? 'none' : `1px solid ${st.color}30` }}>{st.label}</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400">ISSUE Nº 006 — DUO</div>
+              <div className="mono-font text-[10px] tracking-widest px-2 py-0.5" style={{ color: st.color, background: st.bg, border: session.status === 'closed' ? 'none' : `1px solid ${st.color}30` }}>{st.label}</div>
             </div>
             <h1 className="display-font font-bold text-stone-900 leading-tight" style={{ fontSize:'clamp(18px,3vw,34px)', letterSpacing:'-0.02em' }}>
               {session.institution_a}
@@ -517,28 +517,28 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
             {nextSt && nextStCfg && nextSt !== 'closed' && (
               <button onClick={() => handleStatusChange(nextSt)} className="mono-font"
-                style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:`1px solid ${nextStCfg.color}`, color: nextStCfg.color, cursor:'pointer' }}>
+                style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:`1px solid ${nextStCfg.color}`, color: nextStCfg.color, cursor:'pointer' }}>
                 MARK {nextStCfg.label}
               </button>
             )}
             {nextSt === 'closed' && (
               <button onClick={() => setClosurePromptId(session.id)} className="mono-font"
-                style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:'1px solid #1A1814', color:'#1A1814', cursor:'pointer' }}>
+                style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:'1px solid #1A1814', color:'#1A1814', cursor:'pointer' }}>
                 CLOSE SESSION
               </button>
             )}
             <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
               <div>
                 {notifySent && (
-                  <div className="mono-font text-[9px] tracking-widest text-emerald-700 border border-emerald-300 bg-emerald-50 px-2 py-1">INVITE SENT</div>
+                  <div className="mono-font text-[10px] tracking-widest text-emerald-700 border border-emerald-300 bg-emerald-50 px-2 py-1">INVITE SENT</div>
                 )}
-                <div className="mono-font text-[9px] tracking-widest text-stone-400 text-right">SESSION</div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-400 text-right">SESSION</div>
                 <div className="mono-font font-bold text-stone-900 tracking-[0.2em]" style={{ fontSize:'18px' }}>{session.id}</div>
               </div>
               <button onClick={handleCopy} style={{ padding:'6px 8px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer' }}>
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-stone-500" />}
               </button>
-              <button onClick={() => setPhase('dashboard')} className="mono-font" style={{ padding:'6px 12px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', fontSize:'9px', letterSpacing:'0.1em', color:'#6B5F4D' }}>
+              <button onClick={() => setPhase('dashboard')} className="mono-font" style={{ padding:'6px 12px', background:'transparent', border:'1px solid #D4CCBC', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', fontSize:'10px', letterSpacing:'0.1em', color:'#6B5F4D' }}>
                 <X className="w-3 h-3" />SESSIONS
               </button>
             </div>
@@ -547,7 +547,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
         {closurePromptId === session.id && (
           <div className="mb-6 border border-stone-800 bg-stone-50 px-4 py-3" style={{ maxWidth:'520px' }}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-600 mb-2">CLOSURE SUMMARY (OPTIONAL)</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-600 mb-2">CLOSURE SUMMARY (OPTIONAL)</div>
             <textarea value={closureNote} onChange={e => setClosureNote(e.target.value)} rows={3}
               placeholder="Outcome, agreed amount, reference numbers, next steps..."
               style={{ width:'100%', fontSize:'13px', fontFamily:'Georgia,serif', lineHeight:1.5, padding:'8px', border:'1px solid #C8C0B0', background:'#FAF7F1', resize:'none', boxSizing:'border-box' }} />
@@ -561,11 +561,11 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                   try { await duoPatch(session.id, { [field]: JSON.stringify(next) }) } catch {}
                 }
                 setClosurePromptId(null); setClosureNote('')
-              }} className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'6px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+              }} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'6px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
                 CONFIRM CLOSE
               </button>
               <button onClick={() => { setClosurePromptId(null); setClosureNote('') }}
-                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'6px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'6px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
                 CANCEL
               </button>
             </div>
@@ -587,7 +587,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               <div style={{ border:'1px solid #D4CCBC', background:'#FFFFFF' }}>
                 {isCryptoClaim && (
                   <div style={{ padding:'8px 12px', background:'#1A1814', borderBottom:'1px solid #2D2922' }}>
-                    <span className="mono-font text-[9px] tracking-widest" style={{ color:'#C9A86C' }}>⬡ CRYPTO / DIGITAL ASSET CASE</span>
+                    <span className="mono-font text-[10px] tracking-widest" style={{ color:'#C9A86C' }}>⬡ CRYPTO / DIGITAL ASSET CASE</span>
                   </div>
                 )}
                 <table style={{ width:'100%', borderCollapse:'collapse' }}>
@@ -607,7 +607,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                             <div key={i} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
                               <code className="mono-font" style={{ fontSize:'10px', color:'#1A1814', background:'#F0EBE3', padding:'2px 6px', wordBreak:'break-all', flex:1 }}>{addr}</code>
                               <button onClick={() => navigator.clipboard.writeText(addr)}
-                                className="mono-font shrink-0" style={{ fontSize:'8px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
+                                className="mono-font shrink-0" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
                             </div>
                           ))}
                         </td>
@@ -622,7 +622,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                             <div key={i} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
                               <code className="mono-font" style={{ fontSize:'10px', color:'#1A1814', background:'#F0EBE3', padding:'2px 6px', wordBreak:'break-all', flex:1 }}>{txid}</code>
                               <button onClick={() => navigator.clipboard.writeText(txid)}
-                                className="mono-font shrink-0" style={{ fontSize:'8px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
+                                className="mono-font shrink-0" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'2px 7px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>COPY</button>
                             </div>
                           ))}
                         </td>
@@ -633,21 +633,21 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                 {/* Crypto: freeze action strip */}
                 {isCryptoClaim && session.status !== 'closed' && (
                   <div style={{ padding:'10px 12px', borderTop:'1px solid #EDE8E0', display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap' }}>
-                    <span className="mono-font text-[9px] tracking-widest text-stone-400">ASSET ACTION:</span>
+                    <span className="mono-font text-[10px] tracking-widest text-stone-400">ASSET ACTION:</span>
                     {session.status !== 'freeze_requested' && session.status !== 'freeze_confirmed' && (
                       <button onClick={() => handleStatusChange('freeze_requested')} className="mono-font"
-                        style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#FEF3C7', border:'1px solid #D97706', color:'#92400E', cursor:'pointer' }}>
+                        style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'5px 10px', background:'#FEF3C7', border:'1px solid #D97706', color:'#92400E', cursor:'pointer' }}>
                         REQUEST FREEZE
                       </button>
                     )}
                     {session.status === 'freeze_requested' && (
                       <button onClick={() => handleStatusChange('freeze_confirmed')} className="mono-font"
-                        style={{ fontSize:'9px', letterSpacing:'0.1em', padding:'5px 10px', background:'#ECFDF5', border:'1px solid #065F46', color:'#065F46', cursor:'pointer' }}>
+                        style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'5px 10px', background:'#ECFDF5', border:'1px solid #065F46', color:'#065F46', cursor:'pointer' }}>
                         CONFIRM FREEZE
                       </button>
                     )}
                     {session.status === 'freeze_confirmed' && (
-                      <span className="mono-font text-[9px] tracking-widest" style={{ color:'#065F46' }}>✓ FREEZE CONFIRMED — log reference in thread</span>
+                      <span className="mono-font text-[10px] tracking-widest" style={{ color:'#065F46' }}>✓ FREEZE CONFIRMED — log reference in thread</span>
                     )}
                   </div>
                 )}
@@ -666,7 +666,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                     const isMe = entry.role === myRole
                     return (
                       <div key={i} style={{ display:'flex', flexDirection:'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                        <div className="mono-font text-[9px] tracking-wide text-stone-400 mb-1">
+                        <div className="mono-font text-[10px] tracking-wide text-stone-400 mb-1">
                           {entry.institution || (entry.role === 'a' ? 'Institution A' : 'Institution B')} · {new Date(entry.ts).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}
                         </div>
                         <div style={{ maxWidth:'86%', padding:'10px 13px', background: isMe ? '#1A1814' : '#F5F1EA', color: isMe ? '#F5F1EA' : '#2D2922', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.6 }}>
@@ -679,7 +679,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
             </div>
             {/* New entry */}
             <div>
-              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1.5">AS {myName || 'YOUR INSTITUTION'}</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1.5">AS {myName || 'YOUR INSTITUTION'}</div>
               <textarea value={newEntry} onChange={e => setNewEntry(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddEntry() }}
                 rows={3} placeholder="Findings, proposed resolution, agreed next steps…"
@@ -687,7 +687,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               {error && <div className="mono-font text-[10px] text-red-700 mt-1">{error}</div>}
               <div style={{ display:'flex', alignItems:'center', gap:'12px', marginTop:'8px', flexWrap:'wrap' }}>
                 <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim()}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
-                <div className="mono-font text-[9px] tracking-widest text-stone-400">
+                <div className="mono-font text-[10px] tracking-widest text-stone-400">
                   ⌘↵ to post · syncs every 5s{lastSync ? ` · ${lastSync.toLocaleTimeString()}` : ''}
                 </div>
               </div>
@@ -707,9 +707,9 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                   const stCfg = DUO_STATUS[entry.status] || DUO_STATUS.active
                   return (
                     <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'12px', padding:'8px 12px', background:'#FFFFFF', border:'1px solid #E8E3DA' }}>
-                      <div className="mono-font text-[9px] tracking-widest px-1.5 py-0.5 shrink-0" style={{ color:stCfg.color, background:stCfg.bg }}>{stCfg.label}</div>
+                      <div className="mono-font text-[10px] tracking-widest px-1.5 py-0.5 shrink-0" style={{ color:stCfg.color, background:stCfg.bg }}>{stCfg.label}</div>
                       <div style={{ flex:1 }}>
-                        <div className="mono-font text-[9px] text-stone-400">{new Date(entry.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · {entry.institution || 'Unknown'}</div>
+                        <div className="mono-font text-[10px] text-stone-400">{new Date(entry.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · {entry.institution || 'Unknown'}</div>
                         {entry.note && <div className="display-font text-stone-700 text-[12px] mt-0.5 italic">{entry.note}</div>}
                       </div>
                     </div>
@@ -747,7 +747,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
         <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
           {[['standard','STANDARD CASE'],['crypto','CRYPTO / DIGITAL ASSET']].map(([val, label]) => (
             <button key={val} onClick={() => setLinkType(val)} className="mono-font"
-              style={{ flex:1, padding:'10px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
+              style={{ flex:1, padding:'10px 0', fontSize:'10px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
               {label}
             </button>
           ))}
@@ -771,18 +771,18 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
               {/* Transaction identifiers — lets the receiving FI find the account */}
               <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px', marginTop:'4px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
                 <div style={{ display:'grid', gap:'14px' }}>
                   <div>
                     {F('RECEIVING ACCOUNT NUMBER', 'receiving_account', '****1234 or full account number')}
-                    <div className="mono-font text-[9px] text-stone-400 mt-1 leading-relaxed">
+                    <div className="mono-font text-[10px] text-stone-400 mt-1 leading-relaxed">
                       Account at the receiving institution where funds landed. Use full number or last 4 — the receiving FI cannot look up the case without this.
                     </div>
                   </div>
                   {F('RECEIVING ACCOUNT HOLDER NAME', 'receiving_account_name', 'Name on the account at the receiving institution')}
                   <div>
                     {F('TRANSACTION REFERENCE', 'transaction_ref', 'ACH trace no. / wire IMAD / Fedwire ref')}
-                    <div className="mono-font text-[9px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
+                    <div className="mono-font text-[10px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
                   </div>
                   {F('YOUR ACCOUNT (last 4, optional)', 'sending_account_last4', '****5678')}
                 </div>
@@ -803,7 +803,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
               <div>
                 {F('SOURCE INSTITUTION (optional)', 'source_institution', 'Name of the bank or fintech the victim used to send funds')}
-                <div className="mono-font text-[9px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
+                <div className="mono-font text-[10px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
                 {F('ASSET TYPE', 'asset_type', 'BTC / ETH / USDT')}
@@ -861,15 +861,15 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* The link */}
           <div style={{ border:'1px solid #C8C0B0', background:'#FFFFFF', padding:'20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
             <div className="mono-font text-stone-900 break-all" style={{ fontSize:'13px', lineHeight:1.6, marginBottom:'16px' }}>{url}</div>
             <div style={{ display:'flex', gap:'8px' }}>
               <button onClick={() => { navigator.clipboard.writeText(url); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500) }}
-                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
                 {linkCopied ? '✓ COPIED' : 'COPY LINK'}
               </button>
               <a href={`mailto:?subject=Case%20for%20your%20attention&body=Please%20review%20the%20following%20case%3A%0A%0A${encodeURIComponent(url)}%0A%0AThis%20link%20expires%20in%2030%20days.`}
-                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
                 OPEN IN EMAIL
               </a>
             </div>
@@ -877,7 +877,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* What happens next */}
           <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
             {[
               'The receiving institution opens the link and sees your institution name and case type — the details are blurred until they identify themselves.',
               'They enter their name, email, institution, and role. This is logged to your audit trail.',
@@ -885,7 +885,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               'Their response appears live in the Responses panel below — auto-refreshing every 15 seconds.',
             ].map((t, i) => (
               <div key={i} style={{ display:'flex', gap:'12px', marginBottom:'12px' }}>
-                <div className="mono-font text-[9px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
+                <div className="mono-font text-[10px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
                 <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{t}</div>
               </div>
             ))}
@@ -896,12 +896,12 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'#F9F7F3', cursor:'pointer', userSelect:'none' }}
               onClick={() => setAccessLogOpen(v => !v)}>
               <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-500">ACCESS LOG</div>
-                <div className="mono-font text-[9px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500">ACCESS LOG</div>
+                <div className="mono-font text-[10px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
                   {linkAccessLog.length} {linkAccessLog.length === 1 ? 'VIEW' : 'VIEWS'}
                 </div>
               </div>
-              <div className="mono-font text-[9px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+              <div className="mono-font text-[10px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
             </div>
             {accessLogOpen && (
               <div style={{ padding:'0 16px 12px' }}>
@@ -914,7 +914,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                         <div className="mono-font text-[10px] text-stone-500 mt-0.5">{[a.accessor_institution, a.accessor_role].filter(Boolean).join(' · ')}</div>
                         {a.accessor_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{a.accessor_email}</div>}
                       </div>
-                      <div className="mono-font text-[9px] text-stone-400 text-right shrink-0 ml-4">
+                      <div className="mono-font text-[10px] text-stone-400 text-right shrink-0 ml-4">
                         {a.accessed_at ? new Date(a.accessed_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
                       </div>
                     </div>
@@ -928,19 +928,19 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           <div style={{ border:'1px solid #C8C0B0', marginBottom:'24px' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'#F5F1EA', borderBottom:'1px solid #E8E3DA' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-700">RESPONSES</div>
-                <div className="mono-font text-[9px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-700">RESPONSES</div>
+                <div className="mono-font text-[10px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
                   {linkResponses.length} {linkResponses.length === 1 ? 'RESPONSE' : 'RESPONSES'}
                 </div>
               </div>
-              <div className="mono-font text-[9px] text-stone-400">
+              <div className="mono-font text-[10px] text-stone-400">
                 {linkRespSync ? `SYNCED ${new Date(linkRespSync).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}` : 'SYNCING…'}
               </div>
             </div>
             <div style={{ padding: linkResponses.length > 0 ? '0' : '20px 16px' }}>
               {linkResponses.length === 0 ? (
                 <div style={{ textAlign:'center' }}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
                   <div className="display-font text-stone-500" style={{ fontSize:'13px', lineHeight:1.6 }}>
                     Responses submitted via the case link will appear here automatically.
                   </div>
@@ -964,11 +964,11 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                         {r.respondent_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{r.respondent_email}</div>}
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', shrink:0 }}>
-                        <div className="mono-font text-[9px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
+                        <div className="mono-font text-[10px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
                           {(r.disposition || 'UNKNOWN').toUpperCase()}
                         </div>
                         {r.freeze_confirmed && (
-                          <div className="mono-font text-[9px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
+                          <div className="mono-font text-[10px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
                             ✓ FREEZE CONFIRMED
                           </div>
                         )}
@@ -976,23 +976,23 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                     </div>
                     {r.internal_case_ref && (
                       <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
                         <div className="mono-font text-[11px] text-stone-700">{r.internal_case_ref}</div>
                       </div>
                     )}
                     {r.freeze_reference && (
                       <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
                         <div className="mono-font text-[11px] text-stone-700">{r.freeze_reference}</div>
                       </div>
                     )}
                     {r.notes && (
                       <div style={{ background:'#F9F7F3', border:'1px solid #E8E3DA', padding:'10px 12px', marginTop:'8px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">NOTES</div>
                         <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{r.notes}</div>
                       </div>
                     )}
-                    <div className="mono-font text-[9px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
+                    <div className="mono-font text-[10px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
                       {r.responded_at ? new Date(r.responded_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
                     </div>
                   </div>
@@ -1003,7 +1003,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* Incentive note */}
           <div style={{ background:'#1A1814', padding:'16px 20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
+            <div className="mono-font text-[10px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
             <p className="display-font" style={{ fontSize:'13px', color:'#C8C0B0', lineHeight:1.6 }}>
               Receiving institutions that join Covalence can respond directly inside their own dashboard, run live Duo sessions with you, and track all their cross-institutional cases in one place. They'll see the prompt when they access this link.
             </p>
@@ -1041,7 +1041,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
         <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
           {[['standard','STANDARD CASE'],['crypto','CRYPTO / DIGITAL ASSET']].map(([val, label]) => (
             <button key={val} onClick={() => setLinkType(val)} className="mono-font"
-              style={{ flex:1, padding:'10px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
+              style={{ flex:1, padding:'10px 0', fontSize:'10px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer', background: linkType === val ? '#1A1814' : 'transparent', color: linkType === val ? '#F5F1EA' : '#6B5F4D' }}>
               {label}
             </button>
           ))}
@@ -1065,18 +1065,18 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
               {/* Transaction identifiers — lets the receiving FI find the account */}
               <div style={{ borderTop:'1px solid #E8E3DA', paddingTop:'18px', marginTop:'4px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-4">TRANSACTION IDENTIFIERS — sent to receiving institution</div>
                 <div style={{ display:'grid', gap:'14px' }}>
                   <div>
                     {F('RECEIVING ACCOUNT NUMBER', 'receiving_account', '****1234 or full account number')}
-                    <div className="mono-font text-[9px] text-stone-400 mt-1 leading-relaxed">
+                    <div className="mono-font text-[10px] text-stone-400 mt-1 leading-relaxed">
                       Account at the receiving institution where funds landed. Use full number or last 4 — the receiving FI cannot look up the case without this.
                     </div>
                   </div>
                   {F('RECEIVING ACCOUNT HOLDER NAME', 'receiving_account_name', 'Name on the account at the receiving institution')}
                   <div>
                     {F('TRANSACTION REFERENCE', 'transaction_ref', 'ACH trace no. / wire IMAD / Fedwire ref')}
-                    <div className="mono-font text-[9px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
+                    <div className="mono-font text-[10px] text-stone-400 mt-1">ACH trace number, wire IMAD/OMAD, or internal transfer reference.</div>
                   </div>
                   {F('YOUR ACCOUNT (last 4, optional)', 'sending_account_last4', '****5678')}
                 </div>
@@ -1097,7 +1097,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               {F('INCIDENT DATE', 'incident_date', '2024-01-15', 'date')}
               <div>
                 {F('SOURCE INSTITUTION (optional)', 'source_institution', 'Name of the bank or fintech the victim used to send funds')}
-                <div className="mono-font text-[9px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
+                <div className="mono-font text-[10px] text-stone-400 mt-1">Helps the receiving exchange trace the fiat on-ramp.</div>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
                 {F('ASSET TYPE', 'asset_type', 'BTC / ETH / USDT')}
@@ -1155,15 +1155,15 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* The link */}
           <div style={{ border:'1px solid #C8C0B0', background:'#FFFFFF', padding:'20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">SHAREABLE CASE LINK</div>
             <div className="mono-font text-stone-900 break-all" style={{ fontSize:'13px', lineHeight:1.6, marginBottom:'16px' }}>{url}</div>
             <div style={{ display:'flex', gap:'8px' }}>
               <button onClick={() => { navigator.clipboard.writeText(url); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500) }}
-                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
                 {linkCopied ? '✓ COPIED' : 'COPY LINK'}
               </button>
               <a href={`mailto:?subject=Case%20for%20your%20attention&body=Please%20review%20the%20following%20case%3A%0A%0A${encodeURIComponent(url)}%0A%0AThis%20link%20expires%20in%2030%20days.`}
-                className="mono-font" style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
+                className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', textDecoration:'none', display:'inline-block' }}>
                 OPEN IN EMAIL
               </a>
             </div>
@@ -1171,7 +1171,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* What happens next */}
           <div style={{ border:'1px solid #E8E3DA', background:'#F9F7F3', padding:'20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">WHAT HAPPENS NEXT</div>
             {[
               'The receiving institution opens the link and sees your institution name and case type — the details are blurred until they identify themselves.',
               'They enter their name, email, institution, and role. This is logged to your audit trail.',
@@ -1179,7 +1179,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
               'Their response appears live in the Responses panel below — auto-refreshing every 15 seconds.',
             ].map((t, i) => (
               <div key={i} style={{ display:'flex', gap:'12px', marginBottom:'12px' }}>
-                <div className="mono-font text-[9px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
+                <div className="mono-font text-[10px] text-stone-400 shrink-0" style={{ paddingTop:'2px' }}>0{i+1}</div>
                 <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{t}</div>
               </div>
             ))}
@@ -1190,12 +1190,12 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'#F9F7F3', cursor:'pointer', userSelect:'none' }}
               onClick={() => setAccessLogOpen(v => !v)}>
               <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-500">ACCESS LOG</div>
-                <div className="mono-font text-[9px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500">ACCESS LOG</div>
+                <div className="mono-font text-[10px]" style={{ background:'#E8E3DA', color:'#6B5F4D', padding:'2px 7px' }}>
                   {linkAccessLog.length} {linkAccessLog.length === 1 ? 'VIEW' : 'VIEWS'}
                 </div>
               </div>
-              <div className="mono-font text-[9px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+              <div className="mono-font text-[10px] text-stone-400">{accessLogOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
             </div>
             {accessLogOpen && (
               <div style={{ padding:'0 16px 12px' }}>
@@ -1208,7 +1208,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                         <div className="mono-font text-[10px] text-stone-500 mt-0.5">{[a.accessor_institution, a.accessor_role].filter(Boolean).join(' · ')}</div>
                         {a.accessor_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{a.accessor_email}</div>}
                       </div>
-                      <div className="mono-font text-[9px] text-stone-400 text-right shrink-0 ml-4">
+                      <div className="mono-font text-[10px] text-stone-400 text-right shrink-0 ml-4">
                         {a.accessed_at ? new Date(a.accessed_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
                       </div>
                     </div>
@@ -1222,19 +1222,19 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           <div style={{ border:'1px solid #C8C0B0', marginBottom:'24px' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'#F5F1EA', borderBottom:'1px solid #E8E3DA' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-700">RESPONSES</div>
-                <div className="mono-font text-[9px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
+                <div className="mono-font text-[10px] tracking-widest text-stone-700">RESPONSES</div>
+                <div className="mono-font text-[10px]" style={{ background: linkResponses.length > 0 ? '#065F46' : '#E8E3DA', color: linkResponses.length > 0 ? '#ECFDF5' : '#6B5F4D', padding:'2px 7px' }}>
                   {linkResponses.length} {linkResponses.length === 1 ? 'RESPONSE' : 'RESPONSES'}
                 </div>
               </div>
-              <div className="mono-font text-[9px] text-stone-400">
+              <div className="mono-font text-[10px] text-stone-400">
                 {linkRespSync ? `SYNCED ${new Date(linkRespSync).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' })}` : 'SYNCING…'}
               </div>
             </div>
             <div style={{ padding: linkResponses.length > 0 ? '0' : '20px 16px' }}>
               {linkResponses.length === 0 ? (
                 <div style={{ textAlign:'center' }}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">WAITING FOR RESPONSE</div>
                   <div className="display-font text-stone-500" style={{ fontSize:'13px', lineHeight:1.6 }}>
                     Responses submitted via the case link will appear here automatically.
                   </div>
@@ -1258,11 +1258,11 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                         {r.respondent_email && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{r.respondent_email}</div>}
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'6px', shrink:0 }}>
-                        <div className="mono-font text-[9px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
+                        <div className="mono-font text-[10px]" style={{ ...dispColor, padding:'3px 8px', letterSpacing:'0.08em' }}>
                           {(r.disposition || 'UNKNOWN').toUpperCase()}
                         </div>
                         {r.freeze_confirmed && (
-                          <div className="mono-font text-[9px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
+                          <div className="mono-font text-[10px]" style={{ background:'#ECFDF5', color:'#065F46', padding:'3px 8px', letterSpacing:'0.08em' }}>
                             ✓ FREEZE CONFIRMED
                           </div>
                         )}
@@ -1270,23 +1270,23 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                     </div>
                     {r.internal_case_ref && (
                       <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 shrink-0 pt-0.5">THEIR REF</div>
                         <div className="mono-font text-[11px] text-stone-700">{r.internal_case_ref}</div>
                       </div>
                     )}
                     {r.freeze_reference && (
                       <div style={{ display:'flex', gap:'8px', marginBottom:'6px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 shrink-0 pt-0.5">FREEZE REF</div>
                         <div className="mono-font text-[11px] text-stone-700">{r.freeze_reference}</div>
                       </div>
                     )}
                     {r.notes && (
                       <div style={{ background:'#F9F7F3', border:'1px solid #E8E3DA', padding:'10px 12px', marginTop:'8px' }}>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">NOTES</div>
                         <div className="display-font text-stone-700" style={{ fontSize:'13px', lineHeight:1.6 }}>{r.notes}</div>
                       </div>
                     )}
-                    <div className="mono-font text-[9px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
+                    <div className="mono-font text-[10px] text-stone-400 mt-8" style={{ textAlign:'right' }}>
                       {r.responded_at ? new Date(r.responded_at).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : ''}
                     </div>
                   </div>
@@ -1297,7 +1297,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
           {/* Incentive note */}
           <div style={{ background:'#1A1814', padding:'16px 20px', marginBottom:'24px' }}>
-            <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
+            <div className="mono-font text-[10px] tracking-widest mb-2" style={{ color:'#C9A86C' }}>COVALENCE USERS GET MORE</div>
             <p className="display-font" style={{ fontSize:'13px', color:'#C8C0B0', lineHeight:1.6 }}>
               Receiving institutions that join Covalence can respond directly inside their own dashboard, run live Duo sessions with you, and track all their cross-institutional cases in one place. They'll see the prompt when they access this link.
             </p>

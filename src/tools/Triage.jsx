@@ -699,7 +699,7 @@ Return ONLY valid JSON:
         }
         .triage-root .input-label {
           font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
+          font-size: 10px;
           letter-spacing: 0.18em;
           text-transform: uppercase;
           color: #6B5F4D;
@@ -712,7 +712,7 @@ Return ONLY valid JSON:
         .triage-root .border-stone-100 { border-color: #E4DECE !important; }
         /* dividers */
         .tri-section-rule { border: none; border-top: 1px solid #D4CCBC; margin: 28px 0; }
-        .tri-sub-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #A89B88; margin-bottom: 12px; }
+        .tri-sub-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #A89B88; margin-bottom: 12px; }
       `}</style>
 
       {/* ── Masthead ─────────────────────────────────────────────────────────── */}
@@ -1026,11 +1026,11 @@ Return ONLY valid JSON:
               {!isCardBased && accountType && onGoToDuo && (
                 <div className="flex items-center justify-between px-4 py-3" style={{ background:'#ECFDF5', border:'1px solid #6EE7B7' }}>
                   <div>
-                    <div className="mono-font text-[9px] tracking-widest text-emerald-900 mb-0.5">CROSS-INSTITUTIONAL CASE</div>
+                    <div className="mono-font text-[10px] tracking-widest text-emerald-900 mb-0.5">CROSS-INSTITUTIONAL CASE</div>
                     <div className="display-font text-emerald-900 text-[13px]">Coordinate with the receiving institution in Duo Mode.</div>
                   </div>
                   <button onClick={onGoToDuo} className="mono-font shrink-0 ml-4"
-                    style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                    style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
                     OPEN 005 DUO →
                   </button>
                 </div>
@@ -1117,7 +1117,7 @@ Return ONLY valid JSON:
                 </select>
               </div>
               <div>
-                <label className="input-label">Dispute / Claim Type <span className="mono-font text-[9px] text-stone-400">(optional — helps AI routing)</span></label>
+                <label className="input-label">Dispute / Claim Type <span className="mono-font text-[10px] text-stone-400">(optional — helps AI routing)</span></label>
                 <select value={claimType} onChange={e => setClaimType(e.target.value)} className="input-field" style={{ fontSize: '14px' }}>
                   <option value="">Not specified — let AI determine</option>
                   <optgroup label="Unauthorized / Fraud">
@@ -1332,11 +1332,11 @@ Return ONLY valid JSON:
               <div style={{ display:'flex', alignItems:'center', gap:'16px', padding:'14px 20px', background:'#1A1814', marginBottom:'4px' }}>
                 <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#34D399', flexShrink:0 }} />
                 <div>
-                  <div className="mono-font text-[9px] tracking-[0.2em] text-stone-400">ANALYSIS COMPLETE</div>
+                  <div className="mono-font text-[10px] tracking-[0.2em] text-stone-400">ANALYSIS COMPLETE</div>
                   <div className="mono-font text-[11px] tracking-widest text-stone-200">{result.verdict?.replace(/_/g,' ')} · {result.risk_level || ''}</div>
                 </div>
                 <button onClick={() => { setResult(null); setError(null); window.scrollTo({ top:0, behavior:'smooth' }) }}
-                  className="mono-font ml-auto text-[9px] tracking-widest text-stone-500 hover:text-stone-300 transition-colors"
+                  className="mono-font ml-auto text-[10px] tracking-widest text-stone-500 hover:text-stone-300 transition-colors"
                   style={{ background:'none', border:'none', cursor:'pointer' }}>↑ BACK TO FORM</button>
               </div>
 
@@ -1368,7 +1368,7 @@ Return ONLY valid JSON:
                     <div key={i} className="flex items-start gap-3 px-4 py-3" style={{ background: w.level === 'HIGH' ? '#FEF2F2' : '#FFFBEB', border: `1px solid ${w.level === 'HIGH' ? '#FCA5A5' : '#FCD34D'}` }}>
                       <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${w.level === 'HIGH' ? 'text-red-700' : 'text-amber-700'}`} />
                       <div>
-                        <span className={`mono-font text-[9px] tracking-widest font-bold ${w.level === 'HIGH' ? 'text-red-800' : 'text-amber-800'}`}>VELOCITY SIGNAL — {w.level} &nbsp;</span>
+                        <span className={`mono-font text-[10px] tracking-widest font-bold ${w.level === 'HIGH' ? 'text-red-800' : 'text-amber-800'}`}>VELOCITY SIGNAL — {w.level} &nbsp;</span>
                         <span className="display-font text-stone-800 text-[13px] leading-snug">{w.text}</span>
                       </div>
                     </div>
@@ -1451,7 +1451,7 @@ Return ONLY valid JSON:
                         <div key={i} className="flex items-center gap-2 flex-wrap">
                           <span className="mono-font text-xs px-1.5 py-0.5 shrink-0" style={{ background: ws.bg, color: ws.text }}>{inf.weight}</span>
                           <span className="display-font text-stone-700 text-[13px] flex-1 min-w-0">{inf.signal}</span>
-                          {towardCfg && <span className="mono-font shrink-0 px-1.5 py-0.5" style={{ fontSize: '9px', letterSpacing: '0.08em', background: towardCfg.bg, color: towardCfg.badgeText }}>→ {towardCfg.label}</span>}
+                          {towardCfg && <span className="mono-font shrink-0 px-1.5 py-0.5" style={{ fontSize: '10px', letterSpacing: '0.08em', background: towardCfg.bg, color: towardCfg.badgeText }}>→ {towardCfg.label}</span>}
                         </div>
                       )
                     })}
@@ -1465,7 +1465,7 @@ Return ONLY valid JSON:
                 <p className="display-font text-stone-700 text-[15px] leading-relaxed">{result.routing_detail}</p>
                 {(['RECIPIENT_FI','NACHA_RETURN','PROVIDER_DISPUTE'].includes(result.routing) || isCE || accountType === 'crypto') && onGoToDuo && (
                   <div className="mt-4 pt-4" style={{ borderTop:'1px solid #D4CCBC' }}>
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">
+                    <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">
                       {isCE ? 'EXCHANGE-TO-EXCHANGE COORDINATION' : accountType === 'crypto' ? 'CRYPTO / CROSS-INSTITUTIONAL CASE' : 'CROSS-INSTITUTIONAL CASE'}
                     </div>
                     <p className="display-font text-stone-600 text-[13px] leading-relaxed mb-3">
@@ -1479,7 +1479,7 @@ Return ONLY valid JSON:
                       const claim = { source:'triage', accountType: isCE ? 'crypto_exchange' : accountType, regFramework, routing_label: result?.routing_label, routing: result?.routing, classification: result?.classification, risk_level: result?.risk_level }
                       onSendToDuo ? onSendToDuo(claim) : onGoToDuo()
                     }} className="mono-font"
-                      style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'9px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
+                      style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'9px 20px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
                       {isCE ? 'COORDINATE WITH RECEIVING EXCHANGE →' : 'OPEN IN 005 DUO →'}
                     </button>
                   </div>
@@ -1518,9 +1518,9 @@ Return ONLY valid JSON:
                 }}
                   style={{ width:'100%', padding:'20px 24px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', textAlign:'left' }}>
                   <div>
-                    <div className="mono-font mb-1" style={{ fontSize:'9px', letterSpacing:'0.15em', opacity:0.7 }}>CROSS-INSTITUTIONAL CASE DETECTED</div>
+                    <div className="mono-font mb-1" style={{ fontSize:'10px', letterSpacing:'0.15em', opacity:0.7 }}>CROSS-INSTITUTIONAL CASE DETECTED</div>
                     <div className="display-font font-bold" style={{ fontSize:'18px', letterSpacing:'-0.01em' }}>Coordinate in Duo Mode →</div>
-                    <div className="mono-font mt-1" style={{ fontSize:'9px', letterSpacing:'0.08em', opacity:0.65 }}>Share this case with the receiving institution · Build a shared record · Work toward recovery</div>
+                    <div className="mono-font mt-1" style={{ fontSize:'10px', letterSpacing:'0.08em', opacity:0.65 }}>Share this case with the receiving institution · Build a shared record · Work toward recovery</div>
                   </div>
                 </button>
               )}
@@ -1684,18 +1684,18 @@ Return ONLY valid JSON:
               {isCE && result && (
                 <div className="border border-stone-300" style={{ background: '#F5F1EA' }}>
                   <div className="px-5 py-4 border-b border-stone-200" style={{ background: '#EDE9E0' }}>
-                    <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-0.5">STEP 4 — RESOLUTION</div>
+                    <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-0.5">STEP 4 — RESOLUTION</div>
                     <div className="display-font font-semibold text-stone-900" style={{ fontSize: '15px', letterSpacing: '-0.01em' }}>Record Actions &amp; Outcome</div>
                     <p className="mono-font text-[10px] text-stone-500 mt-1">CE cases don't route to a network — track what was actually done and close the case here.</p>
                   </div>
                   <div className="px-5 py-4 space-y-4">
                     {/* Resolution status */}
                     <div>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">CASE STATUS</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-2">CASE STATUS</div>
                       <div className="flex gap-2 flex-wrap">
                         {[{id:'open',label:'OPEN',bg:'#92400E',fg:'#FEF3C7'},{id:'in_progress',label:'IN PROGRESS',bg:'#1E3A8A',fg:'#DBEAFE'},{id:'resolved',label:'RESOLVED',bg:'#064E3B',fg:'#D1FAE5'},{id:'no_recovery',label:'NO RECOVERY',bg:'#3F3F46',fg:'#E4E4E7'}].map(s => (
                           <button key={s.id} onClick={() => setCeResolution(r => ({ ...r, status: r.status === s.id ? '' : s.id }))}
-                            className="mono-font text-[9px] px-3 py-1.5 tracking-widest transition-colors"
+                            className="mono-font text-[10px] px-3 py-1.5 tracking-widest transition-colors"
                             style={{ background: ceResolution.status === s.id ? s.bg : 'none', color: ceResolution.status === s.id ? s.fg : '#78716C', border: '1px solid ' + (ceResolution.status === s.id ? s.bg : '#D4CCBC'), cursor: 'pointer' }}>
                             {s.label}
                           </button>
@@ -1704,13 +1704,13 @@ Return ONLY valid JSON:
                     </div>
                     {/* Actions taken */}
                     <div>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">ACTIONS TAKEN</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-2">ACTIONS TAKEN</div>
                       <div className="flex flex-wrap gap-2">
                         {CE_ACTIONS.map(a => {
                           const active = ceResolution.actions.includes(a)
                           return (
                             <button key={a} onClick={() => setCeResolution(r => ({ ...r, actions: active ? r.actions.filter(x => x !== a) : [...r.actions, a] }))}
-                              className="mono-font text-[9px] px-2.5 py-1 tracking-wide transition-colors"
+                              className="mono-font text-[10px] px-2.5 py-1 tracking-wide transition-colors"
                               style={{ background: active ? '#1A1814' : 'none', color: active ? '#E8E3DC' : '#78716C', border: '1px solid ' + (active ? '#1A1814' : '#D4CCBC'), cursor: 'pointer' }}>
                               {active ? '✓ ' : ''}{a}
                             </button>
@@ -1720,7 +1720,7 @@ Return ONLY valid JSON:
                     </div>
                     {/* Notes */}
                     <div>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-2">RESOLUTION NOTES</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-2">RESOLUTION NOTES</div>
                       <textarea
                         value={ceResolution.notes}
                         onChange={e => setCeResolution(r => ({ ...r, notes: e.target.value }))}
@@ -1788,10 +1788,10 @@ Return ONLY valid JSON:
                   <div className="border border-stone-300 mb-4" style={{ background: '#F9F6F0' }}>
                     <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
                       <div className="flex items-center gap-3">
-                        <span className="mono-font text-[9px] tracking-widest text-stone-500">◈ PRIOR DISPUTES</span>
-                        <span className="mono-font text-[8px] tracking-widest px-2 py-0.5 font-bold" style={{ background: patternColor, color: '#F5F1EA' }}>{pattern}</span>
+                        <span className="mono-font text-[10px] tracking-widest text-stone-500">◈ PRIOR DISPUTES</span>
+                        <span className="mono-font text-[10px] tracking-widest px-2 py-0.5 font-bold" style={{ background: patternColor, color: '#F5F1EA' }}>{pattern}</span>
                       </div>
-                      <span className="mono-font text-[9px] text-stone-400">{total} record{total !== 1 ? 's' : ''} matched · {merchant}</span>
+                      <span className="mono-font text-[10px] text-stone-400">{total} record{total !== 1 ? 's' : ''} matched · {merchant}</span>
                     </div>
                     <div className="divide-y divide-stone-200">
                       {matchedDesk.slice(0,5).map((o, i) => {
@@ -1800,14 +1800,14 @@ Return ONLY valid JSON:
                         const stColor = st === 'won' ? '#064E3B' : st === 'lost' ? '#7F1D1D' : '#57534E'
                         return (
                           <div key={i} className="flex items-center gap-3 px-4 py-2 flex-wrap">
-                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
-                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">{net}</span>
+                            <span className="mono-font text-[10px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[10px] text-stone-500 w-8 shrink-0">{net}</span>
                             <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant}</span>
-                            <span className="mono-font text-[9px] text-stone-500">{o.amount}</span>
-                            {o.verdict && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
-                            <span className="mono-font text-[8px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
-                            {o.dfaScore && <span className="mono-font text-[8px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
-                            <span className="mono-font text-[8px] text-stone-300">DESK</span>
+                            <span className="mono-font text-[10px] text-stone-500">{o.amount}</span>
+                            {o.verdict && <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
+                            <span className="mono-font text-[10px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
+                            {o.dfaScore && <span className="mono-font text-[10px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
+                            <span className="mono-font text-[10px] text-stone-300">DESK</span>
                           </div>
                         )
                       })}
@@ -1815,13 +1815,13 @@ Return ONLY valid JSON:
                         const v = o.correctedVerdict || o.verdict
                         return (
                           <div key={'t'+i} className="flex items-center gap-3 px-4 py-2 flex-wrap">
-                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{(o.date||o.timestamp) ? new Date(o.date||o.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
-                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">—</span>
+                            <span className="mono-font text-[10px] text-stone-400 w-12 shrink-0">{(o.date||o.timestamp) ? new Date(o.date||o.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[10px] text-stone-500 w-8 shrink-0">—</span>
                             <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant || o.inputs?.merchant || '—'}</span>
-                            <span className="mono-font text-[9px] text-stone-500">{o.amount || o.inputs?.amount || '—'}</span>
-                            {v && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[v]||'#E7E2D9', color: VERDICT_COLORS[v]||'#57534E' }}>{VERDICT_SHORT[v]||v}</span>}
-                            {o.outcome && o.outcome !== 'pending' && <span className="mono-font text-[8px] font-bold uppercase text-stone-500">{o.outcome}</span>}
-                            <span className="mono-font text-[8px] text-stone-300">TRIAGE</span>
+                            <span className="mono-font text-[10px] text-stone-500">{o.amount || o.inputs?.amount || '—'}</span>
+                            {v && <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[v]||'#E7E2D9', color: VERDICT_COLORS[v]||'#57534E' }}>{VERDICT_SHORT[v]||v}</span>}
+                            {o.outcome && o.outcome !== 'pending' && <span className="mono-font text-[10px] font-bold uppercase text-stone-500">{o.outcome}</span>}
+                            <span className="mono-font text-[10px] text-stone-300">TRIAGE</span>
                           </div>
                         )
                       })}
@@ -1831,20 +1831,20 @@ Return ONLY valid JSON:
                         const stColor = st === 'won' ? '#064E3B' : st === 'lost' ? '#7F1D1D' : '#57534E'
                         return (
                           <div key={'s'+i} className="flex items-center gap-3 px-4 py-2 flex-wrap" style={{background:'#F0F7FF'}}>
-                            <span className="mono-font text-[9px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
-                            <span className="mono-font text-[8px] text-stone-500 w-8 shrink-0">{net}</span>
+                            <span className="mono-font text-[10px] text-stone-400 w-12 shrink-0">{o.date ? new Date(o.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}</span>
+                            <span className="mono-font text-[10px] text-stone-500 w-8 shrink-0">{net}</span>
                             <span className="display-font text-[12px] text-stone-700 flex-1 truncate">{o.merchant}</span>
-                            <span className="mono-font text-[9px] text-stone-500">{o.amount}</span>
-                            {o.verdict && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
-                            <span className="mono-font text-[8px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
-                            {o.dfaScore && <span className="mono-font text-[8px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
-                            <span className="mono-font text-[8px] font-bold" style={{color:'#1E40AF'}}>☁ CLOUD</span>
+                            <span className="mono-font text-[10px] text-stone-500">{o.amount}</span>
+                            {o.verdict && <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold" style={{ background: VERDICT_BG[o.verdict]||'#E7E2D9', color: VERDICT_COLORS[o.verdict]||'#57534E' }}>{VERDICT_SHORT[o.verdict]||o.verdict}</span>}
+                            <span className="mono-font text-[10px] font-bold uppercase" style={{ color: stColor }}>{st}</span>
+                            {o.dfaScore && <span className="mono-font text-[10px] px-1 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}}>DFA {o.dfaScore}</span>}
+                            <span className="mono-font text-[10px] font-bold" style={{color:'#1E40AF'}}>☁ CLOUD</span>
                           </div>
                         )
                       })}
                     </div>
                     {total > 10 && (
-                      <div className="px-4 py-2 mono-font text-[9px] text-stone-400 border-t border-stone-200">+{total - 10} more records not shown</div>
+                      <div className="px-4 py-2 mono-font text-[10px] text-stone-400 border-t border-stone-200">+{total - 10} more records not shown</div>
                     )}
                   </div>
                 )
@@ -1855,7 +1855,7 @@ Return ONLY valid JSON:
                 <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
                   <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0" />
                   <div>
-                    <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-0.5">HANDED OFF TO DISPUTE DESK</div>
+                    <div className="mono-font text-[10px] tracking-widest text-emerald-800 mb-0.5">HANDED OFF TO DISPUTE DESK</div>
                     <div className="display-font text-emerald-900 text-sm">Case {outcomes[0]?.id} is pre-filled in the Dispute Desk — switch to the Desk tab to continue.</div>
                   </div>
                 </div>
@@ -1896,7 +1896,7 @@ Return ONLY valid JSON:
           <div className="flex items-baseline gap-3 mb-6 flex-wrap">
             <span className="mono-font text-xs text-stone-400">05</span>
             <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Outcome Log</h2>
-            <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background: isCE ? '#1E3A5F' : '#1A1814', color:'#F5F1EA' }}>{isCE ? 'CRYPTO EXCHANGE' : 'FINANCIAL INSTITUTION'}</span>
+            <span className="mono-font text-[10px] tracking-widest px-2 py-0.5" style={{ background: isCE ? '#1E3A5F' : '#1A1814', color:'#F5F1EA' }}>{isCE ? 'CRYPTO EXCHANGE' : 'FINANCIAL INSTITUTION'}</span>
             <span className="mono-font text-xs text-stone-400 ml-auto">{logOutcomes.length} CASE{logOutcomes.length !== 1 ? 'S' : ''} CLASSIFIED</span>
           </div>
 
@@ -1941,14 +1941,14 @@ Return ONLY valid JSON:
               {!showArchived && logOutcomes.length > 0 && (
                 <button onClick={archiveAll}
                   className="mono-font"
-                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background:'none', border:'1px solid #D4CCBC', color:'#78716C', cursor:'pointer' }}
+                  style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 10px', background:'none', border:'1px solid #D4CCBC', color:'#78716C', cursor:'pointer' }}
                   title="Move all active records to archive">
                   ↓ ARCHIVE ALL
                 </button>
               )}
               <button onClick={() => setShowArchived(v => !v)}
                 className="mono-font"
-                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 10px', background: showArchived ? '#2D2922' : 'none', color: showArchived ? '#E8E3DC' : '#78716C', border:'1px solid ' + (showArchived ? '#2D2922' : '#D4CCBC'), cursor:'pointer' }}>
+                style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 10px', background: showArchived ? '#2D2922' : 'none', color: showArchived ? '#E8E3DC' : '#78716C', border:'1px solid ' + (showArchived ? '#2D2922' : '#D4CCBC'), cursor:'pointer' }}>
                 {showArchived ? '← ACTIVE LOG' : `ARCHIVED (${logArchived.length})`}
               </button>
             </div>
@@ -1984,13 +1984,13 @@ Return ONLY valid JSON:
                           <div className="px-4 py-3 bg-stone-50">
                             <div className="grid gap-2 mb-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
                               <div>
-                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">MERCHANT / PAYEE</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">MERCHANT / PAYEE</div>
                                 <input className="cov-input mono-font w-full" style={{ fontSize:'12px' }}
                                   value={triageEditDraft.merchant || ''}
                                   onChange={e => setTriageEditDraft(d => ({ ...d, merchant: e.target.value }))} />
                               </div>
                               <div>
-                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">AMOUNT</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">AMOUNT</div>
                                 <input className="cov-input mono-font w-full" style={{ fontSize:'12px' }}
                                   value={triageEditDraft.amount || ''}
                                   onChange={e => setTriageEditDraft(d => ({ ...d, amount: e.target.value }))} />
@@ -2011,11 +2011,11 @@ Return ONLY valid JSON:
                             <span className="display-font text-sm text-stone-700 truncate pr-3">{o.merchant}</span>
                             <span className="mono-font text-xs text-stone-600">{o.amount}</span>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '8px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
+                              <span className="mono-font px-1.5 py-0.5 shrink-0" style={{ fontSize: '10px', letterSpacing: '0.08em', background: vc.bg, color: vc.badgeText }}>{vc.label}</span>
                               {overridePickId === o.id ? (
                                 /* ── Inline verdict picker on override ── */
                                 <div className="flex flex-col gap-1.5">
-                                  <div className="mono-font text-[8px] tracking-widest text-red-700">WHAT IS THE CORRECT VERDICT?</div>
+                                  <div className="mono-font text-[10px] tracking-widest text-red-700">WHAT IS THE CORRECT VERDICT?</div>
                                   {[
                                     { id:'TRUE_FRAUD',               label:'TRUE FRAUD' },
                                     { id:'FIRST_PARTY_FRAUD',        label:'FIRST-PARTY FRAUD' },
@@ -2024,12 +2024,12 @@ Return ONLY valid JSON:
                                   ].map(v => (
                                     <button key={v.id}
                                       onClick={() => { markOutcome(o.id, 'overridden', v.id); setOverridePickId(null) }}
-                                      className="mono-font text-[9px] px-2 py-0.5 text-left transition-colors"
+                                      className="mono-font text-[10px] px-2 py-0.5 text-left transition-colors"
                                       style={{ background: v.id === o.verdict ? '#FEE2E2' : '#FAF7F1', border:'1px solid ' + (v.id === o.verdict ? '#FCA5A5' : '#D4CCBC'), color: v.id === o.verdict ? '#991B1B' : '#57534E', cursor:'pointer' }}>
                                       {v.id === o.verdict ? '← was: ' : ''}{v.label}
                                     </button>
                                   ))}
-                                  <button onClick={() => setOverridePickId(null)} className="mono-font text-[8px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }}>CANCEL</button>
+                                  <button onClick={() => setOverridePickId(null)} className="mono-font text-[10px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }}>CANCEL</button>
                                 </div>
                               ) : o.outcome === 'pending' ? (
                                 <div className="flex gap-1 flex-wrap">
@@ -2043,9 +2043,9 @@ Return ONLY valid JSON:
                                     {o.outcome === 'confirmed' ? '✓ CONFIRMED' : '✗ OVERRIDDEN'}
                                   </span>
                                   {o.correctedVerdict && o.correctedVerdict !== o.verdict && (
-                                    <span className="mono-font text-[8px] px-1 py-0.5 bg-red-100 text-red-700">→ {o.correctedVerdict.replace(/_/g,' ')}</span>
+                                    <span className="mono-font text-[10px] px-1 py-0.5 bg-red-100 text-red-700">→ {o.correctedVerdict.replace(/_/g,' ')}</span>
                                   )}
-                                  <button onClick={() => { setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, outcome: 'pending', correctedVerdict: null } : x)) }} className="mono-font text-[8px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }} title="Reset outcome">↩</button>
+                                  <button onClick={() => { setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, outcome: 'pending', correctedVerdict: null } : x)) }} className="mono-font text-[10px] text-stone-400 hover:text-stone-600 transition-colors" style={{ background:'none', border:'none', cursor:'pointer' }} title="Reset outcome">↩</button>
                                   <button onClick={() => reloadCase(o)} className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:bg-stone-50 transition-colors" title="Re-run triage analysis on this case" style={{ background: 'none', cursor: 'pointer' }}>↺ RERUN</button>
                                 </div>
                               )}
@@ -2097,7 +2097,7 @@ Return ONLY valid JSON:
           </div>
 
           <div className="mt-3 flex justify-between items-center">
-            <div className="mono-font text-[9px] tracking-widest text-stone-400">
+            <div className="mono-font text-[10px] tracking-widest text-stone-400">
               {showArchived
                 ? `${logArchived.length} archived ${logLabel} record${logArchived.length !== 1 ? 's' : ''}`
                 : `${logOutcomes.length} active ${logLabel} record${logOutcomes.length !== 1 ? 's' : ''}`}

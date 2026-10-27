@@ -296,14 +296,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             })}
           </div>
           {strategyMode && (
-            <div className="mono-font text-[8px] tracking-widest" style={{ color:'#78716C' }}>RISK STRATEGIST VIEW</div>
+            <div className="mono-font text-[10px] tracking-widest" style={{ color:'#78716C' }}>RISK STRATEGIST VIEW</div>
           )}
         </div>
       </div>
 
       {/* ── Early access banner — Trio is still growing, and says so ── */}
       <div className="mb-6 px-4 py-2.5 flex items-center gap-3 flex-wrap" style={{ background:'#FAF7F1', border:'1px solid #7F1D1D' }}>
-        <span className="mono-font text-[9px] tracking-widest px-2 py-0.5" style={{ background:'#7F1D1D', color:'#FEF2F2' }}>EARLY ACCESS</span>
+        <span className="mono-font text-[10px] tracking-widest px-2 py-0.5" style={{ background:'#7F1D1D', color:'#FEF2F2' }}>EARLY ACCESS</span>
         <span className="display-font text-[12px] text-stone-700">Trio is live and growing — new incident command capabilities are rolling out in phases, with cross-institutional coordination next.</span>
       </div>
 
@@ -381,14 +381,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
           <div>
             {/* ── Strategy header ── */}
             <div className="mb-6 px-4 py-3" style={{ background:'#1A1814', border:'1px solid #44403C' }}>
-              <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>TRIO — STRATEGY MODE</div>
+              <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#78716C' }}>TRIO — STRATEGY MODE</div>
               <div className="display-font" style={{ color:'#D4CCBC', fontSize:'13px' }}>Post directives · Aggregate risk exposure · Debrief closed incidents · Build response playbooks</div>
             </div>
 
             {/* ── Strategy directives — broadcast to all analysts ── */}
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ STRATEGY DIRECTIVES</div>
-              <div className="mono-font text-[9px] mb-3" style={{ color:'#57534E' }}>Directives are visible to all analysts in the operational view. Use them to broadcast priorities, containment instructions, or escalation decisions.</div>
+              <div className="mono-font text-[10px] mb-3" style={{ color:'#57534E' }}>Directives are visible to all analysts in the operational view. Use them to broadcast priorities, containment instructions, or escalation decisions.</div>
               <textarea
                 value={globalNoteDraft}
                 onChange={e => setGlobalNoteDraft(e.target.value)}
@@ -398,7 +398,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               />
               <button onClick={() => { if(globalNoteDraft.trim()) saveGlobalNote(globalNoteDraft.trim()) }}
                 disabled={!globalNoteDraft.trim()}
-                className="mono-font text-[9px] tracking-widest px-5 py-2.5"
+                className="mono-font text-[10px] tracking-widest px-5 py-2.5"
                 style={{ background: globalNoteDraft.trim()?'#D4CCBC':'transparent', color: globalNoteDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor: globalNoteDraft.trim()?'pointer':'default' }}>
                 ◈ POST DIRECTIVE TO ANALYSTS
               </button>
@@ -407,7 +407,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   {globalNotes.map((n,idx) => (
                     <div key={n.id||idx} style={{ padding:'10px 14px', background:'#1E1C18', borderLeft:'3px solid #78716C', display:'flex', gap:'12px', alignItems:'flex-start' }}>
                       <div style={{ flex:1 }}>
-                        <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                        <div className="mono-font text-[10px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
                         <div className="display-font" style={{ fontSize:'13px', color:'#C8C2B8', lineHeight:1.55 }}>{n.text}</div>
                       </div>
                       <button onClick={() => { const updated = globalNotes.filter((_,i)=>i!==idx); setGlobalNotes(updated); try{localStorage.setItem('cov_strategy_global_notes',JSON.stringify(updated))}catch{} }}
@@ -434,7 +434,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   ['SAR FLAGS',       sarHits,           sarHits>0?'#991B1B':null],
                 ].map(([label,val,col]) => (
                   <div key={label} style={{ background:'#1E1C18', padding:'14px' }}>
-                    <div className="mono-font text-[8px] tracking-widest mb-1" style={{ color:'#57534E' }}>{label}</div>
+                    <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#57534E' }}>{label}</div>
                     <div className="mono-font font-bold" style={{ fontSize:'20px', color: col||'#D4CCBC' }}>{val}</div>
                   </div>
                 ))}
@@ -442,42 +442,42 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
 
               {/* 12-month timeline */}
               <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px', marginBottom:'16px' }}>
-                <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT FREQUENCY — LAST 12 MONTHS</div>
+                <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT FREQUENCY — LAST 12 MONTHS</div>
                 <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:'56px', borderBottom:'1px solid #2D2922' }}>
                   {incTimeline.map(m => (
                     <div key={m.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:'2px', height:'100%', justifyContent:'flex-end' }}>
                       {m.count>0 && <div style={{ width:'100%', background:'#7F1D1D', height:(m.count/maxInc*48)+'px', minHeight:'4px' }}/>}
-                      <div className="mono-font" style={{ fontSize:'7px', color:'#3D3A35', marginTop:'2px' }}>{m.label}</div>
+                      <div className="mono-font" style={{ fontSize:'10px', color:'#3D3A35', marginTop:'2px' }}>{m.label}</div>
                     </div>
                   ))}
                 </div>
-                {allIncs.length===0 && <div className="mono-font text-[9px] mt-2" style={{ color:'#3D3A35' }}>No incidents recorded yet.</div>}
+                {allIncs.length===0 && <div className="mono-font text-[10px] mt-2" style={{ color:'#3D3A35' }}>No incidents recorded yet.</div>}
               </div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', flexWrap:'wrap' }}>
                 {/* Incident types */}
                 <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px' }}>
-                  <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT TYPES</div>
+                  <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#57534E' }}>INCIDENT TYPES</div>
                   {topTypes.length ? topTypes.map(([type,count]) => (
                     <div key={type} className="flex items-center justify-between mb-2">
-                      <div className="mono-font text-[9px]" style={{ color:'#A8A29E' }}>{type.replace(/_/g,' ').toUpperCase()}</div>
+                      <div className="mono-font text-[10px]" style={{ color:'#A8A29E' }}>{type.replace(/_/g,' ').toUpperCase()}</div>
                       <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                         <div style={{ width:`${Math.round((count/allIncs.length)*80)}px`, height:'4px', background:'#D4CCBC', minWidth:'4px' }}/>
-                        <div className="mono-font text-[9px]" style={{ color:'#D4CCBC' }}>{count}</div>
+                        <div className="mono-font text-[10px]" style={{ color:'#D4CCBC' }}>{count}</div>
                       </div>
                     </div>
-                  )) : <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No incidents yet.</div>}
+                  )) : <div className="mono-font text-[10px]" style={{ color:'#57534E' }}>No incidents yet.</div>}
                 </div>
 
                 {/* Repeat FIs */}
                 <div style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'16px' }}>
-                  <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E' }}>REPEAT INSTITUTIONS</div>
+                  <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#57534E' }}>REPEAT INSTITUTIONS</div>
                   {topFis.length ? topFis.map(([fi,count]) => (
                     <div key={fi} className="flex items-center justify-between mb-2">
-                      <div className="mono-font text-[9px]" style={{ color:'#A8A29E' }}>{fi}</div>
-                      <div className="mono-font text-[9px] font-bold" style={{ color: count>1?'#F59E0B':'#78716C' }}>{count}×</div>
+                      <div className="mono-font text-[10px]" style={{ color:'#A8A29E' }}>{fi}</div>
+                      <div className="mono-font text-[10px] font-bold" style={{ color: count>1?'#F59E0B':'#78716C' }}>{count}×</div>
                     </div>
-                  )) : <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No cross-incident FI data.</div>}
+                  )) : <div className="mono-font text-[10px]" style={{ color:'#57534E' }}>No cross-incident FI data.</div>}
                 </div>
               </div>
             </div>
@@ -486,20 +486,20 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ SAR AGGREGATION — REGULATORY EXPOSURE BY INCIDENT</div>
               {incidentSAR.length === 0 ? (
-                <div className="mono-font text-[9px]" style={{ color:'#3D3A35' }}>No incidents recorded. SAR assessment populates as incidents are created and cases linked.</div>
+                <div className="mono-font text-[10px]" style={{ color:'#3D3A35' }}>No incidents recorded. SAR assessment populates as incidents are created and cases linked.</div>
               ) : (
                 <>
                   <div style={{ border:'1px solid #2D2922' }}>
                     <div className="flex items-center gap-3 px-4 py-2" style={{ borderBottom:'1px solid #2D2922', background:'#141210' }}>
-                      <span className="mono-font text-[8px] tracking-widest flex-1" style={{ color:'#3D3A35' }}>INCIDENT</span>
-                      <span className="mono-font text-[8px] tracking-widest w-14 text-right shrink-0" style={{ color:'#3D3A35' }}>CASES</span>
-                      <span className="mono-font text-[8px] tracking-widest w-24 text-right shrink-0" style={{ color:'#3D3A35' }}>EXPOSURE</span>
-                      <span className="mono-font text-[8px] tracking-widest w-20 text-right shrink-0" style={{ color:'#3D3A35' }}>SAR</span>
+                      <span className="mono-font text-[10px] tracking-widest flex-1" style={{ color:'#3D3A35' }}>INCIDENT</span>
+                      <span className="mono-font text-[10px] tracking-widest w-14 text-right shrink-0" style={{ color:'#3D3A35' }}>CASES</span>
+                      <span className="mono-font text-[10px] tracking-widest w-24 text-right shrink-0" style={{ color:'#3D3A35' }}>EXPOSURE</span>
+                      <span className="mono-font text-[10px] tracking-widest w-20 text-right shrink-0" style={{ color:'#3D3A35' }}>SAR</span>
                     </div>
                     {incidentSAR.map((inc,i) => (
                       <div key={inc.id} className="flex items-center gap-3 px-4 py-3" style={{ borderTop:i>0?'1px solid #2D2922':'none', background:'#1A1814' }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{inc.id} · {(inc.status||'active').toUpperCase()}</div>
+                          <div className="mono-font text-[10px] mb-0.5" style={{ color:'#57534E' }}>{inc.id} · {(inc.status||'active').toUpperCase()}</div>
                           <div className="display-font truncate" style={{ fontSize:'12px', color:'#D4CCBC' }}>{inc.name}</div>
                         </div>
                         <div className="mono-font text-[10px] w-14 text-right shrink-0" style={{ color:'#78716C' }}>{inc.linkedCount}</div>
@@ -507,14 +507,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                           {inc.exposure>0?'$'+Math.round(inc.exposure).toLocaleString():'—'}
                         </div>
                         <div className="w-20 text-right shrink-0">
-                          <span className="mono-font text-[8px] px-2 py-0.5" style={{ background:inc.sarTriggered?'#7F1D1D':'#1E2A3A', color:inc.sarTriggered?'#FEE2E2':'#93C5FD' }}>
+                          <span className="mono-font text-[10px] px-2 py-0.5" style={{ background:inc.sarTriggered?'#7F1D1D':'#1E2A3A', color:inc.sarTriggered?'#FEE2E2':'#93C5FD' }}>
                             {inc.sarTriggered?'REVIEW':'BELOW'}
                           </span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="mono-font text-[8px] mt-2" style={{ color:'#3D3A35' }}>
+                  <div className="mono-font text-[10px] mt-2" style={{ color:'#3D3A35' }}>
                     SAR threshold: ${sarThresholdV.toLocaleString()} (configurable in Settings) · {sarHits} incident{sarHits!==1?'s':''} at or above threshold
                   </div>
                 </>
@@ -525,7 +525,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ POST-INCIDENT DEBRIEF</div>
               {closed.length === 0 ? (
-                <div className="mono-font text-[9px]" style={{ color:'#57534E' }}>No closed incidents yet. Close an incident in operational mode to begin debrief.</div>
+                <div className="mono-font text-[10px]" style={{ color:'#57534E' }}>No closed incidents yet. Close an incident in operational mode to begin debrief.</div>
               ) : (
                 <div className="space-y-2 mb-4">
                   {closed.map(i => {
@@ -537,10 +537,10 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                         style={{ background: strategyIncId===i.id?'#252320':'#1E1C18', border:`1px solid ${strategyIncId===i.id?'#78716C':'#2D2922'}`, cursor:'pointer' }}>
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id} · CLOSED</div>
+                            <div className="mono-font text-[10px] mb-0.5" style={{ color:'#57534E' }}>{i.id} · CLOSED</div>
                             <div className="display-font" style={{ color:'#E7E4DF', fontSize:'13px' }}>{i.name}</div>
                           </div>
-                          <div className="mono-font text-[8px] text-right" style={{ color:'#57534E' }}>
+                          <div className="mono-font text-[10px] text-right" style={{ color:'#57534E' }}>
                             <div>{completedFields}/5 debrief · {(strategyNotes[i.id]||[]).length} notes</div>
                             <div>{strategyIncId===i.id?'▲':'▼'}</div>
                           </div>
@@ -563,12 +563,12 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 const exposureD = incCasesD.reduce((s,c)=>s+(parseFloat(c.amount)||0),0)
                 return (
                   <div style={{ background:'#1A1814', border:'1px solid #44403C', padding:'20px' }}>
-                    <div className="mono-font text-[9px] tracking-widest mb-4" style={{ color:'#78716C' }}>DEBRIEF — {debriefInc.name.toUpperCase()}</div>
+                    <div className="mono-font text-[10px] tracking-widest mb-4" style={{ color:'#78716C' }}>DEBRIEF — {debriefInc.name.toUpperCase()}</div>
 
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:'10px', marginBottom:'20px' }}>
                       {[['TYPE',(debriefInc.type||'—').replace(/_/g,' ').toUpperCase()],['SEVERITY',debriefInc.severity||'—'],['DETECTED',debriefInc.detectionDate||'—'],['CASES',(debriefInc.linkedCaseIds||[]).length],['AGENTS',(debriefInc.participants||[]).length],['EXPOSURE',exposureD>0?'$'+Math.round(exposureD).toLocaleString():'—']].map(([k,v])=>(
                         <div key={k}>
-                          <div className="mono-font text-[8px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>{k}</div>
+                          <div className="mono-font text-[10px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>{k}</div>
                           <div className="mono-font text-[10px]" style={{ color:'#D4CCBC' }}>{v}</div>
                         </div>
                       ))}
@@ -576,11 +576,11 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
 
                     {/* Structured debrief questions */}
                     <div className="mb-5">
-                      <div className="mono-font text-[9px] tracking-widest mb-3" style={{ color:'#57534E', borderBottom:'1px solid #2D2922', paddingBottom:'6px' }}>STRUCTURED DEBRIEF</div>
+                      <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#57534E', borderBottom:'1px solid #2D2922', paddingBottom:'6px' }}>STRUCTURED DEBRIEF</div>
                       <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
                         {DEBRIEF_QUESTIONS.map(q => (
                           <div key={q.key}>
-                            <div className="mono-font text-[8px] tracking-widest mb-1" style={{ color:'#78716C' }}>{q.label}</div>
+                            <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#78716C' }}>{q.label}</div>
                             <textarea value={sdD[q.key]||''} onChange={e=>updateSD(q.key,e.target.value)} placeholder={q.ph} rows={2}
                               style={{ width:'100%', background:'#252320', border:'1px solid '+(sdD[q.key]?'#78716C':'#3D3A35'), color:'#E7E4DF', padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', boxSizing:'border-box' }} />
                           </div>
@@ -590,11 +590,11 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
 
                     {/* Strategic annotations */}
                     <div className="mb-5">
-                      <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#57534E' }}>STRATEGIC ANNOTATIONS</div>
-                      {(strategyNotes[debriefInc.id]||[]).length===0&&<div className="mono-font text-[9px] mb-2" style={{ color:'#3D3A35' }}>No annotations yet.</div>}
+                      <div className="mono-font text-[10px] tracking-widest mb-2" style={{ color:'#57534E' }}>STRATEGIC ANNOTATIONS</div>
+                      {(strategyNotes[debriefInc.id]||[]).length===0&&<div className="mono-font text-[10px] mb-2" style={{ color:'#3D3A35' }}>No annotations yet.</div>}
                       {(strategyNotes[debriefInc.id]||[]).map((n,idx)=>(
                         <div key={idx} className="mb-2 px-3 py-2" style={{ background:'#252320', borderLeft:'2px solid #78716C' }}>
-                          <div className="mono-font text-[8px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                          <div className="mono-font text-[10px] mb-1" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
                           <div className="display-font text-sm" style={{ color:'#D4CCBC' }}>{n.text}</div>
                         </div>
                       ))}
@@ -602,7 +602,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                         placeholder="Add strategic observation — pattern, anomaly, open question..."
                         rows={2} style={{ width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', resize:'vertical', marginTop:'6px' }} />
                       <button onClick={()=>{ if(strategyDraft.trim()) saveStrategyNote(debriefInc.id,strategyDraft.trim()) }} disabled={!strategyDraft.trim()}
-                        className="mono-font text-[9px] tracking-widest mt-2 px-4 py-2"
+                        className="mono-font text-[10px] tracking-widest mt-2 px-4 py-2"
                         style={{ background:strategyDraft.trim()?'#D4CCBC':'transparent', color:strategyDraft.trim()?'#1A1814':'#3D3A35', border:'1px solid #3D3A35', cursor:strategyDraft.trim()?'pointer':'default' }}>
                         + ADD ANNOTATION
                       </button>
@@ -611,17 +611,17 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     {/* Actions row */}
                     <div style={{ borderTop:'1px solid #2D2922', paddingTop:'16px', display:'flex', gap:'8px', flexWrap:'wrap' }}>
                       <button onClick={()=>{ navigator.clipboard.writeText(generateThreatBrief(debriefInc)); setBriefCopied(true); setTimeout(()=>setBriefCopied(false),2500) }}
-                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        className="mono-font text-[10px] tracking-widest px-4 py-2.5"
                         style={{ background:'#1A1814', border:'1px solid #78716C', color:'#D4CCBC', cursor:'pointer' }}>
                         {briefCopied?'✓ COPIED':'◈ COPY THREAT BRIEF'}
                       </button>
                       <button onClick={()=>{ const txt=generateThreatBrief(debriefInc); const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(txt); a.download='TRIO-BRIEF-'+debriefInc.id+'-'+new Date().toISOString().split('T')[0]+'.txt'; a.click() }}
-                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        className="mono-font text-[10px] tracking-widest px-4 py-2.5"
                         style={{ background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
                         ↓ THREAT BRIEF .TXT
                       </button>
                       <button onClick={()=>savePlaybook(debriefInc)}
-                        className="mono-font text-[9px] tracking-widest px-4 py-2.5"
+                        className="mono-font text-[10px] tracking-widest px-4 py-2.5"
                         style={{ background:'#7F1D1D', border:'none', color:'#FEE2E2', cursor:'pointer' }}>
                         ◈ BUILD RESPONSE PLAYBOOK
                       </button>
@@ -635,20 +635,20 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3" style={{ borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>
                 <div className="mono-font text-[10px] tracking-widest" style={{ color:'#78716C' }}>◈ RESPONSE PLAYBOOK LIBRARY ({playbooks.length})</div>
-                {playbooks.length>0&&<button onClick={()=>setShowPlaybooks(p=>!p)} className="mono-font text-[9px]" style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer' }}>{showPlaybooks?'▲ COLLAPSE':'▼ EXPAND'}</button>}
+                {playbooks.length>0&&<button onClick={()=>setShowPlaybooks(p=>!p)} className="mono-font text-[10px]" style={{ background:'transparent', border:'none', color:'#57534E', cursor:'pointer' }}>{showPlaybooks?'▲ COLLAPSE':'▼ EXPAND'}</button>}
               </div>
               {playbooks.length===0 ? (
-                <div className="mono-font text-[9px]" style={{ color:'#3D3A35' }}>No playbooks yet. Complete a debrief and click "Build Response Playbook" to create the first one.</div>
+                <div className="mono-font text-[10px]" style={{ color:'#3D3A35' }}>No playbooks yet. Complete a debrief and click "Build Response Playbook" to create the first one.</div>
               ) : showPlaybooks && (
                 <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                   {playbooks.map((pb,i)=>(
                     <div key={pb.id||i} style={{ background:'#1E1C18', border:'1px solid #2D2922', padding:'14px', display:'flex', alignItems:'center', gap:'12px' }}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{(pb.type||'').replace(/_/g,' ').toUpperCase()} · {new Date(pb.createdAt).toLocaleDateString()}</div>
+                        <div className="mono-font text-[10px] mb-0.5" style={{ color:'#57534E' }}>{(pb.type||'').replace(/_/g,' ').toUpperCase()} · {new Date(pb.createdAt).toLocaleDateString()}</div>
                         <div className="display-font truncate" style={{ color:'#E7E4DF', fontSize:'13px' }}>{pb.incidentName}</div>
                       </div>
                       <button onClick={()=>{ const a=document.createElement('a'); a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(pb.text); a.download='TRIO-PLAYBOOK-'+(pb.incidentName||'').replace(/\s+/g,'-').toUpperCase()+'-'+new Date(pb.createdAt).toISOString().split('T')[0]+'.txt'; a.click() }}
-                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 shrink-0"
+                        className="mono-font text-[10px] tracking-widest px-3 py-1.5 shrink-0"
                         style={{ background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
                         ↓ DOWNLOAD
                       </button>
@@ -661,14 +661,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             {/* ── Cross-tool intelligence ── */}
             <div className="mb-6">
               <div className="mono-font text-[10px] tracking-widest mb-3" style={{ color:'#78716C', borderBottom:'1px solid #2D2922', paddingBottom:'8px' }}>◈ CROSS-TOOL CASE INTELLIGENCE</div>
-              <div className="mono-font text-[9px] mb-4" style={{ color:'#57534E' }}>All cases across Triage, Desk, Multi and File — visible to the strategist in read mode.</div>
+              <div className="mono-font text-[10px] mb-4" style={{ color:'#57534E' }}>All cases across Triage, Desk, Multi and File — visible to the strategist in read mode.</div>
 
               {/* Filter bar */}
               <div style={{ display:'flex', gap:'2px', marginBottom:'12px', flexWrap:'wrap' }}>
                 {[['all','ALL'],['triage','TRIAGE ONLY'],['fraud','FRAUD'],['service','SERVICE'],['open','OPEN'],['won','WON'],['lost','LOST']].map(([val,lbl]) => (
                   <button key={val} onClick={() => setCaseFilter(val)}
                     className="mono-font"
-                    style={{ fontSize:'8px', letterSpacing:'0.14em', padding:'5px 12px', border:'1px solid', cursor:'pointer', transition:'all 0.12s',
+                    style={{ fontSize:'10px', letterSpacing:'0.14em', padding:'5px 12px', border:'1px solid', cursor:'pointer', transition:'all 0.12s',
                       background: caseFilter===val ? (val==='triage'?'#2D1B4E':'#D4CCBC') : 'transparent',
                       color:      caseFilter===val ? (val==='triage'?'#C4B5FD':'#1A1814')  : '#57534E',
                       borderColor:caseFilter===val ? (val==='triage'?'#6D28D9':'#D4CCBC')  : '#2D2922' }}>
@@ -689,30 +689,30 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   return true
                 })
                 if (filtered.length === 0) return (
-                  <div className="mono-font text-[9px] py-6 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>No cases match this filter.</div>
+                  <div className="mono-font text-[10px] py-6 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>No cases match this filter.</div>
                 )
                 return (
                   <div style={{ border:'1px solid #2D2922', maxHeight:'320px', overflowY:'auto' }}>
                     {filtered.slice(0,50).map((c,i) => (
                       <div key={c.id||i} style={{ display:'flex', gap:'12px', alignItems:'center', padding:'10px 14px', borderTop: i>0?'1px solid #2D2922':'none', background:'#1A1814' }}>
-                        <div className="mono-font" style={{ fontSize:'8px', padding:'2px 6px', flexShrink:0, background: c._source==='TRIAGE'?'#2D1B4E':'#1E2A3A', color: c._source==='TRIAGE'?'#C4B5FD':'#93C5FD', letterSpacing:'0.1em' }}>
+                        <div className="mono-font" style={{ fontSize:'10px', padding:'2px 6px', flexShrink:0, background: c._source==='TRIAGE'?'#2D1B4E':'#1E2A3A', color: c._source==='TRIAGE'?'#C4B5FD':'#93C5FD', letterSpacing:'0.1em' }}>
                           {c._source||'DESK'}
                         </div>
-                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, width:'88px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.id||'—'}</div>
+                        <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', flexShrink:0, width:'88px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.id||'—'}</div>
                         <div className="display-font" style={{ fontSize:'12px', color:'#D4CCBC', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant||c.description||'—'}</div>
-                        <div className="mono-font" style={{ fontSize:'9px', color:'#A8A29E', flexShrink:0 }}>{c.amount||'—'}</div>
-                        <div className="mono-font" style={{ fontSize:'8px', padding:'2px 7px', flexShrink:0,
+                        <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', flexShrink:0 }}>{c.amount||'—'}</div>
+                        <div className="mono-font" style={{ fontSize:'10px', padding:'2px 7px', flexShrink:0,
                           background: c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':c.status==='triaged'||c.status==='DESK'?'#3D2A00':c.status==='pending'?'#292524':'#1E3A5F',
                           color: c.status==='won'?'#D1FAE5':c.status==='lost'?'#FEE2E2':c.status==='triaged'||c.status==='DESK'?'#FCD34D':'#CBD5E1' }}>
                           {(c.status||'unknown').toUpperCase()}
                         </div>
-                        <div className="mono-font" style={{ fontSize:'9px', color:'#57534E', flexShrink:0, minWidth:'54px', textAlign:'right' }}>
+                        <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', flexShrink:0, minWidth:'54px', textAlign:'right' }}>
                           {c.date ? new Date(c.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '—'}
                         </div>
                       </div>
                     ))}
                     {filtered.length > 50 && (
-                      <div className="mono-font text-center py-2" style={{ fontSize:'8px', color:'#57534E', borderTop:'1px solid #2D2922' }}>+ {filtered.length-50} more — apply a filter to narrow</div>
+                      <div className="mono-font text-center py-2" style={{ fontSize:'10px', color:'#57534E', borderTop:'1px solid #2D2922' }}>+ {filtered.length-50} more — apply a filter to narrow</div>
                     )}
                   </div>
                 )
@@ -732,7 +732,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
           <div className="flex items-center justify-between mb-3">
             <div className="mono-font text-[10px] tracking-widest text-stone-500">INCIDENTS ({incidents.length})</div>
             <button onClick={() => setShowCreate(true)}
-              className="mono-font text-[9px] tracking-widest px-3 py-1.5 transition-colors"
+              className="mono-font text-[10px] tracking-widest px-3 py-1.5 transition-colors"
               style={{ background:'#7F1D1D', color:'#FEF2F2', border:'none', cursor:'pointer' }}>
               + NEW INCIDENT
             </button>
@@ -744,21 +744,21 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               <div className="mono-font text-[10px] tracking-widest text-red-800 mb-3">NEW INCIDENT</div>
               <div className="space-y-3">
                 <div>
-                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">INCIDENT NAME *</label>
+                  <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">INCIDENT NAME *</label>
                   <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
                     value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
                     placeholder="e.g. Skip the Dishes BIN Attack Oct 2026" />
                 </div>
                 <div className="grid gap-2" style={{ gridTemplateColumns:'1fr 1fr' }}>
                   <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">TYPE</label>
+                    <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">TYPE</label>
                     <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'#FAF7F1' }}
                       value={form.type} onChange={e => setForm(f => ({...f, type: e.target.value}))}>
                       {Object.entries(TYPE_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">SEVERITY</label>
+                    <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">SEVERITY</label>
                     <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'#FAF7F1' }}
                       value={form.severity} onChange={e => setForm(f => ({...f, severity: e.target.value}))}>
                       {['LOW','MEDIUM','HIGH','CRITICAL'].map(s => <option key={s}>{s}</option>)}
@@ -766,30 +766,30 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   </div>
                 </div>
                 <div>
-                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">DETECTION DATE</label>
+                  <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">DETECTION DATE</label>
                   <input type="date" className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
                     value={form.detectionDate} onChange={e => setForm(f => ({...f, detectionDate: e.target.value}))} />
                 </div>
                 <div>
-                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">AFFECTED PRODUCT / CHANNEL</label>
+                  <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">AFFECTED PRODUCT / CHANNEL</label>
                   <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px]" style={{ background:'#FAF7F1' }}
                     value={form.affectedProduct} onChange={e => setForm(f => ({...f, affectedProduct: e.target.value}))}
                     placeholder="e.g. Visa debit, P2P / Skip" />
                 </div>
                 <div>
-                  <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">INITIAL SUMMARY</label>
+                  <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">INITIAL SUMMARY</label>
                   <textarea rows={2} className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[11px] resize-none" style={{ background:'#FAF7F1' }}
                     value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))}
                     placeholder="What happened, how it was detected..." />
                 </div>
                 <div className="flex gap-2">
                   <button onClick={createIncident} disabled={!form.name.trim()}
-                    className="mono-font text-[9px] tracking-widest px-4 py-1.5 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors"
+                    className="mono-font text-[10px] tracking-widest px-4 py-1.5 disabled:bg-stone-300 disabled:cursor-not-allowed transition-colors"
                     style={{ background: form.name.trim() ? '#7F1D1D' : undefined, color: form.name.trim() ? '#FEF2F2' : undefined, border:'none', cursor: form.name.trim() ? 'pointer' : undefined }}>
                     OPEN INCIDENT
                   </button>
                   <button onClick={() => setShowCreate(false)}
-                    className="mono-font text-[9px] tracking-widest px-3 py-1.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
+                    className="mono-font text-[10px] tracking-widest px-3 py-1.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
                     CANCEL
                   </button>
                 </div>
@@ -811,21 +811,21 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 className="w-full text-left px-3 py-3 border transition-colors"
                 style={{ background: activeId === inc.id ? '#1A1814' : '#FAF7F1', borderColor: activeId === inc.id ? '#1A1814' : '#D4CCBC' }}>
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="mono-font text-[9px]" style={{ color: activeId === inc.id ? '#A8A29E' : '#78716C' }}>{inc.id}</span>
-                  <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold"
+                  <span className="mono-font text-[10px]" style={{ color: activeId === inc.id ? '#A8A29E' : '#78716C' }}>{inc.id}</span>
+                  <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold"
                     style={{ background: SEV_BG[inc.severity], color: SEV_COLORS[inc.severity] }}>{inc.severity}</span>
                 </div>
                 <div className="display-font text-sm font-semibold leading-tight" style={{ color: activeId === inc.id ? '#F5F1EA' : '#1A1814' }}>{inc.name}</div>
-                <div className="mono-font text-[9px] mt-1" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
+                <div className="mono-font text-[10px] mt-1" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
                   {TYPE_LABELS[inc.type]||inc.type} · {(inc.linkedCaseIds||[]).length} cases
                 </div>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="mono-font text-[8px] font-bold" style={{ color: STATUS_COLORS[inc.status]||'#78716C' }}>
+                  <span className="mono-font text-[10px] font-bold" style={{ color: STATUS_COLORS[inc.status]||'#78716C' }}>
                     ● {(inc.status||'active').toUpperCase()}
                   </span>
-                  <span className="mono-font text-[8px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>{elapsedLabel(inc.detectionDate)}</span>
+                  <span className="mono-font text-[10px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>{elapsedLabel(inc.detectionDate)}</span>
                   {(inc.participants||[]).length > 0 && (
-                    <span className="mono-font text-[8px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
+                    <span className="mono-font text-[10px]" style={{ color: activeId === inc.id ? '#78716C' : '#A8A29E' }}>
                       · 👤 {(inc.participants||[]).length}
                     </span>
                   )}
@@ -846,18 +846,18 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             <div className="px-5 py-4 border" style={{ background:'#1A1814', borderColor:'#1A1814' }}>
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">{activeIncident.id} · {TYPE_LABELS[activeIncident.type]||activeIncident.type}</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">{activeIncident.id} · {TYPE_LABELS[activeIncident.type]||activeIncident.type}</div>
                   <div className="display-font font-bold text-stone-50" style={{ fontSize:'clamp(18px,2.5vw,26px)', letterSpacing:'-0.01em' }}>{activeIncident.name}</div>
                   {activeIncident.affectedProduct && (
                     <div className="mono-font text-[10px] text-stone-400 mt-1">PRODUCT / CHANNEL: {activeIncident.affectedProduct}</div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="mono-font text-[9px] px-2 py-1 font-bold"
+                  <span className="mono-font text-[10px] px-2 py-1 font-bold"
                     style={{ background: SEV_BG[activeIncident.severity], color: SEV_COLORS[activeIncident.severity] }}>{activeIncident.severity}</span>
                   <select value={activeIncident.status}
                     onChange={e => updateIncident(activeIncident.id, { status: e.target.value })}
-                    className="mono-font text-[9px] px-2 py-1 border-none font-bold tracking-widest cursor-pointer"
+                    className="mono-font text-[10px] px-2 py-1 border-none font-bold tracking-widest cursor-pointer"
                     style={{ background: activeIncident.status==='active'?'#7F1D1D':activeIncident.status==='contained'?'#78350F':'#374151', color:'#F5F1EA' }}>
                     <option value="active">● ACTIVE</option>
                     <option value="contained">◐ CONTAINED</option>
@@ -866,7 +866,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   {activeIncident.status !== 'closed' && (
                     <button
                       onClick={() => { if (window.confirm(`Close incident "${activeIncident.name}"? This moves it to debrief in Strategy Mode.`)) updateIncident(activeIncident.id, { status:'closed', closedAt: new Date().toISOString() }) }}
-                      className="mono-font text-[9px] px-3 py-1 tracking-widest transition-colors"
+                      className="mono-font text-[10px] px-3 py-1 tracking-widest transition-colors"
                       style={{ background:'transparent', color:'#9CA3AF', border:'1px solid #374151', cursor:'pointer' }}
                       onMouseEnter={e => { e.currentTarget.style.background='#374151'; e.currentTarget.style.color='#F5F1EA' }}
                       onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#9CA3AF' }}>
@@ -876,14 +876,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   {activeIncident.status === 'closed' && (
                     <button
                       onClick={() => updateIncident(activeIncident.id, { status:'active', closedAt: null })}
-                      className="mono-font text-[9px] px-3 py-1 tracking-widest"
+                      className="mono-font text-[10px] px-3 py-1 tracking-widest"
                       style={{ background:'transparent', color:'#6EE7B7', border:'1px solid #065F46', cursor:'pointer' }}>
                       ↺ REOPEN
                     </button>
                   )}
                   {incidents.length > 1 && (
                     <button onClick={() => setMergeModal(activeIncident.id)}
-                      className="mono-font text-[9px] px-2 py-1 tracking-widest"
+                      className="mono-font text-[10px] px-2 py-1 tracking-widest"
                       style={{ background:'#292524', color:'#A8A29E', border:'1px solid #44403C' }}>
                       ⇄ MERGE
                     </button>
@@ -893,14 +893,14 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               {activeIncident.description && (
                 <p className="display-font text-stone-400 text-[13px] mt-3 leading-snug">{activeIncident.description}</p>
               )}
-              <div className="mono-font text-[9px] text-stone-600 mt-3">
+              <div className="mono-font text-[10px] text-stone-600 mt-3">
                 DETECTED {activeIncident.detectionDate} · {elapsedLabel(activeIncident.detectionDate)} · {(activeIncident.notes||[]).length} WAR ROOM ENTRIES
               </div>
               {(activeIncident.participants||[]).length > 0 && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className="mono-font text-[8px] text-stone-500 tracking-widest">AGENTS IN ROOM:</span>
+                  <span className="mono-font text-[10px] text-stone-500 tracking-widest">AGENTS IN ROOM:</span>
                   {(activeIncident.participants||[]).map((p,i) => (
-                    <span key={i} className="mono-font text-[8px] px-1.5 py-0.5 font-bold"
+                    <span key={i} className="mono-font text-[10px] px-1.5 py-0.5 font-bold"
                       style={{ background: p === agentName ? '#065F46' : '#292524', color: p === agentName ? '#D1FAE5' : '#A8A29E' }}>
                       {p}
                     </span>
@@ -908,7 +908,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 </div>
               )}
               {syncStatus && (
-                <div className="mono-font text-[8px] mt-2" style={{ color: syncStatus==='error' ? '#EF4444' : syncStatus==='syncing' ? '#D97706' : '#6EE7B7' }}>
+                <div className="mono-font text-[10px] mt-2" style={{ color: syncStatus==='error' ? '#EF4444' : syncStatus==='syncing' ? '#D97706' : '#6EE7B7' }}>
                   {syncStatus==='syncing' ? '↻ SYNCING...' : syncStatus==='error' ? '✗ SYNC ERROR' : '✓ LIVE'}
                 </div>
               )}
@@ -923,7 +923,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 { label:'CH NOTIFIED', value: `${activeIncident.cardholderNotified||0}${activeIncident.cardholderTotal?` / ${activeIncident.cardholderTotal}`:''}` },
               ].map(s => (
                 <div key={s.label} className="px-4 py-3 border border-stone-300" style={{ background: s.highlight ? '#FEF2F2' : '#FAF7F1' }}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{s.label}</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{s.label}</div>
                   <div className="mono-font text-base font-bold" style={{ color: s.highlight ? '#991B1B' : '#1A1814' }}>{s.value}</div>
                 </div>
               ))}
@@ -932,15 +932,15 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             {/* SAR progress bar */}
             <div className="border border-stone-300 px-4 py-3" style={{ background: sarCrossed ? '#FEF2F2' : '#FAF7F1' }}>
               <div className="flex items-center justify-between mb-2">
-                <div className="mono-font text-[9px] tracking-widest text-stone-500">SAR / STR THRESHOLD TRACKER</div>
-                {sarCrossed && <span className="mono-font text-[9px] tracking-widest font-bold text-red-700">⚠ FILING OBLIGATION MET</span>}
+                <div className="mono-font text-[10px] tracking-widest text-stone-500">SAR / STR THRESHOLD TRACKER</div>
+                {sarCrossed && <span className="mono-font text-[10px] tracking-widest font-bold text-red-700">⚠ FILING OBLIGATION MET</span>}
               </div>
               <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
                 <div className="h-2 transition-all" style={{ width: `${(sarProgress*100).toFixed(1)}%`, background: sarCrossed ? '#DC2626' : sarProgress > 0.7 ? '#D97706' : '#059669' }} />
               </div>
               <div className="flex justify-between mt-1.5">
-                <span className="mono-font text-[9px] text-stone-500">${linkedTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} linked</span>
-                <span className="mono-font text-[9px] text-stone-400">threshold: ${sarThreshold.toLocaleString()}</span>
+                <span className="mono-font text-[10px] text-stone-500">${linkedTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} linked</span>
+                <span className="mono-font text-[10px] text-stone-400">threshold: ${sarThreshold.toLocaleString()}</span>
               </div>
               {sarCrossed && (
                 <p className="mono-font text-[10px] text-red-700 mt-2 font-bold">SAR/STR filing is required. Coordinate with your compliance officer before finalizing write-offs on linked cases.</p>
@@ -956,12 +956,12 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     onKeyDown={e => e.key === 'Enter' && linkCase()}
                     placeholder="CASE-XXXXXX" className="mono-font text-[10px] border border-stone-300 px-2 py-1"
                     style={{ background:'white', width:'120px' }} />
-                  <button onClick={linkCase} className="mono-font text-[9px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
+                  <button onClick={linkCase} className="mono-font text-[10px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
                     + LINK
                   </button>
                 </div>
               </div>
-              {linkError && <div className="px-4 py-1 mono-font text-[9px] text-red-600">{linkError}</div>}
+              {linkError && <div className="px-4 py-1 mono-font text-[10px] text-red-600">{linkError}</div>}
               {(activeIncident.linkedCaseIds||[]).length === 0 ? (
                 <div className="px-4 py-6 text-center">
                   <p className="mono-font text-[10px] text-stone-400">No cases linked. Enter a case ID from the Dispute Desk tracker.</p>
@@ -973,19 +973,19 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                       <span className="mono-font text-[10px] text-stone-500 w-24 shrink-0"><CaseLink id={c.id} /></span>
                       <span className="display-font text-sm text-stone-800 flex-1 truncate">{c.merchant||'—'}</span>
                       <span className="mono-font text-[10px] text-stone-600">{c.amount||'—'}</span>
-                      <span className="mono-font text-[9px] px-1.5 py-0.5"
+                      <span className="mono-font text-[10px] px-1.5 py-0.5"
                         style={{ background: c.status==='filed'?'#1C1917':c.status==='queued'?'#4C1D95':c.status==='won'?'#064E3B':c.status==='lost'?'#7F1D1D':'#D6D3CD', color: ['filed','queued','won','lost'].includes(c.status)?'#F5F1EA':'#57534E' }}>
                         {(c.status||'pending').toUpperCase()}
                       </span>
-                      <button onClick={() => unlinkCase(c.id)} className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
+                      <button onClick={() => unlinkCase(c.id)} className="mono-font text-[10px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
                     </div>
                   ))}
                   {/* Show unresolved IDs (cases not yet in tracker) */}
                   {(activeIncident.linkedCaseIds||[]).filter(id => !linkedCases.find(c=>c.id===id)).map(id => (
                     <div key={id} className="px-4 py-2.5 flex items-center gap-3">
                       <span className="mono-font text-[10px] text-stone-400 w-24 shrink-0">{id}</span>
-                      <span className="mono-font text-[9px] text-amber-700 italic">not found in local tracker</span>
-                      <button onClick={() => unlinkCase(id)} className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors ml-auto">✕</button>
+                      <span className="mono-font text-[10px] text-amber-700 italic">not found in local tracker</span>
+                      <button onClick={() => unlinkCase(id)} className="mono-font text-[10px] text-stone-400 hover:text-red-600 transition-colors ml-auto">✕</button>
                     </div>
                   ))}
                 </div>
@@ -997,7 +997,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               <div className="mono-font text-[10px] tracking-widest text-stone-600 mb-3">CARDHOLDER NOTIFICATION</div>
               <div className="flex items-center gap-4 flex-wrap">
                 <div>
-                  <label className="mono-font text-[9px] text-stone-400 block mb-1">NOTIFIED</label>
+                  <label className="mono-font text-[10px] text-stone-400 block mb-1">NOTIFIED</label>
                   <div className="flex items-center gap-1">
                     <button onClick={() => updateIncident(activeIncident.id, { cardholderNotified: Math.max(0,(activeIncident.cardholderNotified||0)-1) })}
                       className="mono-font text-xs px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100">−</button>
@@ -1007,7 +1007,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   </div>
                 </div>
                 <div>
-                  <label className="mono-font text-[9px] text-stone-400 block mb-1">TARGET TOTAL</label>
+                  <label className="mono-font text-[10px] text-stone-400 block mb-1">TARGET TOTAL</label>
                   <input type="number" min="0"
                     value={activeIncident.cardholderTotal||''}
                     onChange={e => updateIncident(activeIncident.id, { cardholderTotal: parseInt(e.target.value)||0 })}
@@ -1016,7 +1016,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 </div>
                 {(activeIncident.cardholderTotal||0) > 0 && (
                   <div className="flex-1">
-                    <div className="mono-font text-[9px] text-stone-400 mb-1">
+                    <div className="mono-font text-[10px] text-stone-400 mb-1">
                       {Math.round((activeIncident.cardholderNotified||0)/(activeIncident.cardholderTotal||1)*100)}% COMPLETE
                     </div>
                     <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
@@ -1034,7 +1034,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Party A — Our cardholder */}
                 <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#F0FDF4' }}>
-                  <div className="mono-font text-[8px] tracking-widest text-green-700 mb-1">PARTY A · YOUR FI</div>
+                  <div className="mono-font text-[10px] tracking-widest text-green-700 mb-1">PARTY A · YOUR FI</div>
                   <input
                     value={activeIncident.flowSender || ''}
                     onChange={e => updateIncident(activeIncident.id, { flowSender: e.target.value })}
@@ -1045,7 +1045,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 <div className="mono-font text-stone-400 text-sm px-1">→</div>
                 {/* Party B — Platform / Receiving FI */}
                 <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#FEF3C7' }}>
-                  <div className="mono-font text-[8px] tracking-widest text-amber-700 mb-1">PARTY B · PLATFORM / RECEIVING FI</div>
+                  <div className="mono-font text-[10px] tracking-widest text-amber-700 mb-1">PARTY B · PLATFORM / RECEIVING FI</div>
                   <input
                     value={activeIncident.flowPlatform || ''}
                     onChange={e => updateIncident(activeIncident.id, { flowPlatform: e.target.value })}
@@ -1056,7 +1056,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 <div className="mono-font text-stone-400 text-sm px-1">→</div>
                 {/* Party C — Fraudster / recipient account */}
                 <div className="flex-1 border border-stone-300 px-3 py-2.5 text-center" style={{ minWidth:'120px', background:'#FEF2F2' }}>
-                  <div className="mono-font text-[8px] tracking-widest text-red-700 mb-1">PARTY C · RECEIVING ACCOUNT</div>
+                  <div className="mono-font text-[10px] tracking-widest text-red-700 mb-1">PARTY C · RECEIVING ACCOUNT</div>
                   <input
                     value={activeIncident.flowReceiver || ''}
                     onChange={e => updateIncident(activeIncident.id, { flowReceiver: e.target.value })}
@@ -1066,7 +1066,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 </div>
               </div>
               {(activeIncident.flowSender || activeIncident.flowPlatform || activeIncident.flowReceiver) && (
-                <p className="mono-font text-[9px] text-stone-400 mt-2">Click any field to edit. This maps the fraud chain for the incident record.</p>
+                <p className="mono-font text-[10px] text-stone-400 mt-2">Click any field to edit. This maps the fraud chain for the incident record.</p>
               )}
             </div>
 
@@ -1075,7 +1075,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
               <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
                 <div className="mono-font text-[10px] tracking-widest text-stone-600">RECEIVING FI / PLATFORM</div>
                 <button onClick={() => { setReceivingEdit(!receivingEdit); setReceivingDraft(activeIncident.receivingFi || {}) }}
-                  className="mono-font text-[9px] px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
+                  className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-500 hover:bg-stone-100 transition-colors">
                   {receivingEdit ? 'CANCEL' : (activeIncident.receivingFi?.name ? 'EDIT' : '+ ADD')}
                 </button>
               </div>
@@ -1083,12 +1083,12 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 <div className="px-4 py-3 space-y-2">
                   <div className="grid gap-2" style={{ gridTemplateColumns:'1fr 1fr' }}>
                     <div>
-                      <label className="mono-font text-[9px] text-stone-400 block mb-1">INSTITUTION / PLATFORM NAME</label>
+                      <label className="mono-font text-[10px] text-stone-400 block mb-1">INSTITUTION / PLATFORM NAME</label>
                       <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
                         value={receivingDraft.name||''} onChange={e => setReceivingDraft(d => ({...d, name: e.target.value}))} placeholder="e.g. Skip the Dishes" />
                     </div>
                     <div>
-                      <label className="mono-font text-[9px] text-stone-400 block mb-1">TYPE</label>
+                      <label className="mono-font text-[10px] text-stone-400 block mb-1">TYPE</label>
                       <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
                         value={receivingDraft.type||'platform'} onChange={e => setReceivingDraft(d => ({...d, type: e.target.value}))}>
                         <option value="platform">Platform / Marketplace</option>
@@ -1101,18 +1101,18 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                       </select>
                     </div>
                     <div>
-                      <label className="mono-font text-[9px] text-stone-400 block mb-1">CONTACT NAME</label>
+                      <label className="mono-font text-[10px] text-stone-400 block mb-1">CONTACT NAME</label>
                       <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
                         value={receivingDraft.contactName||''} onChange={e => setReceivingDraft(d => ({...d, contactName: e.target.value}))} placeholder="Fraud / Risk team contact" />
                     </div>
                     <div>
-                      <label className="mono-font text-[9px] text-stone-400 block mb-1">CONTACT INFO</label>
+                      <label className="mono-font text-[10px] text-stone-400 block mb-1">CONTACT INFO</label>
                       <input className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
                         value={receivingDraft.contactInfo||''} onChange={e => setReceivingDraft(d => ({...d, contactInfo: e.target.value}))} placeholder="Email or phone" />
                     </div>
                   </div>
                   <div>
-                    <label className="mono-font text-[9px] text-stone-400 block mb-1">COOPERATION STATUS</label>
+                    <label className="mono-font text-[10px] text-stone-400 block mb-1">COOPERATION STATUS</label>
                     <select className="border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'white' }}
                       value={receivingDraft.status||'not_contacted'} onChange={e => setReceivingDraft(d => ({...d, status: e.target.value}))}>
                       <option value="not_contacted">Not yet contacted</option>
@@ -1124,12 +1124,12 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     </select>
                   </div>
                   <div>
-                    <label className="mono-font text-[9px] text-stone-400 block mb-1">NOTES</label>
+                    <label className="mono-font text-[10px] text-stone-400 block mb-1">NOTES</label>
                     <textarea rows={2} className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px] resize-none" style={{ background:'white' }}
                       value={receivingDraft.notes||''} onChange={e => setReceivingDraft(d => ({...d, notes: e.target.value}))} placeholder="Any relevant context..." />
                   </div>
                   <button onClick={() => { updateIncident(activeIncident.id, { receivingFi: receivingDraft }); setReceivingEdit(false) }}
-                    className="mono-font text-[9px] tracking-widest px-4 py-1.5 transition-colors"
+                    className="mono-font text-[10px] tracking-widest px-4 py-1.5 transition-colors"
                     style={{ background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer' }}>
                     SAVE
                   </button>
@@ -1144,13 +1144,13 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     ['STATUS', (activeIncident.receivingFi.status||'').replace(/_/g,' ').toUpperCase()],
                   ].filter(([,v])=>v).map(([k,v]) => (
                     <div key={k}>
-                      <div className="mono-font text-[8px] tracking-widest text-stone-400">{k}</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-400">{k}</div>
                       <div className="mono-font text-[11px] text-stone-800">{v}</div>
                     </div>
                   ))}
                   {activeIncident.receivingFi.notes && (
                     <div className="col-span-full">
-                      <div className="mono-font text-[8px] tracking-widest text-stone-400">NOTES</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-400">NOTES</div>
                       <div className="display-font text-[12px] text-stone-600 italic">{activeIncident.receivingFi.notes}</div>
                     </div>
                   )}
@@ -1170,7 +1170,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   <input value={fiInput.name} onChange={e => setFiInput(f => ({...f, name: e.target.value}))}
                     placeholder="Institution name" className="mono-font text-[10px] border border-stone-300 px-2 py-1" style={{ background:'white', width:'160px' }} />
                   <select value={fiInput.status} onChange={e => setFiInput(f => ({...f, status: e.target.value}))}
-                    className="mono-font text-[9px] border border-stone-300 px-1 py-1" style={{ background:'white' }}>
+                    className="mono-font text-[10px] border border-stone-300 px-1 py-1" style={{ background:'white' }}>
                     <option value="notified">Notified</option>
                     <option value="unaware">Unaware</option>
                     <option value="cooperating">Cooperating</option>
@@ -1181,7 +1181,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     const entry = { name: fiInput.name.trim(), type: fiInput.type, status: fiInput.status, addedAt: new Date().toISOString() }
                     updateIncident(activeIncident.id, { affectedFis: [...(activeIncident.affectedFis||[]), entry] })
                     setFiInput({ name:'', type:'bank', status:'notified' })
-                  }} className="mono-font text-[9px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
+                  }} className="mono-font text-[10px] tracking-widest px-3 py-1 border border-stone-700 text-stone-700 hover:bg-stone-100 transition-colors whitespace-nowrap">
                     + ADD FI
                   </button>
                 </div>
@@ -1195,12 +1195,12 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   {(activeIncident.affectedFis||[]).map((fi, i) => (
                     <div key={i} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
                       <span className="display-font text-sm text-stone-800 flex-1">{fi.name}</span>
-                      <span className="mono-font text-[8px] px-1.5 py-0.5"
+                      <span className="mono-font text-[10px] px-1.5 py-0.5"
                         style={{ background: fi.status==='cooperating'?'#ECFDF5':fi.status==='unresponsive'?'#FEF2F2':'#F5F1EA', color: fi.status==='cooperating'?'#065F46':fi.status==='unresponsive'?'#991B1B':'#57534E' }}>
                         {(fi.status||'').replace(/_/g,' ').toUpperCase()}
                       </span>
                       <button onClick={() => updateIncident(activeIncident.id, { affectedFis: (activeIncident.affectedFis||[]).filter((_,j)=>j!==i) })}
-                        className="mono-font text-[9px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
+                        className="mono-font text-[10px] text-stone-400 hover:text-red-600 transition-colors">✕</button>
                     </div>
                   ))}
                 </div>
@@ -1214,7 +1214,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             <div className="border border-stone-800" style={{ background:'#1A1814', display:'flex', flexDirection:'column', minHeight:'520px' }}>
               <div className="px-4 py-3 border-b border-stone-700 flex items-center justify-between">
                 <div className="mono-font text-[10px] tracking-widest" style={{ color:'#A8A29E' }}>WAR ROOM FEED</div>
-                <span className="mono-font text-[8px]" style={{ color:'#78716C' }}>{(activeIncident.notes||[]).length} ENTRIES</span>
+                <span className="mono-font text-[10px]" style={{ color:'#78716C' }}>{(activeIncident.notes||[]).length} ENTRIES</span>
               </div>
               <div style={{ flex:1, overflowY:'auto', maxHeight:'400px' }}>
                 {(activeIncident.notes||[]).length === 0 ? (
@@ -1226,8 +1226,8 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     {[...(activeIncident.notes||[])].reverse().map((n, i) => (
                       <div key={i} className="px-4 py-3 border-b" style={{ borderColor:'#292524' }}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="mono-font text-[9px] font-bold" style={{ color: n.author === agentName ? '#6EE7B7' : '#78716C' }}>{n.author}</span>
-                          <span className="mono-font text-[8px]" style={{ color:'#57534E' }}>{new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})} {new Date(n.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+                          <span className="mono-font text-[10px] font-bold" style={{ color: n.author === agentName ? '#6EE7B7' : '#78716C' }}>{n.author}</span>
+                          <span className="mono-font text-[10px]" style={{ color:'#57534E' }}>{new Date(n.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})} {new Date(n.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
                         </div>
                         <p className="display-font text-[13px] leading-snug" style={{ color:'#D6D3D1' }}>{n.text}</p>
                       </div>
@@ -1242,7 +1242,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                   className="w-full mono-font text-[11px] px-3 py-2 resize-none focus:outline-none"
                   style={{ background:'#292524', color:'#D6D3D1', border:'1px solid #44403C', borderRadius:0 }} />
                 <button onClick={addNote} disabled={!noteDraft.trim()}
-                  className="mono-font text-[9px] tracking-widest px-4 py-1.5 mt-2 w-full disabled:cursor-not-allowed transition-colors"
+                  className="mono-font text-[10px] tracking-widest px-4 py-1.5 mt-2 w-full disabled:cursor-not-allowed transition-colors"
                   style={{ background: noteDraft.trim() ? '#16A34A' : '#292524', color: noteDraft.trim() ? '#F0FDF4' : '#57534E', border:'none', cursor: noteDraft.trim() ? 'pointer' : undefined }}>
                   POST UPDATE
                 </button>
@@ -1260,13 +1260,13 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         <div className="mt-6" style={{ border:'1px solid #44403C', background:'#1A1814', padding:'16px 20px' }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
             <div>
-              <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#D4CCBC' }}>◈ STRATEGY DIRECTIVES</div>
-              <div className="mono-font text-[8px]" style={{ color:'#57534E' }}>Posted by Risk Strategist — read before actioning cases</div>
+              <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#D4CCBC' }}>◈ STRATEGY DIRECTIVES</div>
+              <div className="mono-font text-[10px]" style={{ color:'#57534E' }}>Posted by Risk Strategist — read before actioning cases</div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-              <div className="mono-font text-[8px] px-2 py-1" style={{ color:'#F59E0B', background:'#292524', border:'1px solid #92400E' }}>READ ONLY</div>
+              <div className="mono-font text-[10px] px-2 py-1" style={{ color:'#F59E0B', background:'#292524', border:'1px solid #92400E' }}>READ ONLY</div>
               <button onClick={() => { setStrategyMode(true); setStrategyIncId(null) }}
-                className="mono-font text-[8px] tracking-widest px-3 py-1"
+                className="mono-font text-[10px] tracking-widest px-3 py-1"
                 style={{ background:'transparent', border:'1px solid #44403C', color:'#78716C', cursor:'pointer' }}
                 onMouseEnter={e=>{e.currentTarget.style.color='#D4CCBC'}}
                 onMouseLeave={e=>{e.currentTarget.style.color='#78716C'}}>
@@ -1275,19 +1275,19 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
             </div>
           </div>
           {globalNotes.length === 0 ? (
-            <div className="mono-font text-[9px] py-4 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>
+            <div className="mono-font text-[10px] py-4 text-center" style={{ color:'#3D3A35', border:'1px solid #2D2922' }}>
               No directives posted yet. Switch to Strategy Mode to post one.
             </div>
           ) : (
             <div style={{ maxHeight:'220px', overflowY:'auto', display:'flex', flexDirection:'column', gap:'6px' }}>
               {globalNotes.slice(0,10).map((n,idx) => (
                 <div key={n.id||idx} style={{ padding:'12px 16px', background:'#252320', borderLeft:'3px solid #78716C' }}>
-                  <div className="mono-font text-[8px] mb-2" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
+                  <div className="mono-font text-[10px] mb-2" style={{ color:'#57534E' }}>{n.author} · {new Date(n.ts).toLocaleString()}</div>
                   <div className="display-font" style={{ fontSize:'13px', color:'#E7E4DF', lineHeight:1.6 }}>{n.text}</div>
                 </div>
               ))}
               {globalNotes.length > 10 && (
-                <div className="mono-font text-[8px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older directives — switch to Strategy Mode to see all</div>
+                <div className="mono-font text-[10px] text-center py-1" style={{ color:'#3D3A35' }}>+ {globalNotes.length-10} older directives — switch to Strategy Mode to see all</div>
               )}
             </div>
           )}
@@ -1301,25 +1301,25 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
           return (
             <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:'24px' }}>
               <div style={{ background:'#1A1814', border:'1px solid #44403C', width:'100%', maxWidth:'440px', padding:'24px' }}>
-                <div className="mono-font text-[9px] tracking-widest mb-1" style={{ color:'#78716C' }}>MERGE INCIDENT</div>
+                <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#78716C' }}>MERGE INCIDENT</div>
                 <div className="display-font font-bold mb-1" style={{ color:'#F5F1EA', fontSize:'16px' }}>{fromInc.name}</div>
-                <div className="mono-font text-[9px] mb-4" style={{ color:'#57534E' }}>Linked cases, notes, participants and affected FIs will be absorbed into the target incident. This incident will be removed.</div>
-                <div className="mono-font text-[9px] tracking-widest mb-2" style={{ color:'#78716C' }}>MERGE INTO →</div>
+                <div className="mono-font text-[10px] mb-4" style={{ color:'#57534E' }}>Linked cases, notes, participants and affected FIs will be absorbed into the target incident. This incident will be removed.</div>
+                <div className="mono-font text-[10px] tracking-widest mb-2" style={{ color:'#78716C' }}>MERGE INTO →</div>
                 <div className="space-y-2">
                   {incidents.filter(i => i.id !== mergeModal).map(i => (
                     <button key={i.id} onClick={() => { if (window.confirm(`Merge "${fromInc.name}" into "${i.name}"? This cannot be undone.`)) mergeIncidents(mergeModal, i.id) }}
                       className="w-full text-left px-3 py-3 border transition-colors hover:border-stone-400"
                       style={{ background:'#252320', borderColor:'#3D3A35' }}>
-                      <div className="mono-font text-[8px] mb-0.5" style={{ color:'#57534E' }}>{i.id}</div>
+                      <div className="mono-font text-[10px] mb-0.5" style={{ color:'#57534E' }}>{i.id}</div>
                       <div className="display-font text-sm" style={{ color:'#E7E4DF' }}>{i.name}</div>
-                      <div className="mono-font text-[8px] mt-1" style={{ color:'#78716C' }}>
+                      <div className="mono-font text-[10px] mt-1" style={{ color:'#78716C' }}>
                         {(i.linkedCaseIds||[]).length} cases · {(i.notes||[]).length} notes · {(i.participants||[]).length} agents
                       </div>
                     </button>
                   ))}
                 </div>
                 <button onClick={() => setMergeModal(null)}
-                  className="mono-font text-[9px] tracking-widest mt-4 w-full py-2"
+                  className="mono-font text-[10px] tracking-widest mt-4 w-full py-2"
                   style={{ background:'transparent', border:'1px solid #3D3A35', color:'#78716C' }}>
                   CANCEL
                 </button>

@@ -299,19 +299,19 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="mono-font text-xs font-medium text-stone-100">{sc.id}</span>
-            {sc.source === "uploaded" && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-blue-800 text-blue-100">CSV</span>}
-            {sc.source === "manual"   && <span className="mono-font text-[8px] px-1.5 py-0.5 bg-violet-800 text-violet-100">MANUAL</span>}
-            <span className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-600 text-stone-400">{network.toUpperCase()}</span>
+            {sc.source === "uploaded" && <span className="mono-font text-[10px] px-1.5 py-0.5 bg-blue-800 text-blue-100">CSV</span>}
+            {sc.source === "manual"   && <span className="mono-font text-[10px] px-1.5 py-0.5 bg-violet-800 text-violet-100">MANUAL</span>}
+            <span className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-600 text-stone-400">{network.toUpperCase()}</span>
             {sc.cycleStage && sc.cycleStage !== '1cb' && (
-              <span className={`mono-font text-[8px] px-1.5 py-0.5 border ${sc.cycleStage==='2cb'?'border-emerald-600 text-emerald-300':sc.cycleStage==='arb'?'border-red-600 text-red-300':'border-amber-600 text-amber-300'}`}>
+              <span className={`mono-font text-[10px] px-1.5 py-0.5 border ${sc.cycleStage==='2cb'?'border-emerald-600 text-emerald-300':sc.cycleStage==='arb'?'border-red-600 text-red-300':'border-amber-600 text-amber-300'}`}>
                 {CYCLE_STAGE_LABELS[sc.cycleStage]?.toUpperCase()}
               </span>
             )}
           </div>
           <div className="display-font text-stone-300 text-[13px]">{sc.code} — {sc.codeLabel}</div>
-          {sc.issuer && <div className="mono-font text-[9px] text-stone-400 mt-0.5">ISSUER: {sc.issuer}</div>}
-          {sc.stageMod?.feeRisk && <div className="mono-font text-[9px] text-amber-400 mt-1">⚠ {sc.stageMod.feeNote}</div>}
-          {sc.feeRiskPenalty > 0 && <div className="mono-font text-[9px] text-amber-400">−{sc.feeRiskPenalty} pts fee-risk penalty applied to fundability score</div>}
+          {sc.issuer && <div className="mono-font text-[10px] text-stone-400 mt-0.5">ISSUER: {sc.issuer}</div>}
+          {sc.stageMod?.feeRisk && <div className="mono-font text-[10px] text-amber-400 mt-1">⚠ {sc.stageMod.feeNote}</div>}
+          {sc.feeRiskPenalty > 0 && <div className="mono-font text-[10px] text-amber-400">−{sc.feeRiskPenalty} pts fee-risk penalty applied to fundability score</div>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className={`mono-font text-sm font-bold px-2 py-0.5 ${g.bg} ${g.text}`}>{g.label}</span>
@@ -321,15 +321,15 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 
       {onToggleExclude && (
         <div className="px-5 py-2 border-b border-stone-200 flex items-center justify-between" style={{ background:"#EEE9E0" }}>
-          <span className="mono-font text-[9px] tracking-widest text-stone-500">PORTFOLIO INCLUSION</span>
+          <span className="mono-font text-[10px] tracking-widest text-stone-500">PORTFOLIO INCLUSION</span>
           <div className="flex items-center gap-2">
             <button onClick={() => onToggleExclude(sc.id)}
-              className={`mono-font text-[9px] tracking-wide px-2.5 py-1 border transition-colors ${excluded?"border-amber-700 bg-amber-50 text-amber-800":"border-stone-400 text-stone-600 hover:border-stone-800 hover:text-stone-900"}`}>
+              className={`mono-font text-[10px] tracking-wide px-2.5 py-1 border transition-colors ${excluded?"border-amber-700 bg-amber-50 text-amber-800":"border-stone-400 text-stone-600 hover:border-stone-800 hover:text-stone-900"}`}>
               {excluded ? "EXCLUDED — CLICK TO RESTORE" : "EXCLUDE FROM PORTFOLIO"}
             </button>
             {onRemove && (sc.source === 'manual' || sc.source === 'desk') && (
               <button onClick={() => { if (window.confirm('Remove this claim permanently?')) onRemove(sc.id) }}
-                className="mono-font text-[9px] tracking-wide px-2.5 py-1 border border-red-400 text-red-600 hover:bg-red-50 transition-colors">
+                className="mono-font text-[10px] tracking-wide px-2.5 py-1 border border-red-400 text-red-600 hover:bg-red-50 transition-colors">
                 REMOVE
               </button>
             )}
@@ -339,7 +339,7 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 
       <div className="px-5 py-5 space-y-5">
         <div>
-          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">SCORE BREAKDOWN</div>
+          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">SCORE BREAKDOWN</div>
           <div className="space-y-3">
             {[
               { label:"Recovery probability", weight:"55%", raw:sc.recoveryProb, display:`${Math.round(sc.recoveryProb*100)}%`, color:sc.recoveryProb>=0.65?"#064e3b":sc.recoveryProb>=0.40?"#92400e":"#7f1d1d" },
@@ -348,14 +348,14 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
             ].map(m => (
               <div key={m.label}>
                 <div className="flex justify-between items-baseline mb-1.5">
-                  <div><span className="display-font text-[13px] text-stone-700">{m.label}</span><span className="mono-font text-[9px] text-stone-400 ml-1.5">({m.weight})</span></div>
+                  <div><span className="display-font text-[13px] text-stone-700">{m.label}</span><span className="mono-font text-[10px] text-stone-400 ml-1.5">({m.weight})</span></div>
                   <span className="mono-font text-xs font-medium text-stone-800">{m.display}</span>
                 </div>
                 <ScoreBar value={m.raw} color={m.color} />
               </div>
             ))}
             {sc.cycleStage && sc.cycleStage !== '1cb' && sc.stageMod && (
-              <div className={`mono-font text-[9px] px-2.5 py-1.5 border ${sc.cycleStage==='2cb'?'border-emerald-300 bg-emerald-50 text-emerald-800':sc.cycleStage==='arb'?'border-red-300 bg-red-50 text-red-800':'border-amber-300 bg-amber-50 text-amber-800'}`}>
+              <div className={`mono-font text-[10px] px-2.5 py-1.5 border ${sc.cycleStage==='2cb'?'border-emerald-300 bg-emerald-50 text-emerald-800':sc.cycleStage==='arb'?'border-red-300 bg-red-50 text-red-800':'border-amber-300 bg-amber-50 text-amber-800'}`}>
                 CYCLE STAGE ({CYCLE_STAGE_LABELS[sc.cycleStage]}): prob {sc.stageMod.probMod > 0 ? '+' : ''}{Math.round(sc.stageMod.probMod*100)}% · time ×{sc.stageMod.timeMulti}
                 {sc.feeRiskPenalty > 0 ? ` · −${sc.feeRiskPenalty}pt fee-risk penalty` : ''}
               </div>
@@ -365,7 +365,7 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 
         {evidenceItems.length > 0 && (
           <div>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">EVIDENCE FACTORS</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">EVIDENCE FACTORS</div>
             <div className="space-y-1.5">
               {evidenceItems.map(e => (
                 <div key={e.label} className="flex items-start gap-2">
@@ -379,13 +379,13 @@ function ClaimDetail({ sc, advanceRate, claimNet, onClose, excluded, onToggleExc
 
         {sc.note && (
           <div>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">UNDERWRITER NOTE</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">UNDERWRITER NOTE</div>
             <p className="display-font text-stone-700 text-[13px] leading-relaxed border-l-2 border-stone-300 pl-3 italic">{sc.note}</p>
           </div>
         )}
 
         <div className="border-t border-stone-200 pt-4">
-          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">FUNDING SUMMARY</div>
+          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">FUNDING SUMMARY</div>
           <div className="space-y-2">
             {[
               { label:"Face value",                                            val:`$${sc.amount.toLocaleString()}`,                                                                      bold:false },
@@ -728,7 +728,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
             <div className="flex items-center gap-4 flex-wrap">
               <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 005 — DFA</div>
               {Object.keys(historicalWinRates).length > 0 && (
-                <span className="mono-font text-[9px] tracking-widest px-2 py-0.5 border border-emerald-700 text-emerald-700">
+                <span className="mono-font text-[10px] tracking-widest px-2 py-0.5 border border-emerald-700 text-emerald-700">
                   ✓ {Object.keys(historicalWinRates).length} WIN RATE{Object.keys(historicalWinRates).length!==1?'S':''} CALIBRATED FROM YOUR HISTORY
                 </span>
               )}
@@ -746,7 +746,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
         <div style={{ display:'flex', gap:'2px', marginBottom:'28px', maxWidth:'360px' }}>
           {[['card','CARD CHARGEBACKS'],['crypto','CRYPTO / EXCHANGE']].map(([val,label]) => (
             <button key={val} onClick={() => setDfaTab(val)} className="mono-font"
-              style={{ flex:1, padding:'9px 0', fontSize:'9px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer',
+              style={{ flex:1, padding:'9px 0', fontSize:'10px', letterSpacing:'0.12em', border:'1px solid #C8C0B0', cursor:'pointer',
                        background:dfaTab===val?'#1A1814':'transparent', color:dfaTab===val?'#F5F1EA':'#6B5F4D' }}>
               {label}
             </button>
@@ -757,17 +757,17 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
         {dfaTab === 'crypto' && (
           <div>
             <div className="border border-stone-300 mb-5 px-5 py-4" style={{ background:'#F9F7F3', maxWidth:'680px' }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1.5">ABOUT CRYPTO / EXCHANGE SCORING</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1.5">ABOUT CRYPTO / EXCHANGE SCORING</div>
               <p className="display-font text-stone-600 text-[13px] leading-relaxed">Separate model for crypto and digital-asset claims — unauthorized access, phishing, scams, exchange errors. Recovery probability is driven by claim type, platform regulation, blockchain traceability, and time since incident.</p>
             </div>
             <div style={{ display:'flex', gap:'10px', marginBottom:'16px', flexWrap:'wrap' }}>
               <button onClick={() => setShowCryptoForm(v=>!v)} className="mono-font"
-                style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px' }}>
+                style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 14px', background:'#1A1814', color:'#F5F1EA', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px' }}>
                 <Plus className="w-3 h-3" />{showCryptoForm ? 'CANCEL' : 'ADD CLAIM'}
               </button>
               {cryptoClaims.length > 0 && (
                 <button onClick={() => { if(window.confirm('Clear all crypto claims?')) setCryptoClaims([]) }} className="mono-font"
-                  style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'8px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
+                  style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 12px', background:'transparent', border:'1px solid #C8C0B0', color:'#6B5F4D', cursor:'pointer' }}>
                   CLEAR ALL
                 </button>
               )}
@@ -777,35 +777,35 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                 <div className="px-4 py-2.5 border-b border-stone-200 mono-font text-[10px] tracking-widest text-stone-500" style={{ background:'#EEE9E0' }}>ADD CRYPTO CLAIM</div>
                 <div className="px-4 py-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">CLAIM ID</label>
+                    <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">CLAIM ID</label>
                       <input className="input-field" placeholder="AUTO" value={cryptoDraft.id} onChange={e=>setCryptoDraft(d=>({...d,id:e.target.value}))} /></div>
-                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">AMOUNT (USD)</label>
+                    <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">AMOUNT (USD)</label>
                       <input className="input-field" type="number" placeholder="0.00" value={cryptoDraft.amountUSD} onChange={e=>setCryptoDraft(d=>({...d,amountUSD:e.target.value}))} /></div>
                   </div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">CLAIM TYPE</label>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">CLAIM TYPE</label>
                     <select className="input-field" value={cryptoDraft.claimType} onChange={e=>setCryptoDraft(d=>({...d,claimType:e.target.value}))}>
                       {Object.entries(CRYPTO_CLAIM_TYPES).map(([k,v]) => <option key={k} value={k}>{v.label} — {Math.round(v.baseWin*100)}% base</option>)}
                     </select></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">EXCHANGE / PLATFORM TYPE</label>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">EXCHANGE / PLATFORM TYPE</label>
                     <select className="input-field" value={cryptoDraft.exchangeType} onChange={e=>setCryptoDraft(d=>({...d,exchangeType:e.target.value}))}>
                       {Object.entries(CRYPTO_EXCHANGES).map(([k,v]) => <option key={k} value={k}>{v.label} ({v.mod>0?'+':''}{Math.round(v.mod*100)}%)</option>)}
                     </select></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">DAYS SINCE INCIDENT</label>
+                    <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">DAYS SINCE INCIDENT</label>
                       <input className="input-field" type="number" value={cryptoDraft.daysSince} onChange={e=>setCryptoDraft(d=>({...d,daysSince:e.target.value}))} /></div>
-                    <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">PRIOR CLAIMS</label>
+                    <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">PRIOR CLAIMS</label>
                       <input className="input-field" type="number" value={cryptoDraft.priorClaims} onChange={e=>setCryptoDraft(d=>({...d,priorClaims:e.target.value}))} /></div>
                   </div>
                   <div>
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1.5">EVIDENCE SIGNALS</div>
+                    <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1.5">EVIDENCE SIGNALS</div>
                     <div className="flex flex-wrap gap-2">
                       {[{key:'blockchainTrace',label:'BLOCKCHAIN TRACE'},{key:'kycVerified',label:'KYC VERIFIED'},{key:'freezeRequested',label:'FREEZE REQUESTED'},{key:'policeReport',label:'POLICE REPORT'}].map(({key,label}) => (
                         <button key={key} type="button" onClick={()=>setCryptoDraft(d=>({...d,[key]:!d[key]}))}
-                          className={`mono-font text-[9px] tracking-wide px-2.5 py-1.5 border transition-colors ${cryptoDraft[key]?'border-stone-900 bg-stone-900 text-stone-50':'border-stone-300 text-stone-500 hover:border-stone-600'}`}>{label}</button>
+                          className={`mono-font text-[10px] tracking-wide px-2.5 py-1.5 border transition-colors ${cryptoDraft[key]?'border-stone-900 bg-stone-900 text-stone-50':'border-stone-300 text-stone-500 hover:border-stone-600'}`}>{label}</button>
                       ))}
                     </div>
                   </div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTE (OPTIONAL)</label>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">NOTE (OPTIONAL)</label>
                     <input className="input-field" placeholder="Context on this claim..." value={cryptoDraft.note} onChange={e=>setCryptoDraft(d=>({...d,note:e.target.value}))} /></div>
                   <div className="flex gap-2">
                     <button onClick={addCryptoClaim} disabled={!cryptoDraft.amountUSD||isNaN(parseFloat(cryptoDraft.amountUSD))||parseFloat(cryptoDraft.amountUSD)<=0}
@@ -827,7 +827,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                     {label:'EXPECTED RECOVERY',val:`$${Math.round(cryptoPortfolioExpected).toLocaleString()}`,sub:`${cryptoPortfolioValue>0?Math.round(cryptoPortfolioExpected/cryptoPortfolioValue*100):0}% of face`},
                     {label:'PORTFOLIO GRADE',val:cryptoPortfolioGrade.label,sub:`avg score ${Math.round(cryptoWeightedScore)}`}].map(s => (
                     <div key={s.label} className="border border-stone-200 px-4 py-4" style={{background:'#FAF7F1'}}>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{s.label}</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{s.label}</div>
                       <div className="display-font font-semibold text-stone-900" style={{fontSize:'26px',lineHeight:1}}>{s.val}</div>
                       <div className="mono-font text-[10px] text-stone-400 mt-1">{s.sub}</div>
                     </div>
@@ -841,7 +841,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                         <div onClick={()=>setCryptoSelected(isSel?null:c.id)}
                           className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors">
                           <span className={`mono-font text-xs font-bold px-2 py-0.5 shrink-0 ${g.bg} ${g.text}`}>{g.label}</span>
-                          <span className="mono-font text-[9px] text-stone-400 shrink-0">{c.id}</span>
+                          <span className="mono-font text-[10px] text-stone-400 shrink-0">{c.id}</span>
                           <span className="display-font text-stone-700 flex-1 text-[13px] truncate">{(CRYPTO_CLAIM_TYPES[c.claimType]||{label:'?'}).label}</span>
                           <span className="mono-font text-[11px] text-stone-600 shrink-0">${(c.amountUSD||0).toLocaleString()}</span>
                           <span className="mono-font text-[10px] text-stone-400 shrink-0">{Math.round(c.recoveryProb*100)}% win</span>
@@ -851,20 +851,20 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                           <div className="border-t border-stone-200 px-4 py-4 space-y-3">
                             <div className="grid grid-cols-3 gap-3">
                               {[{label:'WIN PROB',val:`${Math.round(c.recoveryProb*100)}%`,w:'55%'},{label:'TIME SCORE',val:`${Math.round(c.timeScore*100)}%`,w:'25%'},{label:'AMT SCORE',val:`${Math.round(c.amtScore*100)}%`,w:'20%'}].map(m=>(
-                                <div key={m.label}><div className="mono-font text-[9px] text-stone-400 mb-1">{m.label} ({m.w})</div>
+                                <div key={m.label}><div className="mono-font text-[10px] text-stone-400 mb-1">{m.label} ({m.w})</div>
                                   <div className="display-font font-semibold text-stone-900" style={{fontSize:'20px'}}>{m.val}</div></div>
                               ))}
                             </div>
-                            <div className="mono-font text-[9px] text-stone-500 space-y-0.5">
+                            <div className="mono-font text-[10px] text-stone-500 space-y-0.5">
                               <div>Exchange: {(CRYPTO_EXCHANGES[c.exchangeType]||{label:'?'}).label}</div>
                               <div>Days since incident: {c.daysSince} · Prior claims: {c.priorClaims}</div>
                               {[c.blockchainTrace&&'✓ Blockchain trace',c.kycVerified&&'✓ KYC verified',c.freezeRequested&&'✓ Freeze requested',c.policeReport&&'✓ Police report'].filter(Boolean).map((s,i)=><div key={i} className="text-emerald-700">{s}</div>)}
                             </div>
                             {c.note && <p className="display-font text-stone-600 text-[13px] italic border-l-2 border-stone-200 pl-3">{c.note}</p>}
                             <div className="border-t border-stone-100 pt-3 flex items-center justify-between">
-                              <span className="mono-font text-[9px] text-stone-500">Expected recovery: <strong className="text-emerald-800">${Math.round(c.expectedRecovery).toLocaleString()}</strong></span>
+                              <span className="mono-font text-[10px] text-stone-500">Expected recovery: <strong className="text-emerald-800">${Math.round(c.expectedRecovery).toLocaleString()}</strong></span>
                               <button onClick={()=>{setCryptoClaims(prev=>prev.filter(x=>x.id!==c.id));setCryptoSelected(null)}}
-                                className="mono-font text-[9px] px-2 py-1 border border-red-300 text-red-600 hover:bg-red-50 transition-colors" style={{background:'none',cursor:'pointer'}}>REMOVE</button>
+                                className="mono-font text-[10px] px-2 py-1 border border-red-300 text-red-600 hover:bg-red-50 transition-colors" style={{background:'none',cursor:'pointer'}}>REMOVE</button>
                             </div>
                           </div>
                         )}
@@ -904,35 +904,35 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
               </div>
               <div className="px-4 py-4 space-y-4">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">CLAIM ID</label><input className="input-field" placeholder="AUTO" value={draft.id} onChange={e=>setDraft(d=>({...d,id:e.target.value}))} /></div>
-                  <div className="col-span-2"><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">REASON CODE</label><select className="input-field" value={draft.code} onChange={e=>setDraft(d=>({...d,code:e.target.value}))}>{Object.entries(CODE_LABELS).map(([k,v]) => <option key={k} value={k}>{k} — {v}</option>)}</select></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">AMOUNT ($)</label><input className="input-field" type="number" placeholder="0.00" value={draft.amount} onChange={e=>setDraft(d=>({...d,amount:e.target.value}))} /></div>
-                  <div className="col-span-2"><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">CYCLE STAGE</label>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">CLAIM ID</label><input className="input-field" placeholder="AUTO" value={draft.id} onChange={e=>setDraft(d=>({...d,id:e.target.value}))} /></div>
+                  <div className="col-span-2"><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">REASON CODE</label><select className="input-field" value={draft.code} onChange={e=>setDraft(d=>({...d,code:e.target.value}))}>{Object.entries(CODE_LABELS).map(([k,v]) => <option key={k} value={k}>{k} — {v}</option>)}</select></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">AMOUNT ($)</label><input className="input-field" type="number" placeholder="0.00" value={draft.amount} onChange={e=>setDraft(d=>({...d,amount:e.target.value}))} /></div>
+                  <div className="col-span-2"><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">CYCLE STAGE</label>
                     <select className="input-field" value={draft.cycleStage} onChange={e=>setDraft(d=>({...d,cycleStage:e.target.value}))}>
                       {Object.entries(CYCLE_STAGE_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
                     </select>
-                    {draft.cycleStage==='2cb' && <div className="mono-font text-[9px] text-emerald-700 mt-1">↑ +8% probability — already survived first chargeback round</div>}
-                    {draft.cycleStage==='prearb' && <div className="mono-font text-[9px] text-amber-700 mt-1">⚠ Pre-arb fee risk — Visa $500 / MC $500 filing fee if lost</div>}
-                    {draft.cycleStage==='arb' && <div className="mono-font text-[9px] text-red-700 mt-1">⚠ Arbitration fee risk up to $1,100 (MC) — only fund if high-confidence</div>}
+                    {draft.cycleStage==='2cb' && <div className="mono-font text-[10px] text-emerald-700 mt-1">↑ +8% probability — already survived first chargeback round</div>}
+                    {draft.cycleStage==='prearb' && <div className="mono-font text-[10px] text-amber-700 mt-1">⚠ Pre-arb fee risk — Visa $500 / MC $500 filing fee if lost</div>}
+                    {draft.cycleStage==='arb' && <div className="mono-font text-[10px] text-red-700 mt-1">⚠ Arbitration fee risk up to $1,100 (MC) — only fund if high-confidence</div>}
                   </div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">ISSUER</label><input className="input-field" placeholder="Chase / BofA / CU..." value={draft.issuer} onChange={e=>setDraft(d=>({...d,issuer:e.target.value}))} /></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">FILED DAYS AGO</label><input className="input-field" type="number" value={draft.filedDaysAgo} onChange={e=>setDraft(d=>({...d,filedDaysAgo:e.target.value}))} /></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">WINDOW (DAYS)</label><input className="input-field" type="number" value={draft.windowDays} onChange={e=>setDraft(d=>({...d,windowDays:e.target.value}))} /></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">MERCHANT CBR</label><input className="input-field" type="number" step="0.1" value={draft.merchantCBR} onChange={e=>setDraft(d=>({...d,merchantCBR:e.target.value}))} /></div>
-                  <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">PRIOR CLAIMS</label><input className="input-field" type="number" value={draft.priorClaims} onChange={e=>setDraft(d=>({...d,priorClaims:e.target.value}))} /></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">ISSUER</label><input className="input-field" placeholder="Chase / BofA / CU..." value={draft.issuer} onChange={e=>setDraft(d=>({...d,issuer:e.target.value}))} /></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">FILED DAYS AGO</label><input className="input-field" type="number" value={draft.filedDaysAgo} onChange={e=>setDraft(d=>({...d,filedDaysAgo:e.target.value}))} /></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">WINDOW (DAYS)</label><input className="input-field" type="number" value={draft.windowDays} onChange={e=>setDraft(d=>({...d,windowDays:e.target.value}))} /></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">MERCHANT CBR</label><input className="input-field" type="number" step="0.1" value={draft.merchantCBR} onChange={e=>setDraft(d=>({...d,merchantCBR:e.target.value}))} /></div>
+                  <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">PRIOR CLAIMS</label><input className="input-field" type="number" value={draft.priorClaims} onChange={e=>setDraft(d=>({...d,priorClaims:e.target.value}))} /></div>
                 </div>
                 <div>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-2">EVIDENCE SIGNALS — click to toggle</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">EVIDENCE SIGNALS — click to toggle</div>
                   <div className="flex flex-wrap gap-2">
                     {[{key:"avsMismatch",label:"AVS MISMATCH"},{key:"no3DS",label:"NO 3DS"},{key:"deliveryConf",label:"DELIVERY CONF"},{key:"merchantAck",label:"MERCHANT ACK"},{key:"pinVerified",label:"PIN VERIFIED"},{key:"isVFMP",label:"VFMP ENROLLED"},{key:"strongDocs",label:"STRONG DOCS"}].map(({key,label}) => (
                       <button key={key} type="button" onClick={() => setDraft(d=>({...d,[key]:!d[key]}))}
-                        className={`mono-font text-[9px] tracking-wide px-2.5 py-1.5 border transition-colors ${draft[key]?"border-stone-900 bg-stone-900 text-stone-50":"border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700"}`}>
+                        className={`mono-font text-[10px] tracking-wide px-2.5 py-1.5 border transition-colors ${draft[key]?"border-stone-900 bg-stone-900 text-stone-50":"border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700"}`}>
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div><label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">UNDERWRITER NOTE (OPTIONAL)</label><input className="input-field" placeholder="Observations on this claim..." value={draft.note} onChange={e=>setDraft(d=>({...d,note:e.target.value}))} /></div>
+                <div><label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">UNDERWRITER NOTE (OPTIONAL)</label><input className="input-field" placeholder="Observations on this claim..." value={draft.note} onChange={e=>setDraft(d=>({...d,note:e.target.value}))} /></div>
                 <div className="flex gap-2 flex-wrap">
                   <button type="button" onClick={addManualClaim} disabled={!draft.amount||isNaN(parseFloat(draft.amount))||parseFloat(draft.amount)<=0} className="mono-font text-[10px] tracking-widest px-4 py-2 bg-stone-900 text-stone-50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">SCORE &amp; ADD CLAIM</button>
                   <button type="button" onClick={() => { setDraft({...MANUAL_DEFAULTS}); setShowAddForm(false) }} className="mono-font text-[10px] tracking-widest px-4 py-2 border border-stone-300 text-stone-500 hover:border-stone-600 hover:text-stone-700 transition-colors">CANCEL</button>
@@ -972,9 +972,9 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
               { label:"FUNDABILITY SCORE",    value:`${portfolioScore} / 100`,                        sub:concPenalty>0?`−${concPenalty} concentration`:"no concentration risk"    },
             ].map(m => (
               <div key={m.label} className={`border p-4 ${m.hi?"border-emerald-700 bg-emerald-50":"border-stone-300"}`} style={m.hi?{}:{background:"#FAF7F1"}}>
-                <div className={`mono-font text-[9px] tracking-widest mb-2 ${m.hi?"text-emerald-700":"text-stone-400"}`}>{m.label}</div>
+                <div className={`mono-font text-[10px] tracking-widest mb-2 ${m.hi?"text-emerald-700":"text-stone-400"}`}>{m.label}</div>
                 <div className={`display-font font-semibold ${m.hi?"text-emerald-900":"text-stone-900"}`} style={{ fontSize:"clamp(16px,2.5vw,22px)", letterSpacing:"-0.02em" }}>{m.value}</div>
-                <div className={`mono-font text-[9px] tracking-wide mt-1 ${m.hi?"text-emerald-600":"text-stone-400"}`}>{m.sub}</div>
+                <div className={`mono-font text-[10px] tracking-wide mt-1 ${m.hi?"text-emerald-600":"text-stone-400"}`}>{m.sub}</div>
               </div>
             ))}
           </div>
@@ -983,7 +983,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
           <div className="border border-stone-300 p-4 mb-5" style={{ background:"#FAF7F1" }}>
             <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
               <div>
-                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-0.5">ADVANCE RATE</div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-0.5">ADVANCE RATE</div>
                 <div className="display-font text-stone-500 text-[13px]">
                   Grade default: <strong className="text-stone-800">{Math.round(gradeAdvRate*100)}%</strong>
                   {advanceOverride !== null && <span className="mono-font text-[10px] text-amber-700 ml-2">OVERRIDDEN</span>}
@@ -998,11 +998,11 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                 <span className="mono-font text-[10px] text-stone-400">75%</span>
                 <span className="mono-font text-sm font-bold text-stone-900 w-10 text-right">{Math.round(advanceRate*100)}%</span>
                 {advanceOverride !== null && (
-                  <button onClick={() => setAdvanceOverride(null)} className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors">RESET</button>
+                  <button onClick={() => setAdvanceOverride(null)} className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors">RESET</button>
                 )}
               </div>
             </div>
-            <div className="mono-font text-[9px] tracking-widest text-stone-400 leading-relaxed">
+            <div className="mono-font text-[10px] tracking-widest text-stone-400 leading-relaxed">
               DEPLOYING ${Math.round(advanceValue).toLocaleString()} · {roaPercent}% GROSS RETURN · ~{annualizedIRR}% ANNUALIZED ({holdingDays}-DAY WINDOW){recourseType==="partial"?` · +$${Math.round(recourseBonus).toLocaleString()} RECOURSE REFUND`:""}
             </div>
           </div>
@@ -1010,10 +1010,10 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
           {/* Tranche breakdown */}
           {tranches.length > 0 && (
             <div className="border border-stone-300 overflow-hidden mb-4" style={{ background:"#FAF7F1" }}>
-              <div className="px-4 py-2 border-b border-stone-200" style={{ background:"#EEE9E0" }}><span className="mono-font text-[9px] tracking-widest text-stone-600">TRANCHE BREAKDOWN</span></div>
+              <div className="px-4 py-2 border-b border-stone-200" style={{ background:"#EEE9E0" }}><span className="mono-font text-[10px] tracking-widest text-stone-600">TRANCHE BREAKDOWN</span></div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead><tr className="border-b border-stone-200">{["GRADE","CLAIMS","FACE VALUE","EXPECTED RECOVERY","SHARE OF EXPECTED"].map(h => <th key={h} className={`px-4 py-2 mono-font text-[9px] tracking-widest text-stone-400 ${h==="GRADE"?"text-left":"text-right"}`}>{h}</th>)}</tr></thead>
+                  <thead><tr className="border-b border-stone-200">{["GRADE","CLAIMS","FACE VALUE","EXPECTED RECOVERY","SHARE OF EXPECTED"].map(h => <th key={h} className={`px-4 py-2 mono-font text-[10px] tracking-widest text-stone-400 ${h==="GRADE"?"text-left":"text-right"}`}>{h}</th>)}</tr></thead>
                   <tbody>
                     {tranches.map(t => {
                       const tg = grade(t.gl==="A"?80:t.gl==="B"?65:t.gl==="C"?50:30)
@@ -1063,7 +1063,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
           const maxExpected = Math.max(...buckets.map(b => b.expected), 1)
           return (
             <div className="mb-6 mt-2">
-              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">RECOVERY TIMELINE — PROJECTED CASH RETURN BY RESOLUTION WINDOW</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">RECOVERY TIMELINE — PROJECTED CASH RETURN BY RESOLUTION WINDOW</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {buckets.map(b => {
                   const barW = Math.round(b.expected / maxExpected * 100)
@@ -1071,7 +1071,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                   projDate.setDate(projDate.getDate() + (b.max === 9999 ? 120 : b.max))
                   return (
                     <div key={b.label} className="border border-stone-200 p-3" style={{ background: '#FAF7F1' }}>
-                      <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">{b.label}</div>
+                      <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{b.label}</div>
                       <div className="display-font font-semibold text-stone-900 mb-0.5" style={{ fontSize: 'clamp(14px,4vw,18px)', letterSpacing: '-0.02em' }}>
                         ${Math.round(b.expected).toLocaleString()}
                       </div>
@@ -1080,7 +1080,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                         <div style={{ height: '100%', width: `${barW}%`, background: '#064e3b', borderRadius: '2px', transition: 'width 0.4s' }} />
                       </div>
                       {b.claims.length > 0 && (
-                        <div className="mono-font text-[9px] text-stone-400 mt-1.5">
+                        <div className="mono-font text-[10px] text-stone-400 mt-1.5">
                           est. return by {projDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                         </div>
                       )}
@@ -1088,7 +1088,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                   )
                 })}
               </div>
-              <div className="mt-2 mono-font text-[9px] text-stone-400">
+              <div className="mt-2 mono-font text-[10px] text-stone-400">
                 Timeline based on filing window remaining per claim (windowDays − daysAgo). Actual resolution may vary by network and issuer response.
               </div>
             </div>
@@ -1104,10 +1104,10 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
               <button className="w-full flex items-center justify-between px-4 py-3" style={{ borderBottom: calibOpen ? '1px solid #E8E3DA' : 'none' }}
                 onClick={() => setCalibOpen(v => !v)}>
                 <div className="flex items-center gap-3">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500">MODEL CALIBRATION — WIN RATE OVERRIDES</div>
-                  {hasOverrides && <div className="mono-font text-[9px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>{Object.keys(winRateOverrides).length} OVERRIDE{Object.keys(winRateOverrides).length > 1 ? 'S' : ''} ACTIVE</div>}
+                  <div className="mono-font text-[10px] tracking-widest text-stone-500">MODEL CALIBRATION — WIN RATE OVERRIDES</div>
+                  {hasOverrides && <div className="mono-font text-[10px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>{Object.keys(winRateOverrides).length} OVERRIDE{Object.keys(winRateOverrides).length > 1 ? 'S' : ''} ACTIVE</div>}
                 </div>
-                <div className="mono-font text-[9px] text-stone-400">{calibOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+                <div className="mono-font text-[10px] text-stone-400">{calibOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
               </button>
               {calibOpen && (
                 <div className="px-4 py-4">
@@ -1123,7 +1123,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                         <div key={code} style={{ display:'grid', gridTemplateColumns:'200px 1fr 60px 80px', alignItems:'center', gap:'12px' }}>
                           <div>
                             <div className="mono-font text-[10px] text-stone-700">{code}</div>
-                            <div className="mono-font text-[9px] text-stone-400">{CODE_LABELS[code] || code}</div>
+                            <div className="mono-font text-[10px] text-stone-400">{CODE_LABELS[code] || code}</div>
                           </div>
                           <input type="range" min="0.05" max="0.96" step="0.01"
                             value={current}
@@ -1132,9 +1132,9 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                           <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
                             {override !== undefined && (
                               <button onClick={() => setWinRateOverrides(prev => { const n = {...prev}; delete n[code]; return n })}
-                                className="mono-font text-[9px] text-stone-400 hover:text-stone-700">RESET</button>
+                                className="mono-font text-[10px] text-stone-400 hover:text-stone-700">RESET</button>
                             )}
-                            {override === undefined && <div className="mono-font text-[9px] text-stone-300">DEFAULT</div>}
+                            {override === undefined && <div className="mono-font text-[10px] text-stone-300">DEFAULT</div>}
                           </div>
                         </div>
                       )
@@ -1142,11 +1142,11 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                   </div>
                   {hasOverrides && (
                     <button onClick={() => setWinRateOverrides({})}
-                      className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 mt-4 border border-stone-300 px-3 py-1.5">
+                      className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-stone-700 mt-4 border border-stone-300 px-3 py-1.5">
                       RESET ALL TO DEFAULTS
                     </button>
                   )}
-                  <div className="mono-font text-[9px] text-stone-400 mt-3">
+                  <div className="mono-font text-[10px] text-stone-400 mt-3">
                     Default rates are based on published network win-rate research and Covalence model training data. Adjust based on your actual representment outcomes over the last 12 months for best accuracy.
                   </div>
                 </div>
@@ -1181,10 +1181,10 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                 style={{ borderBottom: vintageOpen ? '1px solid #E8E3DA' : 'none' }}
                 onClick={() => setVintageOpen(v => !v)}>
                 <div className="flex items-center gap-3">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500">VINTAGE ANALYSIS — FILING DATE DISTRIBUTION</div>
-                  {vintageConc > 0.60 && <div className="mono-font text-[9px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>⚠ VINTAGE CONCENTRATION</div>}
+                  <div className="mono-font text-[10px] tracking-widest text-stone-500">VINTAGE ANALYSIS — FILING DATE DISTRIBUTION</div>
+                  {vintageConc > 0.60 && <div className="mono-font text-[10px]" style={{ background:'#FEF3C7', color:'#92400E', padding:'2px 7px' }}>⚠ VINTAGE CONCENTRATION</div>}
                 </div>
-                <div className="mono-font text-[9px] text-stone-400">{vintageOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
+                <div className="mono-font text-[10px] text-stone-400">{vintageOpen ? '▲ COLLAPSE' : '▼ EXPAND'}</div>
               </button>
               {vintageOpen && (
                 <div className="px-4 py-4">
@@ -1203,12 +1203,12 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                             <div style={{ height:'100%', width:`${barW}%`, background: b.count/totalClaims > 0.60 ? '#92400e' : '#44403c', borderRadius:'2px', transition:'width 0.3s' }} />
                           </div>
                           <div className="mono-font text-[10px] text-stone-700 text-right">{b.count}</div>
-                          <div className="mono-font text-[9px] text-stone-400 text-right">${Math.round(b.value).toLocaleString()}</div>
+                          <div className="mono-font text-[10px] text-stone-400 text-right">${Math.round(b.value).toLocaleString()}</div>
                         </div>
                       )
                     })}
                   </div>
-                  <div className="mono-font text-[9px] text-stone-400 mt-3">A healthy rolling portfolio shows claims spread across multiple buckets. Funders typically prefer to see no single vintage accounting for more than 50% of face value.</div>
+                  <div className="mono-font text-[10px] text-stone-400 mt-3">A healthy rolling portfolio shows claims spread across multiple buckets. Funders typically prefer to see no single vintage accounting for more than 50% of face value.</div>
                 </div>
               )}
             </div>
@@ -1233,13 +1233,13 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
           if (rows.length < 2) return null
           return (
             <div className="mt-2 mb-6">
-              <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CONCENTRATION BY MERCHANT / SOURCE (TOP {rows.length})</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">CONCENTRATION BY MERCHANT / SOURCE (TOP {rows.length})</div>
               <div className="border border-stone-200 overflow-x-auto">
                 <table className="w-full" style={{ minWidth: '480px' }}>
                   <thead>
                     <tr style={{ background: '#EEE9E0' }}>
                       {['MERCHANT / SOURCE','CLAIMS','FACE VALUE','EXP. RECOVERY','SHARE'].map(h=>(
-                        <th key={h} className="mono-font text-[9px] tracking-widest text-stone-400 px-3 py-2 text-left font-normal">{h}</th>
+                        <th key={h} className="mono-font text-[10px] tracking-widest text-stone-400 px-3 py-2 text-left font-normal">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1274,7 +1274,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
               <button className="upload-btn" onClick={() => {
                 const w = window.open('','_blank')
                 const g = grade
-                w.document.write('<!DOCTYPE html><html><head><title>Covalence DFA — Portfolio Summary</title><style>body{font-family:monospace;padding:40px;color:#1A1814;max-width:900px;margin:0 auto}h1{font-size:26px;margin-bottom:4px}h2{font-size:13px;color:#78716c;margin:0 0 28px;font-weight:normal}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.card{border:1px solid #D4CCBC;padding:10px}.label{font-size:9px;letter-spacing:0.1em;color:#78716c;margin-bottom:3px}.val{font-size:19px;font-weight:600}.sub{font-size:10px;color:#a8a29e;margin-top:1px}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;padding:5px 8px;background:#EEE9E0;font-size:9px;letter-spacing:0.08em;font-weight:normal}td{padding:5px 8px;border-top:1px solid #f5f5f4}.A{color:#064e3b;font-weight:700}.B{color:#065f46}.C{color:#92400e}.D{color:#7f1d1d}.footer{margin-top:32px;font-size:9px;color:#a8a29e;border-top:1px solid #D4CCBC;padding-top:10px}@media print{button{display:none}}</style></head><body>'
+                w.document.write('<!DOCTYPE html><html><head><title>Covalence DFA — Portfolio Summary</title><style>body{font-family:monospace;padding:40px;color:#1A1814;max-width:900px;margin:0 auto}h1{font-size:26px;margin-bottom:4px}h2{font-size:13px;color:#78716c;margin:0 0 28px;font-weight:normal}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}.card{border:1px solid #D4CCBC;padding:10px}.label{font-size:10px;letter-spacing:0.1em;color:#78716c;margin-bottom:3px}.val{font-size:19px;font-weight:600}.sub{font-size:10px;color:#a8a29e;margin-top:1px}table{width:100%;border-collapse:collapse;font-size:11px}th{text-align:left;padding:5px 8px;background:#EEE9E0;font-size:10px;letter-spacing:0.08em;font-weight:normal}td{padding:5px 8px;border-top:1px solid #f5f5f4}.A{color:#064e3b;font-weight:700}.B{color:#065f46}.C{color:#92400e}.D{color:#7f1d1d}.footer{margin-top:32px;font-size:10px;color:#a8a29e;border-top:1px solid #D4CCBC;padding-top:10px}@media print{button{display:none}}</style></head><body>'
                   + '<h1>Covalence — Dispute Funding Assessor</h1>'
                   + '<h2>Portfolio Summary &mdash; ' + new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + '</h2>'
                   + '<div class="grid">'
@@ -1317,10 +1317,10 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                       <div>
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <span className="mono-font text-xs font-medium text-stone-800">{c.id}</span>
-                          {c.source==="uploaded"&&<span className="mono-font text-[8px] px-1.5 py-0.5 bg-blue-900 text-blue-50">CSV</span>}
-                          {c.source==="manual"&&<span className="mono-font text-[8px] px-1.5 py-0.5 bg-violet-900 text-violet-50">MANUAL</span>}
-                          <span className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-500">{detectNetwork(c.code).toUpperCase()}</span>
-                          {isExcluded&&<span className="mono-font text-[8px] px-1.5 py-0.5 border border-amber-600 text-amber-700">EXCL</span>}
+                          {c.source==="uploaded"&&<span className="mono-font text-[10px] px-1.5 py-0.5 bg-blue-900 text-blue-50">CSV</span>}
+                          {c.source==="manual"&&<span className="mono-font text-[10px] px-1.5 py-0.5 bg-violet-900 text-violet-50">MANUAL</span>}
+                          <span className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-500">{detectNetwork(c.code).toUpperCase()}</span>
+                          {isExcluded&&<span className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-600 text-amber-700">EXCL</span>}
                         </div>
                         <div className="display-font text-stone-600 text-[13px]">{c.code} — {c.codeLabel}</div>
                       </div>
@@ -1374,8 +1374,8 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className={`mono-font text-xs font-medium ${isSel?"text-stone-100":"text-stone-800"}`}>{c.id}</span>
-                                {c.source==="uploaded"&&<span className={`mono-font text-[8px] px-1.5 py-0.5 ${isSel?"bg-stone-600 text-stone-200":"bg-blue-900 text-blue-50"}`}>CSV</span>}
-                                {c.source==="manual"&&<span className={`mono-font text-[8px] px-1.5 py-0.5 ${isSel?"bg-stone-600 text-stone-200":"bg-violet-900 text-violet-50"}`}>MAN</span>}
+                                {c.source==="uploaded"&&<span className={`mono-font text-[10px] px-1.5 py-0.5 ${isSel?"bg-stone-600 text-stone-200":"bg-blue-900 text-blue-50"}`}>CSV</span>}
+                                {c.source==="manual"&&<span className={`mono-font text-[10px] px-1.5 py-0.5 ${isSel?"bg-stone-600 text-stone-200":"bg-violet-900 text-violet-50"}`}>MAN</span>}
                               </div>
                               <div className={`sub-text mono-font text-[10px] mt-0.5 ${isSel?"":"text-stone-400"}`}>{c.windowDays-c.filedDaysAgo}d remaining</div>
                             </td>
@@ -1410,7 +1410,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                 <ClaimDetail sc={sc} advanceRate={advanceRate} claimNet={claimNet} onClose={() => setSelected(null)} excluded={excludedIds.has(sc.id)} onToggleExclude={toggleExclude} onRemove={removeManualClaim} />
               ) : (
                 <div className="border border-dashed border-stone-300 flex flex-col items-center justify-center py-20" style={{ background:"#FAF7F1" }}>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-300 text-center leading-relaxed">SELECT A CLAIM<br />TO VIEW DETAIL</div>
+                  <div className="mono-font text-[10px] tracking-widest text-stone-300 text-center leading-relaxed">SELECT A CLAIM<br />TO VIEW DETAIL</div>
                 </div>
               )}
             </div>
@@ -1430,7 +1430,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
 
           {/* Capital flow waterfall */}
           <div className="mb-8">
-            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">CAPITAL FLOW</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">CAPITAL FLOW</div>
             <div className="space-y-2.5">
               {[
                 { label:"FACE VALUE",        value:totalValue,                                  color:"#D4CCBC", textColor:"text-stone-500" },
@@ -1441,7 +1441,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                 const pct = totalValue > 0 ? Math.round(row.value/totalValue*100) : 0
                 return (
                   <div key={row.label} className="flex items-center gap-3 sm:gap-4">
-                    <div className="mono-font text-[9px] tracking-widest text-stone-400 w-32 sm:w-40 shrink-0 text-right">{row.label}</div>
+                    <div className="mono-font text-[10px] tracking-widest text-stone-400 w-32 sm:w-40 shrink-0 text-right">{row.label}</div>
                     <div className="flex-1" style={{ background:"#EEE9E0", height:"20px", position:"relative", minWidth:0 }}>
                       <div style={{ position:"absolute", top:0, left:0, height:"100%", width:`${pct}%`, background:row.color, transition:"width 0.4s ease" }} />
                     </div>
@@ -1456,14 +1456,14 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
 
           {/* Scenario table */}
           <div className="mb-8">
-            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">SCENARIO ANALYSIS</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">SCENARIO ANALYSIS</div>
             <div className="border border-stone-300 overflow-hidden" style={{ background:"#FAF7F1" }}>
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ minWidth:"580px" }}>
                   <thead>
                     <tr className="border-b border-stone-200" style={{ background:"#EEE9E0" }}>
                       {["SCENARIO","EXPECTED RECOVERY","ADVANCE (FIXED)","NET TO FUNDER","RETURN","ANNUALIZED"].map(h => (
-                        <th key={h} className={`px-4 py-2.5 mono-font text-[9px] tracking-widest text-stone-500 ${h==="SCENARIO"?"text-left":"text-right"}`}>{h}</th>
+                        <th key={h} className={`px-4 py-2.5 mono-font text-[10px] tracking-widest text-stone-500 ${h==="SCENARIO"?"text-left":"text-right"}`}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1501,11 +1501,11 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Recourse */}
             <div className="border border-stone-300 p-5" style={{ background:"#FAF7F1" }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">RECOURSE STRUCTURE</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">RECOURSE STRUCTURE</div>
               <div className="flex gap-0 mb-4">
                 {[["nonrecourse","Non-recourse"],["partial","Partial recourse"]].map(([val,lbl]) => (
                   <button key={val} onClick={() => setRecourseType(val)}
-                    className={`mono-font text-[9px] tracking-wide px-3 py-2 border transition-colors flex-1 ${recourseType===val?"border-stone-900 bg-stone-900 text-stone-50":"border-stone-300 text-stone-500 hover:border-stone-600"}`}>
+                    className={`mono-font text-[10px] tracking-wide px-3 py-2 border transition-colors flex-1 ${recourseType===val?"border-stone-900 bg-stone-900 text-stone-50":"border-stone-300 text-stone-500 hover:border-stone-600"}`}>
                     {lbl}
                   </button>
                 ))}
@@ -1517,8 +1517,8 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
                     <span className="mono-font text-xs font-bold text-stone-900">{Math.round(refundPct*100)}%</span>
                   </div>
                   <input type="range" min="0.05" max="0.50" step="0.05" value={refundPct} onChange={e => setRefundPct(parseFloat(e.target.value))} className="w-full" />
-                  <div className="flex justify-between mono-font text-[9px] text-stone-400 mt-1 mb-3"><span>5%</span><span>25%</span><span>50%</span></div>
-                  <div className="mono-font text-[9px] tracking-widest text-emerald-700">+${Math.round(recourseBonus).toLocaleString()} expected refund · improves net return by {advanceValue>0?Math.round(recourseBonus/advanceValue*100):0}pp</div>
+                  <div className="flex justify-between mono-font text-[10px] text-stone-400 mt-1 mb-3"><span>5%</span><span>25%</span><span>50%</span></div>
+                  <div className="mono-font text-[10px] tracking-widest text-emerald-700">+${Math.round(recourseBonus).toLocaleString()} expected refund · improves net return by {advanceValue>0?Math.round(recourseBonus/advanceValue*100):0}pp</div>
                 </div>
               ) : (
                 <p className="display-font text-stone-500 text-[13px] leading-relaxed">Funder bears all credit losses. No refund from issuer on losing claims. Full downside risk sits with the funder.</p>
@@ -1527,13 +1527,13 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
 
             {/* Holding period */}
             <div className="border border-stone-300 p-5" style={{ background:"#FAF7F1" }}>
-              <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-4">RESOLUTION WINDOW</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-4">RESOLUTION WINDOW</div>
               <div className="flex items-center justify-between mb-2">
                 <span className="display-font text-stone-600 text-[13px]">Average holding period</span>
                 <span className="mono-font text-xs font-bold text-stone-900">{holdingDays} days</span>
               </div>
               <input type="range" min="45" max="180" step="15" value={holdingDays} onChange={e => setHoldingDays(parseInt(e.target.value))} className="w-full" />
-              <div className="flex justify-between mono-font text-[9px] text-stone-400 mt-1 mb-4"><span>45d</span><span>90d</span><span>135d</span><span>180d</span></div>
+              <div className="flex justify-between mono-font text-[10px] text-stone-400 mt-1 mb-4"><span>45d</span><span>90d</span><span>135d</span><span>180d</span></div>
               <div className="border-t border-stone-200 pt-4 space-y-2">
                 {[
                   { label:"Gross return on advance", val:`${roaPercent}%` },

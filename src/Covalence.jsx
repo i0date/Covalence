@@ -6,6 +6,7 @@ import { DEMO_INSTITUTION, demoRole, setDemoRole, ensureDemoSeeded, demoAudit } 
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
+import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
 import { DeskView } from './tools/Desk.jsx'
@@ -52,7 +53,7 @@ function LoginGate({ onLogin, startInSignIn, onCancel }) {
   }
 
   const leaveSignIn = () => { clearPendingInvite(); if (onCancel) onCancel(); else setMode('demo') }
-  const label = { fontFamily:"'JetBrains Mono',monospace", fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px', display:'block' }
+  const label = { fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px', display:'block' }
 
   return (
     <WelcomePage>
@@ -97,7 +98,7 @@ function LoginGate({ onLogin, startInSignIn, onCancel }) {
 
       {onCancel && (
         <div style={{ marginTop:'24px' }}>
-          <button type="button" onClick={onCancel} className="wl-mono" style={{ background:'none', border:'none', color:'#78716C', fontSize:'9px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>← Back to the demo</button>
+          <button type="button" onClick={onCancel} className="wl-mono" style={{ background:'none', border:'none', color:'#78716C', fontSize:'10px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' }}>← Back to the demo</button>
         </div>
       )}
     </WelcomePage>
@@ -145,6 +146,8 @@ export default function Covalence() {
   const [deskOpenRequest, setDeskOpenRequest] = useState(null)
   const [dataVersion,     setDataVersion]     = useState(0) // bump to remount tools after demo load/clear
   useOpenCaseListener(setOpenCaseId)
+  const openSearch = React.useCallback(() => setSearchOpen(true), [])
+  const { help: shortcutsOpen, setHelp: setShortcutsOpen } = useShortcuts({ setActiveSection, openSearch, activeSection, enabled: !!(demoUser || membership) })
 
   const loadDemo  = () => { loadDemoInstitution(setOutcomes, covUser?.email); setDataVersion(v => v + 1) }
   const clearDemo = () => { clearDemoInstitution(setOutcomes); setDataVersion(v => v + 1) }
@@ -293,15 +296,15 @@ export default function Covalence() {
                 COVALENCE
                 {/* Not signed in → everything here is local demo data; say so */}
                 {!covUser?.authed && <span title="You're exploring with demo data. Sign in to use your institution's workspace."
-                  style={{ fontSize:'8px', letterSpacing:'0.16em', color:'#D6CFC4', border:'1px dashed #78716C', padding:'2px 6px' }}>DEMO</span>}
+                  style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#D6CFC4', border:'1px dashed #78716C', padding:'2px 6px' }}>DEMO</span>}
               </div>
             </div>
-            <span className="mobile-only mono-font cov-nav-current">{(NAV.find(n => n.id === activeSection)?.label || '').replace(/\s+/g, ' ')}</span>
+            <span className="mono-font cov-nav-current">{(NAV.find(n => n.id === activeSection)?.label || '').replace(/\s+/g, ' ')}</span>
             <div className="cov-nav-buttons" style={{ display:'flex', alignItems:'center' }}>
               {NAV.map(({ id, label }) => (
                 <button key={id} onClick={() => setActiveSection(id)}
                   style={{
-                    fontFamily:"'JetBrains Mono',monospace", fontSize:'9px', letterSpacing:'0.12em',
+                    fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em',
                     padding:'14px 12px', background:'transparent', border:'none',
                     borderBottom: activeSection === id ? '2px solid #D6CFC4' : '2px solid transparent',
                     color: activeSection === id ? '#F5F1EA' : '#7A7068',
@@ -317,41 +320,43 @@ export default function Covalence() {
                 style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'5px 8px 5px 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
                 <Search size={13} strokeWidth={1.75} style={{flexShrink:0}} />
                 <span className="desktop-only cov-nav-search-label" style={{flex:1,textAlign:'left'}}>Search cases</span>
-                <kbd className="desktop-only" style={{fontFamily:'inherit',fontSize:'9px',color:'#78716C',border:'1px solid #3D3A35',padding:'1px 5px',lineHeight:1.4}}>
+                <kbd className="desktop-only" style={{fontFamily:'inherit',fontSize:'10px',color:'#78716C',border:'1px solid #3D3A35',padding:'1px 5px',lineHeight:1.4}}>
                   {/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K'}
                 </kbd>
               </button>
 
               {SUPA_URL && SUPA_KEY && covUser?.authed && globalSyncStatus !== 'idle' && (
-                <span className="mono-font" style={{fontSize:'8px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
+                <span className="mono-font" style={{fontSize:'10px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
                   color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
                   borderColor: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669'}}>
                   <span className="desktop-only">{globalSyncStatus==='syncing'?'↻ SYNC':globalSyncStatus==='error'?'✗ SYNC ERROR':'✓ LIVE'}</span>
                   <span className="mobile-only" title={globalSyncStatus==='error'?'Sync error':globalSyncStatus==='syncing'?'Syncing':'Live'}>●</span>
                 </span>
               )}
-              {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
+              {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'10px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
               {covUser?.demo && (
-                <label className="mono-font desktop-only" title="Try Covalence as each role — the app changes what you can do" style={{fontSize:'9px',letterSpacing:'0.1em',color:'#78716C',display:'flex',alignItems:'center',gap:'6px'}}>
-                  VIEW AS
+                <label className="mono-font desktop-only" title="Try Covalence as each role — the app changes what you can do" style={{fontSize:'10px',letterSpacing:'0.1em',color:'#78716C',display:'flex',alignItems:'center',gap:'6px'}}>
+                  <span className="cov-nav-collapse">VIEW AS</span>
                   <select value={demoRoleState} onChange={e => setDemoRole(e.target.value)} aria-label="View the demo as role"
-                    style={{background:'#232019',border:'1px solid #3D3A35',color:'#E7E4DF',fontFamily:'inherit',fontSize:'9px',letterSpacing:'0.1em',padding:'3px 4px',cursor:'pointer'}}>
+                    style={{background:'#232019',border:'1px solid #3D3A35',color:'#E7E4DF',fontFamily:'inherit',fontSize:'10px',letterSpacing:'0.1em',padding:'3px 4px',cursor:'pointer'}}>
                     {Object.entries(ROLES).map(([k, r]) => <option key={k} value={k}>{r.label.toUpperCase()}</option>)}
                   </select>
                 </label>
               )}
-              {covUser&&<div className="mono-font desktop-only" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
-                <span style={{color:'#A8A29E',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>
+              {covUser&&<div className="mono-font desktop-only" style={{fontSize:'10px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                <span className="cov-nav-collapse" style={{color:'#A8A29E',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>
                   {covUser.name}{covUser.authed && <span className="desktop-only" style={{color:'#57534E'}}> · {covUser.institution}</span>}
                 </span>
                 {!covUser.authed && authAvailable && (
                   <button onClick={() => setShowSignIn(true)} title="Sign in to share cases with your team"
-                    style={{background:'transparent',border:'1px solid #D6CFC4',color:'#E7E4DF',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>SIGN IN</button>
+                    style={{background:'transparent',border:'1px solid #D6CFC4',color:'#E7E4DF',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'10px',letterSpacing:'0.1em',flexShrink:0}}>SIGN IN</button>
                 )}
                 <button onClick={() => { if (covUser.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }}
                   title={covUser.authed ? 'Sign out' : 'Leave the demo'}
-                  style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
+                  style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'10px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
+              <button onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="mono-font desktop-only cov-nav-collapse"
+                style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',width:'28px',height:'28px',cursor:'pointer',fontSize:'12px'}}>?</button>
               <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole}
                 onSignIn={!covUser?.authed && authAvailable ? () => setShowSignIn(true) : null}
                 onSignOut={() => { if (covUser?.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }} />
@@ -383,12 +388,13 @@ export default function Covalence() {
           />
         )}
         <CaseSearch outcomes={outcomes} open={searchOpen} setOpen={setSearchOpen} />
+        <ShortcutHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
         {/* ── Section views — all kept mounted (display:none when inactive) to preserve local state ── */}
         <React.Fragment key={dataVersion}>
         <div style={{ display: activeSection === 'home' ? 'block' : 'none' }}>
           <HomeView outcomes={outcomes} settings={settings} setActiveSection={setActiveSection} platformMode={platformMode}
-            onLoadDemo={loadDemo} onClearDemo={clearDemo} />
+            onLoadDemo={loadDemo} onClearDemo={clearDemo} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
           <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />

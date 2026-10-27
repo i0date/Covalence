@@ -7,18 +7,18 @@ import { sendCode, verifyCode, signOut, createInstitution, acceptInvite, pending
 
 // Shared dark styles — match the welcome screen
 const gate = {
-  label: { fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' },
+  label: { fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.2em', color:'#78716C', marginBottom:'6px' },
   input: { width:'100%', background:'#252320', border:'1px solid #3D3A35', color:'#E7E4DF', padding:'10px 14px', fontFamily:'monospace', fontSize:'16px', outline:'none', boxSizing:'border-box' },
   btn:   { width:'100%', padding:'12px', background:'#292524', border:'1px solid #57534E', color:'#E7E4DF', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.15em', cursor:'pointer' },
-  link:  { background:'none', border:'none', color:'#78716C', fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' },
-  err:   { fontFamily:'monospace', fontSize:'9px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' },
+  link:  { background:'none', border:'none', color:'#78716C', fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.12em', cursor:'pointer', padding:0, textDecoration:'underline', textUnderlineOffset:'3px' },
+  err:   { fontFamily:'monospace', fontSize:'10px', color:'#F87171', letterSpacing:'0.05em', marginBottom:'12px' },
   note:  { fontFamily:'monospace', fontSize:'10px', color:'#A8A29E', letterSpacing:'0.04em', lineHeight:1.6, marginBottom:'20px' },
 }
 export function GateShell({ title, subtitle, children }) {
   return (
     <div style={{ minHeight:'100vh', background:'#1A1814', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}>
       <div style={{ width:'100%', maxWidth:'400px' }}>
-        <div style={{ fontFamily:'monospace', fontSize:'9px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
+        <div style={{ fontFamily:'monospace', fontSize:'10px', letterSpacing:'0.25em', color:'#57534E', marginBottom:'32px' }}>COVALENCE · DISPUTE OPS</div>
         <div style={{ fontFamily:'Georgia,serif', fontSize:'26px', color:'#E7E4DF', letterSpacing:'-0.02em', marginBottom:'6px' }}>{title}</div>
         {subtitle && <div style={{ fontFamily:'monospace', fontSize:'10px', color:'#78716C', letterSpacing:'0.05em', marginBottom:'32px', lineHeight:1.6 }}>{subtitle}</div>}
         {children}
@@ -195,10 +195,10 @@ export function TeamPanel({ covUser }) {
                 {Object.entries(ROLES).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
               </select>
             ) : (
-              <span style={{ ...small, fontSize:'9px', letterSpacing:'0.1em', color: m.role === 'admin' ? '#7F1D1D' : '#78716C' }}>{(ROLES[m.role]?.label || m.role).toUpperCase()}</span>
+              <span style={{ ...small, fontSize:'10px', letterSpacing:'0.1em', color: m.role === 'admin' ? '#7F1D1D' : '#78716C' }}>{(ROLES[m.role]?.label || m.role).toUpperCase()}</span>
             )}
             {isAdmin && m.email !== covUser.email && (
-              <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }}
+              <button style={{ ...small, fontSize:'10px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }}
                 onClick={() => { if (window.confirm(`Remove ${m.display_name || m.email} from ${covUser.institution}?`)) removeMember(m.user_id).then(refresh).catch(e => setErr(e.message)) }}>REMOVE</button>
             )}
           </div>
@@ -221,19 +221,19 @@ export function TeamPanel({ covUser }) {
                 <div style={{ ...small, color:'#065F46', marginBottom:'6px' }}>{covUser?.demo ? 'Invite created (demo — no email is sent, and the link only works for a real workspace).' : 'Invite created. Send this link to them — it works only for that email address and expires in 14 days.'}</div>
                 <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                   <code style={{ ...small, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#1A1814' }}>{newLink}</code>
-                  <button className="upload-btn" style={{ padding:'5px 10px' }} onClick={() => copy(newLink)}>{copied ? 'COPIED ✓' : 'COPY'}</button>
+                  <button className="cov-btn-secondary" style={{ padding:'5px 10px' }} onClick={() => copy(newLink)}>{copied ? 'COPIED ✓' : 'COPY'}</button>
                 </div>
               </div>
             )}
             {invites.length > 0 && (
               <div className="mt-4">
-                <div style={{ ...small, fontSize:'9px', letterSpacing:'0.15em', color:'#8A7F72', marginBottom:'4px' }}>PENDING INVITES</div>
+                <div style={{ ...small, fontSize:'10px', letterSpacing:'0.15em', color:'#8A7F72', marginBottom:'4px' }}>PENDING INVITES</div>
                 {invites.map(i => (
                   <div key={i.code} style={row}>
                     <span style={{ ...small, color:'#1A1814', flex:1, minWidth:0 }}>{i.email}</span>
-                    <span style={{ ...small, fontSize:'9px', color:'#78716C' }}>{(ROLES[i.role]?.label || i.role).toUpperCase()} · expires {new Date(i.expires_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
-                    <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#1E3A5F', cursor:'pointer' }} onClick={() => copy(inviteLink(i.code))}>COPY LINK</button>
-                    <button style={{ ...small, fontSize:'9px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }} onClick={() => revokeInvite(i.code).then(refresh).catch(e => setErr(e.message))}>REVOKE</button>
+                    <span style={{ ...small, fontSize:'10px', color:'#78716C' }}>{(ROLES[i.role]?.label || i.role).toUpperCase()} · expires {new Date(i.expires_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                    <button style={{ ...small, fontSize:'10px', background:'none', border:'none', color:'#1E3A5F', cursor:'pointer' }} onClick={() => copy(inviteLink(i.code))}>COPY LINK</button>
+                    <button style={{ ...small, fontSize:'10px', background:'none', border:'none', color:'#B91C1C', cursor:'pointer' }} onClick={() => revokeInvite(i.code).then(refresh).catch(e => setErr(e.message))}>REVOKE</button>
                   </div>
                 ))}
               </div>

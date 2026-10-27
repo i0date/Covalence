@@ -1,5 +1,6 @@
 // 002 DISPUTE DESK — case analysis, evidence, tracker (issuer + merchant)
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
+import { SectionNav } from '../SectionNav.jsx'
 import React, { useState, useEffect, useRef } from 'react'
 import { Shield, Loader2, ArrowRight, AlertCircle, FileText, Check, Copy, CheckSquare, Square, MessageSquare, ClipboardList, Pencil, Download } from 'lucide-react'
 import { openEvidence } from '../CaseThread.jsx'
@@ -308,6 +309,7 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   // ── Triage handoff — triageHandoff + setTriageHandoff come as props ────
   const showHandoffBanner = triageHandoff !== null
   const dismissHandoffBanner = () => setTriageHandoff(null)
+  const deskRootRef = useRef(null)
   // COV- number the next analysis should reuse (set by a Triage handoff or by opening a tracked case)
   const pendingCaseIdRef = useRef(null)
   // Case panel → "Open in Desk": pre-fill the form from the case (no automatic AI re-run)
@@ -1314,16 +1316,19 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 sm:py-12">
+    <div ref={deskRootRef} className="max-w-6xl mx-auto px-4 py-8 sm:px-6 sm:py-12">
+
+        {/* Jump between Desk's sections (built from the headings on screen) */}
+        <SectionNav rootRef={deskRootRef} label="Dispute Desk sections" />
 
         {/* ── Masthead ── */}
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 002 — THE DISPUTE DESK</div>
             <div className="flex items-center gap-3">
-              {supaSyncStatus === 'syncing' && <span className="mono-font text-[9px] tracking-widest text-amber-600">↻ SYNCING</span>}
-              {supaSyncStatus === 'synced'  && <span className="mono-font text-[9px] tracking-widest text-emerald-600">✓ SYNCED</span>}
-              {supaSyncStatus === 'error'   && <span className="mono-font text-[9px] tracking-widest text-red-600">✗ SYNC ERROR</span>}
+              {supaSyncStatus === 'syncing' && <span className="mono-font text-[10px] tracking-widest text-amber-600">↻ SYNCING</span>}
+              {supaSyncStatus === 'synced'  && <span className="mono-font text-[10px] tracking-widest text-emerald-600">✓ SYNCED</span>}
+              {supaSyncStatus === 'error'   && <span className="mono-font text-[10px] tracking-widest text-red-600">✗ SYNC ERROR</span>}
               <div className="mono-font text-xs tracking-widest text-stone-600">
                 {new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
               </div>
@@ -1344,10 +1349,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
           </div>
           {/* ── Mode indicator strip ── */}
           <div style={{ marginTop:'12px', padding:'10px 16px', borderLeft:'3px solid ' + (platformMode === 'fi' ? '#1D4ED8' : '#92400E'), background: platformMode === 'fi' ? '#EFF6FF' : '#FFFBEB' }}>
-            <span className="mono-font text-[9px] tracking-widest" style={{ color: platformMode === 'fi' ? '#1E3A8A' : '#78350F', fontWeight: 700 }}>
+            <span className="mono-font text-[10px] tracking-widest" style={{ color: platformMode === 'fi' ? '#1E3A8A' : '#78350F', fontWeight: 700 }}>
               {platformMode === 'fi' ? 'ISSUER / FI MODE' : 'MERCHANT MODE'}
             </span>
-            <span className="mono-font text-[9px] ml-3" style={{ color: platformMode === 'fi' ? '#1D4ED8' : '#92400E' }}>
+            <span className="mono-font text-[10px] ml-3" style={{ color: platformMode === 'fi' ? '#1D4ED8' : '#92400E' }}>
               {platformMode === 'fi'
                 ? '— File disputes on behalf of cardholders. Reg E / Reg Z compliance. Network chargeback workflow.'
                 : '— Fight chargebacks as a merchant. Build rebuttal evidence. Submit representment to your acquirer.'}
@@ -1530,10 +1535,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
               {/* DFA Signal Capture */}
               <div className="border border-stone-300 p-4" style={{ background:'#F0EDE6' }}>
-                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">DFA SIGNALS <span className="normal-case tracking-normal font-normal opacity-60">— improves funding grade accuracy</span></div>
+                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">DFA SIGNALS <span className="normal-case tracking-normal font-normal opacity-60">— improves funding grade accuracy</span></div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">AVS MISMATCH</label>
+                    <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1.5">AVS MISMATCH</label>
                     <div className="flex gap-0">
                       {[{v:null,l:'—'},{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
                         <button key={l} onClick={() => setFiAvsMismatch(v)}
@@ -1543,10 +1548,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                         </button>
                       ))}
                     </div>
-                    {fiAvsMismatch===null && <div className="mono-font text-[9px] text-stone-400 mt-1">unknown — won't affect grade</div>}
+                    {fiAvsMismatch===null && <div className="mono-font text-[10px] text-stone-400 mt-1">unknown — won't affect grade</div>}
                   </div>
                   <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">VFMP ENROLLED</label>
+                    <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1.5">VFMP ENROLLED</label>
                     <div className="flex gap-0">
                       {[{v:null,l:'—'},{v:false,l:'NO'},{v:true,l:'YES'}].map(({v,l}) => (
                         <button key={l} onClick={() => setFiIsVFMP(v)}
@@ -1556,14 +1561,14 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                         </button>
                       ))}
                     </div>
-                    {fiIsVFMP===null && <div className="mono-font text-[9px] text-stone-400 mt-1">unknown — won't affect grade</div>}
+                    {fiIsVFMP===null && <div className="mono-font text-[10px] text-stone-400 mt-1">unknown — won't affect grade</div>}
                   </div>
                   <div>
-                    <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1.5">PRIOR CLAIMS ON ACCOUNT</label>
+                    <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1.5">PRIOR CLAIMS ON ACCOUNT</label>
                     <input type="number" min="0" max="99" value={fiPriorClaims} placeholder="—"
                       onChange={e => setFiPriorClaims(e.target.value)}
                       className="cov-input mono-font" style={{ fontSize:'13px', maxWidth:'80px' }} />
-                    <div className="mono-font text-[9px] text-stone-400 mt-1">leave blank if unknown</div>
+                    <div className="mono-font text-[10px] text-stone-400 mt-1">leave blank if unknown</div>
                   </div>
                 </div>
               </div>
@@ -1834,7 +1839,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             <textarea readOnly value={draftLines} rows={18}
                               style={{ width:'100%', fontSize:'11px', fontFamily:'monospace', lineHeight:1.55, padding:'12px', background:'#FFF5F5', border:'1px solid #FCA5A5', color:'#1C1917', resize:'vertical', boxSizing:'border-box' }} />
                             <button onClick={() => navigator.clipboard.writeText(draftLines)} className="mono-font"
-                              style={{ fontSize:'9px', letterSpacing:'0.12em', padding:'5px 12px', marginTop:'6px', border:'1px solid #B91C1C', color:'#B91C1C', background:'none', cursor:'pointer' }}>
+                              style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 12px', marginTop:'6px', border:'1px solid #B91C1C', color:'#B91C1C', background:'none', cursor:'pointer' }}>
                               COPY TO CLIPBOARD
                             </button>
                           </div>
@@ -2058,7 +2063,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                     <div className="space-y-3">
                       {mchResult.evidence_to_submit.map((ev, i) => (
                         <div key={i} className="flex gap-2 items-start">
-                          <span className={'mono-font text-[9px] tracking-widest px-1.5 py-0.5 mt-0.5 shrink-0 ' + (ev.priority === 'required' ? 'bg-stone-900 text-stone-50' : 'bg-stone-300 text-stone-700')}>{(ev.priority || '').toUpperCase()}</span>
+                          <span className={'mono-font text-[10px] tracking-widest px-1.5 py-0.5 mt-0.5 shrink-0 ' + (ev.priority === 'required' ? 'bg-stone-900 text-stone-50' : 'bg-stone-300 text-stone-700')}>{(ev.priority || '').toUpperCase()}</span>
                           <div>
                             <div className="display-font text-stone-800 text-[14px] font-medium">{ev.item}</div>
                             <div className="display-font text-stone-500 text-[12px] italic">{ev.note}</div>
@@ -2154,7 +2159,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               <div className={'flex items-start gap-4 px-4 py-3 mb-6 border ' + (past ? 'border-red-700' : urgent ? 'border-amber-700' : 'border-stone-300')}
                 style={{ background: past ? '#FEF2F2' : urgent ? '#FFFBEB' : '#FAF7F1' }}>
                 <div>
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">
+                  <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">
                     {'NETWORK DEADLINE · ' + (network || 'VISA').toUpperCase() + ' · ' + ddDays + 'D FROM CHARGEBACK NOTICE'}
                   </div>
                   <div className={'mono-font text-sm font-semibold ' + (past ? 'text-red-700' : urgent ? 'text-amber-800' : 'text-stone-900')}>
@@ -2206,10 +2211,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
             return (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <div className="mono-font text-[9px] tracking-widest text-stone-500">
+                  <div className="mono-font text-[10px] tracking-widest text-stone-500">
                     {code ? 'EVIDENCE REQUIRED — CODE ' + code : 'FULL CHECKLIST — ENTER REASON CODE IN STEP 01 FOR TAILORED LIST'}
                   </div>
-                  <div className="mono-font text-[9px] text-stone-400">{checkedCount} / {items.length} CONFIRMED</div>
+                  <div className="mono-font text-[10px] text-stone-400">{checkedCount} / {items.length} CONFIRMED</div>
                 </div>
                 <div className="border border-stone-200" style={{ background: '#FAF7F1' }}>
                   {items.map((it, idx) => (
@@ -2218,13 +2223,13 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                         onChange={e => setMchEvidenceChecked(prev => ({ ...prev, [it.id]: e.target.checked }))}
                         className="mt-0.5 shrink-0" style={{ accentColor: '#1A1814' }} />
                       <span className="display-font text-stone-800 text-[14px] leading-snug flex-1">{it.label}</span>
-                      <span className="mono-font text-[8px] tracking-widest px-1.5 py-0.5 shrink-0"
+                      <span className="mono-font text-[10px] tracking-widest px-1.5 py-0.5 shrink-0"
                         style={{ background: tagBg[it.tag] || '#1A1814', color: '#F5F1EA' }}>{it.tag}</span>
                     </label>
                   ))}
                 </div>
                 {checkedCount > 0 && checkedCount === items.length && (
-                  <div className="mt-3 mono-font text-[9px] tracking-widest text-emerald-700">
+                  <div className="mt-3 mono-font text-[10px] tracking-widest text-emerald-700">
                     ✓ ALL EVIDENCE CONFIRMED — READY FOR STEP 04
                   </div>
                 )}
@@ -2261,7 +2266,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
           </div>
 
           <div className="mb-6">
-            <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-3">SUBMISSION CHECKLIST</div>
+            <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-3">SUBMISSION CHECKLIST</div>
             <div className="border border-stone-200" style={{ background: '#FAF7F1' }}>
               {[
                 { id: 'rep_letter',    label: 'Rebuttal letter drafted and reviewed (Step 02)' },
@@ -2295,7 +2300,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
           {mchSubmitDate && (
             <div className="mt-5 px-4 py-3 border border-emerald-700" style={{ background: '#ECFDF5' }}>
-              <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-1">SUBMITTED TO ACQUIRER</div>
+              <div className="mono-font text-[10px] tracking-widest text-emerald-800 mb-1">SUBMITTED TO ACQUIRER</div>
               <div className="display-font text-emerald-900 text-sm">
                 {new Date(mchSubmitDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                 {mchTrackingRef && <> · Ref: <span className="font-semibold">{mchTrackingRef}</span></>}
@@ -2331,7 +2336,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                   style={{ fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap' }}>{line || '\u00A0'}</p>
               ))}
             </div>
-            <div className="bg-stone-50 px-4 py-2 border-t border-stone-200 mono-font text-[9px] text-stone-400">
+            <div className="bg-stone-50 px-4 py-2 border-t border-stone-200 mono-font text-[10px] text-stone-400">
               Fill acquirer name, deadline, and tracking ref in Step 04 to auto-populate this template.
             </div>
           </div>
@@ -2405,19 +2410,19 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
           {/* Pre-Arb escalation workflow */}
           {mchOutcome === 'pre_arb' && (
             <div className="border border-purple-700 bg-purple-50 p-6 space-y-4">
-              <div className="mono-font text-[9px] tracking-widest text-purple-900 mb-2">⚠ PRE-ARBITRATION ESCALATION</div>
+              <div className="mono-font text-[10px] tracking-widest text-purple-900 mb-2">⚠ PRE-ARBITRATION ESCALATION</div>
               <p className="display-font text-purple-900 text-[14px] leading-relaxed">
                 The issuer has filed a second chargeback. You now have a second opportunity to respond — typically 30 days from the escalation date (Visa) or 45 days (Mastercard). Confirm your deadline with your acquirer immediately.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13px]">
                 <div className="mono-font text-purple-800 border border-purple-200 bg-white p-3">
-                  <div className="text-[9px] tracking-widest mb-1 text-purple-500">VISA PRE-ARB DEADLINE</div>
+                  <div className="text-[10px] tracking-widest mb-1 text-purple-500">VISA PRE-ARB DEADLINE</div>
                   {mchOutcomeDate
                     ? (() => { const d = new Date(mchOutcomeDate + 'T12:00:00'); d.setDate(d.getDate() + 30); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' (30d)' })()
                     : 'Enter decision date above'}
                 </div>
                 <div className="mono-font text-purple-800 border border-purple-200 bg-white p-3">
-                  <div className="text-[9px] tracking-widest mb-1 text-purple-500">MC PRE-ARB DEADLINE</div>
+                  <div className="text-[10px] tracking-widest mb-1 text-purple-500">MC PRE-ARB DEADLINE</div>
                   {mchOutcomeDate
                     ? (() => { const d = new Date(mchOutcomeDate + 'T12:00:00'); d.setDate(d.getDate() + 45); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' (45d)' })()
                     : 'Enter decision date above'}
@@ -2463,7 +2468,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
           )}
           {(mchOutcome === 'won' || mchOutcome === 'no_response') && (
             <div className="px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
-              <div className="mono-font text-[9px] tracking-widest text-emerald-800 mb-1">✓ CHARGEBACK REVERSED</div>
+              <div className="mono-font text-[10px] tracking-widest text-emerald-800 mb-1">✓ CHARGEBACK REVERSED</div>
               <div className="display-font text-emerald-900 text-[15px]">
                 {mchOutcomeDate ? new Date(mchOutcomeDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : 'Decision date not set'}
                 {(mchRecoveryAmt || amount) && <> · <span className="font-semibold">{mchRecoveryAmt || amount} {currency || 'CAD'} recovered</span></>}
@@ -2473,7 +2478,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
           )}
           {mchOutcome === 'lost' && (
             <div className="px-5 py-4 border border-red-700" style={{ background: '#FEF2F2' }}>
-              <div className="mono-font text-[9px] tracking-widest text-red-800 mb-1">✗ CHARGEBACK UPHELD — FUNDS DEBITED</div>
+              <div className="mono-font text-[10px] tracking-widest text-red-800 mb-1">✗ CHARGEBACK UPHELD — FUNDS DEBITED</div>
               <div className="display-font text-red-900 text-[14px]">
                 Review the issuer decision for the specific reason. If procedural error, file a compliance case via your acquirer.
               </div>
@@ -2738,7 +2743,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       <p className="display-font text-stone-400 text-[12px] italic">Dear Valued Cardholder,</p>
                       {letterDraftModified && comms?.body && (
                         <button onClick={() => { setEditableLetterBody(comms.body); setLetterDraftModified(false) }}
-                          className="mono-font text-[8px] tracking-widest px-2 py-1 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
+                          className="mono-font text-[10px] tracking-widest px-2 py-1 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors">
                           ↺ RESET TO AI DRAFT
                         </button>
                       )}
@@ -2820,10 +2825,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                           <div>
                             <span className={`display-font text-[14px] leading-snug ${done ? 'line-through text-stone-400' : 'text-stone-800'}`}>{item.text}</span>
                             {!done && item.impact === 'required' && (
-                              <span className="mono-font text-[9px] text-red-700 ml-2 tracking-wider">REQUIRED</span>
+                              <span className="mono-font text-[10px] text-red-700 ml-2 tracking-wider">REQUIRED</span>
                             )}
                             {!done && item.impact === 'strengthens' && (
-                              <span className="mono-font text-[9px] text-emerald-700 ml-2 tracking-wider">STRENGTHENS</span>
+                              <span className="mono-font text-[10px] text-emerald-700 ml-2 tracking-wider">STRENGTHENS</span>
                             )}
                           </div>
                         </button>
@@ -2905,27 +2910,27 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                   {platformMode === 'fi' && result && fightCalc && (
                         <div className="border border-stone-300 mt-2" style={{ background: '#EEE9E0' }}>
                           <div className="px-4 py-2.5 border-b border-stone-300">
-                            <span className="mono-font text-[9px] tracking-widest text-stone-500">NET RECOVERY ESTIMATE</span>
+                            <span className="mono-font text-[10px] tracking-widest text-stone-500">NET RECOVERY ESTIMATE</span>
                           </div>
                           {fightCalc && (
                             <div className="grid grid-cols-4 divide-x divide-stone-200 border-b border-stone-300">
                               <div className="p-3">
-                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">WIN PROB</div>
                                 <div className="display-font font-bold text-xl text-stone-900">{fightCalc.winProb}%</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal ? ' + REBUTTAL' : ''}</div>
+                                <div className="mono-font text-[10px] text-stone-400 mt-0.5">{result.confidence?.toUpperCase()}{rebuttal ? ' + REBUTTAL' : ''}</div>
                               </div>
                               <div className="p-3">
-                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">EXP. RECOVERY</div>
                                 <div className="display-font font-bold text-xl text-stone-900">${fightCalc.expectedRec.toFixed(2)}</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">amt × win prob</div>
+                                <div className="mono-font text-[10px] text-stone-400 mt-0.5">amt × win prob</div>
                               </div>
                               <div className="p-3">
-                                <div className="mono-font text-[9px] tracking-widest text-stone-500 mb-1">WRITE-OFF RISK</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-500 mb-1">WRITE-OFF RISK</div>
                                 <div className="display-font font-bold text-xl text-red-800">${fightCalc.writeOffRisk.toFixed(2)}</div>
-                                <div className="mono-font text-[9px] text-stone-400 mt-0.5">if lost + ~${fightCalc.netFee} fee</div>
+                                <div className="mono-font text-[10px] text-stone-400 mt-0.5">if lost + ~${fightCalc.netFee} fee</div>
                               </div>
                               <div className={`p-3 ${fightCalc.recommendation === 'FIGHT' ? 'bg-emerald-900' : 'bg-red-900'}`}>
-                                <div className={`mono-font text-[9px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
+                                <div className={`mono-font text-[10px] tracking-widest mb-1 ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-300' : 'text-red-300'}`}>NET VALUE</div>
                                 <div className={`display-font font-bold text-xl ${fightCalc.recommendation === 'FIGHT' ? 'text-emerald-100' : 'text-red-100'}`}>
                                   {fightCalc.netValue >= 0 ? '+' : ''}{fightCalc.netValue.toFixed(2)}
                                 </div>
@@ -2934,7 +2939,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             </div>
                           )}
                           <div className="px-4 py-2">
-                            <p className="mono-font text-[9px] text-stone-400 italic">Win probability from AI analysis + merchant defense signals. Write-off risk = full disputed amount if lost. Network filing fee ~$25.</p>
+                            <p className="mono-font text-[10px] text-stone-400 italic">Win probability from AI analysis + merchant defense signals. Write-off risk = full disputed amount if lost. Network filing fee ~$25.</p>
                           </div>
                         </div>
                   )}
@@ -2978,8 +2983,8 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               {showSettings && (
                 <div className="border border-stone-400 mb-5" style={{ background: '#FAF7F1' }}>
                   <div className="flex items-center justify-between px-4 py-2.5 border-b border-stone-200" style={{ background: '#EEE9E0' }}>
-                    <span className="mono-font text-[9px] tracking-widest text-stone-600">COMPLIANCE THRESHOLDS — INSTITUTION CONFIGURATION</span>
-                    <button onClick={resetSettings} className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors">RESET DEFAULTS</button>
+                    <span className="mono-font text-[10px] tracking-widest text-stone-600">COMPLIANCE THRESHOLDS — INSTITUTION CONFIGURATION</span>
+                    <button onClick={resetSettings} className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors">RESET DEFAULTS</button>
                   </div>
                   <div className="px-4 py-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {[
@@ -2991,7 +2996,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       { key: 'absoluteCapDays',       label: 'ABSOLUTE CAP (DAYS)',       type: 'number', hint: 'Hard cap on any filing, regardless of reason code (Visa: 540 days from transaction)' },
                     ].map(({ key, label, type, hint }) => (
                       <div key={key}>
-                        <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">{label}</label>
+                        <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">{label}</label>
                         <input
                           type={type}
                           value={settings[key]}
@@ -3003,17 +3008,17 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       </div>
                     ))}
                     <div>
-                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">DFA SCORING</label>
+                      <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">DFA SCORING</label>
                       <button
                         onClick={() => updateSetting('dfaEnabled', !settings.dfaEnabled)}
-                        className="mono-font text-[9px] tracking-widest px-4 py-2 border transition-colors"
+                        className="mono-font text-[10px] tracking-widest px-4 py-2 border transition-colors"
                         style={{ background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C' }}>
                         {settings.dfaEnabled !== false ? '● DFA ON' : '○ DFA OFF'}
                       </button>
                       <p className="display-font text-[11px] text-stone-400 mt-1 leading-snug italic">Enable or disable the Dispute Funding Analyzer scoring engine</p>
                     </div>
                     <div>
-                      <label className="mono-font text-[9px] tracking-widest text-stone-500 block mb-1">PC MILESTONES (BUSINESS DAYS)</label>
+                      <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">PC MILESTONES (BUSINESS DAYS)</label>
                       <div className="flex gap-2">
                         {settings.pcMilestones.map((m, i) => (
                           <input key={i} type="number" value={m}
@@ -3062,7 +3067,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       {/* Network breakdown */}
                       {Object.keys(analytics.byNetwork).length > 0 && (
                         <div>
-                          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">WIN RATE BY NETWORK</div>
+                          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">WIN RATE BY NETWORK</div>
                           <div className="flex gap-6 flex-wrap">
                             {Object.entries(analytics.byNetwork).map(([net, d]) => {
                               const rate = Math.round(d.won / d.total * 100)
@@ -3084,7 +3089,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       {/* Reason code breakdown */}
                       {analytics.topCodes.length > 0 && (
                         <div>
-                          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">WIN RATE BY REASON CODE (TOP {analytics.topCodes.length})</div>
+                          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">WIN RATE BY REASON CODE (TOP {analytics.topCodes.length})</div>
                           <div className="space-y-2">
                             {analytics.topCodes.map(([code, d]) => {
                               const rate = Math.round(d.won / d.total * 100)
@@ -3105,16 +3110,16 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
                       {/* Weekly filing trend */}
                       <div>
-                        <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">WEEKLY FILING TREND (LAST 8 WEEKS)</div>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">WEEKLY FILING TREND (LAST 8 WEEKS)</div>
                         <div className="flex items-end gap-1.5">
                           {analytics.weeks.map((w, i) => {
                             const barH = w.total > 0 ? Math.max(8, Math.round(w.total / Math.max(...analytics.weeks.map(x => x.total), 1) * 48)) : 2
                             const isLast = i === analytics.weeks.length - 1
                             return (
                               <div key={w.label} className="flex flex-col items-center gap-1" style={{ flex: 1 }}>
-                                <div className="mono-font text-[8px] text-stone-400">{w.total > 0 ? w.total : ''}</div>
+                                <div className="mono-font text-[10px] text-stone-400">{w.total > 0 ? w.total : ''}</div>
                                 <div style={{ width: '100%', height: `${barH}px`, background: isLast ? '#1A1814' : '#D4CCBC', minHeight: '2px' }} />
-                                <div className="mono-font text-[8px] text-stone-400">{w.label}</div>
+                                <div className="mono-font text-[10px] text-stone-400">{w.label}</div>
                               </div>
                             )
                           })}
@@ -3125,16 +3130,16 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                       <div className="flex flex-wrap gap-6 pt-2 border-t border-stone-200">
                         {analytics.avgDays !== null && (
                           <div>
-                            <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-0.5">AVG RESOLUTION</div>
+                            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-0.5">AVG RESOLUTION</div>
                             <div className="display-font font-semibold text-stone-900" style={{ fontSize: '20px' }}>{analytics.avgDays} days</div>
                           </div>
                         )}
                         <div>
-                          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-0.5">OVERALL WIN RATE</div>
+                          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-0.5">OVERALL WIN RATE</div>
                           <div className="display-font font-semibold text-stone-900" style={{ fontSize: '20px' }}>{winRate !== null ? `${winRate}%` : '—'}</div>
                         </div>
                         <div>
-                          <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-0.5">CASES RESOLVED</div>
+                          <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-0.5">CASES RESOLVED</div>
                           <div className="display-font font-semibold text-stone-900" style={{ fontSize: '20px' }}>{analytics.resolvedCount}</div>
                         </div>
                       </div>
@@ -3256,7 +3261,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">EDITING {o.id}</div>
                                 <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">MERCHANT</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">MERCHANT</label>
                                     <input
                                       className="input-field"
                                       value={editDraft.merchant || ''}
@@ -3265,7 +3270,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     />
                                   </div>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">AMOUNT</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">AMOUNT</label>
                                     <input
                                       className="input-field"
                                       value={editDraft.amount || ''}
@@ -3274,7 +3279,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     />
                                   </div>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">REASON CODE</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">REASON CODE</label>
                                     <input
                                       className="input-field"
                                       value={editDraft.reasonCode || ''}
@@ -3283,7 +3288,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     />
                                   </div>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">STATUS</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">STATUS</label>
                                     <select
                                       className="input-field"
                                       value={o.status}
@@ -3317,14 +3322,14 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 {o.mode === 'merchant' && (
                                   <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                     <div>
-                                      <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">DATE SUBMITTED TO ACQUIRER</label>
+                                      <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">DATE SUBMITTED TO ACQUIRER</label>
                                       <input type="date" className="input-field" value={editDraft.submitDate || ''}
                                         onChange={e => setEditDraft(d => ({ ...d, submitDate: e.target.value }))}
                                         style={{ fontSize: '13px', padding: '8px 10px' }}
                                       />
                                     </div>
                                     <div>
-                                      <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">ACQUIRER REFERENCE #</label>
+                                      <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">ACQUIRER REFERENCE #</label>
                                       <input className="input-field" value={editDraft.trackingRef || ''}
                                         onChange={e => setEditDraft(d => ({ ...d, trackingRef: e.target.value }))}
                                         placeholder="e.g. ACQ-2024-88341"
@@ -3335,7 +3340,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 )}
                                 <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NOTES</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">NOTES</label>
                                     <input
                                       className="input-field"
                                       value={editDraft.notes || ''}
@@ -3345,7 +3350,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     />
                                   </div>
                                   <div>
-                                    <label className="mono-font text-[9px] tracking-widest text-stone-400 block mb-1">NEXT RESPONSE DUE</label>
+                                    <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">NEXT RESPONSE DUE</label>
                                     <input
                                       type="date"
                                       className="input-field"
@@ -3377,9 +3382,9 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="mono-font text-xs text-stone-600">{o.reasonCode}</span>
                                     {o.mode === 'merchant' && o.winProb && (
-                                      <span className={'mono-font text-[8px] tracking-widest px-1.5 py-0.5 ' + (o.winProb === 'HIGH' ? 'bg-emerald-900 text-emerald-50' : o.winProb === 'LOW' ? 'bg-red-900 text-red-50' : 'bg-amber-800 text-amber-50')}>{o.winProb}</span>
+                                      <span className={'mono-font text-[10px] tracking-widest px-1.5 py-0.5 ' + (o.winProb === 'HIGH' ? 'bg-emerald-900 text-emerald-50' : o.winProb === 'LOW' ? 'bg-red-900 text-red-50' : 'bg-amber-800 text-amber-50')}>{o.winProb}</span>
                                     )}
-                                    {o.dfaScore && <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}} title="DFA Fundability Score">DFA {o.dfaScore}</span>}
+                                    {o.dfaScore && <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}} title="DFA Fundability Score">DFA {o.dfaScore}</span>}
                                   </div>
                                   {notesText(o.notes) && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{notesText(o.notes)}</p>}
                                   {o.mode === 'merchant' && o.submitDate && (
@@ -3402,7 +3407,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       const overdue = daysLeft < 0
                                       const urgent = !overdue && daysLeft <= 3
                                       return (
-                                        <span className={`mono-font text-[8px] tracking-widest px-1.5 py-0.5 font-bold whitespace-nowrap ${overdue ? 'bg-red-700 text-red-50' : urgent ? 'bg-amber-700 text-amber-50' : 'bg-blue-700 text-blue-50'}`}>
+                                        <span className={`mono-font text-[10px] tracking-widest px-1.5 py-0.5 font-bold whitespace-nowrap ${overdue ? 'bg-red-700 text-red-50' : urgent ? 'bg-amber-700 text-amber-50' : 'bg-blue-700 text-blue-50'}`}>
                                           {overdue ? `⚠ RESP ${Math.abs(daysLeft)}d OVERDUE` : `RESP ${daysLeft === 0 ? 'TODAY' : `in ${daysLeft}d`} · ${new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}`}
                                         </span>
                                       )
@@ -3410,18 +3415,18 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     {quickDueDateRow === o.id ? (
                                       <span className="flex items-center gap-1">
                                         <input type="date" value={quickDueDate} onChange={e => setQuickDueDate(e.target.value)}
-                                          className="mono-font text-[8px] border border-stone-300 px-1 py-0.5"
+                                          className="mono-font text-[10px] border border-stone-300 px-1 py-0.5"
                                           style={{ fontSize:'10px', lineHeight:1, minWidth:0, width:'100px' }} />
                                         <button onClick={() => {
                                           if (quickDueDate) setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, nextRespDate: quickDueDate } : x))
                                           setQuickDueDateRow(null); setQuickDueDate('')
-                                        }} disabled={!quickDueDate} className="mono-font text-[8px] px-1 py-0.5 bg-stone-900 text-stone-50 disabled:bg-stone-300">✓</button>
+                                        }} disabled={!quickDueDate} className="mono-font text-[10px] px-1 py-0.5 bg-stone-900 text-stone-50 disabled:bg-stone-300">✓</button>
                                         <button onClick={() => { setQuickDueDateRow(null); setQuickDueDate('') }}
-                                          className="mono-font text-[8px] px-1 py-0.5 border border-stone-300 text-stone-500">✕</button>
+                                          className="mono-font text-[10px] px-1 py-0.5 border border-stone-300 text-stone-500">✕</button>
                                       </span>
                                     ) : (
                                       <button onClick={() => { setQuickDueDateRow(o.id); setQuickDueDate(o.nextRespDate || new Date().toISOString().split('T')[0]) }}
-                                        className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:border-blue-500 hover:text-blue-600 transition-colors whitespace-nowrap"
+                                        className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:border-blue-500 hover:text-blue-600 transition-colors whitespace-nowrap"
                                         title="Set next network response deadline">
                                         {o.nextRespDate ? '✎ DUE' : '+ DUE DATE'}
                                       </button>
@@ -3439,107 +3444,107 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
                                   {/* ── PENDING (FI only) ───────────────────── */}
                                   {o.mode !== 'merchant' && (!o.status || o.status === 'pending') && (<>
-                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
-                                    <button onClick={() => advanceStage(o.id,'queued')} title="Move to batch filing queue" className="mono-font text-[8px] px-1.5 py-0.5 border border-violet-600 text-violet-700 hover:bg-violet-50 whitespace-nowrap transition-colors">IN QUEUE</button>
-                                    <button onClick={() => advanceStage(o.id,'filed')} title="Mark chargeback as filed with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
+                                    <button onClick={() => advanceStage(o.id,'queued')} title="Move to batch filing queue" className="mono-font text-[10px] px-1.5 py-0.5 border border-violet-600 text-violet-700 hover:bg-violet-50 whitespace-nowrap transition-colors">IN QUEUE</button>
+                                    <button onClick={() => advanceStage(o.id,'filed')} title="Mark chargeback as filed with network" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
                                     {!o.provCreditDate && (
-                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                     )}
                                   </>)}
 
                                   {/* ── MERCHANT: RECEIVED ──────────────────── */}
                                   {o.mode === 'merchant' && (o.status === 'received' || !o.status || o.status === 'pending') && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-orange-800 text-orange-50">RECEIVED</span>
-                                    <button onClick={() => advanceStage(o.id,'rebuttal_prep')} title="Begin preparing representment rebuttal" className="mono-font text-[8px] px-1.5 py-0.5 border border-amber-700 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">PREP REBUTTAL</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede — do not fight this chargeback" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-orange-800 text-orange-50">RECEIVED</span>
+                                    <button onClick={() => advanceStage(o.id,'rebuttal_prep')} title="Begin preparing representment rebuttal" className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">PREP REBUTTAL</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede — do not fight this chargeback" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
                                   </>)}
 
                                   {/* ── INVSTG (FI only) ───────────────────── */}
                                   {o.mode !== 'merchant' && o.status === 'investigating' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-blue-900 text-blue-50">INVSTG</span>
-                                    <button onClick={() => advanceStage(o.id,'filed')} title="Done investigating — file chargeback with network" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-blue-900 text-blue-50">INVSTG</span>
+                                    <button onClick={() => advanceStage(o.id,'filed')} title="Done investigating — file chargeback with network" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
                                     {o.mode !== 'merchant' && (
                                       o.escalation === 'lea_referral'
-                                        ? <span className="mono-font text-[8px] px-1.5 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA ✓</span>
-                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[8px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>
+                                        ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA ✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>
                                     )}
                                     {o.mode !== 'merchant' && !o.provCreditDate && (
-                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                     )}
-                                    <button onClick={() => revertCase(o.id)} title="Back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ PENDING</button>
+                                    <button onClick={() => revertCase(o.id)} title="Back to pending" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ PENDING</button>
                                   </>)}
 
                                   {/* ── IN QUEUE (FI only) ──────────────────── */}
                                   {o.mode !== 'merchant' && o.status === 'queued' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
                                     {!o.provCreditDate && (
-                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                      <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                     )}
-                                    <button onClick={() => revertCase(o.id)} title="Remove from batch queue — back to pending" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ UNQUEUE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Remove from batch queue — back to pending" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ UNQUEUE</button>
                                   </>)}
 
                                   {/* ── MERCHANT: REBUTTAL PREP ─────────────── */}
                                   {o.mode === 'merchant' && o.status === 'rebuttal_prep' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-800 text-amber-50">REBUTTAL PREP</span>
-                                    <button onClick={() => advanceStage(o.id,'submitted')} title="Representment submitted to acquirer" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">SUBMITTED</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede this chargeback" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
-                                    <button onClick={() => revertCase(o.id)} title="Back to received" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ BACK</button>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-800 text-amber-50">REBUTTAL PREP</span>
+                                    <button onClick={() => advanceStage(o.id,'submitted')} title="Representment submitted to acquirer" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">SUBMITTED</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede this chargeback" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Back to received" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ BACK</button>
                                   </>)}
 
                                   {/* ── MERCHANT: SUBMITTED ─────────────────── */}
                                   {o.mode === 'merchant' && o.status === 'submitted' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">SUBMITTED</span>
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Representment won — chargeback reversed" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Representment lost — chargeback upheld" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    <button onClick={() => revertCase(o.id)} title="Revert to prep" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">SUBMITTED</span>
+                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Representment won — chargeback reversed" className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Representment lost — chargeback upheld" className="mono-font text-[10px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
+                                    <button onClick={() => revertCase(o.id)} title="Revert to prep" className="mono-font text-[10px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
                                   </>)}
 
                                   {/* ── FILED (FI) / legacy merchant filed ─── */}
                                   {o.status === 'filed' && (<>
                                     {o.mode === 'merchant'
-                                      ? <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-700 text-stone-200">SUBMITTED (legacy)</span>
-                                      : <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>}
-                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won" className="mono-font text-[8px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
-                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost" className="mono-font text-[8px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
+                                      ? <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-700 text-stone-200">SUBMITTED (legacy)</span>
+                                      : <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>}
+                                    <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won" className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
+                                    <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost" className="mono-font text-[10px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
                                     {o.mode !== 'merchant' && (<>
-                                      <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
+                                      <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
                                       {!o.provCreditDate && (
-                                        <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[8px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
+                                        <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                       )}
                                     </>)}
-                                    <button onClick={() => revertCase(o.id)} title="Revert" className="mono-font text-[8px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
+                                    <button onClick={() => revertCase(o.id)} title="Revert" className="mono-font text-[10px] px-1 py-0.5 text-stone-400 hover:text-stone-700 transition-colors">↩</button>
                                   </>)}
 
                                   {/* ── LEGACY: network_invstg / representment / pre_arb ── */}
                                   {(o.status === 'network_invstg' || o.status === 'representment' || o.status === 'pre_arb') && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-900 text-amber-50">
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-900 text-amber-50">
                                       {o.status === 'network_invstg' ? 'NTW INVSTG' : o.status === 'representment' ? 'REPMT' : 'PRE-ARB'}
                                     </span>
-                                    <button onClick={() => revertCase(o.id)} title="Re-mark status" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Re-mark status" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
 
                                   {/* ── RESOLVED ────────────────────────────── */}
                                   {o.status === 'resolved' && (<>
-                                    <span className="mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-teal-900 text-teal-50">RESOLVED</span>
-                                    <button onClick={() => revertCase(o.id)} title="Re-open case" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
+                                    <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-teal-900 text-teal-50">RESOLVED</span>
+                                    <button onClick={() => revertCase(o.id)} title="Re-open case" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
 
                                   {/* ── WON / LOST / WITHDRAWN ──────────────── */}
                                   {(o.status === 'won' || o.status === 'lost' || o.status === 'withdrawn') && (<>
-                                    <span className={`mono-font text-[8px] px-1.5 py-0.5 font-bold whitespace-nowrap ${o.status==='won'?'bg-emerald-900 text-emerald-50':o.status==='lost'?'bg-red-900 text-red-50':'bg-stone-600 text-stone-50'}`}>
+                                    <span className={`mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap ${o.status==='won'?'bg-emerald-900 text-emerald-50':o.status==='lost'?'bg-red-900 text-red-50':'bg-stone-600 text-stone-50'}`}>
                                       {o.status === 'withdrawn' ? 'WD' : o.status.toUpperCase()}
                                     </span>
                                     {o.status === 'lost' && o.mode !== 'merchant' && (<>
                                       {o.escalation === 'lea_referral'
-                                        ? <span className="mono-font text-[8px] px-1 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA✓</span>
-                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[8px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>}
+                                        ? <span className="mono-font text-[10px] px-1 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>}
                                       {o.escalation === 'writeoff'
-                                        ? <span className="mono-font text-[8px] px-1 py-0.5 bg-stone-700 text-stone-200 whitespace-nowrap" title="Written off">W/O✓</span>
-                                        : <button onClick={() => escalateCase(o.id,'writeoff')} title="Write off loss" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">W/O</button>}
+                                        ? <span className="mono-font text-[10px] px-1 py-0.5 bg-stone-700 text-stone-200 whitespace-nowrap" title="Written off">W/O✓</span>
+                                        : <button onClick={() => escalateCase(o.id,'writeoff')} title="Write off loss" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">W/O</button>}
                                     </>)}
-                                    <button onClick={() => revertCase(o.id)} title="Re-open / change outcome" className="mono-font text-[8px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
+                                    <button onClick={() => revertCase(o.id)} title="Re-open / change outcome" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ CHANGE</button>
                                   </>)}
 
                                 </div>
@@ -3580,18 +3585,18 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
                                       if (o._complaint) setTimeout(() => analyze(o._complaint), 0)
                                     }}
-                                    className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
+                                    className="mono-font text-[10px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
                                     title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
                                   >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
                                    <button
                                      onClick={() => setExpandedCbRow(expandedCbRow === o.id ? null : o.id)}
-                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
+                                     className="mono-font text-[10px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
                                      style={{ borderColor: expandedCbRow === o.id ? '#D97706' : '#A8A29E', color: expandedCbRow === o.id ? '#D97706' : '#78716C', background: expandedCbRow === o.id ? '#FFFBEB' : 'transparent' }}
                                      title="Manage Chargeback Cycle"
                                    >▸ CB</button>
                                    <button
                                      onClick={() => setDocOpen(prev => ({ ...prev, [o.id]: !prev[o.id] }))}
-                                     className="mono-font text-[9px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
+                                     className="mono-font text-[10px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
                                      style={{ borderColor: docOpen[o.id] ? '#166534' : '#A8A29E', color: docOpen[o.id] ? '#166534' : '#78716C', background: docOpen[o.id] ? '#F0FDF4' : 'transparent' }}
                                      title="Evidence documents"
                                    >📎{(o.docs||[]).length > 0 ? ` ${(o.docs||[]).length}` : ''}</button>
@@ -3642,35 +3647,35 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                               return (
                                 <div className="px-4 py-3 border-t border-amber-200" style={{ background: '#FFFBEB' }}>
                                   <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                    <span className="mono-font text-[9px] tracking-widest text-amber-700">CB STAGE</span>
+                                    <span className="mono-font text-[10px] tracking-widest text-amber-700">CB STAGE</span>
                                     {[{v:'1cb',l:'1ST CB'},{v:'2cb',l:'2ND PRES'},{v:'prearb',l:'PRE-ARB'},{v:'arb',l:'ARB'}].map(({v,l}) => (
                                       <button key={v}
                                         onClick={() => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, cbStage: v} : x))}
-                                        className="mono-font text-[9px] px-2 py-0.5 transition-all"
+                                        className="mono-font text-[10px] px-2 py-0.5 transition-all"
                                         style={{ background: _st===v?'#1A1814':'transparent', color: _st===v?'#F5F1EA':'#92400E', border:'1px solid #D97706', cursor:'pointer' }}
                                       >{l}</button>
                                     ))}
                                     <input type="date" value={o.cbFiledDate || ''}
                                       onChange={e => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, cbFiledDate: e.target.value} : x))}
                                       className="mono-font border border-amber-300 px-1 bg-transparent ml-2"
-                                      style={{ fontSize: '9px' }} />
-                                    {!o.cbFiledDate && <span className="mono-font text-[9px] text-amber-500 italic">← set filing date</span>}
+                                      style={{ fontSize: '10px' }} />
+                                    {!o.cbFiledDate && <span className="mono-font text-[10px] text-amber-500 italic">← set filing date</span>}
                                   </div>
                                   {_dl && (() => {
                                     const _cls = _ov ? 'text-red-700 font-bold' : _urg ? 'text-amber-700 font-bold' : 'text-amber-900'
                                     const _lbl = _ov ? ('PASSED ' + Math.abs(_dLeft) + 'd ago') : _dLeft === 0 ? 'DUE TODAY' : (_dLeft + 'd remaining')
                                     const _sl = _st==='1cb'?'1ST CB':_st==='2cb'?'2ND PRES':_st==='prearb'?'PRE-ARB':'ARB'
-                                    return (<div className="flex items-center gap-3"><span className="mono-font text-[9px] text-amber-500 tracking-wider">DEADLINE</span><span className={['mono-font text-[10px] tracking-wide', _cls].join(' ')}>{_sl} - {_dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})} - {_lbl}</span></div>)
+                                    return (<div className="flex items-center gap-3"><span className="mono-font text-[10px] text-amber-500 tracking-wider">DEADLINE</span><span className={['mono-font text-[10px] tracking-wide', _cls].join(' ')}>{_sl} - {_dl.toLocaleDateString('en-US',{month:'short',day:'numeric'})} - {_lbl}</span></div>)
                                   })()}
                                   {/* Network indicators */}
                                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                                     <button
                                       onClick={() => setOutcomes(prev => prev.map(x => x.id === o.id ? {...x, networkInvstg: !x.networkInvstg} : x))}
                                       title="Toggle: network or acquirer is actively processing this chargeback"
-                                      className={`mono-font text-[9px] px-1.5 py-0.5 border transition-colors whitespace-nowrap ${o.networkInvstg ? 'bg-blue-900 text-blue-50 border-blue-900' : 'border-blue-500 text-blue-600 hover:bg-blue-50'}`}
+                                      className={`mono-font text-[10px] px-1.5 py-0.5 border transition-colors whitespace-nowrap ${o.networkInvstg ? 'bg-blue-900 text-blue-50 border-blue-900' : 'border-blue-500 text-blue-600 hover:bg-blue-50'}`}
                                     >{o.networkInvstg ? 'NTW INVSTG ✓' : 'NTW INVSTG'}</button>
                                     {o.merchantRespDate ? (
-                                      <span className="mono-font text-[9px] text-amber-800 font-bold">
+                                      <span className="mono-font text-[10px] text-amber-800 font-bold">
                                         MERCHANT RESP: {new Date(o.merchantRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                                       </span>
                                     ) : (
@@ -3681,14 +3686,14 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                           cbStage: x.cbStage === '1cb' ? '2cb' : x.cbStage
                                         } : x))}
                                         title="Log merchant representment received — bumps CB stage to 2ND PRES if currently at 1ST CB"
-                                        className="mono-font text-[9px] px-1.5 py-0.5 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                                        className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-600 text-amber-700 hover:bg-amber-50 transition-colors whitespace-nowrap"
                                       >MERCHANT RESP</button>
                                     )}
                                   </div>
                                   {/* Pre-arb drafter — appears when stage is 2CB or PRE-ARB */}
                                   {(_st === '2cb' || _st === 'prearb') && (
                                     <div className="mt-3 pt-3 border-t border-amber-200">
-                                      <div className="mono-font text-[9px] tracking-widest text-amber-700 mb-1.5">
+                                      <div className="mono-font text-[10px] tracking-widest text-amber-700 mb-1.5">
                                         {_st === 'prearb' ? 'PRE-ARB REBUTTAL DRAFTER' : 'DRAFT PRE-ARB RESPONSE'}
                                       </div>
                                       <textarea
@@ -3702,10 +3707,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       <button
                                         onClick={() => generatePreArbDraft(o)}
                                         disabled={preArbLoading && preArbTargetId === o.id}
-                                        className="mono-font text-[9px] tracking-widest px-3 py-1.5 mt-1.5 transition-colors"
+                                        className="mono-font text-[10px] tracking-widest px-3 py-1.5 mt-1.5 transition-colors"
                                         style={{background:'#78350F', color:'#FEF3C7', border:'none', cursor:'pointer', opacity: preArbLoading && preArbTargetId === o.id ? 0.6 : 1}}
                                       >{preArbLoading && preArbTargetId === o.id ? 'DRAFTING…' : 'GENERATE PRE-ARB REBUTTAL →'}</button>
-                                      <p className="mono-font text-[9px] text-amber-600 mt-1 italic">Merchant response is optional — AI will draft from case context alone if blank.</p>
+                                      <p className="mono-font text-[10px] text-amber-600 mt-1 italic">Merchant response is optional — AI will draft from case context alone if blank.</p>
                                     </div>
                                   )}
                                 </div>
@@ -3715,7 +3720,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             {/* Evidence / doc attachment panel */}
                             {docOpen[o.id] && (
                               <div className="px-4 py-3 border-t border-stone-200" style={{ background: '#F0FDF4' }}>
-                                <div className="mono-font text-[9px] tracking-widest text-green-800 mb-3">EVIDENCE — {o.id}</div>
+                                <div className="mono-font text-[10px] tracking-widest text-green-800 mb-3">EVIDENCE — {o.id}</div>
                                 {/* Existing docs list */}
                                 {(o.docs||[]).length === 0 && (
                                   <p className="mono-font text-[10px] text-stone-400 mb-3">No documents attached yet.</p>
@@ -3725,16 +3730,16 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     {(o.docs||[]).map((d, i) => (
                                       <div key={i} className="flex items-center gap-2">
                                         <span className="mono-font text-[10px] text-stone-600 flex-1 truncate">{d.name}</span>
-                                        <span className="mono-font text-[9px] text-stone-400">{d.size ? `${(d.size/1024).toFixed(0)} KB` : ''}</span>
-                                        <span className="mono-font text-[9px] text-stone-400">{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}</span>
+                                        <span className="mono-font text-[10px] text-stone-400">{d.size ? `${(d.size/1024).toFixed(0)} KB` : ''}</span>
+                                        <span className="mono-font text-[10px] text-stone-400">{d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}</span>
                                         <button onClick={() => openEvidence(d)} title="Opens a link that expires in 5 minutes"
-                                          className="mono-font text-[9px] text-green-700 hover:underline whitespace-nowrap" style={{ background:'none', border:'none', cursor:'pointer', padding:0 }}>↗ VIEW</button>
+                                          className="mono-font text-[10px] text-green-700 hover:underline whitespace-nowrap" style={{ background:'none', border:'none', cursor:'pointer', padding:0 }}>↗ VIEW</button>
                                         <button
                                           onClick={() => {
                                             if (!window.confirm(`Remove ${d.name}?`)) return
                                             setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, docs: (x.docs||[]).filter((_,j)=>j!==i), updatedAt: new Date().toISOString() } : x))
                                           }}
-                                          className="mono-font text-[9px] text-red-500 hover:text-red-700 transition-colors"
+                                          className="mono-font text-[10px] text-red-500 hover:text-red-700 transition-colors"
                                           title="Remove attachment">✕</button>
                                       </div>
                                     ))}
@@ -3742,10 +3747,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 )}
                                 {/* Upload area */}
                                 {docError[o.id] && (
-                                  <p className="mono-font text-[9px] text-red-600 mb-2">⚠ {docError[o.id]}</p>
+                                  <p className="mono-font text-[10px] text-red-600 mb-2">⚠ {docError[o.id]}</p>
                                 )}
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <label className={`mono-font text-[9px] tracking-widest px-3 py-1.5 border cursor-pointer transition-colors whitespace-nowrap ${docUploading[o.id] ? 'border-stone-300 text-stone-400' : 'border-green-700 text-green-700 hover:bg-green-50'}`}>
+                                  <label className={`mono-font text-[10px] tracking-widest px-3 py-1.5 border cursor-pointer transition-colors whitespace-nowrap ${docUploading[o.id] ? 'border-stone-300 text-stone-400' : 'border-green-700 text-green-700 hover:bg-green-50'}`}>
                                     {docUploading[o.id] ? 'UPLOADING…' : '+ ATTACH FILE'}
                                     <input type="file" className="hidden" disabled={!!docUploading[o.id]}
                                       accept=".pdf,.png,.jpg,.jpeg,.gif,.tiff,.doc,.docx,.xls,.xlsx,.csv,.txt,.eml,.msg"
@@ -3768,7 +3773,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       }}
                                     />
                                   </label>
-                                  <span className="mono-font text-[9px] text-stone-400">PDF, PNG, JPG, DOCX, XLSX, EML accepted</span>
+                                  <span className="mono-font text-[10px] text-stone-400">PDF, PNG, JPG, DOCX, XLSX, EML accepted</span>
                                 </div>
                               </div>
                             )}
@@ -3776,7 +3781,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             {/* 360 panel — full case detail */}
                             {case360Id === o.id && (
                               <div className="px-4 py-3 border-t border-stone-200" style={{ background: '#F5F1EA' }}>
-                                <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-3">CASE 360 — {o.id}</div>
+                                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">CASE 360 — {o.id}</div>
                                 <div className="grid gap-x-6 gap-y-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                                   {[
                                     ['MERCHANT',    o.merchant],
@@ -3797,18 +3802,18 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     ['CONFIDENCE',  o.confidence || '—'],
                                   ].map(([label, val]) => (
                                     <div key={label}>
-                                      <div className="mono-font text-[9px] tracking-widest text-stone-400">{label}</div>
+                                      <div className="mono-font text-[10px] tracking-widest text-stone-400">{label}</div>
                                       <div className="mono-font text-xs text-stone-700 mt-0.5">{val || '—'}</div>
                                     </div>
                                   ))}
                                 </div>
                                 {notesText(o.notes) && (
                                   <div className="mt-3 pt-3 border-t border-stone-200">
-                                    <div className="mono-font text-[9px] tracking-widest text-stone-400 mb-1">NOTES</div>
+                                    <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">NOTES</div>
                                     <div className="display-font text-sm text-stone-600 italic">{notesText(o.notes)}</div>
                                   </div>
                                 )}
-                                <button onClick={() => setCase360Id(null)} className="mono-font text-[9px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors mt-3">✕ CLOSE 360</button>
+                                <button onClick={() => setCase360Id(null)} className="mono-font text-[10px] tracking-widest text-stone-400 hover:text-stone-700 transition-colors mt-3">✕ CLOSE 360</button>
                               </div>
                             )}
                           </div>
@@ -3962,7 +3967,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                   <div>
                     <label className="input-label">TOTAL TXNS THIS MONTH</label>
                     <input type="number" value={mchCbTransactions} onChange={e => setMchCbTransactions(e.target.value)} placeholder="enter total" className="input-field mono-font" style={{ fontSize: '13px' }} />
-                    <div className="mono-font text-[9px] text-stone-400 mt-1">required to calculate CBR%</div>
+                    <div className="mono-font text-[10px] text-stone-400 mt-1">required to calculate CBR%</div>
                   </div>
                   <div>
                     <label className="input-label">DISPUTE VOLUME ($)</label>
