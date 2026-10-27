@@ -4,9 +4,10 @@ import React from 'react'
 import { TeamPanel } from '../AuthScreens.jsx'
 import { AuditPanel } from '../AuditPanel.jsx'
 import { RetentionPanel } from '../RetentionPanel.jsx'
+import { WorkflowPanel } from '../WorkflowPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 
-export function SettingsView({ settings, setSettings, covUser }) {
+export function SettingsView({ settings, setSettings, covUser, outcomes, team }) {
   const [saved, setSaved] = React.useState(false)
   const set = (key, val) => {
     setSettings(prev => ({ ...prev, [key]: val }))
@@ -18,7 +19,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
   // One section at a time, so the audit log doesn't push the settings down the page
-  const TABS = [['settings', 'Institution settings'], ...(workspace ? [['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
+  const TABS = [['settings', 'Institution settings'], ...(workspace ? [['workflow', 'Workflow'], ['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
   const [tab, setTab] = React.useState(() => { try { return localStorage.getItem('cov_settings_tab') || 'settings' } catch { return 'settings' } })
   const activeTab = TABS.some(([k]) => k === tab) ? tab : 'settings'
   const pickTab = k => { setTab(k); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
@@ -105,6 +106,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
         </div>
       )}
 
+      {activeTab === 'workflow'  && <WorkflowPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} team={team || []} />}
       {activeTab === 'team'      && <TeamPanel covUser={covUser} />}
       {activeTab === 'audit'     && <AuditPanel covUser={covUser} />}
       {activeTab === 'retention' && <RetentionPanel covUser={covUser} />}

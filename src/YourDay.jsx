@@ -1,65 +1,57 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // YOUR DAY — Home's first panel: what needs you today, most urgent first
 // ═══════════════════════════════════════════════════════════════════════════════
-// Ranks open cases by what's due: overdue responses, responses due in the next
-// 3 days, Reg E provisional-credit deadlines, new cases waiting for analysis,
-// and what goes out in today's batch. Shows the user's own cases when any are
-// assigned to them, otherwise the team's.
+// Ranks open cases by their clocks (clocks.mjs — the same ones the reminders
+// bell and the daily email use): anything breached, escalations to you, clocks
+// due soon, new cases waiting for analysis, and what goes out in today's batch.
+// Shows the user's own cases (assigned or escalated to them) when there are
+// any, otherwise the team's. Below that, the team's other deadlines this week.
 import React, { useMemo, useState } from 'react'
 import { allThreadCases, stageOf, openCase } from './CaseThread.jsx'
+import { caseClocks, pressing, sortClocks } from './clocks.mjs'
 import { Badge, Button } from './ui.jsx'
 
 const DAY = 86400000
-const daysTo = d => Math.round((new Date(d + (String(d).length === 10 ? 'T12:00:00' : '')) - new Date()) / DAY)
-function addBusinessDays(start, n) {
-  const d = new Date(start); let added = 0
-  while (added < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) added++ }
-  return d
-}
+const short = k => k.text.replace(/ (left|overdue)$/, '')
+const BREACHED = { response: k => `OVERDUE ${short(k)}`, regE: () => 'REG E OVERDUE', file: () => 'FILE SLA MISSED', assign: () => 'NO OWNER' }
+const SOON     = { response: k => `DUE ${short(k)}`, regE: k => `REG E ${short(k)}`, file: k => `FILE IN ${short(k)}`, assign: k => `ASSIGN ${short(k)}` }
 
 // Each open case gets at most one reason, the most urgent one
-function reasonFor(c, batchTime) {
+function reasonFor(c, settings, me) {
   const stage = stageOf(c)
   if (stage === 'closed') return null
-  if (c.nextRespDate) {
-    const d = daysTo(c.nextRespDate)
-    if (d < 0)  return { rank: 0, tone: 'danger', label: `OVERDUE ${-d}d`, why: 'Response deadline passed' }
-    if (d <= 3) return { rank: 1, tone: 'warn',   label: d === 0 ? 'DUE TODAY' : `DUE ${d}d`, why: 'Response due' }
-  }
-  if (c.provCreditDate && c.mode !== 'merchant') {
-    const d = daysTo(addBusinessDays(c.provCreditDate, 45).toISOString())
-    if (d >= 0 && d <= 7) return { rank: 2, tone: 'warn', label: `REG E ${d}d`, why: '45-business-day provisional credit limit' }
-  }
+  const top = pressing(caseClocks(c, settings))[0]
+  if (top?.state === 'breached') return { rank: 0, tone: 'danger', label: BREACHED[top.key](top), why: `${top.label} — ${top.text}` }
+  if (me && (c.escalatedTo || '').toLowerCase() === me) return { rank: 1, tone: 'danger', label: 'ESCALATED', why: `Escalated to you — ${c.escalationReason || 'needs review'}` }
+  if (top) return { rank: top.key === 'response' ? 1 : 2, tone: 'warn', label: SOON[top.key](top), why: `${top.label} — ${top.text}` }
   if (stage === 'triage') return { rank: 3, tone: 'info', label: 'TRIAGED', why: 'Build the case in Desk' }
   if (stage === 'desk')   return { rank: 3, tone: 'info', label: 'NEW', why: 'Analyse and pick the reason code' }
-  if (stage === 'multi')  return { rank: 4, tone: 'neutral', label: `BATCH ${batchTime}`, why: 'Queued — goes out with today’s batch' }
-  if (c.nextRespDate)     return { rank: 5, tone: 'neutral', label: `DUE ${daysTo(c.nextRespDate)}d`, why: 'Waiting on the merchant' }
+  if (stage === 'multi')  return { rank: 4, tone: 'neutral', label: `BATCH ${settings?.batchFileTime || '15:00'}`, why: 'Queued — goes out with today’s batch' }
+  if (c.nextRespDate)     return { rank: 5, tone: 'neutral', label: `DUE ${Math.round((new Date(c.nextRespDate + 'T12:00:00') - new Date()) / DAY)}d`, why: 'Waiting on the merchant' }
   return null
 }
 
 export function YourDay({ outcomes, covUser, settings, platformMode }) {
   const [showAll, setShowAll] = useState(false)
-  const me = covUser?.email
-  const { items, scope, counts, comingUp } = useMemo(() => {
-    const batch = settings?.batchFileTime || '15:00'
-    const open = allThreadCases(outcomes)
+  const me = covUser?.email?.toLowerCase()
+  const { items, scope, counts, comingUp, unowned } = useMemo(() => {
+    const all = allThreadCases(outcomes)
       .filter(c => (platformMode === 'merchant' ? c.mode === 'merchant' : c.mode !== 'merchant'))
-      .map(c => ({ c, r: reasonFor(c, batch) })).filter(x => x.r)
-    const mine = me ? open.filter(x => x.c.assignedTo === me) : []
+    const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
+    const isMine = c => !!me && ((c.assignedTo || '').toLowerCase() === me || (c.escalatedTo || '').toLowerCase() === me)
+    const mine = open.filter(x => isMine(x.c))
     const list = (mine.length ? mine : open).sort((a, b) => a.r.rank - b.r.rank || (a.c.nextRespDate || '9').localeCompare(b.c.nextRespDate || '9'))
     const counts = { urgent: list.filter(x => x.r.rank <= 2).length, todo: list.filter(x => x.r.rank === 3).length, batch: list.filter(x => x.r.rank === 4).length }
-    // The whole team's deadlines in the next 7 days that aren't already listed above
-    // (this replaces Home's separate "Upcoming deadlines" and Reg E boxes)
+    // The whole team's deadlines in the next 7 days that aren't already listed above.
+    // Cases with no owner are summed up in one line rather than listed one by one.
     const listed = new Set(list.map(x => x.c.id))
-    const comingUp = open.map(({ c }) => {
-      const resp = c.nextRespDate ? daysTo(c.nextRespDate) : null
-      const regE = c.provCreditDate && c.mode !== 'merchant' ? daysTo(addBusinessDays(c.provCreditDate, 45).toISOString()) : null
-      const due = [resp != null && resp <= 7 ? { d: resp, what: 'Response' } : null, regE != null && regE >= 0 && regE <= 7 ? { d: regE, what: 'Reg E 45-day limit' } : null]
-        .filter(Boolean).sort((a, b) => a.d - b.d)[0]
-      return due && !listed.has(c.id) ? { c, ...due } : null
-    }).filter(Boolean).sort((a, b) => a.d - b.d)
-    return { items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp }
-  }, [outcomes, me, settings?.batchFileTime, platformMode])
+    const comingUp = all.filter(c => !listed.has(c.id)).map(c => {
+      const k = sortClocks(caseClocks(c, settings)).find(k => k.key !== 'assign' && (k.state === 'breached' || k.state === 'soon' || (k.state === 'ok' && k.left <= 7 * DAY)))
+      return k ? { c, k } : null
+    }).filter(Boolean).sort((a, b) => a.k.left - b.k.left)
+    const unowned = all.filter(c => caseClocks(c, settings).some(k => k.key === 'assign' && k.state === 'breached')).length
+    return { items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
+  }, [outcomes, me, settings, platformMode])
 
   const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
   const shown = showAll ? items : items.slice(0, 6)
@@ -116,13 +108,19 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
           COMING UP · NEXT 7 DAYS{scope === 'mine' ? ' · WHOLE TEAM' : ''}
           {!comingUp.length && <span style={{ color:'#6B6259', letterSpacing:'0.04em' }}> — no other deadlines this week.</span>}
         </div>
-        {comingUp.map(({ c, d, what }) => (
+        {unowned > 0 && (
+          <div className="mono-font" style={{ fontSize:'11px', color:'#92400E', padding:'5px 0' }}>
+            {unowned} open case{unowned === 1 ? ' has' : 's have'} had no owner for longer than the {settings?.slaAssignHours ?? 24}h target
+            {settings?.autoAssign ? '.' : ' — assign them in Multi, or turn on auto-assignment in Settings → Workflow.'}
+          </div>
+        )}
+        {comingUp.map(({ c, k }) => (
           <button key={c.id} onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
             style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
               background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
-            <span style={{ color: d < 0 ? '#991B1B' : d <= 3 ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{d < 0 ? `OVERDUE ${-d}d` : d === 0 ? 'TODAY' : `in ${d}d`}</span>
+            <span style={{ color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
             <span style={{ color:'#57534E' }}>{c.id}</span>
-            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span style={{ color:'#6B6259' }}>· {what}</span></span>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span style={{ color:'#6B6259' }}>· {k.label}</span></span>
             <span className="desktop-only" style={{ color:'#6B6259' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'unassigned'}</span>
           </button>
         ))}
