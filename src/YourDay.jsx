@@ -40,7 +40,7 @@ function reasonFor(c, batchTime) {
 export function YourDay({ outcomes, covUser, settings, platformMode }) {
   const [showAll, setShowAll] = useState(false)
   const me = covUser?.email
-  const { items, scope, counts } = useMemo(() => {
+  const { items, scope, counts, comingUp } = useMemo(() => {
     const batch = settings?.batchFileTime || '15:00'
     const open = allThreadCases(outcomes)
       .filter(c => (platformMode === 'merchant' ? c.mode === 'merchant' : c.mode !== 'merchant'))
@@ -48,7 +48,17 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
     const mine = me ? open.filter(x => x.c.assignedTo === me) : []
     const list = (mine.length ? mine : open).sort((a, b) => a.r.rank - b.r.rank || (a.c.nextRespDate || '9').localeCompare(b.c.nextRespDate || '9'))
     const counts = { urgent: list.filter(x => x.r.rank <= 2).length, todo: list.filter(x => x.r.rank === 3).length, batch: list.filter(x => x.r.rank === 4).length }
-    return { items: list, scope: mine.length ? 'mine' : 'team', counts }
+    // The whole team's deadlines in the next 7 days that aren't already listed above
+    // (this replaces Home's separate "Upcoming deadlines" and Reg E boxes)
+    const listed = new Set(list.map(x => x.c.id))
+    const comingUp = open.map(({ c }) => {
+      const resp = c.nextRespDate ? daysTo(c.nextRespDate) : null
+      const regE = c.provCreditDate && c.mode !== 'merchant' ? daysTo(addBusinessDays(c.provCreditDate, 45).toISOString()) : null
+      const due = [resp != null && resp <= 7 ? { d: resp, what: 'Response' } : null, regE != null && regE >= 0 && regE <= 7 ? { d: regE, what: 'Reg E 45-day limit' } : null]
+        .filter(Boolean).sort((a, b) => a.d - b.d)[0]
+      return due && !listed.has(c.id) ? { c, ...due } : null
+    }).filter(Boolean).sort((a, b) => a.d - b.d)
+    return { items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp }
   }, [outcomes, me, settings?.batchFileTime, platformMode])
 
   const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
@@ -99,6 +109,24 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
           <Button variant="quiet" onClick={() => setShowAll(v => !v)}>{showAll ? 'Show fewer' : `Show all ${items.length}`}</Button>
         </div>
       )}
+
+      {/* Coming up — the team's deadlines this week */}
+      <div style={{ borderTop:'1px solid #D4CCBC', padding:'12px 18px 14px' }}>
+        <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom: comingUp.length ? '6px' : 0 }}>
+          COMING UP · NEXT 7 DAYS{scope === 'mine' ? ' · WHOLE TEAM' : ''}
+          {!comingUp.length && <span style={{ color:'#6B6259', letterSpacing:'0.04em' }}> — no other deadlines this week.</span>}
+        </div>
+        {comingUp.map(({ c, d, what }) => (
+          <button key={c.id} onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
+            style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
+              background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
+            <span style={{ color: d < 0 ? '#991B1B' : d <= 3 ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{d < 0 ? `OVERDUE ${-d}d` : d === 0 ? 'TODAY' : `in ${d}d`}</span>
+            <span style={{ color:'#57534E' }}>{c.id}</span>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span style={{ color:'#6B6259' }}>· {what}</span></span>
+            <span className="desktop-only" style={{ color:'#6B6259' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'unassigned'}</span>
+          </button>
+        ))}
+      </div>
     </section>
   )
 }

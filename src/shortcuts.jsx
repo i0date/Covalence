@@ -18,7 +18,7 @@ export const isTyping = e => {
 
 // Home rows that J/K move through: "Your day" first, then the case list
 function moveFocus(dir) {
-  const rows = [...document.querySelectorAll('.cov-yourday-row, [data-case-row]')].filter(el => el.offsetParent)
+  const rows = [...document.querySelectorAll('.cov-yourday-row, .cov-comingup-row, [data-case-row]')].filter(el => el.offsetParent)
   if (!rows.length) return
   const i = rows.indexOf(document.activeElement)
   const next = rows[i < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.min(rows.length - 1, Math.max(0, i + dir))]

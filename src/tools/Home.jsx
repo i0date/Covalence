@@ -3,7 +3,7 @@
 import React from 'react'
 import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
-import { DEFAULT_SETTINGS, addBusinessDays, daysUntil } from '../shared.jsx'
+import { DEFAULT_SETTINGS } from '../shared.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
@@ -42,14 +42,6 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
   const pending  = active.filter(o => ['pending','queued','received'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
-  const urgent   = recent.filter(o => o.mode !== 'merchant' && o.provCreditDate && !['won','lost','withdrawn'].includes(o.status)).filter(o => {
-    const d = daysUntil(addBusinessDays(o.provCreditDate, 45)); return d !== null && d >= 0 && d <= 7
-  })
-
-  const nextRespDue = active.filter(o => o.nextRespDate && !['won','lost','withdrawn','resolved'].includes(o.status)).map(o => ({
-    ...o, daysLeft: Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000)
-  })).filter(o => o.daysLeft <= 7).sort((a,b) => a.daysLeft - b.daysLeft)
-
   const stats = [
     { label:'OPEN CASES',  value: (pending.length + inProg.length).toString(), sub:'last 60 days' },
     { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—',       sub: resolved.length + ' resolved' },
@@ -83,6 +75,37 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         </div>
       )}
 
+      {/* ── The seven tools (orientation) + tour, under the Brief ── */}
+      <div className="mb-8 cov-home-tools" style={{ display:'flex', gap:'12px', alignItems:'stretch', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:'1px', flexWrap:'wrap', background:'#D4CCBC', flex:'1 1 560px' }}>
+          {[
+            { num:'001', name:'TRIAGE', section:'triage', bg:'#EDE9E3' },
+            { num:'002', name:'DESK',   section:'desk',   bg:'#E8E3DC' },
+            { num:'003', name:'MULTI',  section:'multi',  bg:'#E3DDD5' },
+            { num:'004', name:'FILE',   section:'file',   bg:'#DDD7CE' },
+            { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
+            { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
+            { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
+          ].map(({ num, name, section, bg }) => (
+            <button key={num} onClick={() => setActiveSection(section)}
+              className="mono-font"
+              style={{ background:bg, border:'none', cursor:'pointer', padding:'9px 14px', flex:'1 1 auto', textAlign:'left', transition:'background 0.12s', minWidth:'72px' }}
+              onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
+              onMouseLeave={e => e.currentTarget.style.background=bg}>
+              <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>{num}</div>
+              <div style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
+            </button>
+          ))}
+        </div>
+        <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
+          className="mono-font"
+          style={{ fontSize:'10px', letterSpacing:'0.16em', padding:'9px 18px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' }}
+          onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#FAF7F1' }}
+          onMouseLeave={e => { e.currentTarget.style.background='#2D2922'; e.currentTarget.style.color='#E8E3DC' }}>
+          ◎ &nbsp;TAKE THE TOUR
+        </button>
+      </div>
+
       {hasDemo && (
         <div className="mb-6 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', border:'1px dashed #B8B0A4', padding:'10px 14px', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
           <span>DEMO INSTITUTION LOADED — fictional cases across every stage. They stay in this browser and are never shared.</span>
@@ -92,40 +115,6 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
 
       {/* ── Your day: what needs attention, most urgent first ── */}
       <YourDay outcomes={outcomes} covUser={covUser} settings={settings} platformMode={platformMode} />
-
-      {/* ── Tool buttons ── */}
-      <div className="mb-8">
-        <div style={{ display:'flex', gap:'1px', flexWrap:'wrap', background:'#D4CCBC', marginBottom:'10px' }}>
-          {[
-            { num:'001', name:'TRIAGE', section:'triage', bg:'#EDE9E3' },
-            { num:'002', name:'DESK',   section:'desk',   bg:'#E8E3DC' },
-            { num:'003', name:'MULTI',  section:'multi',  bg:'#E3DDD5' },
-            { num:'004', name:'FILE',   section:'file',   bg:'#DDD7CE' },
-            { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
-            { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
-            { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
-
-          ].map(({ num, name, section, bg }) => (
-            <button key={num} onClick={() => setActiveSection(section)}
-              className="mono-font"
-              style={{ background:bg, border:'none', cursor:'pointer', padding:'14px 20px', flex:'1 1 auto', textAlign:'left', transition:'background 0.12s', minWidth:'80px' }}
-              onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
-              onMouseLeave={e => e.currentTarget.style.background=bg}>
-              <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#A8A29E', marginBottom:'4px' }}>{num}</div>
-              <div style={{ fontSize:'12px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
-            </button>
-          ))}
-        </div>
-        <div style={{ textAlign:'right' }}>
-          <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
-            className="mono-font"
-            style={{ fontSize:'10px', letterSpacing:'0.16em', padding:'9px 20px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#FAF7F1' }}
-            onMouseLeave={e => { e.currentTarget.style.background='#2D2922'; e.currentTarget.style.color='#E8E3DC' }}>
-            ◎ &nbsp;NEW HERE? &nbsp;START WITH THE TOUR
-          </button>
-        </div>
-      </div>
 
       {/* ── 7-slide tour modal ── */}
       {tourOpen && (() => {
@@ -209,36 +198,6 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
           </div>
         )
       })()}
-
-      {urgent.length > 0 && (
-        <div className="mb-6 border border-amber-700 px-4 py-3" style={{ background:'#FFFBEB' }}>
-          <div className="mono-font text-stone-900 mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em' }}>
-            {'⚠'} {urgent.length} CASE{urgent.length > 1 ? 'S' : ''} APPROACHING 45BD DEADLINE
-          </div>
-          {urgent.map(o => {
-            const d45 = addBusinessDays(o.provCreditDate, 45)
-            const days = daysUntil(d45)
-            return (
-              <div key={o.id} className="mono-font text-amber-800" style={{ fontSize:'11px' }}>
-                {o.id} — {o.merchant} — due {d45.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ({days}d)
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      <div className="mb-5 border border-stone-300 px-4 py-3" style={{ background:'#FAF7F1' }}>
-        <div className="mono-font mb-2" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#78716C' }}>
-          UPCOMING DEADLINES — NEXT 7 DAYS
-        </div>
-        {nextRespDue.length === 0 ? (
-          <div className="mono-font" style={{ fontSize:'11px', color:'#93C5FD' }}>No next-response dates due within 7 days.</div>
-        ) : nextRespDue.map(o => (
-          <div key={o.id} className="mono-font" style={{ fontSize:'11px', color: o.daysLeft < 0 ? '#B91C1C' : o.daysLeft <= 3 ? '#92400E' : '#1E40AF' }}>
-            {o.id} — {o.merchant} — {o.daysLeft < 0 ? `OVERDUE ${Math.abs(o.daysLeft)}d` : o.daysLeft === 0 ? 'DUE TODAY' : `in ${o.daysLeft}d`} · {new Date(o.nextRespDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-          </div>
-        ))}
-      </div>
 
       <div className="mb-8 home-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
         {stats.map(s => (
