@@ -16,6 +16,8 @@ import { exportCaseFile } from './caseExport.js'
 import { demoFileUrl, clearDemoBackend } from './demoBackend.js'
 import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 import { CLOSED_STATUSES, FILE_STAGE_STATUSES, caseClocks, sortClocks } from './clocks.mjs'
+import { decisionsOf } from './ai.js'
+import { AiExplain } from './AiExplain.jsx'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -339,6 +341,40 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             </div>
           )}
 
+          {/* AI decisions — each with its reasons, and whether a person agreed */}
+          {c && (() => {
+            const all = decisionsOf(c), decisions = all.filter(d => !d.draft), drafts = all.filter(d => d.draft)
+            if (!all.length) return null
+            const canReview = !c._triageOnly && canWrite() && !!covUser
+            const review = (d, r) => {
+              setOutcomes(prev => prev.map(o => {
+                if (o.id !== caseId) return o
+                const reviews = { ...(o.aiReviews || {}) }
+                if (r) reviews[d.id] = { ...r, by: covUser?.name || covUser?.email || 'Agent', byEmail: covUser?.email || '', ts: new Date().toISOString() }
+                else delete reviews[d.id]
+                return { ...o, aiReviews: reviews }
+              }))
+              if (r) auditWrite('ai.reviewed', 'case', caseId, { decision: d.id, task: d.kind, answer: d.answer, verdict: r.verdict, note: r.note || '' })
+            }
+            return (
+              <div>
+                <Label>AI DECISIONS ({decisions.length})</Label>
+                <div style={{ display:'grid', gap:'10px' }}>
+                  {decisions.map((d, i) => (
+                    <AiExplain key={d.id} record={d} title={d.task.toUpperCase()} defaultOpen={i === decisions.length - 1}
+                      review={c.aiReviews?.[d.id]} onReview={canReview ? r => review(d, r) : undefined} />
+                  ))}
+                </div>
+                {drafts.length > 0 && (
+                  <div className="mono-font" style={{ fontSize:'10px', color:'#57534E', marginTop:'8px', lineHeight:1.7 }}>
+                    {drafts.map(d => <div key={d.id}>AI DRAFT · {d.task} · {d.model} · {new Date(d.ts).toLocaleDateString('en-US', { month:'short', day:'numeric' })} · {d.by}</div>)}
+                  </div>
+                )}
+                {c._triageOnly && <div className="mono-font" style={{ fontSize:'10px', color:'#6B6259', marginTop:'6px' }}>Open the case in Desk to record whether you agree.</div>}
+              </div>
+            )
+          })()}
+
           {/* Clocks — SLA targets and deadlines (Settings → Workflow) */}
           {c && (() => {
             const clocks = sortClocks(caseClocks(c, settings))
@@ -622,6 +658,7 @@ export function buildDemoInstitution(userEmail) {
     { id:'MCH-DEMO03', mode:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
     { id:'MCH-DEMO04', mode:'merchant', date:iso(45), merchant:'Northwind Electronics', amount:'98.00 USD', network:'VISA', status:'won', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', resolvedDate:iso(18), winProb:'HIGH', history:h([45,'received'],[41,'rebuttal_prep','received'],[37,'submitted','rebuttal_prep'],[18,'won','submitted']) },
   ].map(c => ({ ...base, ...c, updatedAt: iso(0) }))
+  addDemoAi(cases, iso)
   const triage = [
     // Crypto Exchange triage log (Triage → Crypto Exchange mode)
     { id:'COV-DEMO15', date:iso(1), merchant:'Unhosted wallet 0x7a3f…c91e', amount:'2.4 ETH', accountType:'crypto_exchange', network:'Ethereum', verdict:'AUTHORIZED_PUSH_PAYMENT', confidence:'HIGH', routing:'ACCOUNT_FREEZE', outcome:'pending', isDemo:true },
@@ -629,10 +666,61 @@ export function buildDemoInstitution(userEmail) {
     { id:'COV-DEMO13', date:iso(0), merchant:'Veridian Crypto Exchange', amount:'4200 USD', accountType:'debit', network:'', verdict:'AUTHORIZED_PUSH_PAYMENT', confidence:'HIGH', routing:'ACCOUNT_FREEZE', outcome:'pending', fraud_sub_type:'investment_scam', isDemo:true },
     { id:'COV-DEMO14', date:iso(0), merchant:'Keystone Tutoring', amount:'380 USD', accountType:'credit', network:'visa', verdict:'CONSUMER_DISPUTE', confidence:'MEDIUM', routing:'CARD_CHARGEBACK', outcome:'pending', isDemo:true },
     // Triage records for cases that have since moved on, so their pipeline shows Triage ✓
-    { id:'COV-DEMO01', date:iso(2), merchant:'Northwind Electronics', amount:'1249.99 USD', accountType:'credit', network:'visa', verdict:'TRUE_FRAUD', confidence:'HIGH', routing:'CARD_CHARGEBACK', outcome:'pending', isDemo:true },
+    { id:'COV-DEMO01', aiDecision: DEMO_TRIAGE_AI(iso), date:iso(2), merchant:'Northwind Electronics', amount:'1249.99 USD', accountType:'credit', network:'visa', verdict:'TRUE_FRAUD', confidence:'HIGH', routing:'CARD_CHARGEBACK', outcome:'pending', isDemo:true },
     { id:'COV-DEMO03', date:iso(6), merchant:'Harbor Air', amount:'842.40 USD', accountType:'credit', network:'visa', verdict:'TRUE_FRAUD', confidence:'HIGH', routing:'CARD_CHARGEBACK', outcome:'pending', isDemo:true },
   ]
   return { cases, triage }
+}
+
+// What the AI said on a few demo cases, so the explanations, reviews and QA
+// sample have something to show without a live AI call
+const DEMO_MODEL = 'claude-sonnet-4-6'
+const DEMO_TRIAGE_AI = iso => ({
+  id:'AI-DEMO-T01', kind:'triage_fi', prompt:'triage-fi@2', task:'Triage — dispute classification', model:DEMO_MODEL, ts:iso(2), by:'Demo Analyst',
+  answer:'TRUE_FRAUD', confidence:'HIGH', summary:'Card-not-present purchase the cardholder doesn’t recognise, card still in their possession.',
+  inputs:{ accountType:'Credit Card', network:'visa', merchant:'Northwind Electronics', amount:'1249.99 USD', customerReason:'I did not make this purchase. My card was in my wallet the whole time and I have never shopped at Northwind.', cardPossession:'Yes — in possession', priorDisputes:'None', deviceRecognized:'New device, different state' },
+  factors:[
+    { factor:'Card was in the cardholder’s possession when the charge happened', source:'cardPossession', weight:'HIGH', effect:'supports', toward:'TRUE_FRAUD' },
+    { factor:'Transaction came from a new device in a different state', source:'deviceRecognized', weight:'HIGH', effect:'supports', toward:'TRUE_FRAUD' },
+    { factor:'No prior disputes in 12 months', source:'priorDisputes', weight:'MEDIUM', effect:'supports', toward:'TRUE_FRAUD' },
+    { factor:'Large electronics order — a common resale target, but also a common friendly-fraud category', source:'merchant', weight:'LOW', effect:'against', toward:'FIRST_PARTY_FRAUD' },
+  ],
+  alternatives:[{ option:'First-party fraud', why_not:'No dispute history and the device and location don’t match the cardholder’s.' }],
+  assumptions:['Shipping address wasn’t provided; assumed it doesn’t match the cardholder’s.'],
+  wouldChangeIf:['The order shipped to the cardholder’s own address', 'The device has been used by the cardholder before'],
+})
+function addDemoAi(cases, iso) {
+  const desk = (id, code, title, conf, factors, alts, extra = {}) => ({
+    id:'AI-DEMO-' + id, kind:'desk_analysis', prompt:'desk-analysis@2', task:'Desk — reason code and dispute summary', model:DEMO_MODEL, by:'Demo Analyst',
+    answer:`${code} — ${title}`, confidence:conf, factors, alternatives:alts, assumptions:[], wouldChangeIf:[], ...extra,
+  })
+  const ai = {
+    'COV-DEMO03': desk('D03', '10.4', 'Other Fraud — Card Absent', 'high', [
+      { factor:'Cardholder doesn’t recognise the airline purchase', source:'complaint', weight:'HIGH', effect:'supports' },
+      { factor:'AVS mismatch on the billing address', source:'avsMismatch', weight:'HIGH', effect:'supports' },
+      { factor:'No 3-D Secure authentication, so liability stays with the merchant', source:'threeDSStatus', weight:'MEDIUM', effect:'supports' },
+    ], [{ option:'10.5 — Visa Fraud Monitoring Program', why_not:'The merchant isn’t listed in the program.' }], { ts:iso(5), wouldChangeIf:['The passenger name matches the cardholder'] }),
+    'COV-DEMO05': desk('D05', '13.1', 'Merchandise / Services Not Received', 'high', [
+      { factor:'Promised delivery date passed six weeks ago', source:'expectedDeliveryDate', weight:'HIGH', effect:'supports' },
+      { factor:'Cardholder tried to contact the merchant and got no reply', source:'complaint', weight:'MEDIUM', effect:'supports' },
+    ], [{ option:'13.3 — Not as Described', why_not:'Nothing was delivered, so there is nothing to describe.' }], { ts:iso(8), assumptions:['The cardholder didn’t agree to a later delivery date.'] }),
+    'COV-DEMO10': desk('D10', '12.6', 'Duplicate Processing', 'high', [
+      { factor:'Two identical charges a minute apart for the same amount', source:'complaint', weight:'HIGH', effect:'supports' },
+    ], [], { ts:iso(39) }),
+    'COV-DEMO12': desk('D12', '13.1', 'Merchandise / Services Not Received', 'medium', [
+      { factor:'Cardholder says the retreat “never really happened”', source:'complaint', weight:'MEDIUM', effect:'supports' },
+      { factor:'Merchant says the cardholder attended day one', source:'complaint', weight:'MEDIUM', effect:'against' },
+    ], [{ option:'13.3 — Not as Described', why_not:'Fits if the service was delivered but was materially different.' }], { ts:iso(56), wouldChangeIf:['Proof the cardholder attended part of the retreat'] }),
+  }
+  const reviews = {
+    'COV-DEMO03': { 'AI-DEMO-D03': { verdict:'agree', note:'', by:'Priya Raman', byEmail:'p.raman@demo.bank', ts:iso(5) } },
+    'COV-DEMO12': { 'AI-DEMO-D12': { verdict:'disagree', note:'She attended day one — this is not-as-described, not non-receipt.', by:'James Chen', byEmail:'j.chen@demo.bank', ts:iso(55) } },
+  }
+  cases.forEach(c => {
+    if (ai[c.id]) c.aiDecisions = [ai[c.id]]
+    if (reviews[c.id]) c.aiReviews = reviews[c.id]
+    if (c.id === 'COV-DEMO11') c.qa = { period:iso(21).slice(0, 7), checks:{ classification:'yes', reasonCode:'yes', evidence:'yes', deadlines:'yes', communication:'na', ai:'na' }, result:'pass', note:'', reviewer:'Maria Okafor', reviewerEmail:'m.okafor@demo.bank', ts:iso(3) }
+  })
 }
 
 // Storage is written before any tool reads it: tools load their own copy on
@@ -649,7 +737,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '4'
+const DEMO_VERSION = '5'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

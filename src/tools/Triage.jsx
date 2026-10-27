@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Shield, AlertTriangle, MessageSquare, Send, Loader2, Bitcoin, ArrowRight, AlertCircle, Lock, Check, Copy, CheckCircle, ExternalLink } from 'lucide-react'
 import { SUPA_KEY, SUPA_URL, pullCasesFromSupa } from '../data.js'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson } from '../ai.js'
+import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -400,6 +402,7 @@ ${isCardBased ? `MERCHANT RISK SIGNALS:
 - VFMP listed: ${vfmp || 'Unknown'}
 - Merchant dispute rate: ${merchantDisputeRate || 'Unknown'}
 - MCC risk tier: ${mccRisk || 'Unknown'}` : `MERCHANT SIGNALS: N/A — non-card payment rail.`}
+${EXPLAIN_RULES}
 
 Return ONLY valid JSON, no markdown. Include ALL fields:
 {
@@ -421,7 +424,8 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
     { "signal": "signal text", "weight": "HIGH" | "MEDIUM" | "LOW", "toward": "TRUE_FRAUD" | "FIRST_PARTY_FRAUD" | "CONSUMER_DISPUTE" | "AUTHORIZED_PUSH_PAYMENT" }
   ],
   "risk_notes": "Caveats or watch-outs — or empty string.",
-  "proceed_to_dispute": true | false
+  "proceed_to_dispute": true | false,
+  ${EXPLAIN_JSON}
 }`
 
     try {
@@ -438,12 +442,20 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
       } finally { clearTimeout(timeoutId) }
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(text)
+      const parsed = readAiJson(data)
+      parsed._ai = aiRecord('triage_fi', {
+        data, answer: parsed.classification, confidence: parsed.confidence, summary: parsed.headline, explanation: parsed.explanation,
+        factors: (parsed.signal_influences || []).map(x => ({ factor: x.signal, weight: x.weight, toward: x.toward })),
+        inputs: { institutionType: instType, jurisdiction: jur, accountType: accountTypeLabel, regFramework, network, merchant, amount: amount ? `${amount} ${currency}` : '',
+          transactionDate: daysNote, transactionType, flaggedBy, claimType, customerReason, priorDisputes, accountAge, cardPossession: isCardBased ? cardPossession : '',
+          accountChanges, deviceRecognized, vfmp: isCardBased ? vfmp : '', merchantDisputeRate: isCardBased ? merchantDisputeRate : '', mccRisk: isCardBased ? mccRisk : '',
+          cryptoScenario, exchangeRegulated, walletCustody, contactedExchange },
+      })
       setResult(parsed)
       setOutcomes(prev => [{
         id: `COV-${Date.now().toString(36).toUpperCase().slice(-6)}`,
         date: new Date().toISOString(),
+        aiDecision: parsed._ai,
         merchant: merchant || '—',
         amount: amount ? `${amount} ${currency}` : '—',
         accountType, network: network || '',
@@ -504,6 +516,7 @@ ${ceComplaint}
 
 REGULATORY: ${ceRegLabel}
 ${ceSarRequired ? '⚠ SAR/STR filing obligation triggered' : 'No automatic threshold triggered'}
+${EXPLAIN_RULES}
 
 Return ONLY valid JSON, no markdown:
 {
@@ -520,7 +533,8 @@ Return ONLY valid JSON, no markdown:
   "routing_label": "Human-readable routing label",
   "routing_detail": "2–3 sentences on exact next steps.",
   "risk_notes": "Watch-outs or empty string.",
-  "proceed_to_dispute": true | false
+  "proceed_to_dispute": true | false,
+  ${EXPLAIN_JSON}
 }`
 
     try {
@@ -531,12 +545,20 @@ Return ONLY valid JSON, no markdown:
       })
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(text)
+      const parsed = readAiJson(data)
+      parsed._ai = aiRecord('triage_ce', {
+        data, answer: parsed.classification, confidence: parsed.confidence, summary: parsed.headline, explanation: parsed.explanation,
+        factors: (parsed.signal_influences || []).map(x => ({ factor: x.signal, weight: x.weight, toward: x.toward })),
+        inputs: { accountType: ceAccountType, kycLevel: ceKycLevel, priorClaims: cePriorClaims, flaggedBy: ceFlaggedBy, asset: ceAsset, chain: ceChain,
+          transactionType: ceTxType, amount: ceAmount ? `${ceAmount} ${ceCurrency}` : '', sarStatus: sarNote, transactionDate: daysNote, destinationType: ceDestinationType,
+          destination: ceDestinationAddress, receivingExchange: ceReceivingExchange, compromiseVector: ceCompromiseVector, recentAccountChanges: ceRecentAcctChanges,
+          device: ceDeviceNew, blockchainTrace: ceBlockchainTrace, customerStatement: ceComplaint, regulatory: ceRegLabel },
+      })
       setResult(parsed)
       setOutcomes(prev => [{
         id: `COV-${Date.now().toString(36).toUpperCase().slice(-6)}`,
         date: new Date().toISOString(),
+        aiDecision: parsed._ai,
         merchant: ceReceivingExchange || ceDestinationAddress || '—',
         amount: ceAmount ? `${ceAmount} ${ceCurrency}` : '—',
         accountType: 'crypto_exchange', network: ceChain || ceAsset || '',
@@ -591,8 +613,7 @@ Return ONLY valid JSON:
       })
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
-      setCeActionPlan(JSON.parse(text))
+      setCeActionPlan({ ...readAiJson(data), _ai: aiDraftRecord('ce_plan', data) })
     } catch (e) {
       setCeActionPlanError(`Action plan failed: ${e.message}`)
     } finally {
@@ -1440,7 +1461,7 @@ Return ONLY valid JSON:
                 </div>
               </div>
 
-              {result.signal_influences?.length > 0 && (
+              {result._ai ? <AiExplain record={result._ai} /> : result.signal_influences?.length > 0 && (
                 <div className="border border-stone-200 p-5" style={{ background: '#FAF7F1' }}>
                   <div className="mono-font text-xs tracking-widest text-stone-500 mb-3">WHAT DROVE THIS VERDICT</div>
                   <div className="space-y-2.5">
@@ -1564,7 +1585,7 @@ Return ONLY valid JSON:
               {isCE && ceActionPlan && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="mono-font text-xs tracking-widest text-stone-500">FULL ACTION PLAN</div>
+                    <div><div className="mono-font text-xs tracking-widest text-stone-500">FULL ACTION PLAN</div><AiDraftNote record={ceActionPlan._ai} /></div>
                     <button onClick={() => {
                       const t = [`CE ACTION PLAN — ${result.classification?.replace(/_/g,' ')}`, `Recovery: ${ceActionPlan.recovery_outlook}`, '', 'IMMEDIATE ACTIONS:', ...(ceActionPlan.immediate_actions||[]).map((a,i) => `${i+1}. ${a}`), '', 'INVESTIGATION:', ...(ceActionPlan.investigation_steps||[]).map((a,i) => `${i+1}. ${a}`), ceActionPlan.sar_required ? '\nSAR: ' + ceActionPlan.sar_note : '', ceActionPlan.lea_referral_recommended ? '\nLEA: ' + ceActionPlan.lea_note : '', '', 'RECOVERY: ' + ceActionPlan.recovery_note].filter(Boolean).join('\n')
                       navigator.clipboard.writeText(t)

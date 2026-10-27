@@ -444,7 +444,7 @@ export default function Covalence() {
           <TrioView outcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
-          <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} outcomes={outcomes} team={team} />
+          <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} outcomes={outcomes} setOutcomes={setOutcomes} team={team} />
         </div>
         </React.Fragment>
       </div>

@@ -6,6 +6,8 @@ import { Shield, Loader2, ArrowRight, AlertCircle, FileText, Check, Copy, CheckS
 import { openEvidence } from '../CaseThread.jsx'
 import { SUPA_KEY, SUPA_URL, pushCasesToSupa, uploadEvidence } from '../data.js'
 import { DEFAULT_SETTINGS, REASON_TITLES, daysUntil, estimateFundingGrade, loadDeskSession, notesText, saveOutcomes, toDfaClaim } from '../shared.jsx'
+import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withDecision } from '../ai.js'
+import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
 // Returns { systems, cardholder, merchant } arrays of { text, impact } items
@@ -243,6 +245,13 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   const [cbFiledDate, setCbFiledDate]   = useState(_sess.cbFiledDate || '')
   const [cbCycleStage, setCbCycleStage] = useState(_sess.cbCycleStage || '1cb')
   const [currentDeskCaseId, setCurrentDeskCaseId] = useState(_sess.currentDeskCaseId ?? null) // ID of most recently analyzed case in desk
+  // AI drafts (letters, predictions): which model and prompt wrote each, also kept on the case
+  const [draftAi, setDraftAi] = useState({})
+  const noteDraft = (kind, data, caseId) => {
+    const rec = aiDraftRecord(kind, data)
+    setDraftAi(d => ({ ...d, [kind]: rec }))
+    if (caseId) setOutcomes(prev => prev.map(o => o.id === caseId ? withDecision(o, rec) : o))
+  }
 
 
   // ── Deadline push notifications ─────────────────────────────────────────────
@@ -489,6 +498,7 @@ FORMATTING RULES:
 - For PROCESSING ERROR codes: 2-4 sentences, ~60-90 words. State the error and the correct treatment.
 - NEVER use first-person pronouns.
 - Lead with facts. Save the ask for the final sentence.
+${EXPLAIN_RULES}
 
 Return ONLY a valid JSON object:
 {
@@ -501,7 +511,8 @@ Return ONLY a valid JSON object:
   "missing_information": ["list", "of", "info", "needed"],
   "goodwill_outreach_required": true | false,
   "goodwill_outreach_note": "Brief note if required, otherwise empty string.",
-  "alternative_codes": [{"code": "4855", "title": "Goods Not Provided", "when_to_use": "One line"}]
+  "alternative_codes": [{"code": "4855", "title": "Goods Not Provided", "when_to_use": "One line"}],
+  ${EXPLAIN_JSON}
 }`
 
     try {
@@ -516,13 +527,15 @@ Return ONLY a valid JSON object:
       })
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('')
-        .replace(/```json|```/g, '')
-        .trim()
-      const parsed = JSON.parse(text)
+      const parsed = readAiJson(data)
+      parsed._ai = aiRecord('desk_analysis', {
+        data, answer: `${parsed.recommended_reason_code} — ${parsed.reason_code_title}`, confidence: parsed.confidence, summary: parsed.rationale,
+        explanation: parsed.explanation && { ...parsed.explanation,
+          alternatives_considered: parsed.explanation.alternatives_considered?.length ? parsed.explanation.alternatives_considered
+            : (parsed.alternative_codes || []).map(a => ({ option: `${a.code} — ${a.title}`, why_not: a.when_to_use })) },
+        inputs: { complaint: effectiveComplaint, merchant, amount: amount ? `${amount} ${currency}` : '', disputedAmount, transactionDate, expectedDeliveryDate,
+          network: network === 'visa' ? 'Visa' : 'Mastercard', cardType, threeDSStatus },
+      })
       setResult(parsed)
       // Save to outcome log with behavioral signals for DFA.
       // A case opened from Triage or the tracker keeps its COV- number, so the
@@ -544,6 +557,7 @@ Return ONLY a valid JSON object:
         status: prior?.status && !['received','pending'].includes(prior.status) ? prior.status : 'queued',
         resolvedDate: prior?.resolvedDate || null,
         ai: { summary: parsed.dispute_summary || '', rationale: parsed.rationale || '', missing: parsed.missing_information || [], ts: new Date().toISOString() },
+        aiDecisions: [...(prior?.aiDecisions || []), parsed._ai].slice(-20),
         threeDSStatus: threeDSStatus,
         confidence: parsed.confidence,
         category: parsed.category,
@@ -611,13 +625,8 @@ Return ONLY valid JSON:
       })
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('')
-        .replace(/```json|```/g, '')
-        .trim()
-      setRebuttal(JSON.parse(text))
+      setRebuttal(readAiJson(data))
+      noteDraft('rebuttal', data, currentDeskCaseId)
     } catch (e) {
       setRebuttalError(`Rebuttal preview failed: ${e.message}`)
     } finally {
@@ -694,14 +703,9 @@ Return ONLY valid JSON:
       })
       if (!response.ok) throw new Error(`API error: ${response.status}`)
       const data = await response.json()
-      const text = data.content
-        .filter(b => b.type === 'text')
-        .map(b => b.text)
-        .join('')
-        .replace(/```json|```/g, '')
-        .trim()
-      const parsed = JSON.parse(text)
+      const parsed = readAiJson(data)
       setComms(parsed)
+      noteDraft('comms', data, currentDeskCaseId)
       // Don't overwrite if agent has edited the draft — preserve their work
       if (!letterDraftModified) setEditableLetterBody(parsed.body || '')
       // Pre-populate editable docs from current evidence
@@ -842,8 +846,8 @@ Return ONLY valid JSON:
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }) })
       if (!res.ok) throw new Error('API ' + res.status)
       const data = await res.json()
-      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
-      setPreArbDraft(JSON.parse(text))
+      setPreArbDraft(readAiJson(data))
+      noteDraft('pre_arb', data, outcome.id)
     } catch (e) { setPreArbError('Pre-arb draft failed: ' + e.message) }
     finally { setPreArbLoading(false) }
   }
@@ -866,7 +870,8 @@ Return ONLY valid JSON:
       + '\n- Refund Policy Shown at Checkout: ' + mchRefundPolicyShown
       + '\n- Prior Orders Same Customer: ' + (mchPriorOrders || 'Unknown')
       + '\n- IP/Location Notes: ' + (mchIpLogs || 'None')
-      + '\n\nCHARGEBACK NOTIFICATION:\n"""' + complaint + '"""\n\n'
+      + '\n\nCHARGEBACK NOTIFICATION:\n"""' + complaint + '"""\n'
+      + EXPLAIN_RULES + '\n\n'
       + 'Return ONLY valid JSON:\n{\n'
       + '  "win_probability": "HIGH" | "MEDIUM" | "LOW",\n'
       + '  "win_note": "2-sentence win/loss likelihood",\n'
@@ -876,14 +881,19 @@ Return ONLY valid JSON:
       + '  "weaknesses": ["Weakness 1"],\n'
       + '  "deadline_note": "Representment deadline guidance",\n'
       + '  "liability_shift": true | false,\n'
-      + '  "liability_shift_note": "One sentence or empty string"\n}'
+      + '  "liability_shift_note": "One sentence or empty string",\n'
+      + '  ' + EXPLAIN_JSON + '\n}'
     try {
       const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] }) })
       if (!res.ok) throw new Error('API ' + res.status)
       const data = await res.json()
-      const text = data.content.filter(b => b.type === 'text').map(b => b.text).join('').replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(text)
+      const parsed = readAiJson(data)
+      parsed._ai = aiRecord('merchant', {
+        data, answer: `${parsed.win_probability} chance to win`, confidence: parsed.win_probability, summary: parsed.win_note, explanation: parsed.explanation,
+        inputs: { chargeback: complaint, reasonCode: mchReasonCode, network: network === 'visa' ? 'Visa' : 'Mastercard', amount: amount ? amount + ' ' + currency : '',
+          merchant, orderId: mchOrderId, deliveryConfirmed: mchDeliveryConfirmed, threeDS: tds, refundPolicyShown: mchRefundPolicyShown, priorOrders: mchPriorOrders, ipNotes: mchIpLogs },
+      })
       setMchResult(parsed)
       const mchCode = (mchReasonCode || '').split(/[\s–—]/)[0].trim()
       setOutcomes(prev => [{
@@ -903,6 +913,7 @@ Return ONLY valid JSON:
         priorOrders: mchPriorOrders,
         liabilityShift: parsed.liability_shift || false,
         winProb: parsed.win_probability,
+        aiDecisions: [parsed._ai],
       }, ...prev])
     } catch (e) { setMchError('Analysis failed: ' + e.message) }
     finally { setMchLoading(false) }
@@ -930,6 +941,7 @@ Return ONLY valid JSON:
       if (!res.ok) throw new Error('API ' + res.status)
       const data = await res.json()
       setMchRepLetter(data.content.filter(b => b.type === 'text').map(b => b.text).join('').trim())
+      noteDraft('rep_letter', data)
     } catch (e) { setMchRepLetterError('Letter failed: ' + e.message) }
     finally { setMchRepLetterLoading(false) }
   }
@@ -953,6 +965,7 @@ Return ONLY valid JSON:
       if (!res.ok) throw new Error('API ' + res.status)
       const data = await res.json()
       setMchPreArbLetter(data.content.filter(b => b.type === 'text').map(b => b.text).join('').trim())
+      noteDraft('mch_pre_arb', data)
     } catch (e) { setMchPreArbError('Pre-Arb letter failed: ' + e.message) }
     finally { setMchPreArbLoading(false) }
   }
@@ -1727,6 +1740,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                     </div>
                     <p className="display-font text-stone-700 leading-relaxed text-[15px]">{result.rationale}</p>
                   </div>
+                  {result._ai && <AiExplain record={result._ai} />}
   
                   {/* Dispute summary */}
                   <div className="border border-stone-900 bg-white p-6">
@@ -2033,6 +2047,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                     </span>
                   </div>
                   <p className="display-font text-stone-700 leading-relaxed text-[15px]">{mchResult.win_note}</p>
+                  {mchResult._ai && <div className="mt-4"><AiExplain record={mchResult._ai} defaultOpen={false} /></div>}
                   {mchResult.liability_shift && (
                     <div className="mt-3 pt-3 border-t border-stone-200">
                       <div className="mono-font text-[10px] tracking-widest text-emerald-800 mb-1">LIABILITY SHIFT</div>
@@ -2111,6 +2126,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                     <span className="display-font text-sm text-red-900">{mchRepLetterError}</span>
                   </div>
                 )}
+                {mchRepLetter && <AiDraftNote record={draftAi.rep_letter} />}
                 {mchRepLetter && (
                   <div className="border border-stone-900">
                     <div className="bg-stone-900 px-4 py-3 flex items-center justify-between">
@@ -2445,6 +2461,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               {mchPreArbError && (
                 <div className="border border-red-700 bg-red-50 p-3 mono-font text-[11px] text-red-800">{mchPreArbError}</div>
               )}
+              {mchPreArbLetter && <AiDraftNote record={draftAi.mch_pre_arb} />}
               {mchPreArbLetter && (
                 <div className="border border-purple-700">
                   <div className="bg-purple-900 px-4 py-3 flex items-center justify-between">
@@ -2617,6 +2634,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                 </div>
               )}
 
+              {rebuttal && <AiDraftNote record={draftAi.rebuttal} />}
               {rebuttal && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -2717,6 +2735,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                 </div>
               )}
 
+              {comms && commsOc && <AiDraftNote record={draftAi.comms} />}
               {comms && commsOc && (
                 <div className="border border-stone-900">
 
@@ -3882,6 +3901,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                 </div>
               )}
 
+              {preArbDraft && <AiDraftNote record={draftAi.pre_arb} />}
               {preArbDraft && (
                 <div className="space-y-5">
                   {/* Summary + win assessment */}
