@@ -330,6 +330,12 @@ export const GLOBAL_CSS = `
 
   /* ── Case search rows ─────────────────────────────────────────────────── */
   .cov-search-row:hover { background:#EEE9E0 !important; }
+  .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
+  /* Laptop widths: icon + shortcut only, so the tab bar stays on one line */
+  @media (min-width:768px) and (max-width:1399px) {
+    .cov-nav-search { min-width:0 !important; }
+    .cov-nav-search-label { display:none !important; }
+  }
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   @media(max-width:767px) {
@@ -352,7 +358,8 @@ export const GLOBAL_CSS = `
     .cov-nav-buttons  { display:none !important; }
     .cov-nav-inner    { min-height:48px; gap:10px !important; padding:0 12px !important; }
     .cov-nav-current  { font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
-    .cov-nav-inner .cov-nav-icon { padding:0 !important; width:34px; height:34px; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
+    .cov-nav-inner .cov-nav-icon { padding:0 !important; width:34px; height:34px; min-width:0 !important; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
+    .cov-nav-inner .cov-nav-search svg { width:15px; height:15px; }
     /* mobile menu sits inside the nav but needs full-size tap targets */
     .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }
     .cov-mobile-menu .cov-mobile-acct { font-size:10px !important; padding:8px 12px !important; }
