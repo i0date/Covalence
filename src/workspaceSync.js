@@ -6,7 +6,7 @@
 // workspace's values are pulled into this browser on sign-in, on focus and
 // every minute. Demo rows (COV-DEMO / MCH-DEMO) never leave the browser.
 // On sign-out the workspace's data is removed from this browser.
-import { accessToken } from './auth.js'
+import { accessToken, canWrite, canConfigure } from './auth.js'
 import { isDemoCase } from './CaseThread.jsx'
 
 const SUPA_URL = import.meta.env?.VITE_SUPABASE_URL || ''
@@ -60,7 +60,9 @@ const withLocalDemo = (key, remoteRaw) => {
   } catch { return remoteRaw }
 }
 
+const SETTINGS_KEYS = new Set(['cov_settings', 'cov_autobatch_3pm'])  // admins & reviewers only (enforced in the database too)
 function push(key) {
+  if (!canWrite() || (SETTINGS_KEYS.has(key) && !canConfigure())) return
   clearTimeout(pending.get(key))
   pending.set(key, setTimeout(async () => {
     pending.delete(key)

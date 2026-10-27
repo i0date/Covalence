@@ -44,8 +44,9 @@ export function AuditPanel({ covUser }) {
       </div>
       <div className="px-5 py-4">
         <p className="display-font" style={{ fontSize:'13px', color:'#57534E', lineHeight:1.6, margin:'0 0 12px' }}>
-          Every change to cases, your team, invites, Duo sessions, case links and settings is recorded here by the database itself.
-          Entries can’t be edited or deleted, and each one is fingerprinted to the one before it, so any tampering shows up when you verify.
+          {covUser?.demo
+            ? 'Demo Bank’s log, kept in your browser: every change you make here is recorded and fingerprinted to the entry before it, exactly as a real workspace does it in the database — where entries also can’t be edited or deleted.'
+            : 'Every change to cases, your team, invites, Duo sessions, case links and settings is recorded here by the database itself. Entries can’t be edited or deleted, and each one is fingerprinted to the one before it, so any tampering shows up when you verify.'}
         </p>
         {check && check !== 'running' && (
           <div style={{ ...mono, fontSize:'11px', padding:'8px 12px', marginBottom:'12px', border:`1px solid ${check.ok ? '#065F46' : '#B91C1C'}`, background: check.ok ? '#ECFDF5' : '#FEF2F2', color: check.ok ? '#065F46' : '#991B1B' }}>

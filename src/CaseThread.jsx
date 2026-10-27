@@ -11,7 +11,9 @@
 //   • buildDemoInstitution() — a realistic portfolio for first-time visitors
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { accessToken } from './auth.js'
+import { accessToken, legalHoldsList, legalHoldSet, canWrite, canConfigure } from './auth.js'
+import { exportCaseFile } from './caseExport.js'
+import { demoFileUrl, clearDemoBackend } from './demoBackend.js'
 import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 
 const OPEN_EVENT = 'cov:open-case'
@@ -36,6 +38,13 @@ export function evidencePath(d) {
   return tail ? decodeURIComponent(tail.split('?')[0]) : null
 }
 export async function openEvidence(d) {
+  // Demo uploads live in this tab's memory
+  if (String(d?.path || '').startsWith('demo/')) {
+    const url = demoFileUrl(d.path)
+    if (url) window.open(url, '_blank', 'noopener')
+    else window.alert('Demo files are kept only for the browser session they were uploaded in.')
+    return
+  }
   // Open the tab synchronously (inside the click) so popup blockers allow it
   const w = window.open('', '_blank')
   try {
@@ -149,18 +158,21 @@ function nextAction(c) {
 export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDeskOpen, onTriageHandoff, onScoreInDfa, onSendToDuo, covUser }) {
   const [note, setNote] = useState('')
   const [trail, setTrail] = useState(null)
+  const [hold, setHold] = useState(null)        // legal hold on this case, if any
+  const [exporting, setExporting] = useState(false)
   const c = useMemo(() => allThreadCases(outcomes).find(x => x.id === caseId), [caseId, outcomes])
   useEffect(() => {
     const k = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k)
   }, [onClose])
   // Signed in, real case: record the view and load the case's audit trail
-  const audited = !!covUser?.authed && !!caseId && !isDemoCase({ id: caseId })
+  const audited = !!caseId && (covUser?.authed ? !isDemoCase({ id: caseId }) : !!covUser?.demo && isDemoCase({ id: caseId }))
   useEffect(() => {
     setTrail(null)
     if (!audited) return
     auditWrite('case.viewed', 'case', caseId)
     auditList(caseId, 100).then(setTrail).catch(() => setTrail([]))
+    legalHoldsList().then(h => setHold(h.find(x => x.case_id === caseId) || null)).catch(() => setHold(null))
   }, [caseId, audited])
   if (!caseId) return null
 
@@ -233,6 +245,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           </div>}
           {c && <div style={{ marginTop:'10px', display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
             <StatusChip status={c.status} />
+            {hold && <span className="mono-font" title={hold.reason || 'Legal hold'} style={{ fontSize:'9px', letterSpacing:'0.08em', padding:'2px 6px', background:'#7F1D1D', color:'#FEF2F2' }}>LEGAL HOLD</span>}
             {c.reasonCode && <span className="mono-font" style={{ fontSize:'10px', color:'#D6CFC4' }}>{c.network ? `${c.network} ` : ''}{c.reasonCode}{c.reasonTitle ? ` · ${c.reasonTitle}` : ''}</span>}
           </div>}
         </div>
@@ -276,6 +289,31 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             {!c._triageOnly && <button className="upload-btn" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
             <button className="upload-btn" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
             <button className="upload-btn" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
+            {/* Case file for regulators / legal — every role, demo included */}
+            <button className="upload-btn" disabled={exporting} onClick={async () => {
+              setExporting(true)
+              try {
+                await exportCaseFile(c, { timeline, trail: trail || [], hold, exportedBy: covUser?.email || covUser?.name || '',
+                  institution: covUser?.authed ? covUser.institution : 'Demo institution', isDemo: isDemoCase(c) })
+              } finally { setExporting(false) }
+              auditList(caseId, 100).then(setTrail).catch(() => {})
+            }}>{exporting ? 'Exporting…' : 'Export case file'}</button>
+            {/* Legal hold: admins and reviewers, real cases only. Held cases are never purged. */}
+            {audited && canConfigure() && (
+              <button className="upload-btn" style={hold ? { borderColor:'#7F1D1D', color:'#7F1D1D' } : undefined} onClick={async () => {
+                try {
+                  if (hold) {
+                    if (!window.confirm(`Lift the legal hold on ${caseId}? It will become eligible for retention purge again.`)) return
+                    await legalHoldSet(caseId, false); setHold(null)
+                  } else {
+                    const reason = window.prompt(`Reason for the legal hold on ${caseId} (e.g. litigation, regulator request):`, '')
+                    if (reason === null) return
+                    await legalHoldSet(caseId, true, reason); setHold({ case_id: caseId, reason, set_at: new Date().toISOString() })
+                  }
+                  auditList(caseId, 100).then(setTrail).catch(() => {})
+                } catch (e) { window.alert(e.message) }
+              }}>{hold ? 'Lift legal hold' : 'Place legal hold'}</button>
+            )}
           </div>
 
           {/* AI analysis */}
@@ -363,7 +401,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           </div>
 
           {/* Note */}
-          {!c._triageOnly && (
+          {!c._triageOnly && canWrite() && (
             <div>
               <Label>ADD NOTE</Label>
               <div style={{ display:'flex', gap:'8px' }}>
@@ -441,7 +479,7 @@ export function CaseSearch({ outcomes, open, setOpen }) {
 }
 
 // ── Mobile menu ───────────────────────────────────────────────────────────────
-export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut }) {
+export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, roles, onRole }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
     if (!open) return
@@ -474,6 +512,14 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut })
                 <div style={{ minWidth:0 }}>
                   <div className="mono-font" style={{ fontSize:'11px', color:'#E7E4DF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</div>
                   <div className="mono-font" style={{ fontSize:'9px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
+                  {user.demo && roles && onRole && (
+                    <label className="mono-font" style={{ fontSize:'9px', color:'#78716C', letterSpacing:'0.1em', display:'flex', alignItems:'center', gap:'6px', marginTop:'8px' }}>
+                      VIEW AS
+                      <select value={user.role} onChange={e => onRole(e.target.value)} style={{ background:'#232019', border:'1px solid #3D3A35', color:'#E7E4DF', fontFamily:'inherit', fontSize:'11px', padding:'4px 6px' }}>
+                        {Object.entries(roles).map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
+                      </select>
+                    </label>
+                  )}
                 </div>
                 <div style={{ display:'flex', gap:'8px', flexShrink:0 }}>
                   {onSignIn && <button onClick={() => { setOpen(false); onSignIn() }} className="mono-font cov-mobile-acct" style={{ background:'transparent', border:'1px solid #D6CFC4', color:'#E7E4DF', padding:'8px 12px', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer' }}>SIGN IN</button>}
@@ -527,6 +573,11 @@ export function buildDemoInstitution(userEmail) {
     { id:'COV-DEMO12', date:iso(57), merchant:'Solace Wellness', amount:'720.00 USD', network:'VISA', status:'lost', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.3', reasonTitle:'Not as Described or Defective', cardholderName:'N. Kowalski', filedAt:iso(53), resolvedDate:iso(14),
       notes:[{ text:'Lost on representment — merchant produced signed service agreement. Customer informed.', ts:iso(14), author:'Demo Analyst' }],
       history:h([57,'received'],[55,'queued','received'],[53,'filed','queued'],[30,'representment','filed'],[14,'lost','representment']) },
+    // Closed years ago — past Demo Bank's 5-year retention period, so the purge has something to act on
+    { id:'COV-DEMO17', date:'2019-02-11T15:20:00.000Z', merchant:'Lakeside Electronics', amount:'612.00 USD', network:'VISA', status:'won', category:'fraud', verdict:'TRUE_FRAUD', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', cardholderName:'H. Brandt', filedAt:'2019-02-14T10:00:00.000Z', resolvedDate:'2019-04-02T12:00:00.000Z',
+      history:[{ ts:'2019-02-11T15:20:00.000Z', event:'created', status:'received', by:'Demo Analyst' }, { ts:'2019-04-02T12:00:00.000Z', event:'status', from:'filed', status:'won', by:'Demo Analyst' }] },
+    { id:'COV-DEMO18', date:'2020-06-03T09:05:00.000Z', merchant:'Summit Travel Group', amount:'1,140.00 USD', network:'MC', status:'lost', category:'mc_consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'4853', reasonTitle:'Cardholder Dispute', cardholderName:'R. Osei', filedAt:'2020-06-08T10:00:00.000Z', resolvedDate:'2020-08-19T12:00:00.000Z',
+      history:[{ ts:'2020-06-03T09:05:00.000Z', event:'created', status:'received', by:'Demo Analyst' }, { ts:'2020-08-19T12:00:00.000Z', event:'status', from:'representment', status:'lost', by:'Demo Analyst' }] },
     // Merchant / acquirer side — chargebacks received against the merchant (Desk merchant mode)
     { id:'MCH-DEMO01', mode:'merchant', date:iso(3),  merchant:'Northwind Electronics', amount:'689.00 USD', network:'VISA', status:'received', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, winProb:'HIGH', history:h([3,'received']) },
     { id:'MCH-DEMO02', mode:'merchant', date:iso(11), merchant:'Northwind Electronics', amount:'1249.99 USD', network:'VISA', status:'rebuttal_prep', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, liabilityShift:true, winProb:'HIGH', nextRespDate:ymd(4),
@@ -557,11 +608,12 @@ function writeDemoToStorage(userEmail) {
     localStorage.setItem('cov_outcomes', JSON.stringify([...cases, ...readLS('cov_outcomes', []).filter(o => !isDemoCase(o))]))
     localStorage.setItem('cov_demo_loaded', DEMO_VERSION)
   } catch {}
+  clearDemoBackend()  // the demo backend re-seeds its history from these cases
   return cases
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '3'
+const DEMO_VERSION = '4'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.
@@ -590,5 +642,6 @@ export function clearDemoInstitution(setOutcomes) {
     localStorage.setItem('cov_outcomes', JSON.stringify(readLS('cov_outcomes', []).filter(o => !isDemoCase(o))))
     localStorage.removeItem('cov_demo_loaded')
   } catch {}
+  clearDemoBackend()
   setOutcomes(prev => prev.filter(o => !isDemoCase(o)))
 }

@@ -3,6 +3,7 @@
 import React from 'react'
 import { TeamPanel } from '../AuthScreens.jsx'
 import { AuditPanel } from '../AuditPanel.jsx'
+import { RetentionPanel } from '../RetentionPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 
 export function SettingsView({ settings, setSettings, covUser }) {
@@ -13,6 +14,9 @@ export function SettingsView({ settings, setSettings, covUser }) {
     setTimeout(() => setSaved(false), 1800)
   }
   const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
+  // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
+  const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
+  const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
 
   const Field = ({ label, hint, children }) => (
     <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
@@ -84,8 +88,16 @@ export function SettingsView({ settings, setSettings, covUser }) {
       </div>
 
       {/* Team — members, invites (admins). Signed-in users only. */}
-      {covUser?.authed && <TeamPanel covUser={covUser} />}
-      {covUser?.authed && <AuditPanel covUser={covUser} />}
+      {workspace && <TeamPanel covUser={covUser} />}
+      {workspace && <AuditPanel covUser={covUser} />}
+      {workspace && <RetentionPanel covUser={covUser} />}
+
+      {locked && (
+        <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.08em', color:'#57534E', border:'1px dashed #B8B0A4', padding:'10px 14px', marginBottom:'16px' }}>
+          These are {covUser.institution}’s settings. Only admins and reviewers can change them — ask an admin if something needs updating.
+        </div>
+      )}
+      <fieldset disabled={locked} style={{ border:0, padding:0, margin:0, minWidth:0, opacity: locked ? 0.75 : 1 }}>
 
       {/* Two-column grid */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start' }}>
@@ -174,6 +186,7 @@ export function SettingsView({ settings, setSettings, covUser }) {
           RESET TO DEFAULTS
         </button>
       </div>
+      </fieldset>
 
     </div>
   )

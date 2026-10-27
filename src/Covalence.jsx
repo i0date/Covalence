@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
-import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch } from './CaseThread.jsx'
-import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership } from './auth.js'
+import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch, isDemoCase } from './CaseThread.jsx'
+import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership, setCurrentRole, purgedCaseIds, ROLES } from './auth.js'
+import { DEMO_INSTITUTION, demoRole, setDemoRole, ensureDemoSeeded, demoAudit } from './demoBackend.js'
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
@@ -120,10 +121,17 @@ export default function Covalence() {
   const [membership,    setMembership]    = useState(null)
   const [membershipChecked, setMembershipChecked] = useState(false)
   const [showSignIn,    setShowSignIn]    = useState(() => authAvailable && !!pendingInvite()) // invite links go straight to sign-in
+  // Demo visitors work inside "Demo Bank" with a role they can switch (Admin by default)
+  const [demoRoleState, setDemoRoleState] = useState(demoRole)
+  useEffect(() => {
+    const h = e => setDemoRoleState(e.detail)
+    window.addEventListener('cov:demo-role', h); return () => window.removeEventListener('cov:demo-role', h)
+  }, [])
   const covUser = membership
     ? { name: membership.display_name || membership.email, email: membership.email, institution: membership.institution_name,
-        institutionId: membership.institution_id, role: membership.role, authed: true }
-    : demoUser
+        institutionId: membership.institution_id, role: membership.role === 'member' ? 'analyst' : membership.role, authed: true }
+    : demoUser ? { ...demoUser, institution: DEMO_INSTITUTION, institutionId: 'demo', role: demoRoleState, demo: true } : null
+  if (!membership) setCurrentRole(demoUser ? demoRoleState : null)
   const [activeSection, setActiveSection] = useState('home')
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
   const [settings,      setSettings]      = useState(loadSettings)
@@ -161,13 +169,14 @@ export default function Covalence() {
       if (signedInBefore.current) {
         signedInBefore.current = false
         stopWorkspaceSync()
+        setCurrentRole(null)
         setOutcomes(loadOutcomes()); setSettings(loadSettings()); setDataVersion(v => v + 1)
       }
       return
     }
     signedInBefore.current = true
     setMembershipChecked(false)
-    getMembership().then(m => { setMembership(m); setShowSignIn(false) })
+    getMembership().then(m => { setCurrentRole(m?.role); setMembership(m); setShowSignIn(false) })
       .catch(() => setMembership(null))
       .finally(() => setMembershipChecked(true))
   }, [sessionUserId])
@@ -215,9 +224,36 @@ export default function Covalence() {
     return () => { unregister(); window.removeEventListener('storage', storageHandler) }
   }, [])
   useEffect(() => { saveSettings(settings) }, [settings])
+  // Demo visitors: settings changes go into Demo Bank's audit log, with old → new values
+  const prevSettings = useRef(settings)
+  useEffect(() => {
+    const before = prevSettings.current; prevSettings.current = settings
+    if (session || !demoUser || before === settings) return
+    const diff = {}
+    Object.keys({ ...before, ...settings }).forEach(k => { if (JSON.stringify(before[k]) !== JSON.stringify(settings[k])) diff[k] = { from: before[k] ?? null, to: settings[k] ?? null } })
+    if (!Object.keys(diff).length) return
+    const t = setTimeout(() => ensureDemoSeeded().then(() => demoAudit('settings.changed', 'settings', 'cov_settings', diff)), 800)
+    return () => clearTimeout(t)
+  }, [settings])
   useEffect(() => {
     if (!SUPA_URL || !SUPA_KEY || !membership) return
-    const pull = () => pullCasesFromSupa().then(r => { if(r.length) setOutcomes(l => mergeCases(l,r)) }).catch(()=>{})
+    const pull = async () => {
+      // Cases purged under the retention policy: drop this browser's copies so they can't come back
+      try {
+        const purged = new Set(await purgedCaseIds())
+        if (purged.size) {
+          const keep = loadOutcomes().filter(o => !purged.has(o.id))
+          localStorage.setItem('cov_outcomes', JSON.stringify(keep))
+          setOutcomes(l => l.filter(o => !purged.has(o.id)))
+        }
+      } catch {}
+      try {
+        const r = await pullCasesFromSupa()
+        // Auditors can't change anything, so the workspace's copy simply replaces theirs (demo rows stay)
+        if (membership?.role === 'auditor') setOutcomes(l => [...r, ...l.filter(isDemoCase)])
+        else if (r.length) setOutcomes(l => mergeCases(l, r))
+      } catch {}
+    }
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
   }, [membership?.institution_id])
 
@@ -295,6 +331,15 @@ export default function Covalence() {
                 </span>
               )}
               {platformMode==='merchant'&&activeSection==='desk'&&<span className="mono-font desktop-only" style={{fontSize:'9px',letterSpacing:'0.12em',color:'#F59E0B',padding:'14px 0'}}>MERCHANT MODE</span>}
+              {covUser?.demo && (
+                <label className="mono-font desktop-only" title="Try Covalence as each role — the app changes what you can do" style={{fontSize:'9px',letterSpacing:'0.1em',color:'#78716C',display:'flex',alignItems:'center',gap:'6px'}}>
+                  VIEW AS
+                  <select value={demoRoleState} onChange={e => setDemoRole(e.target.value)} aria-label="View the demo as role"
+                    style={{background:'#232019',border:'1px solid #3D3A35',color:'#E7E4DF',fontFamily:'inherit',fontSize:'9px',letterSpacing:'0.1em',padding:'3px 4px',cursor:'pointer'}}>
+                    {Object.entries(ROLES).map(([k, r]) => <option key={k} value={k}>{r.label.toUpperCase()}</option>)}
+                  </select>
+                </label>
+              )}
               {covUser&&<div className="mono-font desktop-only" style={{fontSize:'9px',color:'#78716C',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
                 <span style={{color:'#A8A29E',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={covUser.name+(covUser.institution?` · ${covUser.institution}`:'')}>
                   {covUser.name}{covUser.authed && <span className="desktop-only" style={{color:'#57534E'}}> · {covUser.institution}</span>}
@@ -307,12 +352,19 @@ export default function Covalence() {
                   title={covUser.authed ? 'Sign out' : 'Leave the demo'}
                   style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'8px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
-              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser}
+              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole}
                 onSignIn={!covUser?.authed && authAvailable ? () => setShowSignIn(true) : null}
                 onSignOut={() => { if (covUser?.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }} />
             </div>
           </div>
         </div>
+
+        {/* Auditors: read-only, and say so on every page */}
+        {covUser?.role === 'auditor' && (
+          <div className="mono-font" role="status" style={{ background:'#1E3A5F', color:'#DBEAFE', fontSize:'10px', letterSpacing:'0.12em', padding:'8px 24px', textAlign:'center' }}>
+            READ-ONLY · AUDITOR ACCESS — you can view cases, the audit log and exports. Changes you make on screen aren’t saved.
+          </div>
+        )}
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (
@@ -365,7 +417,7 @@ export default function Covalence() {
           <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} historicalOutcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'duo' ? 'block' : 'none' }}>
-          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} />
+          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed || covUser?.demo ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} />
