@@ -84,7 +84,7 @@ module.exports = async function handler(req, res) {
   const scrubbedMessages = scrubMessages(messages)
 
   const ctrl = new AbortController()
-  const tid  = setTimeout(() => ctrl.abort(), 25000)
+  const tid  = setTimeout(() => ctrl.abort(), 55000)   // under the 60 s maxDuration (vercel.json)
   let upstream
   try {
     upstream = await fetch('https://api.anthropic.com/v1/messages', {

@@ -430,7 +430,7 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
 
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
+      const timeoutId = setTimeout(() => controller.abort(), 65000)   // the server gives up at 55 s
       let response
       try {
         response = await fetch('/api/triage', {
