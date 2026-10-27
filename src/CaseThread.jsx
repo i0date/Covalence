@@ -12,6 +12,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { accessToken } from './auth.js'
+import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -147,11 +148,20 @@ function nextAction(c) {
 // ── Case panel ────────────────────────────────────────────────────────────────
 export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDeskOpen, onTriageHandoff, onScoreInDfa, onSendToDuo, covUser }) {
   const [note, setNote] = useState('')
+  const [trail, setTrail] = useState(null)
   const c = useMemo(() => allThreadCases(outcomes).find(x => x.id === caseId), [caseId, outcomes])
   useEffect(() => {
     const k = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k)
   }, [onClose])
+  // Signed in, real case: record the view and load the case's audit trail
+  const audited = !!covUser?.authed && !!caseId && !isDemoCase({ id: caseId })
+  useEffect(() => {
+    setTrail(null)
+    if (!audited) return
+    auditWrite('case.viewed', 'case', caseId)
+    auditList(caseId, 100).then(setTrail).catch(() => setTrail([]))
+  }, [caseId, audited])
   if (!caseId) return null
 
   const duo  = readLS('duo_my_sessions', []).filter(s => s.caseId === caseId)
@@ -316,6 +326,21 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
               {trio.map(i => (
                 <button key={i.id} onClick={() => { onGo('trio'); onClose() }} className="mono-font" style={{ display:'block', background:'none', border:'none', padding:'4px 0', fontSize:'11px', color:'#7F1D1D', cursor:'pointer' }}>Trio · {i.id} · {i.title || i.name || 'incident'}</button>
               ))}
+            </div>
+          )}
+
+          {/* Audit trail — from the institution's append-only log */}
+          {audited && (
+            <div>
+              <Label>AUDIT TRAIL</Label>
+              {trail === null ? <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E' }}>Loading…</div>
+                : trail.length === 0 ? <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E' }}>No entries yet.</div>
+                : trail.slice(0, 30).map(e => (
+                  <div key={e.id} className="mono-font" style={{ fontSize:'10px', color:'#57534E', padding:'4px 0', borderBottom:'1px solid #EDE7DC', display:'flex', gap:'10px' }}>
+                    <span style={{ color:'#A8A29E', whiteSpace:'nowrap' }}>{new Date(e.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                    <span style={{ minWidth:0 }}>{AUDIT_LABELS[e.action] || e.action}{describeAudit(e) ? ` · ${describeAudit(e)}` : ''} <span style={{ color:'#A8A29E' }}>— {e.actor_email || 'system'}</span></span>
+                  </div>
+                ))}
             </div>
           )}
 
