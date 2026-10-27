@@ -3,8 +3,8 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/triage.js":  { "maxDuration": 30 },
-    "api/analyze.js": { "maxDuration": 30 },
+    "api/triage.js":  { "maxDuration": 60 },
+    "api/analyze.js": { "maxDuration": 60 },
     "api/reminders.js": { "maxDuration": 60 }
   },
   "crons": [

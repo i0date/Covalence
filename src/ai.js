@@ -11,14 +11,14 @@
 
 // Bump a version whenever its prompt changes, so a record shows which wording produced it
 export const PROMPTS = {
-  triage_fi:      { version: 'triage-fi@2',        label: 'Triage — dispute classification' },
-  triage_ce:      { version: 'triage-exchange@2',  label: 'Triage — exchange claim classification' },
+  triage_fi:      { version: 'triage-fi@3',        label: 'Triage — dispute classification' },
+  triage_ce:      { version: 'triage-exchange@3',  label: 'Triage — exchange claim classification' },
   ce_plan:        { version: 'exchange-plan@1',    label: 'Triage — exchange action plan (draft)' },
-  desk_analysis:  { version: 'desk-analysis@2',    label: 'Desk — reason code and dispute summary' },
+  desk_analysis:  { version: 'desk-analysis@3',    label: 'Desk — reason code and dispute summary' },
   rebuttal:       { version: 'rebuttal-sim@1',     label: 'Desk — merchant rebuttal prediction (draft)' },
   comms:          { version: 'customer-letter@1',  label: 'Desk — customer letter (draft)' },
   pre_arb:        { version: 'pre-arb@1',          label: 'Desk — pre-arbitration response (draft)' },
-  merchant:       { version: 'merchant-defence@2', label: 'Desk — merchant defence assessment' },
+  merchant:       { version: 'merchant-defence@3', label: 'Desk — merchant defence assessment' },
   rep_letter:     { version: 'rep-letter@1',       label: 'Desk — representment letter (draft)' },
   mch_pre_arb:    { version: 'mch-pre-arb@1',      label: 'Desk — merchant pre-arbitration letter (draft)' },
 }
@@ -30,7 +30,8 @@ EXPLAINING YOUR ANSWER:
 - Base every key factor on information given above. Name the input it came from. Never invent facts.
 - If something important is missing or unclear, list what you assumed in "assumptions".
 - Under "alternatives_considered", name the closest other answers and why they fit less well.
-- Under "would_change_if", list facts that, if learned, would change the answer.`
+- Under "would_change_if", list facts that, if learned, would change the answer.
+- Keep it short: 3 to 5 key factors, at most 2 alternatives, at most 3 items in each list, one line each.`
 export const EXPLAIN_JSON = `"explanation": {
     "key_factors": [{ "factor": "What in the case mattered", "source": "Which input it came from", "weight": "HIGH" | "MEDIUM" | "LOW", "effect": "supports" | "against" }],
     "alternatives_considered": [{ "option": "Another possible answer", "why_not": "Why it fits less well" }],
