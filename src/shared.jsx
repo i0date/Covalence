@@ -569,6 +569,11 @@ export const GLOBAL_CSS = `
   }
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
+  .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
+  @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  /* phones: a swipeable row, so the cases stay near the top */
+  @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:80%; overflow-x:auto; scroll-snap-type:x mandatory; padding:12px 14px !important; }
+    .cov-yourday-insights > div { scroll-snap-align:start; } }
   @media(max-width:767px) {
     .cov-search-status { width:auto !important; }
     .cov-yourday-row { grid-template-columns:96px minmax(0,1fr) !important; padding:10px 14px !important; }
