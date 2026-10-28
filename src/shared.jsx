@@ -622,6 +622,7 @@ export const GLOBAL_CSS = `
     .cov-nav-inner .cov-nav-search svg { width:15px; height:15px; }
     /* mobile menu sits inside the nav but needs full-size tap targets */
     .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }
+    .cov-mobile-menu .cov-mobile-item.cov-mobile-sub { padding-left:32px !important; }
     .cov-mobile-menu .cov-mobile-acct { font-size:10px !important; padding:8px 12px !important; }
   }
   @media(min-width:768px) { .mobile-only  { display:none !important; } }

@@ -14,7 +14,8 @@ import { insights, greeting, daySummary, money, WEEKDAYS } from './insights.js'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
 
-// New cases per day for the last 14 days; today's bar carries a dashed outline at the forecast
+// New cases per day for the last 14 days; today's bar is solid for cases so far, with a dashed outline
+// up to how many usually arrive by the end of the day (the forecast)
 function IntakeBars({ days, expected }) {
   const [hover, setHover] = useState(null)
   const W = 168, H = 44, gap = 2, bw = (W - gap * (days.length - 1)) / days.length
@@ -42,7 +43,11 @@ function IntakeBars({ days, expected }) {
         })}
       </svg>
       <div className="mono-font" aria-live="polite" style={{ fontSize:'10px', color:'#6B6259', marginTop:'4px', minHeight:'14px' }}>
-        {hover != null ? label(days[hover], hover) : <>LAST 14 DAYS · <span style={{ borderBottom:'1px dashed #1A1814' }}>dashed</span> = expected today</>}
+        {hover != null ? label(days[hover], hover) : (() => {
+          const now = days[days.length - 1]?.count || 0
+          const sw = dashed => <svg width="9" height="9" aria-hidden="true" style={{ display:'inline-block', verticalAlign:'-1px', marginRight:'4px' }}><rect x="0.5" y="0.5" width="8" height="8" rx="1" fill={dashed ? 'none' : '#1A1814'} stroke="#1A1814" strokeWidth="1" strokeDasharray={dashed ? '2 1.5' : undefined} /></svg>
+          return <>NEW CASES, LAST 14 DAYS · today {sw(false)}{now} so far{expected != null && expected > now && <> · {sw(true)}about {Math.round(expected)} by day’s end</>}</>
+        })()}
       </div>
     </div>
   )
