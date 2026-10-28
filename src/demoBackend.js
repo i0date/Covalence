@@ -11,7 +11,7 @@ import { readCases, writeCases } from './caseStore.js'
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
-  seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys',
+  seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -217,6 +217,25 @@ const HANDLERS = {
     need(isAdmin(), 'Only an institution admin can revoke API keys')
     write(K.keys, read(K.keys, []).map(k => k.id === p_id ? { ...k, revoked_at: new Date().toISOString() } : k))
   },
+  // Acting in the bank's systems (supabase_actions.sql): the demo keeps the settings; nothing is sent anywhere
+  action_endpoint_get: () => { if (!canConfigure()) return []; const e = read(K.endpoint, null); return e ? [{ url: e.url, has_secret: !!e.secret, slack_set: !!e.slack, notify_min: e.notify_min || 'high', updated_at: e.updated_at }] : [] },
+  action_endpoint_set: ({ p_url, p_slack_url, p_notify_min }) => {
+    need(isAdmin(), 'Only an institution admin can change connections')
+    const e = read(K.endpoint, {}) || {}
+    if (p_url && !/^https:\/\/[^\s/]+/.test(p_url)) throw new Error('The endpoint must start with https://')
+    if (p_slack_url && !/^https:\/\/hooks\.slack\.com\//.test(p_slack_url)) throw new Error('A Slack incoming webhook starts with https://hooks.slack.com/')
+    write(K.endpoint, { ...e, url: (p_url || '').trim(), slack: p_slack_url == null ? e.slack : !!p_slack_url.trim(), notify_min: p_notify_min || 'high', updated_at: new Date().toISOString() })
+    audit('connection.updated', 'workspace', 'action_endpoint', { url: p_url || '' })
+  },
+  action_secret_rotate: () => {
+    need(isAdmin(), 'Only an institution admin can change connections')
+    const s = 'whsec_' + Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('')
+    write(K.endpoint, { ...(read(K.endpoint, {}) || {}), secret: true, updated_at: new Date().toISOString() })
+    audit('connection.secret_rotated', 'workspace', 'action_endpoint', {})
+    return s
+  },
+  // The demo's "connection" is the simulated feed
+  intake_status: () => [{ active_keys: 1 + read(K.keys, []).filter(k => !k.revoked_at).length, last_received: read(K.feed, null) }],
   tm_alerts_list: ({ p_status }) => read(K.tmAlerts, []).filter(a => !p_status || a.status === p_status),
   tm_alert_set: ({ p_id, p_status, p_patch }) => {
     need(canWrite(), 'Your role can’t change alerts')

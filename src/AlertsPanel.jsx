@@ -3,9 +3,12 @@
 //   005 Licit → Alerts   (kind 'aml')    money laundering, sanctions
 //   001 Triage → Alerts  (kind 'fraud')  customers being robbed
 // ═══════════════════════════════════════════════════════════════════════════════
-// One import feeds both: the transaction file (and an optional account-events
-// file) is stored once, both rule sets run, and each alert shows up where it
-// belongs. Data sent through the API (api/intake.js) lands here the same way.
+// Built for a live connection: the institution's systems send transactions and
+// account events through the API (api/intake.js), the rules run on arrival, and
+// alerts appear here — the list refreshes on its own. A file upload stays as the
+// fallback (backfills, outages, before a bank is connected): the transaction file
+// (and an optional account-events file) is stored once, both rule sets run, and
+// each alert shows up where it belongs.
 // Import a day's transactions (core banking or processor export), run the rules
 // (monitoring.mjs) over each customer's last 30 days, screen counterparties and
 // wallets against OFAC, and work the alerts: close one as not suspicious with a
@@ -17,7 +20,8 @@ import { auditWrite } from './audit.js'
 import { openCase } from './CaseThread.jsx'
 import { parseCsv, MAX_BYTES } from './csvImport.js'
 import { TX_FIELDS, EV_FIELDS, guessTxMapping, guessEvMapping, buildTransactions, buildEvents, evaluate, evaluateFraud, screenables, sanctionsAlert, sampleDay, sampleEvents, sampleDayExchange, sampleEventsExchange, RULES } from './monitoring.mjs'
-import { ingest, ingestEvents, windowFor, windowByNames, eventsWindow, batches as listBatches, addAlerts, listAlerts, setAlert } from './monitoringData.js'
+import { ingest, ingestEvents, windowFor, windowByNames, eventsWindow, batches as listBatches, addAlerts, listAlerts, setAlert, intakeStatus, markDemoFeed } from './monitoringData.js'
+import { LiveStatus } from './ConnectionsPanel.jsx'
 import { FraudAlertDetail } from './FraudAlertDetail.jsx'
 import { detectDateFormat } from './csvImport.js'
 import { Badge, Button } from './ui.jsx'
@@ -60,11 +64,19 @@ export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcome
   const [loadErr, setLoadErr] = useState('')
   const inputRef = useRef(null)
 
+  const [status, setStatus] = useState(null)       // is the live connection sending data?
+  const [upload, setUpload] = useState(false)      // file upload, the fallback
   const refresh = () => {
     listAlerts().then(setAlerts).catch(e => setLoadErr(e.message))
     listBatches().then(setImports).catch(() => {})
+    intakeStatus().then(setStatus).catch(() => {})
   }
   useEffect(refresh, [])
+  // Alerts arrive from the connected systems at any time: check every 20 seconds while the page is in view
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible') { listAlerts().then(setAlerts).catch(() => {}); intakeStatus().then(setStatus).catch(() => {}) } }, 20000)
+    return () => clearInterval(t)
+  }, [])
 
   const loadEvents = async (f, text) => {
     const p = parseCsv(text ?? await f.text())
@@ -84,7 +96,8 @@ export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcome
   }
   const missing = TX_FIELDS.filter(f => f.required && mapping[f.key] == null)
 
-  const go = async () => {
+  const go = async (src = { file, mapping, dateFormat, evFile }) => {
+    const { file, mapping, dateFormat, evFile } = src
     const batch = 'TMB-' + Date.now().toString(36).toUpperCase()
     try {
       setRun({ stage: 'Reading the file' })
@@ -129,31 +142,52 @@ export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcome
       if (raised) auditWrite('alerts.raised', 'workspace', batch, { alerts: raised, rules: [...new Set(all.map(a => a.rule))].join(', ') })
       const nf = all.filter(x => x.kind === 'fraud').length, na = all.length - nf
       setRun({ summary: `${txs.length.toLocaleString()} transactions${ev.events.length ? ` and ${ev.events.length} account events` : ''} read (${added.toLocaleString()} new), ${customers.length.toLocaleString()} customers checked. ${raised} new alert${raised === 1 ? '' : 's'}: ${nf} fraud (001 Triage), ${na} AML (005 Licit).${errors.length ? ` ${errors.length} row${errors.length === 1 ? '' : 's'} couldn’t be read.` : ''}${screenNote}`, errors })
-      setFile(null); setEvFile(null); setFilter('open'); refresh()
+      setFile(null); setEvFile(null); setUpload(false); setFilter('open'); refresh()
     } catch (e) { setRun({ error: e.message }) }
   }
+
+  // Demo: a day of traffic arrives as if from the bank's systems — no column mapping
+  const simulate = async () => {
+    const tx = parseCsv(segment === 'ce' ? sampleDayExchange() : sampleDay()), ev = parseCsv(segment === 'ce' ? sampleEventsExchange() : sampleEvents())
+    const map = guessTxMapping(tx.headers)
+    await go({ file: { name: 'live feed (simulated)', headers: tx.headers, rows: tx.rows }, mapping: map,
+      dateFormat: detectDateFormat(tx.rows.map(r => String(r[map.date] || '').split(/[ T]/)[0])),
+      evFile: { name: 'live feed', headers: ev.headers, rows: ev.rows, mapping: guessEvMapping(ev.headers) } })
+    markDemoFeed(); intakeStatus().then(setStatus).catch(() => {})
+  }
+  const demo = !!covUser?.demo
 
   const mine = alerts.filter(a => (a.kind || 'aml') === kind && (!seg || (a.segment || 'fi') === seg))
   const shown = mine.filter(a => filter === 'all' || a.status === filter)
   const counts = useMemo(() => mine.reduce((m, a) => (m[a.status] = (m[a.status] || 0) + 1, m), {}), [alerts, kind])
 
   return (<>
-    {/* ── Import ── */}
+    {/* ── Live feed (and the file upload, as a fallback) ── */}
     <section style={box}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'12px', flexWrap:'wrap' }}>
-        <h2 className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', margin:0 }}>Import transactions</h2>
-        <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{imports.length ? `Last import ${day(imports[0].imported_at)} · ${imports.reduce((n, b) => n + Number(b.transactions), 0).toLocaleString()} transactions stored` : 'Nothing imported yet'}</span>
+        <h2 className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', margin:0 }}>Live feed</h2>
+        {status && <LiveStatus status={status} compact />}
       </div>
       <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'8px 0 12px', lineHeight:1.5, maxWidth:'760px' }}>
-        {segment === 'ce' ? 'A day of deposits and withdrawals from your exchange, as CSV — plus,' : 'A day’s transactions from your core system or processor, as CSV — plus,'} optionally, account events (logins, new devices, profile changes). Fraud alerts go to 001 Triage, AML alerts to 005 Licit. Systems can also send data directly (Settings → Connections).
+        {segment === 'ce' ? 'Your exchange sends deposits, withdrawals and account events' : 'Your core banking, card and online-banking systems send transactions and account events'} as they happen; the rules run on arrival and {kind === 'fraud' ? 'fraud alerts appear here (AML alerts go to 005 Licit)' : 'AML alerts appear here (fraud alerts go to 001 Triage)'} — this list updates by itself.
       </p>
-      {writer ? (<>
+      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
+        {demo && writer && <Button onClick={simulate} disabled={!!run?.stage}>{run?.stage ? 'Receiving…' : `Simulate live traffic${segment === 'ce' ? ' (exchange)' : ''}`}</Button>}
+        {!demo && status && !status.active_keys && <Button variant="secondary" onClick={() => window.dispatchEvent(new CustomEvent('cov:go', { detail: { section: 'settings', tab: 'connections' } }))}>Connect your systems</Button>}
+        {writer && <Button variant="quiet" onClick={() => setUpload(u => !u)} aria-expanded={upload || !!file}>{upload || file ? 'Hide file upload' : 'Upload a file instead'}</Button>}
+        {!writer && <span className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>Your role can read alerts but not import.</span>}
+      </div>
+      {(upload || file) && writer && (<div style={{ borderTop:'1px solid #E7E2D9', marginTop:'14px', paddingTop:'12px' }}>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 10px', lineHeight:1.5, maxWidth:'760px' }}>
+          For backfills, outages, or before your systems are connected: {segment === 'ce' ? 'a day of deposits and withdrawals' : 'a day’s transactions from your core system or processor'} as CSV, plus optionally account events.{' '}
+          <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{imports.length ? `Last file ${day(imports[0].imported_at)} · ${imports.reduce((n, b) => n + Number(b.transactions), 0).toLocaleString()} transactions stored` : ''}</span>
+        </p>
         <input ref={inputRef} type="file" accept=".csv,.tsv,.txt,text/csv" style={{ display:'none' }} onChange={e => { load(e.target.files?.[0]); e.target.value = '' }} />
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
           <Button variant="secondary" onClick={() => inputRef.current?.click()}>Choose a file</Button>
-          <Button variant="quiet" onClick={() => segment === 'ce' ? (load(null, sampleDayExchange()), loadEvents(null, sampleEventsExchange())) : (load(null, sampleDay()), loadEvents(null, sampleEvents()))}>Try a sample day{segment === 'ce' ? ' (exchange)' : ''}</Button>
+          {!demo && <Button variant="quiet" onClick={() => segment === 'ce' ? (load(null, sampleDayExchange()), loadEvents(null, sampleEventsExchange())) : (load(null, sampleDay()), loadEvents(null, sampleEvents()))}>Try a sample day{segment === 'ce' ? ' (exchange)' : ''}</Button>}
         </div>
-      </>) : <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>Your role can read alerts but not import.</p>}
+      </div>)}
       {file && (
         <div style={{ marginTop:'14px' }}>
           <div className="mono-font" style={{ fontSize:'11px', color:'#57534E', marginBottom:'8px' }}>{file.name} — {file.rows.length.toLocaleString()} rows. Check the columns:</div>
@@ -183,7 +217,7 @@ export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcome
             ) : <Button variant="quiet" onClick={() => evRef.current?.click()}>Add account events (optional)</Button>}
           </div>
           <div style={{ display:'flex', gap:'8px', alignItems:'center', marginTop:'12px', flexWrap:'wrap' }}>
-            <Button disabled={!!missing.length || !!run?.stage || (evFile && EV_FIELDS.some(f => f.required && evFile.mapping[f.key] == null))} onClick={go}>Import and run the rules</Button>
+            <Button disabled={!!missing.length || !!run?.stage || (evFile && EV_FIELDS.some(f => f.required && evFile.mapping[f.key] == null))} onClick={() => go()}>Import and run the rules</Button>
             <Button variant="quiet" onClick={() => { setFile(null); setEvFile(null) }}>Cancel</Button>
             {missing.length > 0 && <span className="mono-font" style={{ fontSize:'11px', color:'#991B1B' }}>Choose a column for {missing.map(f => f.label.toLowerCase()).join(', ')}.</span>}
           </div>

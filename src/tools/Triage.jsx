@@ -33,8 +33,9 @@ const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.t
 
 export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake, appOutcomes, setAppOutcomes, settings, covUser, fraudRoute }) {
   // Two ways in: alerts the bank's monitoring raised, and claims customers report
-  const [intakeTab, setIntakeTab] = useState(() => { try { return localStorage.getItem('cov_triage_tab') || 'claims' } catch { return 'claims' } })
-  const pickIntake = t => { setIntakeTab(t); try { localStorage.setItem('cov_triage_tab', t) } catch {} }
+  // Where Triage starts is an institution default (Settings → Default views)
+  const [intakeTab, setIntakeTab] = useState(() => settings?.triageDefaultTab === 'claims' ? 'claims' : 'alerts')
+  const pickIntake = setIntakeTab
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
@@ -84,7 +85,7 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake,
   const [triageEditDraft, setTriageEditDraft] = useState({})
 
   // ── Channel mode: 'fi' = Financial Institution/card, 'ce' = Crypto Exchange ──
-  const [triageChannelMode, setTriageChannelMode] = useState('fi')
+  const [triageChannelMode, setTriageChannelMode] = useState(() => ['fi', 'ce'].includes(settings?.triageDefaultSide) ? settings.triageDefaultSide : settings?.institutionType === 'exchange' ? 'ce' : 'fi')
 
   // ── Crypto Exchange (CE) mode state ─────────────────────────────────────────
   const [ceAccountType, setCeAccountType]               = useState('')
