@@ -76,6 +76,7 @@ export function WelcomePage({ children }) {
   const proof = [
     ['One record, start to finish', 'A case keeps one number from first contact through triage, filing, representment and funding — with its timeline, evidence and AI reasoning attached.'],
     ['Fraud that crosses institutions', 'Duo puts the sending and receiving institution in one live session on the same case. Trio runs the incident room when a fraud wave hits.'],
+    ['Compliance on the same case', 'Licit screens every case against OFAC, links cases by customer, payee and wallet, and drafts SAR narratives — without keying the facts twice.'],
     ['Network-ready, deadline-aware', 'Visa and Mastercard reason codes, filing packages for all four networks, Reg E / Reg Z windows and chargeback-ratio monitoring, tracked for you.'],
   ]
   return (
@@ -86,10 +87,10 @@ export function WelcomePage({ children }) {
       <section className="wl-pitch">
         <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.3em', color:'#1A1814' }}>COVALENCE</div>
         <div>
-          <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.22em', color:'#8A7F72', marginBottom:'18px' }}>DISPUTES · FRAUD RECOVERY · CROSS-INSTITUTION CASES</div>
+          <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.22em', color:'#8A7F72', marginBottom:'18px' }}>DISPUTES · FRAUD RECOVERY · SANCTIONS &amp; AML · CROSS-INSTITUTION CASES</div>
           <h1 className="wl-h1">Every dispute,<br/><span style={{ fontStyle:'italic', fontWeight:500 }}>one record.</span></h1>
           <p className="wl-serif" style={{ fontSize:'clamp(15px,1.4vw,17px)', lineHeight:1.6, color:'#57534E', maxWidth:'520px', margin:'20px 0 32px' }}>
-            Covalence takes a case from the first customer call to the final network decision — and brings in the other institution when the money has already moved.
+            Covalence takes a case from the first customer call to the final network decision — screens it for sanctions and money laundering on the way — and brings in the other institution when the money has already moved.
           </p>
           {/* Phones: the way in sits below the pitch — let people jump straight to it */}
           <a href="#wl-doors" className="wl-jump wl-mono" style={{ display:'none', textAlign:'center', background:'#1A1814', color:'#F5F1EA', padding:'14px', fontSize:'11px', letterSpacing:'0.16em', textDecoration:'none', marginBottom:'28px' }}>

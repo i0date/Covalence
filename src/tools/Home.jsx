@@ -57,7 +57,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
+            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, screen against sanctions and work AML and SARs in Licit, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
           </p>
           <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             COLLAPSE INTRO ↑
