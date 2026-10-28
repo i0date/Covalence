@@ -19,6 +19,8 @@ import { MultiView } from './tools/Multi.jsx'
 import { SettingsView } from './tools/Settings.jsx'
 import { TriageView } from './tools/Triage.jsx'
 import { TrioView } from './tools/Trio.jsx'
+import { LicitView } from './tools/Licit.jsx'
+import { screeningStatus } from './fincrime.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
@@ -148,6 +150,14 @@ export default function Covalence() {
   const [dataVersion,     setDataVersion]     = useState(0) // bump to remount tools after demo load/clear
   useOpenCaseListener(setOpenCaseId)
   const openSearch = React.useCallback(() => setSearchOpen(true), [])
+  // DFA scores claims for funding; a case with a confirmed sanctions match can't be funded or sold
+  const scoreInDfa = claims => {
+    const blocked = new Set(outcomes.filter(o => screeningStatus(o) === 'confirmed').map(o => o.id))
+    const ok = claims.filter(cl => !blocked.has(cl.id) && !blocked.has(cl.caseId))
+    if (ok.length < claims.length) window.alert(`${claims.length - ok.length} case${claims.length - ok.length === 1 ? ' has' : 's have'} a confirmed sanctions match and can’t be scored for funding. See 005 Licit.`)
+    if (!ok.length) return
+    setDfaQueue(ok); setActiveSection('dfa')
+  }
   const { help: shortcutsOpen, setHelp: setShortcutsOpen } = useShortcuts({ setActiveSection, openSearch, activeSection, enabled: !!(demoUser || membership) })
   // Workflow: auto-assignment and escalation rules run on the case pool (Settings → Workflow)
   const team = useTeam(covUser)
@@ -275,15 +285,17 @@ export default function Covalence() {
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
   }, [membership?.institution_id])
 
+  // Three areas: the dispute pipeline, the compliance desk, recovery and collaboration
   const NAV = [
     { id:'home',     label:'HOME' },
-    { id:'triage',   label:'001  TRIAGE' },
-    { id:'desk',     label:'002  DISPUTE DESK' },
-    { id:'multi',    label:'003  MULTI' },
-    { id:'file',     label:'004  FILE' },
-    { id:'dfa',      label:'005  DFA' },
-    { id:'duo',      label:'006  DUO' },
-    { id:'trio',     label:'007  TRIO' },
+    { id:'triage',   label:'001  TRIAGE', group:'Disputes' },
+    { id:'desk',     label:'002  DISPUTE DESK', group:'Disputes' },
+    { id:'multi',    label:'003  MULTI', group:'Disputes' },
+    { id:'file',     label:'004  FILE', group:'Disputes' },
+    { id:'licit',    label:'005  LICIT', group:'Compliance' },
+    { id:'dfa',      label:'006  DFA', group:'Recovery' },
+    { id:'duo',      label:'007  DUO', group:'Recovery' },
+    { id:'trio',     label:'008  TRIO', group:'Recovery' },
     { id:'settings', label:'SETTINGS' },
   ]
 
@@ -316,8 +328,10 @@ export default function Covalence() {
             </div>
             <span className="mono-font cov-nav-current">{(NAV.find(n => n.id === activeSection)?.label || '').replace(/\s+/g, ' ')}</span>
             <div className="cov-nav-buttons" style={{ display:'flex', alignItems:'center' }}>
-              {NAV.map(({ id, label }) => (
-                <button key={id} onClick={() => setActiveSection(id)}
+              {NAV.map(({ id, label, group }, i) => (<React.Fragment key={id}>
+                {/* A thin rule where one area ends and the next begins */}
+                {i > 0 && group !== NAV[i - 1].group && <span aria-hidden="true" className="cov-nav-sep" style={{ width:'1px', height:'16px', background:'#3D3A35', margin:'0 6px', flexShrink:0 }} />}
+                <button onClick={() => setActiveSection(id)} title={group ? `${group}` : undefined}
                   style={{
                     fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em',
                     padding:'14px 12px', background:'transparent', border:'none',
@@ -325,9 +339,9 @@ export default function Covalence() {
                     color: activeSection === id ? '#F5F1EA' : '#7A7068',
                     cursor:'pointer', textTransform:'uppercase', transition:'all 0.15s', whiteSpace:'nowrap',
                   }}>
-                  {label}
+                  {label.includes('  ') ? <><span className="cov-nav-num">{label.split('  ')[0]}&nbsp;&nbsp;</span>{label.split('  ')[1]}</> : label}
                 </button>
-              ))}
+              </React.Fragment>))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
               {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
@@ -399,7 +413,7 @@ export default function Covalence() {
                 network: (c.network || '').toLowerCase(), complaint: c._complaint || '' })
               setActiveSection('desk')
             }}
-            onScoreInDfa={(c) => { setDfaQueue([toDfaClaim(c)]); setActiveSection('dfa') }}
+            onScoreInDfa={(c) => scoreInDfa([toDfaClaim(c)])}
             onSendToDuo={(c) => { setDuoHandoff(c); setActiveSection('duo') }}
           />
         )}
@@ -421,7 +435,7 @@ export default function Covalence() {
             outcomes={outcomes} setOutcomes={setOutcomes}
             settings={settings} setSettings={setSettings}
             triageHandoff={triageHandoff} setTriageHandoff={setTriageHandoff}
-            onScoreInDfa={(cases) => { setDfaQueue(cases); setActiveSection('dfa') }}
+            onScoreInDfa={(cases) => scoreInDfa(cases)}
             onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }}
             onGoToDuo={() => setActiveSection('duo')}
             platformMode={platformMode} setPlatformMode={setPlatformMode}
@@ -434,6 +448,9 @@ export default function Covalence() {
         </div>
         <div style={{ display: activeSection === 'file' ? 'block' : 'none' }}>
           <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />
+        </div>
+        <div style={{ display: activeSection === 'licit' ? 'block' : 'none' }}>
+          <LicitView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'dfa' ? 'block' : 'none' }}>
           <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} historicalOutcomes={outcomes} />

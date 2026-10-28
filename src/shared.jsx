@@ -553,9 +553,9 @@ export const GLOBAL_CSS = `
   /* ── Case search rows ─────────────────────────────────────────────────── */
   .cov-search-row:hover { background:#EEE9E0 !important; }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
-  /* Top bar: the compact layout (page name + menu) is used up to 1099px — tablets and small laptops too */
+  /* Top bar: the compact layout (page name + menu) is used up to 1199px — tablets and small laptops too */
   .cov-nav-menu, .cov-nav-current { display:none; }
-  @media (max-width:1099px) {
+  @media (max-width:1199px) {
     .cov-nav-buttons { display:none !important; }
     .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-menu { display:block !important; }
@@ -563,8 +563,10 @@ export const GLOBAL_CSS = `
     .cov-nav-search { min-width:0 !important; }
     .cov-nav-search-label { display:none !important; }
   }
-  /* Laptop widths: icon + shortcut only, so the tab bar stays on one line */
-  @media (min-width:768px) and (max-width:1599px) {
+  /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
+  .cov-nav-num { display:none; }
+  /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */
+  @media (min-width:768px) {
     .cov-nav-buttons button { padding:14px 8px !important; letter-spacing:0.06em !important; }
     .cov-nav-collapse { display:none !important; }
     .cov-nav-search { min-width:0 !important; }

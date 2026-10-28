@@ -19,6 +19,7 @@ const USES = [
   ['Dispute Desk', 'Predicts the merchant’s likely rebuttal; drafts customer letters and pre-arbitration responses.', 'Draft'],
   ['Dispute Desk (merchants)', 'Rates the chance of winning a representment and suggests the defence.', 'Decision support'],
   ['Dispute Desk (merchants)', 'Drafts representment and pre-arbitration letters.', 'Draft'],
+  ['Licit', 'Drafts the narrative of a Suspicious Activity Report from the facts on the linked cases, listing where each statement comes from and what still needs adding.', 'Draft'],
 ]
 
 function Section({ n, title, children }) {
@@ -68,7 +69,7 @@ export default function AiPage() {
           <p style={{ marginTop:'12px' }}>
             <strong>Decision support</strong> means the AI suggests an answer and shows why; an analyst accepts or changes it.
             A <strong>draft</strong> is text an analyst reads and edits before it goes anywhere.
-            Nothing else in Covalence uses AI. Deadlines, SLA clocks, auto-assignment, escalation, DFA scoring and QA sampling follow fixed rules you can read in Settings.
+            Nothing else in Covalence uses AI. Deadlines, SLA clocks, auto-assignment, escalation, sanctions matching, AML signals, DFA scoring and QA sampling follow fixed rules you can read in the app.
           </p>
         </Section>
 

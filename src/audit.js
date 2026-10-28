@@ -34,7 +34,7 @@ export const AUDIT_LABELS = {
   'case.auto_assigned': 'Case auto-assigned', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
   'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported',
   'sanctions.screened': 'Sanctions screening', 'sanctions.decided': 'Sanctions match decided', 'sanctions.reported': 'OFAC report recorded',
-  'aml.flagged': 'Flagged for SAR review', 'sar.decided': 'SAR decision', 'sar.filed': 'SAR filed',
+  'aml.flagged': 'Flagged for SAR review', 'sar.decided': 'SAR decision', 'sar.filed': 'SAR filed', 'sar.drafted': 'SAR narrative saved',
   'case.edited': 'Case edited', 'case.viewed': 'Case viewed', 'evidence.uploaded': 'Evidence uploaded',
   'evidence.opened': 'Evidence opened', 'member.joined': 'Member joined', 'member.removed': 'Member removed',
   'member.role_changed': 'Role changed', 'invite.created': 'Invite sent', 'invite.revoked': 'Invite revoked',

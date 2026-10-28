@@ -5,7 +5,7 @@ import { accessToken, isSignedIn, canWrite } from './auth.js'
 import { demoRpc, demoStoreFile } from './demoBackend.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 005 DUO VIEW — multi-institutional real-time collaboration
+// 007 DUO — multi-institutional real-time collaboration
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const SUPA_URL = (typeof import.meta !== 'undefined' && import.meta.env) ? (import.meta.env.VITE_SUPABASE_URL || '') : ''

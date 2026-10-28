@@ -1,37 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // FINANCIAL CRIME SETTINGS — Settings → Financial crime
 // ═══════════════════════════════════════════════════════════════════════════════
-// The OFAC lists in use and when they were downloaded, screening options, and a
-// work queue: unresolved sanctions matches, confirmed matches awaiting the OFAC
-// report, and cases waiting on a SAR decision or filing.
+// The OFAC lists in use and the screening options. The work itself — matches,
+// OFAC reports, investigations, SARs — happens in 005 Licit (tools/Licit.jsx).
 import React, { useEffect, useState } from 'react'
-import { openCase } from './CaseThread.jsx'
 import { CLOSED_STATUSES } from './clocks.mjs'
 import { FINCRIME_DEFAULTS, screeningStatus } from './fincrime.js'
-import { Badge } from './ui.jsx'
 
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'18px 20px' }
 const H2 = ({ children }) => <h2 className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', margin:'0 0 12px', fontWeight:500 }}>{children}</h2>
-
-function Queue({ title, tone, rows, empty }) {
-  return (
-    <div style={{ marginBottom:'14px' }}>
-      <div style={{ display:'flex', gap:'8px', alignItems:'center', marginBottom:'6px' }}>
-        <span className="display-font" style={{ fontSize:'15px', fontWeight:600, color:'#1A1814' }}>{title}</span>
-        <Badge tone={rows.length ? tone : 'neutral'}>{rows.length}</Badge>
-      </div>
-      {rows.length === 0 ? <div className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>{empty}</div> : rows.map(({ c, note }) => (
-        <button key={c.id} onClick={() => openCase(c.id)} className="cov-search-row mono-font"
-          style={{ display:'flex', gap:'12px', width:'100%', textAlign:'left', background:'none', border:'none', borderTop:'1px solid #EDE7DC', padding:'6px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
-          <span style={{ color:'#57534E', flexShrink:0 }}>{c.id}</span>
-          <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} · {c.amount || ''}</span>
-          <span style={{ color:'#6B6259', flexShrink:0 }}>{note}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function FincrimeSettings({ settings, set, locked, outcomes }) {
   const s = { ...FINCRIME_DEFAULTS, ...settings }
@@ -43,7 +21,6 @@ export function FincrimeSettings({ settings, set, locked, outcomes }) {
 
   const real = (outcomes || []).filter(c => !c._triageOnly)
   const open = real.filter(c => !CLOSED_STATUSES.includes(c.status))
-  const screened = open.filter(c => c.screening).length
   const potential = real.filter(c => screeningStatus(c) === 'potential').map(c => ({ c, note: `${c.screening.hits.length} hit${c.screening.hits.length === 1 ? '' : 's'} · ${day(c.screening.ts)}` }))
   const toReport = real.filter(c => screeningStatus(c) === 'confirmed' && !c.ofacReportedAt).map(c => ({ c, note: `confirmed ${day(c.screening.decision.ts)}` }))
   const sar = real.filter(c => c.sarReview && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt)))
@@ -52,11 +29,11 @@ export function FincrimeSettings({ settings, set, locked, outcomes }) {
   return (
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap:'20px', alignItems:'start' }}>
       <section style={box}>
-        <H2>WORK QUEUE</H2>
-        <Queue title="Possible sanctions matches" tone="danger" rows={potential} empty="None waiting." />
-        <Queue title="Confirmed matches to report to OFAC" tone="danger" rows={toReport} empty="None waiting." />
-        <Queue title="SAR decisions and filings" tone="warn" rows={sar} empty="None waiting." />
-        <div className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{screened} of {open.length} open cases screened.</div>
+        <H2>WHERE THE WORK HAPPENS</H2>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.55, margin:0 }}>
+          Possible matches, OFAC reports, investigations and SARs are worked in <strong>005 Licit</strong>. This page holds the settings.
+          {' '}{potential.length + toReport.length + sar.length > 0 && <>Waiting now: {potential.length} possible match{potential.length === 1 ? '' : 'es'}, {toReport.length} OFAC report{toReport.length === 1 ? '' : 's'}, {sar.length} SAR task{sar.length === 1 ? '' : 's'}.</>}
+        </p>
       </section>
 
       <section style={box}>
