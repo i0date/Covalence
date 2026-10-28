@@ -43,14 +43,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
-  const pending  = active.filter(o => ['pending','queued','received'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
-  const stats = [
-    { label:'OPEN CASES',  value: (pending.length + inProg.length).toString(), sub:'last 60 days' },
-    { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—',       sub: resolved.length + ' resolved' },
-    { label:'IN PROGRESS', value: inProg.length.toString(),                     sub: platformMode === 'merchant' ? 'rebuttal prep / submitted' : 'filed / representment' },
-    { label:'RESOLVED',    value: resolved.length.toString(),                   sub:'won + lost' },
-  ]
 
   return (
     <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -209,60 +202,13 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         )
       })()}
 
-      <div className="mb-8 home-stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'16px' }}>
-        {stats.map(s => (
-          <div key={s.label} className="border border-stone-300 px-5 py-5" style={{ background:'#FAF7F1' }}>
-            <div className="mono-font text-stone-400 mb-2" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>{s.label}</div>
-            <div className="display-font font-semibold text-stone-900" style={{ fontSize:'36px', lineHeight:1 }}>{s.value}</div>
-            <div className="mono-font text-stone-400 mt-2" style={{ fontSize:'10px' }}>{s.sub}</div>
-          </div>
-        ))}
-      </div>
-
-
-      {/* ── Snapshot (days configurable in Settings) ── */}
-      {settings.snapshotEnabled !== false && (() => {
-        const snapDays = settings.snapshotDays || 60
-        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - snapDays)
-        const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
-        const res60  = recent.filter(o => ['won','lost','withdrawn'].includes(o.status))
-        const won60  = res60.filter(o => o.status === 'won')
-        const wr60   = res60.length > 0 ? Math.round((won60.length / res60.length) * 100) : null
-        const daysArr = res60.filter(o => o.date && o.resolvedDate).map(o => Math.max(0,Math.round((new Date(o.resolvedDate)-new Date(o.date))/86400000)))
-        const avg60   = daysArr.length > 0 ? Math.round(daysArr.reduce((a,b)=>a+b,0)/daysArr.length) : null
-        const catMap  = {}
-        recent.forEach(o => { const c = (o.category||'unknown').replace('mc_',''); catMap[c] = (catMap[c]||0)+1 })
-        const topCat  = Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0]
-        const fraudC  = recent.filter(o => o.category==='fraud'||o.category==='mc_fraud'||o.verdict==='TRUE_FRAUD').length
-        const svcC    = recent.length - fraudC
-        if (recent.length === 0) return null
-        return (
-          <div className="mb-8 border border-stone-300 px-5 py-4" style={{background:'#FAF7F1'}}>
-            <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-3">{snapDays}-DAY SNAPSHOT</div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                {label:'WIN RATE',       value: wr60  !== null ? `${wr60}%` : '—',  sub: `${res60.length} resolved`},
-                {label:'AVG RESOLUTION', value: avg60 !== null ? `${avg60}d` : '—', sub: 'days to close'},
-                {label:'FRAUD / SERVICE',value:`${fraudC} / ${svcC}`,               sub: `of ${recent.length} cases`},
-                {label:'TOP CATEGORY',   value: topCat ? topCat[0].replace(/_/g,' ').toUpperCase() : '—', sub: topCat ? `${topCat[1]} cases` : ''},
-              ].map(({label,value,sub}) => (
-                <div key={label}>
-                  <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{label}</div>
-                  <div className="display-font font-semibold text-stone-900" style={{fontSize:'clamp(16px,2.5vw,22px)',letterSpacing:'-0.02em',lineHeight:1.1}}>{value}</div>
-                  {sub && <div className="mono-font text-[10px] text-stone-400 mt-0.5">{sub}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
-
       {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
         const thread = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
         const FILTERS = [
           { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
-          { id:'action', label:'NEEDS ACTION',  test: o => ['triage','desk'].includes(stageOf(o)) || (o.nextRespDate && (new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000 <= 7 && stageOf(o) !== 'closed') },
+          { id:'action', label:'NEEDS ACTION',  test: o => ['triage','desk'].includes(stageOf(o)) || (dueIn(o) !== null && dueIn(o) <= 7) },
           { id:'mine',   label:'MINE',          test: o => { try { const me = JSON.parse(localStorage.getItem('cov_user')||'null')?.email; return !!me && o.assignedTo === me } catch { return false } } },
           { id:'closed', label:'CLOSED',        test: o => stageOf(o) === 'closed' },
           { id:'all',    label:'ALL',           test: () => true },
@@ -270,7 +216,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         const f = FILTERS.find(x => x.id === caseFilter) || FILTERS[0]
         const rows = thread.filter(f.test)
         if (thread.length === 0) return (
-          <div className="border border-stone-200 px-6 py-8" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
+          <div className="border border-stone-200 px-6 py-8 mb-5" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
             <div>
               <div className="display-font text-stone-500 italic" style={{ fontSize:'17px' }}>No cases yet.</div>
               <div className="mono-font text-stone-400" style={{ fontSize:'10px', marginTop:'4px' }}>Start with a triage, or load a demo institution to see every tool with data in it.</div>
@@ -281,33 +227,39 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             </div>
           </div>
         )
+        const open = thread.filter(FILTERS[0].test).length, action = thread.filter(FILTERS[1].test).length
+        const overdue = thread.filter(o => dueIn(o) !== null && dueIn(o) < 0).length
         return (
-          <div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', marginBottom:'10px' }}>
-              <button onClick={toggleCases} aria-expanded={casesOpen} aria-controls="home-cases" className="mono-font"
-                style={{ background:'none', border:'none', padding:0, cursor:'pointer', fontSize:'10px', letterSpacing:'0.15em', color:'#57534E' }}>
-                {casesOpen ? '▾' : '▸'} CASES · {thread.filter(x => x.status !== 'closed').length} · {casesOpen ? 'HIDE' : 'SHOW'}
-              </button>
-              {casesOpen && <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+          <section className="mb-5" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1' }}>
+            <button onClick={toggleCases} aria-expanded={casesOpen} aria-controls="home-cases" className="cov-home-cases-bar"
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:'18px', flexWrap:'wrap', background:'none', border:'none', padding:'14px 18px', cursor:'pointer', textAlign:'left' }}>
+              <span className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', letterSpacing:'-0.01em' }}>Cases</span>
+              <span className="mono-font cov-home-cases-sum" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E', display:'flex', gap:'14px', flexWrap:'wrap', flex:1 }}>
+                <span><strong style={{ color:'#1A1814' }}>{open}</strong> OPEN</span>
+                <span><strong style={{ color:'#1A1814' }}>{action}</strong> NEED ACTION</span>
+                {overdue > 0 && <span style={{ color:'#B91C1C' }}><strong>{overdue}</strong> OVERDUE</span>}
+                <span>{thread.length} IN ALL</span>
+              </span>
+              <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#1A1814', whiteSpace:'nowrap' }}>{casesOpen ? 'HIDE ↑' : 'SHOW ↓'}</span>
+            </button>
+            {casesOpen && (<div id="home-cases" style={{ borderTop:'1px solid #E7E2D9' }}>
+              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', padding:'10px 18px' }}>
                 {FILTERS.map(x => (
                   <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'10px' }}>
                     {x.label} {thread.filter(x.test).length}
                   </button>
                 ))}
-              </div>}
-            </div>
-            {casesOpen && (<div id="home-cases">
-            <div className="border border-stone-200" style={{ background:'#FAF7F1' }}>
+              </div>
               {rows.length === 0 ? (
-                <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 16px' }}>Nothing here.</div>
-              ) : rows.slice(0, 25).map((o, i) => {
-                const due = o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
+                <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 18px', borderTop:'1px solid #E7E2D9' }}>Nothing here.</div>
+              ) : rows.slice(0, 25).map(o => {
+                const due = dueIn(o)
                 return (
                   <div key={o.id} onClick={() => window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } }))}
                     data-case-row tabIndex={0} role="button" aria-label={`Open ${o.id} ${o.merchant || ''}`}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } })) } }}
-                    className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
-                    style={{ borderTop: i > 0 ? '1px solid #E7E2D9' : 'none' }}>
+                    className="flex items-center gap-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
+                    style={{ borderTop:'1px solid #E7E2D9', padding:'12px 18px' }}>
                     <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
                     <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px', minWidth:0 }}>{o.merchant}</span>
                     <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
@@ -321,12 +273,44 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                   </div>
                 )
               })}
-            </div>
-            <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'8px', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-              <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record</span>
-              {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
-            </div>
+              <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'10px 18px', borderTop:'1px solid #E7E2D9', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+                <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record{rows.length > 25 ? ` · showing 25 of ${rows.length}` : ''}</span>
+                {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
+              </div>
             </div>)}
+          </section>
+        )
+      })()}
+
+      {/* ── The numbers: one strip (snapshot figures can be turned off in Settings) ── */}
+      {(() => {
+        const cells = [
+          { label:'NEW',         value: active.length,                  sub:`opened in ${windowDays} days` },
+          { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },
+          { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—', sub:`${resolved.length} resolved` },
+        ]
+        if (settings.snapshotEnabled !== false) {
+          const cutoff = new Date(Date.now() - (settings.snapshotDays || 60) * 86400000)
+          const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
+          const days = recent.filter(o => ['won','lost','withdrawn'].includes(o.status) && o.date && o.resolvedDate)
+            .map(o => Math.max(0, Math.round((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)))
+          const fraud = recent.filter(o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD').length
+          const cats = {}
+          recent.forEach(o => { if (o.category) { const c = o.category.replace('mc_', ''); cats[c] = (cats[c] || 0) + 1 } })
+          const top = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]
+          if (days.length) cells.push({ label:'AVG RESOLUTION', value: Math.round(days.reduce((a, b) => a + b, 0) / days.length) + 'd', sub:'opened to closed' })
+          if (recent.length) cells.push({ label:'FRAUD / SERVICE', value:`${fraud} / ${recent.length - fraud}`, sub:`of ${recent.length} cases` })
+          if (top) cells.push({ label:'TOP CATEGORY', value: top[0].replace(/_/g, ' '), sub:`${top[1]} cases`, small:true })
+        }
+        return (
+          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
+            {cells.map(c => (
+              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>{c.label}</div>
+                <div className="display-font" style={{ fontSize: c.small ? '20px' : '28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', textTransform: c.small ? 'capitalize' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
+              </div>
+            ))}
           </div>
         )
       })()}

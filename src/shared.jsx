@@ -582,7 +582,8 @@ export const GLOBAL_CSS = `
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
   .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
-  @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
+  .cov-home-cases-bar:hover { background:#F3EEE5 !important; }
   /* phones: a swipeable row, so the cases stay near the top */
   @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:80%; overflow-x:auto; scroll-snap-type:x mandatory; padding:12px 14px !important; }
     .cov-yourday-insights > div { scroll-snap-align:start; } }
@@ -607,6 +608,8 @@ export const GLOBAL_CSS = `
     .cov-nav-right    { flex-shrink:0; }
     /* home stats: 2-col on mobile */
     .home-stats-grid  { grid-template-columns:repeat(2,1fr) !important; }
+    .cov-home-cases-bar  { justify-content:space-between; row-gap:8px !important; }
+    .cov-home-cases-sum  { order:3; flex:1 1 100% !important; gap:12px !important; }
     /* single-col fallback for fixed grids */
     .mob-1col         { grid-template-columns:1fr !important; }
     /* platform toggles: no wrap */
