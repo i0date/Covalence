@@ -7,7 +7,7 @@ import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
 import { FINCRIME_DEFAULTS } from './fincrime.js'
-import { TM_DEFAULTS } from './monitoring.mjs'
+import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 export class ErrorBoundary extends React.Component {
@@ -61,6 +61,8 @@ export const DEFAULT_SETTINGS = {
   ...FINCRIME_DEFAULTS,
   // Transaction monitoring rules (Settings → Financial crime)
   ...TM_DEFAULTS,
+  // Fraud alert rules and the customer-contact deadline (Settings → Financial crime)
+  ...FRAUD_DEFAULTS,
 }
 
 // ─── Business-day helpers (src/clocks.mjs, shared with the reminder emails) ──
@@ -589,6 +591,9 @@ export const GLOBAL_CSS = `
     .cov-comingup-row { grid-template-columns:70px minmax(0,1fr) !important; }
     .cov-comingup-row > span:nth-child(2) { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
+    /* Your day: the hide/show control sits top-right, always in reach */
+    .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
+    .cov-yourday-head { padding-right:96px !important; }
     .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */

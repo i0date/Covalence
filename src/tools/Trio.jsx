@@ -153,6 +153,16 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
     pushTrioToSupa(updated).catch(() => {})
   }
 
+  // A compromised-merchant alert in 001 Triage opens an incident here
+  React.useEffect(() => {
+    const h = e => setIncidents(prev => {
+      if (prev.some(i => i.id === e.detail.id)) return prev
+      const next = [e.detail, ...prev]; saveIncidents(next); pushTrioToSupa(next).catch(() => {}); return next
+    })
+    window.addEventListener('cov:trio-create', h)
+    return () => window.removeEventListener('cov:trio-create', h)
+  }, [])
+
   const mergeIncidents = (fromId, intoId) => {
     setIncidents(prev => {
       const from = prev.find(i => i.id === fromId)

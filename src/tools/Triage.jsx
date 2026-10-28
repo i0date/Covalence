@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, loadOutcomes } from '../shared.jsx'
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { IntakeClose } from '../IntakeClose.jsx'
+import { AlertsPanel } from '../AlertsPanel.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -29,7 +30,10 @@ const TX_TYPES = {
 const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
 const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
 
-export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake }) {
+export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake, appOutcomes, setAppOutcomes, settings, covUser, fraudRoute }) {
+  // Two ways in: alerts the bank's monitoring raised, and claims customers report
+  const [intakeTab, setIntakeTab] = useState(() => { try { return localStorage.getItem('cov_triage_tab') || 'claims' } catch { return 'claims' } })
+  const pickIntake = t => { setIntakeTab(t); try { localStorage.setItem('cov_triage_tab', t) } catch {} }
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
@@ -780,7 +784,17 @@ Return ONLY valid JSON:
             ? 'Crypto exchange fraud triage. Four verdicts. FinCEN + FINTRAC aware. Built for exchange fraud analysts handling ATO, pig butchering, stablecoin fraud, and consumer disputes on digital asset platforms.'
             : 'Classify incoming dispute claims before anything is filed. Four verdicts. Covers card, ACH, P2P, BNPL, and FI-held crypto — routed by payment rail and regulatory framework: Reg E, Reg Z, NACHA, or provider.'}
         </p>
-        {/* Platform mode toggle */}
+        {/* Alerts (the bank found it) | Claims (the customer reported it) */}
+        <div role="tablist" aria-label="Triage" className="mt-6" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC' }}>
+          {[['alerts', 'Alerts', 'The bank found it'], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
+            <button key={k} role="tab" aria-selected={intakeTab === k} onClick={() => pickIntake(k)} className="mono-font"
+              style={{ background:'none', border:'none', borderBottom: intakeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px', padding:'10px 16px', cursor:'pointer', textAlign:'left' }}>
+              <span style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: intakeTab === k ? '#1A1814' : '#6B6259', fontWeight:600 }}>{l.toUpperCase()}</span>
+              <span className="display-font" style={{ display:'block', fontSize:'12px', color:'#6B6259', letterSpacing:0 }}>{sub}</span>
+            </button>
+          ))}
+        </div>
+        {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
@@ -792,6 +806,13 @@ Return ONLY valid JSON:
         </div>
       </div>
 
+      {intakeTab === 'alerts' && (
+        <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
+          institution={settings?.duoInstitutionName || covUser?.institution || ''} />
+      )}
+
+      {/* Claims: kept mounted (hidden) so a half-written claim survives a look at the alerts */}
+      <div style={{ display: intakeTab === 'claims' ? 'block' : 'none' }}>
       {/* ── Two-column layout ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
@@ -2207,6 +2228,7 @@ Return ONLY valid JSON:
       <div className="mt-12 sm:mt-16 pt-6 flex flex-col sm:flex-row sm:items-baseline justify-between text-stone-500 gap-2" style={{ borderTop: '1px solid #D4CCBC' }}>
         <div className="mono-font text-xs tracking-widest">BUILT BY ADEOTI FASHOKUN — RISK &amp; TRUST OPERATIONS</div>
         <div className="display-font italic text-sm">"Classify before you file. The routing matters."</div>
+      </div>
       </div>
     </div>
   )

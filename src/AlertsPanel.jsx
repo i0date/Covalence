@@ -1,6 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// ALERTS PANEL — 005 Licit → Alerts: transaction monitoring
+// ALERTS PANEL — transaction monitoring alerts, in two places:
+//   005 Licit → Alerts   (kind 'aml')    money laundering, sanctions
+//   001 Triage → Alerts  (kind 'fraud')  customers being robbed
 // ═══════════════════════════════════════════════════════════════════════════════
+// One import feeds both: the transaction file (and an optional account-events
+// file) is stored once, both rule sets run, and each alert shows up where it
+// belongs. Data sent through the API (api/intake.js) lands here the same way.
 // Import a day's transactions (core banking or processor export), run the rules
 // (monitoring.mjs) over each customer's last 30 days, screen counterparties and
 // wallets against OFAC, and work the alerts: close one as not suspicious with a
@@ -11,8 +16,9 @@ import { canWrite } from './auth.js'
 import { auditWrite } from './audit.js'
 import { openCase } from './CaseThread.jsx'
 import { parseCsv, MAX_BYTES } from './csvImport.js'
-import { TX_FIELDS, guessTxMapping, buildTransactions, evaluate, screenables, sanctionsAlert, sampleDay, RULES } from './monitoring.mjs'
-import { ingest, windowFor, batches as listBatches, addAlerts, listAlerts, setAlert } from './monitoringData.js'
+import { TX_FIELDS, EV_FIELDS, guessTxMapping, guessEvMapping, buildTransactions, buildEvents, evaluate, evaluateFraud, screenables, sanctionsAlert, sampleDay, sampleEvents, sampleDayExchange, sampleEventsExchange, RULES } from './monitoring.mjs'
+import { ingest, ingestEvents, windowFor, windowByNames, eventsWindow, batches as listBatches, addAlerts, listAlerts, setAlert } from './monitoringData.js'
+import { FraudAlertDetail } from './FraudAlertDetail.jsx'
 import { detectDateFormat } from './csvImport.js'
 import { Badge, Button } from './ui.jsx'
 
@@ -37,9 +43,13 @@ async function screenBatch(txs, threshold) {
   return hits
 }
 
-export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
+export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcomes, settings, covUser, route, institution }) {
+  // Licit shows every AML alert; Triage shows fraud alerts for the side picked (bank / credit union, or crypto exchange)
+  const seg = kind === 'fraud' ? segment : null
   const writer = canWrite()
   const [file, setFile] = useState(null)          // { name, headers, rows }
+  const [evFile, setEvFile] = useState(null)      // optional account events { name, headers, rows, mapping }
+  const evRef = useRef(null)
   const [mapping, setMapping] = useState({})
   const [dateFormat, setDateFormat] = useState('mdy')
   const [run, setRun] = useState(null)            // { stage, done, total, summary, error }
@@ -56,6 +66,11 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
   }
   useEffect(refresh, [])
 
+  const loadEvents = async (f, text) => {
+    const p = parseCsv(text ?? await f.text())
+    if (!p.rows.length) return setRun({ error: 'The events file has no rows under a header line.' })
+    setEvFile({ name: f?.name || 'sample-events.csv', headers: p.headers, rows: p.rows, mapping: guessEvMapping(p.headers) })
+  }
   const load = async (f, text) => {
     setRun(null)
     if (f && f.size > MAX_BYTES) return setRun({ error: 'Files up to 10 MB can be imported — split it and import each part.' })
@@ -75,13 +90,23 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
       setRun({ stage: 'Reading the file' })
       const { txs, errors } = buildTransactions(file.rows, { mapping, dateFormat, batch })
       if (!txs.length) return setRun({ error: `No transactions could be read. First problem: row ${errors[0]?.row}: ${errors[0]?.message}` })
+      const ev = evFile ? buildEvents(evFile.rows, { mapping: evFile.mapping, dateFormat, batch }) : { events: [], errors: [] }
       setRun({ stage: 'Storing transactions', done: 0, total: txs.length })
       const added = await ingest(txs, (done, total) => setRun({ stage: 'Storing transactions', done, total }))
-      setRun({ stage: 'Running the rules' })
-      const customers = [...new Set(txs.map(t => t.customerId))]
+      if (ev.events.length) { setRun({ stage: 'Storing account events' }); await ingestEvents(ev.events) }
+      setRun({ stage: 'Running the fraud and AML rules' })
+      const customers = [...new Set([...txs.map(t => t.customerId), ...ev.events.map(e => e.customerId)])]
       const earliest = txs.reduce((m, t) => Math.min(m, new Date(t.ts).getTime()), Infinity)
-      const history = await windowFor(customers, new Date(earliest - 30 * DAY).toISOString())
-      const ruleAlerts = evaluate(history, txs.map(t => t.id), settings)
+      // 120 days back, for the dormant-account rule; the AML rules look at the last 30 within it
+      const history = await windowFor(customers, new Date(earliest - 120 * DAY).toISOString())
+      const events = await eventsWindow(customers, new Date(earliest - 7 * DAY).toISOString()).catch(() => [])
+      // Confirmed card-fraud cases: where did the victims shop? (compromised-merchant rule)
+      const fraudCases = outcomes.filter(c => c.verdict === 'TRUE_FRAUD' && c.cardholderName && !c.kind && Date.now() - new Date(c.date || 0) < 90 * DAY)
+        .map(c => ({ id: c.id, customerName: c.cardholderName, date: c.date }))
+      const victimTx = fraudCases.length ? await windowByNames([...new Set(fraudCases.map(c => c.customerName))], new Date(earliest - 150 * DAY).toISOString()).catch(() => []) : []
+      const seen = new Set(history.map(t => t.id)), allTx = [...history, ...victimTx.filter(t => !seen.has(t.id))]
+      const fresh = [...txs.map(t => t.id), ...ev.events.map(e => e.id)]
+      const ruleAlerts = [...evaluate(history.filter(t => new Date(t.ts) > earliest - 31 * DAY), txs.map(t => t.id), settings, new Date(), { segment }), ...evaluateFraud(allTx, events, fresh, settings, fraudCases, new Date(), { segment })]
       setRun({ stage: 'Screening counterparties against OFAC' })
       let screenNote = ''
       const sanc = []
@@ -95,20 +120,22 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
           const best = { ...list[0], others: list.length - 1 }
           const involved = txs.filter(t => (best.wallet ? t.wallet === subject : t.counterparty === subject))
           const byCustomer = new Map(); involved.forEach(t => { if (!byCustomer.has(t.customerId)) byCustomer.set(t.customerId, []); byCustomer.get(t.customerId).push(t) })
-          byCustomer.forEach((tl, cid) => sanc.push(sanctionsAlert(cid, tl[0].customerName, tl, best)))
+          byCustomer.forEach((tl, cid) => sanc.push(sanctionsAlert(cid, tl[0].customerName, tl, best, new Date(), segment)))
         })
       } catch (e) { screenNote = ` Sanctions screening was skipped: ${e.message}.` }
       const all = [...sanc, ...ruleAlerts]
       const raised = all.length ? await addAlerts(all) : 0
-      auditWrite('transactions.imported', 'workspace', batch, { file: file.name, rows: file.rows.length, stored: added, problems: errors.length })
+      auditWrite('transactions.imported', 'workspace', batch, { file: file.name, rows: file.rows.length, stored: added, problems: errors.length, events: ev.events.length })
       if (raised) auditWrite('alerts.raised', 'workspace', batch, { alerts: raised, rules: [...new Set(all.map(a => a.rule))].join(', ') })
-      setRun({ summary: `${txs.length.toLocaleString()} transactions read (${added.toLocaleString()} new), ${customers.length.toLocaleString()} customers checked over 30 days, ${raised} new alert${raised === 1 ? '' : 's'}.${errors.length ? ` ${errors.length} row${errors.length === 1 ? '' : 's'} couldn’t be read.` : ''}${screenNote}`, errors })
-      setFile(null); setFilter('open'); refresh()
+      const nf = all.filter(x => x.kind === 'fraud').length, na = all.length - nf
+      setRun({ summary: `${txs.length.toLocaleString()} transactions${ev.events.length ? ` and ${ev.events.length} account events` : ''} read (${added.toLocaleString()} new), ${customers.length.toLocaleString()} customers checked. ${raised} new alert${raised === 1 ? '' : 's'}: ${nf} fraud (001 Triage), ${na} AML (005 Licit).${errors.length ? ` ${errors.length} row${errors.length === 1 ? '' : 's'} couldn’t be read.` : ''}${screenNote}`, errors })
+      setFile(null); setEvFile(null); setFilter('open'); refresh()
     } catch (e) { setRun({ error: e.message }) }
   }
 
-  const shown = alerts.filter(a => filter === 'all' || a.status === filter)
-  const counts = useMemo(() => alerts.reduce((m, a) => (m[a.status] = (m[a.status] || 0) + 1, m), {}), [alerts])
+  const mine = alerts.filter(a => (a.kind || 'aml') === kind && (!seg || (a.segment || 'fi') === seg))
+  const shown = mine.filter(a => filter === 'all' || a.status === filter)
+  const counts = useMemo(() => mine.reduce((m, a) => (m[a.status] = (m[a.status] || 0) + 1, m), {}), [alerts, kind])
 
   return (<>
     {/* ── Import ── */}
@@ -118,13 +145,13 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{imports.length ? `Last import ${day(imports[0].imported_at)} · ${imports.reduce((n, b) => n + Number(b.transactions), 0).toLocaleString()} transactions stored` : 'Nothing imported yet'}</span>
       </div>
       <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'8px 0 12px', lineHeight:1.5, maxWidth:'760px' }}>
-        A day’s transactions from your core system or processor, as CSV. Each customer in the file is checked over their last 30 days, and counterparties and wallets are screened against OFAC.
+        {segment === 'ce' ? 'A day of deposits and withdrawals from your exchange, as CSV — plus,' : 'A day’s transactions from your core system or processor, as CSV — plus,'} optionally, account events (logins, new devices, profile changes). Fraud alerts go to 001 Triage, AML alerts to 005 Licit. Systems can also send data directly (Settings → Connections).
       </p>
       {writer ? (<>
         <input ref={inputRef} type="file" accept=".csv,.tsv,.txt,text/csv" style={{ display:'none' }} onChange={e => { load(e.target.files?.[0]); e.target.value = '' }} />
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
           <Button variant="secondary" onClick={() => inputRef.current?.click()}>Choose a file</Button>
-          <Button variant="quiet" onClick={() => load(null, sampleDay())}>Try a sample day</Button>
+          <Button variant="quiet" onClick={() => segment === 'ce' ? (load(null, sampleDayExchange()), loadEvents(null, sampleEventsExchange())) : (load(null, sampleDay()), loadEvents(null, sampleEvents()))}>Try a sample day{segment === 'ce' ? ' (exchange)' : ''}</Button>
         </div>
       </>) : <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>Your role can read alerts but not import.</p>}
       {file && (
@@ -147,9 +174,17 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
               </select>
             </label>
           </div>
+          <div style={{ marginTop:'12px', display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
+            <input ref={evRef} type="file" accept=".csv,.tsv,.txt,text/csv" style={{ display:'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) loadEvents(f); e.target.value = '' }} />
+            {evFile ? (
+              <span className="mono-font" style={{ fontSize:'11px', color:'#065F46' }}>Account events: {evFile.name} — {evFile.rows.length} rows ({EV_FIELDS.filter(f => evFile.mapping[f.key] != null).length}/{EV_FIELDS.length} columns matched)
+                {EV_FIELDS.some(f => f.required && evFile.mapping[f.key] == null) && <span style={{ color:'#991B1B' }}> — missing {EV_FIELDS.filter(f => f.required && evFile.mapping[f.key] == null).map(f => f.label.toLowerCase()).join(', ')}</span>}
+                {' '}<button onClick={() => setEvFile(null)} style={{ background:'none', border:'none', color:'#57534E', textDecoration:'underline', cursor:'pointer', font:'inherit' }}>remove</button></span>
+            ) : <Button variant="quiet" onClick={() => evRef.current?.click()}>Add account events (optional)</Button>}
+          </div>
           <div style={{ display:'flex', gap:'8px', alignItems:'center', marginTop:'12px', flexWrap:'wrap' }}>
-            <Button disabled={!!missing.length || !!run?.stage} onClick={go}>Import and run the rules</Button>
-            <Button variant="quiet" onClick={() => setFile(null)}>Cancel</Button>
+            <Button disabled={!!missing.length || !!run?.stage || (evFile && EV_FIELDS.some(f => f.required && evFile.mapping[f.key] == null))} onClick={go}>Import and run the rules</Button>
+            <Button variant="quiet" onClick={() => { setFile(null); setEvFile(null) }}>Cancel</Button>
             {missing.length > 0 && <span className="mono-font" style={{ fontSize:'11px', color:'#991B1B' }}>Choose a column for {missing.map(f => f.label.toLowerCase()).join(', ')}.</span>}
           </div>
         </div>
@@ -164,7 +199,7 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
       {[['open', 'Open'], ['escalated', 'Escalated'], ['closed', 'Closed'], ['all', 'All']].map(([k, l]) => (
         <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className="mono-font"
           style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'6px 12px', border:'1px solid #1A1814', cursor:'pointer', background: filter === k ? '#1A1814' : 'transparent', color: filter === k ? '#F5F1EA' : '#1A1814' }}>
-          {l.toUpperCase()} {k === 'all' ? alerts.length : counts[k] || 0}
+          {l.toUpperCase()} {k === 'all' ? mine.length : counts[k] || 0}
         </button>
       ))}
     </div>
@@ -182,12 +217,26 @@ export function AlertsPanel({ outcomes, setOutcomes, settings, covUser }) {
               </span>
               <span className="mono-font" style={{ fontSize:'11px', color:'#1A1814', textAlign:'right', whiteSpace:'nowrap' }}>{money(a.total)}<br /><span style={{ color:'#6B6259' }}>{a.status === 'open' ? day(a.to) : a.status}</span></span>
             </button>
-            {open === a.id && <AlertDetail a={a} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} writer={writer} onDone={() => { setOpenId(null); refresh() }} />}
+            {open === a.id && (kind === 'fraud'
+              ? <FraudAlertDetail a={a} segment={a.segment || 'fi'} covUser={covUser} writer={writer} institution={institution} route={route} onDone={close => { if (close) setOpenId(null); refresh() }} />
+              : <AlertDetail a={a} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} writer={writer} onDone={() => { setOpenId(null); refresh() }} />)}
           </div>
         ))}
       </div>
     )}
   </>)
+}
+
+// An AML case built from an alert (used by Licit, and by Triage when the customer turns out to be involved)
+export function amlCaseFrom(a, txs, who) {
+  const now = new Date().toISOString()
+  const slimTx = (txs || []).slice(0, 50).map(t => ({ id: t.id, ts: t.ts, amount: t.amount, currency: t.currency, direction: t.direction, channel: t.channel, counterparty: t.counterparty, country: t.country, wallet: t.wallet }))
+  const top = Object.entries((txs || []).reduce((m, t) => (t.counterparty ? (m[t.counterparty] = (m[t.counterparty] || 0) + t.amount, m) : m), {})).sort((x, y) => y[1] - x[1])[0]?.[0]
+  return { id: 'AML-' + Date.now().toString(36).toUpperCase().slice(-6), kind: 'aml', amlCustomerId: a.customerId, date: now, status: 'aml_review', accountType: 'aml',
+    cardholderName: a.customerName || a.customerId, merchant: top || 'Account activity', amount: `${Number(a.total).toFixed(2)} USD`, verdict: '',
+    _complaint: `Monitoring alert: ${a.label}. ${a.detail}`, alerts: [{ id: a.id, rule: a.rule, label: a.label, severity: a.severity, detail: a.detail, total: a.total, from: a.from, to: a.to }],
+    tmTransactions: slimTx, notes: [], docs: [], sarReview: { flaggedAt: now, level: a.severity, signals: [a.rule], by: who, referredFrom: a.kind === 'fraud' ? 'Fraud alert' : 'Monitoring' },
+    history: [{ ts: now, event: 'created_from_alert', alert: a.label, by: who }] }
 }
 
 function AlertDetail({ a, outcomes, setOutcomes, covUser, writer, onDone }) {
