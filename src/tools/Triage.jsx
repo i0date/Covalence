@@ -794,8 +794,8 @@ Return ONLY valid JSON:
             </button>
           ))}
         </div>
-        {/* Platform mode toggle (claims) */}
-        {intakeTab === 'claims' && <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
+        {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
+        <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
@@ -803,11 +803,11 @@ Return ONLY valid JSON:
               {m.label}
             </button>
           ))}
-        </div>}
+        </div>
       </div>
 
       {intakeTab === 'alerts' && (
-        <AlertsPanel kind="fraud" outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
+        <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
           institution={settings?.duoInstitutionName || covUser?.institution || ''} />
       )}
 

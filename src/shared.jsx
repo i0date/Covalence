@@ -591,6 +591,9 @@ export const GLOBAL_CSS = `
     .cov-comingup-row { grid-template-columns:70px minmax(0,1fr) !important; }
     .cov-comingup-row > span:nth-child(2) { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
+    /* Your day: the hide/show control sits top-right, always in reach */
+    .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
+    .cov-yourday-head { padding-right:96px !important; }
     .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */

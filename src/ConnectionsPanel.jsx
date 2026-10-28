@@ -90,6 +90,7 @@ Content-Type: application/json
         <li><strong>Transactions:</strong> negative amounts are money out (or send <code>direction</code>: "in" / "out"). Channel words like zelle, wire, ach, card, cash, crypto, check are recognised.</li>
         <li><strong>Events:</strong> logins, new devices or locations, password, phone or email changes, new payees — what the account-takeover rule reads.</li>
         <li><strong>Alerts</strong> from your own fraud engine land in 001 Triage → Alerts as they are.</li>
+        <li><strong>Crypto exchanges:</strong> add <code>"segment": "ce"</code> to the body — withdrawals to wallets are judged as an exchange’s, and alerts land on Triage’s Crypto Exchange side.</li>
         <li>The answer lists what was stored, what was a duplicate, any rows with problems, and the ids of the alerts raised.</li>
       </ul>
     </section>

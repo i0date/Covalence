@@ -75,7 +75,7 @@ export function FincrimeSettings({ settings, set, locked, outcomes }) {
           {[['fraudAtoMin', 'Account takeover: money out after the changes — at least', 1, 1000000], ['fraudCardTestMax', 'Card testing: tiny charges of at most', 1, 50],
             ['fraudCardTestCount', '…this many within 24 hours', 2, 100], ['fraudScamMin', 'Scam: first payment to a new payee of at least', 100, 1000000],
             ['fraudDormantDays', 'Dormant: no activity for (days)', 30, 730], ['fraudDormantMin', '…then at least this much moving', 100, 1000000],
-            ['fraudCppMin', 'Compromised merchant: fraud victims who used it — at least', 2, 50]].map(([k, l, min, max]) => (
+            ['fraudCppMin', 'Compromised merchant: fraud victims who used it — at least', 2, 50], ['fraudNewAddressMin', 'Exchanges: withdrawal to a just-added address of at least', 100, 1000000]].map(([k, l, min, max]) => (
             <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', justifyContent:'space-between', gap:'12px', alignItems:'center' }}>
               <span>{l}</span>
               <input type="number" min={min} max={max} value={s[k] ?? FRAUD_DEFAULTS[k]} onChange={e => set(k, Math.max(min, Math.min(max, Number(e.target.value) || min)))} className="cov-input" style={{ width:'110px', padding:'6px 8px', fontSize:'14px' }} aria-label={l} />

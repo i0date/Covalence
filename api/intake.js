@@ -47,6 +47,7 @@ module.exports = async function handler(req, res) {
 
   const m = await import('../src/monitoring.mjs')
   const body = req.body || {}
+  const segment = body.segment === 'ce' ? 'ce' : 'fi'   // 'ce' when the sender is a crypto exchange
   const inTx = Array.isArray(body.transactions) ? body.transactions : [], inEv = Array.isArray(body.events) ? body.events : [], inAl = Array.isArray(body.alerts) ? body.alerts : []
   if (inTx.length > MAX || inEv.length > MAX || inAl.length > MAX) return res.status(400).json({ error: `At most ${MAX} of each per request` })
   if (!inTx.length && !inEv.length && !inAl.length) return res.status(400).json({ error: 'Nothing to store: send transactions, events or alerts' })
@@ -74,7 +75,7 @@ module.exports = async function handler(req, res) {
   inAl.forEach((a, i) => {
     if (!a?.id || !a?.customerId) return problems.push({ type: 'alert', index: i, error: 'id and customerId are required' })
     const id = 'EXT-' + crypto.createHash('sha256').update(inst + '|' + a.id).digest('hex').slice(0, 12).toUpperCase()
-    ext.push({ id, kind: 'fraud', rule: 'external', label: str(a.title || 'Alert from a connected fraud system', 120), customerId: str(a.customerId, 120), customerName: str(a.customerName, 120),
+    ext.push({ id, kind: 'fraud', segment, rule: 'external', label: str(a.title || 'Alert from a connected fraud system', 120), customerId: str(a.customerId, 120), customerName: str(a.customerName, 120),
       detail: str(a.reason || a.description || '', 400), severity: ['high', 'medium', 'low'].includes(a.severity) ? a.severity : 'medium', score: 2, source: str(a.source || keyRow.prefix, 80),
       externalId: str(a.id, 120), txIds: Array.isArray(a.transactionIds) ? a.transactionIds.slice(0, 50).map(x => str(x, 120)) : [], total: Number(a.amount) || 0,
       from: isTs(a.ts) ? new Date(a.ts).toISOString() : now.toISOString(), to: isTs(a.ts) ? new Date(a.ts).toISOString() : now.toISOString(),
@@ -103,7 +104,7 @@ module.exports = async function handler(req, res) {
     const kv = await rest(`workspace_kv?institution_id=eq.${inst}&key=eq.cov_settings&select=value`).catch(() => [])
     let s = {}; try { s = JSON.parse(kv?.[0]?.value || '{}') } catch {}
     const freshIds = [...newTx.map(t => t.id), ...newEv.map(e => e.id)]
-    const raised = [...m.evaluateFraud(history, events, freshIds, s, [], now), ...m.evaluate(history.filter(t => new Date(t.ts) > now - 31 * DAY), newTx.map(t => t.id), s, now), ...ext]
+    const raised = [...m.evaluateFraud(history, events, freshIds, s, [], now, { segment }), ...m.evaluate(history.filter(t => new Date(t.ts) > now - 31 * DAY), newTx.map(t => t.id), s, now, { segment }), ...ext]
     const stored = raised.length ? await ins('tm_alerts', raised.map(a => ({ institution_id: inst, id: a.id, data: a, status: 'open' }))) : []
 
     await rest(`intake_keys?id=eq.${keyRow.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_used_at: now.toISOString() }) }).catch(() => {})

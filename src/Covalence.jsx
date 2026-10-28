@@ -166,9 +166,11 @@ export default function Covalence() {
   const fraudRoute = {
     desk: true,
     openDesk: c => { setOutcomes(prev => [c, ...prev]); setDeskOpenRequest({ case: c, t: Date.now() }); setActiveSection('desk') },
-    recall: c => {
+    recall: (c, segment) => {
       setOutcomes(prev => [c, ...prev])
-      setDuoHandoff({ source: 'alert', caseId: c.id, accountType: 'p2p', classification: 'TRUE_FRAUD', routing: 'RECIPIENT_FI', routing_label: 'Recall from the receiving institution', amount: c.amount, merchant: c.merchant })
+      setDuoHandoff(segment === 'ce'
+        ? { source: 'alert', caseId: c.id, accountType: 'crypto_exchange', classification: 'TRUE_FRAUD', routing: 'EXCHANGE_CONTACT', routing_label: 'Ask the receiving exchange to freeze the funds', amount: c.amount, merchant: c.merchant }
+        : { source: 'alert', caseId: c.id, accountType: 'p2p', classification: 'TRUE_FRAUD', routing: 'RECIPIENT_FI', routing_label: 'Recall from the receiving institution', amount: c.amount, merchant: c.merchant })
       setActiveSection('duo')
     },
     scam: c => closeAtIntake(c, { toLicit: true }),

@@ -28,6 +28,9 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   })
   const toggleBrief = () => setBriefOpen(o => { try { localStorage.setItem('cov_brief_open', o ? '0' : '1') } catch {} ; return !o })
   const [caseFilter, setCaseFilter] = React.useState('open')
+  // The full case list folds away (Your day already shows what needs attention); remembered per browser
+  const [casesOpen, setCasesOpen] = React.useState(() => { try { return localStorage.getItem('cov_home_cases_open') === '1' } catch { return false } })
+  const toggleCases = () => setCasesOpen(o => { try { localStorage.setItem('cov_home_cases_open', o ? '0' : '1') } catch {} return !o })
   const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
   const settings = React.useMemo(() => {
@@ -57,7 +60,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, screen against sanctions and work AML and SARs in Licit, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
+            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, screen against sanctions and work AML investigations and SARs, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
           </p>
           <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             COLLAPSE INTRO ↑
@@ -281,15 +284,19 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         return (
           <div>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', marginBottom:'10px' }}>
-              <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.15em' }}>CASES · {rows.length}</div>
-              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+              <button onClick={toggleCases} aria-expanded={casesOpen} aria-controls="home-cases" className="mono-font"
+                style={{ background:'none', border:'none', padding:0, cursor:'pointer', fontSize:'10px', letterSpacing:'0.15em', color:'#57534E' }}>
+                {casesOpen ? '▾' : '▸'} CASES · {thread.filter(x => x.status !== 'closed').length} · {casesOpen ? 'HIDE' : 'SHOW'}
+              </button>
+              {casesOpen && <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                 {FILTERS.map(x => (
                   <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'10px' }}>
                     {x.label} {thread.filter(x.test).length}
                   </button>
                 ))}
-              </div>
+              </div>}
             </div>
+            {casesOpen && (<div id="home-cases">
             <div className="border border-stone-200" style={{ background:'#FAF7F1' }}>
               {rows.length === 0 ? (
                 <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 16px' }}>Nothing here.</div>
@@ -316,9 +323,10 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               })}
             </div>
             <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'8px', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-              <span>● TRIAGE · DESK · MULTI · FILE · DFA — click a case for its full record</span>
+              <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record</span>
               {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
             </div>
+            </div>)}
           </div>
         )
       })()}

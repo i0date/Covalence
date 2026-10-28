@@ -16,7 +16,7 @@ import { canWrite } from './auth.js'
 import { auditWrite } from './audit.js'
 import { openCase } from './CaseThread.jsx'
 import { parseCsv, MAX_BYTES } from './csvImport.js'
-import { TX_FIELDS, EV_FIELDS, guessTxMapping, guessEvMapping, buildTransactions, buildEvents, evaluate, evaluateFraud, screenables, sanctionsAlert, sampleDay, sampleEvents, RULES } from './monitoring.mjs'
+import { TX_FIELDS, EV_FIELDS, guessTxMapping, guessEvMapping, buildTransactions, buildEvents, evaluate, evaluateFraud, screenables, sanctionsAlert, sampleDay, sampleEvents, sampleDayExchange, sampleEventsExchange, RULES } from './monitoring.mjs'
 import { ingest, ingestEvents, windowFor, windowByNames, eventsWindow, batches as listBatches, addAlerts, listAlerts, setAlert } from './monitoringData.js'
 import { FraudAlertDetail } from './FraudAlertDetail.jsx'
 import { detectDateFormat } from './csvImport.js'
@@ -43,7 +43,9 @@ async function screenBatch(txs, threshold) {
   return hits
 }
 
-export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, covUser, route, institution }) {
+export function AlertsPanel({ kind = 'aml', segment = 'fi', outcomes, setOutcomes, settings, covUser, route, institution }) {
+  // Licit shows every AML alert; Triage shows fraud alerts for the side picked (bank / credit union, or crypto exchange)
+  const seg = kind === 'fraud' ? segment : null
   const writer = canWrite()
   const [file, setFile] = useState(null)          // { name, headers, rows }
   const [evFile, setEvFile] = useState(null)      // optional account events { name, headers, rows, mapping }
@@ -104,7 +106,7 @@ export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, cov
       const victimTx = fraudCases.length ? await windowByNames([...new Set(fraudCases.map(c => c.customerName))], new Date(earliest - 150 * DAY).toISOString()).catch(() => []) : []
       const seen = new Set(history.map(t => t.id)), allTx = [...history, ...victimTx.filter(t => !seen.has(t.id))]
       const fresh = [...txs.map(t => t.id), ...ev.events.map(e => e.id)]
-      const ruleAlerts = [...evaluate(history.filter(t => new Date(t.ts) > earliest - 31 * DAY), txs.map(t => t.id), settings), ...evaluateFraud(allTx, events, fresh, settings, fraudCases)]
+      const ruleAlerts = [...evaluate(history.filter(t => new Date(t.ts) > earliest - 31 * DAY), txs.map(t => t.id), settings, new Date(), { segment }), ...evaluateFraud(allTx, events, fresh, settings, fraudCases, new Date(), { segment })]
       setRun({ stage: 'Screening counterparties against OFAC' })
       let screenNote = ''
       const sanc = []
@@ -118,7 +120,7 @@ export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, cov
           const best = { ...list[0], others: list.length - 1 }
           const involved = txs.filter(t => (best.wallet ? t.wallet === subject : t.counterparty === subject))
           const byCustomer = new Map(); involved.forEach(t => { if (!byCustomer.has(t.customerId)) byCustomer.set(t.customerId, []); byCustomer.get(t.customerId).push(t) })
-          byCustomer.forEach((tl, cid) => sanc.push(sanctionsAlert(cid, tl[0].customerName, tl, best)))
+          byCustomer.forEach((tl, cid) => sanc.push(sanctionsAlert(cid, tl[0].customerName, tl, best, new Date(), segment)))
         })
       } catch (e) { screenNote = ` Sanctions screening was skipped: ${e.message}.` }
       const all = [...sanc, ...ruleAlerts]
@@ -131,7 +133,7 @@ export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, cov
     } catch (e) { setRun({ error: e.message }) }
   }
 
-  const mine = alerts.filter(a => (a.kind || 'aml') === kind)
+  const mine = alerts.filter(a => (a.kind || 'aml') === kind && (!seg || (a.segment || 'fi') === seg))
   const shown = mine.filter(a => filter === 'all' || a.status === filter)
   const counts = useMemo(() => mine.reduce((m, a) => (m[a.status] = (m[a.status] || 0) + 1, m), {}), [alerts, kind])
 
@@ -143,13 +145,13 @@ export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, cov
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{imports.length ? `Last import ${day(imports[0].imported_at)} · ${imports.reduce((n, b) => n + Number(b.transactions), 0).toLocaleString()} transactions stored` : 'Nothing imported yet'}</span>
       </div>
       <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'8px 0 12px', lineHeight:1.5, maxWidth:'760px' }}>
-        A day’s transactions from your core system or processor, as CSV — plus, optionally, account events (logins, new devices, profile changes). Fraud alerts go to 001 Triage, AML alerts to 005 Licit. Systems can also send data directly (Settings → Connections).
+        {segment === 'ce' ? 'A day of deposits and withdrawals from your exchange, as CSV — plus,' : 'A day’s transactions from your core system or processor, as CSV — plus,'} optionally, account events (logins, new devices, profile changes). Fraud alerts go to 001 Triage, AML alerts to 005 Licit. Systems can also send data directly (Settings → Connections).
       </p>
       {writer ? (<>
         <input ref={inputRef} type="file" accept=".csv,.tsv,.txt,text/csv" style={{ display:'none' }} onChange={e => { load(e.target.files?.[0]); e.target.value = '' }} />
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
           <Button variant="secondary" onClick={() => inputRef.current?.click()}>Choose a file</Button>
-          <Button variant="quiet" onClick={() => { load(null, sampleDay()); loadEvents(null, sampleEvents()) }}>Try a sample day</Button>
+          <Button variant="quiet" onClick={() => segment === 'ce' ? (load(null, sampleDayExchange()), loadEvents(null, sampleEventsExchange())) : (load(null, sampleDay()), loadEvents(null, sampleEvents()))}>Try a sample day{segment === 'ce' ? ' (exchange)' : ''}</Button>
         </div>
       </>) : <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>Your role can read alerts but not import.</p>}
       {file && (
@@ -216,7 +218,7 @@ export function AlertsPanel({ kind = 'aml', outcomes, setOutcomes, settings, cov
               <span className="mono-font" style={{ fontSize:'11px', color:'#1A1814', textAlign:'right', whiteSpace:'nowrap' }}>{money(a.total)}<br /><span style={{ color:'#6B6259' }}>{a.status === 'open' ? day(a.to) : a.status}</span></span>
             </button>
             {open === a.id && (kind === 'fraud'
-              ? <FraudAlertDetail a={a} covUser={covUser} writer={writer} institution={institution} route={route} onDone={close => { if (close) setOpenId(null); refresh() }} />
+              ? <FraudAlertDetail a={a} segment={a.segment || 'fi'} covUser={covUser} writer={writer} institution={institution} route={route} onDone={close => { if (close) setOpenId(null); refresh() }} />
               : <AlertDetail a={a} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} writer={writer} onDone={() => { setOpenId(null); refresh() }} />)}
           </div>
         ))}

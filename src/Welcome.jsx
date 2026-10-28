@@ -76,7 +76,7 @@ export function WelcomePage({ children }) {
   const proof = [
     ['One record, start to finish', 'A case keeps one number from first contact through triage, filing, representment and funding — with its timeline, evidence and AI reasoning attached.'],
     ['Fraud that crosses institutions', 'Duo puts the sending and receiving institution in one live session on the same case. Trio runs the incident room when a fraud wave hits.'],
-    ['Compliance on the same case', 'Licit screens every case against OFAC, links cases by customer, payee and wallet, and drafts SAR narratives — without keying the facts twice.'],
+    ['Compliance on the same case', 'Every case is screened against OFAC, linked to others by customer, payee and wallet, and its SAR narrative drafted — without keying the facts twice.'],
     ['Network-ready, deadline-aware', 'Visa and Mastercard reason codes, filing packages for all four networks, Reg E / Reg Z windows and chargeback-ratio monitoring, tracked for you.'],
   ]
   return (

@@ -117,7 +117,9 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
 
   return (
     <section aria-labelledby="your-day" className="mb-8" style={{ border:'1px solid #1A1814', background:'#FAF7F1' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
+      {/* The whole header folds and unfolds the panel (easier to hit on a phone than the small button) */}
+      <div onClick={e => { if (!e.target.closest('button')) toggle() }} className="cov-yourday-head"
+        style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
         <div style={{ minWidth:0, flex:'1 1 320px' }}>
           <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>
             YOUR DAY · {today.toUpperCase()}{scope === 'team' ? ' · TEAM QUEUE' : ''}
@@ -133,8 +135,8 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
           {counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
           {counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
           {counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
-          <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font"
-            style={{ background:'none', border:'1px solid #D4CCBC', padding:'5px 10px', cursor:'pointer', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814' }}>
+          <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font cov-yourday-toggle"
+            style={{ background:'#FFFFFF', border:'1px solid #1A1814', padding:'6px 10px', cursor:'pointer', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814' }}>
             {open ? '▴ HIDE' : '▾ SHOW'}
           </button>
         </div>

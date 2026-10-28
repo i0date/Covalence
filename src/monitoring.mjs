@@ -28,17 +28,17 @@ export const TM_DEFAULTS = {
 export const TX_FIELDS = [
   { key:'txId',          label:'Transaction ID',          syn:['transaction id','txn id','tran id','reference','ref','trace','id','transaction ref'], hint:'Stops the same transaction being counted twice.' },
   { key:'date',          label:'Date',                    required:true, syn:['date','transaction date','posting date','post date','posted','value date','timestamp','created','datetime'] },
-  { key:'customerId',    label:'Customer or account ID',  required:true, syn:['customer id','account','account number','acct','account id','member id','cif','client id','customer number'] },
-  { key:'customerName',  label:'Customer name',           syn:['customer name','name','account name','member name','client name','account holder'] },
+  { key:'customerId',    label:'Customer or account ID',  required:true, syn:['customer id','account','account number','acct','account id','member id','cif','client id','customer number','user id','uid','userid'] },
+  { key:'customerName',  label:'Customer name',           syn:['customer name','name','account name','member name','client name','account holder','user','user name','username'] },
   { key:'amount',        label:'Amount',                  required:true, syn:['amount','transaction amount','txn amount','value','amt'] },
   { key:'currency',      label:'Currency',                syn:['currency','ccy','currency code'] },
-  { key:'direction',     label:'In or out',               syn:['direction','debit credit','dr cr','type','transaction type','in out','dc'], hint:'Leave empty if negative amounts are money going out.' },
+  { key:'direction',     label:'In or out',               syn:['direction','debit credit','dr cr','type','transaction type','in out','dc','side','deposit withdrawal'], hint:'Leave empty if negative amounts are money going out.' },
   { key:'channel',       label:'Channel',                 syn:['channel','method','rail','payment method','payment type','instrument','tran code'] },
   { key:'counterparty',  label:'Counterparty',            syn:['counterparty','payee','payer','beneficiary','originator','merchant','recipient','sender','other party'] },
   { key:'counterpartyAccount', label:'Counterparty account', syn:['counterparty account','beneficiary account','payee account','to account','from account'] },
   { key:'country',       label:'Counterparty country',    syn:['country','counterparty country','beneficiary country','destination country','country code'] },
   { key:'wallet',        label:'Crypto wallet address',   syn:['wallet','wallet address','crypto address','address','destination address'] },
-  { key:'description',   label:'Description / memo',      syn:['description','memo','narrative','details','remarks','purpose'] },
+  { key:'description',   label:'Description / memo',      syn:['description','memo','narrative','details','remarks','purpose','note','notes','comment'] },
 ]
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 export function guessTxMapping(headers) {
@@ -120,7 +120,8 @@ const fmtDay = t => new Date(t).toLocaleDateString('en-US', { month: 'short', da
 // history: every transaction for the customers in the new file, last 30+ days (including the new ones)
 // newIds: ids of the transactions just imported — an alert must rest on at least one of them
 // → alerts: [{ id, key, customerId, customerName, rule, label, severity, score, detail, txIds, total, from, to }]
-export function evaluate(history, newIds, settings, now = new Date()) {
+export function evaluate(history, newIds, settings, now = new Date(), opts = {}) {
+  const segment = opts.segment || 'fi'   // 'fi' bank / credit union · 'ce' crypto exchange
   const s = { ...TM_DEFAULTS, ...(settings || {}) }
   if (s.tmEnabled === false) return []
   const fresh = new Set(newIds)
@@ -142,7 +143,7 @@ export function evaluate(history, newIds, settings, now = new Date()) {
       // One alert per customer and rule per run: keep the one resting on the most transactions
       const prev = alerts.findIndex(a => a.customerId === customerId && a.rule === rule)
       if (prev >= 0) { if (alerts[prev].txIds.length >= involved.length) return; alerts.splice(prev, 1) }
-      alerts.push({ id: 'ALT-' + hash(key).toUpperCase(), key, kind: 'aml', customerId, customerName: name, rule, label: r.label, score: r.weight,
+      alerts.push({ id: 'ALT-' + hash(key).toUpperCase(), key, kind: 'aml', segment, customerId, customerName: name, rule, label: r.label, score: r.weight,
         severity: r.weight >= 3 ? 'high' : r.weight === 2 ? 'medium' : 'low', detail, txIds: involved.map(t => t.id),
         total: Math.round(total * 100) / 100, from: new Date(involved.reduce((m, t) => Math.min(m, at(t)), Infinity)).toISOString(),
         to: new Date(last).toISOString(), createdAt: now.toISOString(), status: 'open' })
@@ -185,7 +186,7 @@ export function evaluate(history, newIds, settings, now = new Date()) {
       // 7. Money sent to crypto
       const crypto = week.filter(t => t.direction === 'out' && (t.channel === 'crypto' || t.wallet))
       const cryptoSum = crypto.reduce((n, t) => n + t.amount, 0)
-      if (cryptoSum >= s.tmCryptoMin) raise('crypto', crypto, `${money(cryptoSum)} sent to crypto exchanges or wallets within 7 days`)
+      if (segment === 'fi' && cryptoSum >= s.tmCryptoMin) raise('crypto', crypto, `${money(cryptoSum)} sent to crypto exchanges or wallets within 7 days`)
       // 8. Repeated large round amounts
       const round = week.filter(t => t.direction === 'out' && t.amount >= s.tmRoundMin && t.amount % 1000 === 0)
       if (round.length >= 2) raise('round_amounts', round, `${round.length} round-dollar payments of ${money(s.tmRoundMin)} or more within 7 days`)
@@ -203,9 +204,9 @@ export function screenables(txs, limit = 200) {
   })
   return { names: [...names.values()].slice(0, limit), wallets: [...wallets].slice(0, limit) }
 }
-export function sanctionsAlert(customerId, customerName, txs, hit, now = new Date()) {
+export function sanctionsAlert(customerId, customerName, txs, hit, now = new Date(), segment = 'fi') {
   const key = `${customerId}|sanctions|${hit.name}`
-  return { id: 'ALT-' + hash(key).toUpperCase(), key, kind: 'aml', customerId, customerName, rule: 'sanctions', label: RULES.sanctions.label, score: 5, severity: 'high',
+  return { id: 'ALT-' + hash(key).toUpperCase(), key, kind: 'aml', segment, customerId, customerName, rule: 'sanctions', label: RULES.sanctions.label, score: 5, severity: 'high',
     detail: `${hit.subject} ≈ ${hit.name} (${hit.list}, ${hit.programs}) — ${Math.round(hit.score * 100)}% match${hit.others ? `, and ${hit.others} weaker match${hit.others === 1 ? '' : 'es'}` : ''}`, txIds: txs.map(t => t.id),
     total: txs.reduce((n, t) => n + t.amount, 0), from: txs[0]?.ts, to: txs[txs.length - 1]?.ts, createdAt: now.toISOString(), status: 'open', hit }
 }
@@ -223,13 +224,14 @@ export const FRAUD_DEFAULTS = {
   fraudDormantDays: 90,         // dormant account: no activity for this many days…
   fraudDormantMin: 1000,        // …then at least this much moving
   fraudCppMin: 3,               // compromised merchant: confirmed-fraud customers who all used it
+  fraudNewAddressMin: 1000,     // exchanges: withdrawal to an address added within the day, never used before
 }
 
 // Account events: logins, devices, profile changes (an optional second file)
 export const EV_FIELDS = [
   { key:'eventId',    label:'Event ID',               syn:['event id','id','reference','ref'] },
   { key:'date',       label:'Date',                   required:true, syn:['date','timestamp','datetime','event time','time','created'] },
-  { key:'customerId', label:'Customer or account ID', required:true, syn:['customer id','account','account number','member id','cif','client id','user id'] },
+  { key:'customerId', label:'Customer or account ID', required:true, syn:['customer id','account','account number','member id','cif','client id','user id','uid'] },
   { key:'type',       label:'Event',                  required:true, syn:['event','event type','type','action','activity'] },
   { key:'device',     label:'Device',                 syn:['device','device id','fingerprint','user agent'] },
   { key:'location',   label:'Location / IP country',  syn:['location','country','ip country','geo','city','ip'] },
@@ -245,8 +247,8 @@ export function normEventType(raw) {
   if (/password|passcode|pin (change|reset)/.test(v)) return 'password_change'
   if (/phone|mobile number|sim/.test(v)) return 'phone_change'
   if (/email/.test(v)) return 'email_change'
+  if (/payee|beneficiary|recipient added|biller|withdrawal address|whitelist|allowlist|address book/.test(v)) return 'payee_added'
   if (/address/.test(v)) return 'address_change'
-  if (/payee|beneficiary|recipient added|biller/.test(v)) return 'payee_added'
   if (/mfa|2fa|two.?factor|otp reset|authenticator/.test(v)) return 'mfa_reset'
   if (/login|log in|sign in|signin/.test(v)) return 'login'
   return 'other'
@@ -283,13 +285,15 @@ export const FRAUD_RULES = {
   scam_victim:         { label: 'Possible scam — first large payment to a new payee', weight: 2, action: 'hold_payment', route: 'scam' },
   dormant_awakens:     { label: 'Dormant account suddenly active',          weight: 2, action: 'hold_payment', route: 'recall' },
   check_duplicate:     { label: 'Same check deposited twice',               weight: 3, action: 'hold_payment', route: 'recall' },
+  new_address_withdrawal: { label: 'Withdrawal to a brand-new address',     weight: 3, action: 'hold_payment', route: 'recall' },
   external:            { label: 'Alert from a connected fraud system',      weight: 2, action: null,           route: null },
 }
 const SCAM_WORDS = /\b(fee|release|unlock|tax|irs|customs|bail|lawyer|gift ?card|bitcoin|crypto|usdt|invest|investment|profit|grandson|granddaughter|urgent|lottery|prize|refund|support|microsoft|amazon|apple)\b/i
 
 // history: transactions (≥ 120 days for the dormancy rule); events: account events; fresh: ids of new transactions / events
 // fraudCases: confirmed card-fraud cases [{ customerName, date }] for the compromised-merchant rule
-export function evaluateFraud(history, events, fresh, settings, fraudCases = [], now = new Date()) {
+export function evaluateFraud(history, events, fresh, settings, fraudCases = [], now = new Date(), opts = {}) {
+  const segment = opts.segment || 'fi'
   const s = { ...FRAUD_DEFAULTS, ...(settings || {}) }
   if (s.fraudEnabled === false) return []
   const isNew = new Set(fresh)
@@ -302,7 +306,7 @@ export function evaluateFraud(history, events, fresh, settings, fraudCases = [],
     if (out.some(a => a.key === key)) return
     const r = FRAUD_RULES[rule], total = involved.reduce((n, t) => n + t.amount, 0)
     const due = s.fraudContactHours ? new Date(now.getTime() + Number(s.fraudContactHours) * 3600000).toISOString() : null
-    out.push({ id: 'FRD-' + hash(key).toUpperCase(), key, kind: 'fraud', customerId, customerName: name, rule, label: r.label, score: r.weight,
+    out.push({ id: 'FRD-' + hash(key).toUpperCase(), key, kind: 'fraud', segment, customerId, customerName: name, rule, label: r.label, score: r.weight,
       severity: r.weight >= 3 ? 'high' : 'medium', detail, txIds: involved.map(t => t.id), events: evs.map(e => ({ ts: e.ts, type: e.type, device: e.device, location: e.location })),
       total: Math.round(total * 100) / 100, from: new Date(Math.min(...involved.map(at), ...evs.map(at))).toISOString(), to: new Date(last).toISOString(),
       action: r.action, route: r.route, contactDue: due, createdAt: now.toISOString(), status: 'open', ...extra })
@@ -351,18 +355,31 @@ export function evaluateFraud(history, events, fresh, settings, fraudCases = [],
       const twin = checks.find(x => x.id !== t.id && Math.abs(at(x) - at(t)) <= 14 * DAY && x.amount === t.amount && ((num(x) && num(x) === num(t)) || (!num(t) && norm(x.counterparty) && norm(x.counterparty) === norm(t.counterparty))))
       if (twin) { raise('check_duplicate', cid, name, [twin, t], [], `${money(t.amount)} check${num(t) ? ` #${num(t)}` : ` from ${t.counterparty}`} deposited twice within ${Math.max(1, Math.round(Math.abs(at(t) - at(twin)) / DAY))} day${Math.round(Math.abs(at(t) - at(twin)) / DAY) > 1 ? 's' : ''}`); break }
     }
+    // 5b. Withdrawal to a wallet address added within the day and never used before (exchanges)
+    for (const t of txs.filter(x => isNew.has(x.id) && x.direction === 'out' && x.wallet && x.amount >= s.fraudNewAddressMin)) {
+      if (out.some(a => a.customerId === cid && a.txIds.includes(t.id))) continue
+      const usedBefore = txs.some(x => x.id !== t.id && at(x) < at(t) && x.wallet === t.wallet)
+      const added = evs.filter(e => e.type === 'payee_added' && at(e) <= at(t) && at(t) - at(e) <= DAY).pop()
+      if (!usedBefore && added) {
+        const mins = Math.round((at(t) - at(added)) / 60000)
+        raise('new_address_withdrawal', cid, name, [t], [added], `${money(t.amount)} withdrawn to ${t.wallet.slice(0, 8)}…${t.wallet.slice(-6)}, an address added ${mins < 90 ? `${mins} minutes` : `${Math.round(mins / 60)} hours`} earlier and never used before`)
+      }
+    }
     // 6. Scam victim: first large payment to a new payee by wire, P2P or crypto — unless another alert
     //    already explains it (takeover, dormancy), or the account collects from many senders (a mule: AML's job)
     const explained = new Set(out.filter(a => a.customerId === cid).flatMap(a => a.txIds))
     for (const t of txs.filter(x => isNew.has(x.id) && !explained.has(x.id) && x.direction === 'out' && ['wire', 'p2p', 'crypto'].includes(x.channel) && x.amount >= s.fraudScamMin)) {
       const senders = new Set(txs.filter(x => x.direction === 'in' && x.counterparty && at(x) <= at(t) && at(x) > at(t) - 7 * DAY).map(x => norm(x.counterparty)))
       if (senders.size >= 3) continue
+      // On an exchange the scam pattern is fiat in, then crypto straight out to someone else
+      if (segment === 'ce' && txs.filter(x => x.direction === 'in' && ['ach', 'wire', 'card', 'p2p'].includes(x.channel) && at(x) <= at(t) && at(x) > at(t) - 7 * DAY).reduce((n, x) => n + x.amount, 0) < t.amount * 0.5) continue
       const before = txs.filter(x => at(x) < at(t))
-      const paidBefore = before.some(x => x.direction === 'out' && x.counterparty && norm(x.counterparty) === norm(t.counterparty))
+      const payee = x => x.wallet || norm(x.counterparty)   // on an exchange the wallet address is the payee
+      const paidBefore = before.some(x => x.direction === 'out' && payee(x) && payee(x) === payee(t))
       const biggest = before.filter(x => x.direction === 'out').reduce((m, x) => Math.max(m, x.amount), 0)
       if (!paidBefore && t.amount >= Math.max(biggest * 3, s.fraudScamMin)) {
         const words = (t.description || '').match(SCAM_WORDS)
-        raise('scam_victim', cid, name, [t], [], `${money(t.amount)} by ${t.channel} to ${t.counterparty || 'a new payee'} — never paid before, ${biggest ? `${(t.amount / biggest).toFixed(1)}× their largest payment in recent months` : 'with no earlier payments on record'}${words ? `; the memo mentions “${words[0]}”` : ''}`,
+        raise('scam_victim', cid, name, [t], [], `${money(t.amount)} by ${t.channel} to ${t.counterparty || (t.wallet ? `wallet ${t.wallet.slice(0, 8)}…` : 'a new payee')} — never paid before, ${biggest ? `${(t.amount / biggest).toFixed(1)}× their largest payment in recent months` : 'with no earlier payments on record'}${words ? `; the memo mentions “${words[0]}”` : ''}`,
           { score: words ? 3 : 2, severity: words ? 'high' : 'medium' })
       }
     }
@@ -429,6 +446,38 @@ export function sampleDay(now = new Date()) {
   ;[['A-2001', 'J. Okafor'], ['A-2002', 'M. Chen'], ['A-2003', 'D. Patel']].forEach(([a2, n2], i) => add(18 + i * 3, a2, n2, (48.2 + i * 6).toFixed(2), 'Debit', 'Card', 'Pixel Fuel Station'))
   return rows.map(r => r.map(v => /[,"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n')
 }
+// A day on a crypto exchange: deposits in (fiat and crypto), withdrawals out to wallets
+export function sampleDayExchange(now = new Date()) {
+  const d = n => { const x = new Date(now.getTime() - n * DAY); return `${x.getMonth() + 1}/${x.getDate()}/${x.getFullYear()}` }
+  const rows = [['Txn ID', 'Timestamp', 'User ID', 'User', 'USD Value', 'Currency', 'Side', 'Method', 'Counterparty', 'Country', 'Wallet', 'Note']]
+  let n = 5000
+  const add = (days, uid, name, usd, side, method, cp = '', country = 'US', wallet = '', note = '', time = '') => rows.push([`XTX${n++}`, d(days) + (time ? ' ' + time : ''), uid, name, usd, 'USD', side, method, cp, country, wallet, note])
+  const W = { a: '0x8f3c2a91b7e04d5c66a1e2f9b0c4d7e8a1b2c3d4', b: '0x4e1d9c0b8a7f6e5d4c3b2a19087f6e5d4c3b2a10', c: '0x7a2b4c6d8e0f1a3b5c7d9e1f3a5b7c9d1e3f5a7b', own: '0x1111aaaa2222bbbb3333cccc4444dddd5555eeee' }
+  // Regular trader: deposits and withdrawals to their own wallet
+  for (let i = 27; i >= 3; i -= 6) { add(i, 'U-301', 'L. Park', '1500.00', 'Deposit', 'ACH'); add(i - 1, 'U-301', 'L. Park', '900.00', 'Withdrawal', 'Crypto withdrawal', 'Own wallet', 'US', W.own) }
+  // Exchange account takeover: new device → 2FA reset → withdrawal address added → withdrawal (events in sampleEventsExchange)
+  add(20, 'U-302', 'R. Iyer', '2200.00', 'Deposit', 'ACH'); add(14, 'U-302', 'R. Iyer', '600.00', 'Withdrawal', 'Crypto withdrawal', 'Own wallet', 'US', W.own)
+  add(0, 'U-302', 'R. Iyer', '8150.00', 'Withdrawal', 'Crypto withdrawal', '', 'US', W.a, 'BTC withdrawal', '03:41')
+  // Pig-butchering victim: a large fiat deposit, then a first withdrawal to an outside "investment platform"
+  add(25, 'U-303', 'G. Holt', '300.00', 'Deposit', 'ACH'); add(1, 'U-303', 'G. Holt', '15000.00', 'Deposit', 'Wire', 'Holt Family Trust')
+  add(0, 'U-303', 'G. Holt', '14800.00', 'Withdrawal', 'Crypto withdrawal', 'Apex Yield Platform', 'US', W.b, 'USDT to investment platform for profit plan')
+  // Withdrawal to an address added minutes earlier (no new device — still worth a call)
+  add(18, 'U-304', 'T. Nwosu', '4000.00', 'Deposit', 'Wire'); add(0, 'U-304', 'T. Nwosu', '3900.00', 'Withdrawal', 'Crypto withdrawal', '', 'US', W.c, 'ETH withdrawal', '11:05')
+  // Withdrawal to an OFAC-listed wallet (AML: sanctions)
+  add(5, 'U-305', 'Kestrel OTC Desk', '9000.00', 'Deposit', 'Crypto deposit', '', 'US', '0x9b2e7c1d5f3a8e4b6c0d2f1a7e3b9c5d8f0a2b4c'); add(0, 'U-305', 'Kestrel OTC Desk', '8700.00', 'Withdrawal', 'Crypto withdrawal', '', 'US', '0x252a8bd2319d8a555b872990601221b3a2053bce', 'USDT')
+  // Dormant: an account quiet for months suddenly moves money
+  add(140, 'U-306', 'F. Sato', '50.00', 'Deposit', 'ACH'); add(0, 'U-306', 'F. Sato', '6200.00', 'Deposit', 'Crypto deposit', '', 'US', '0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d'); add(0, 'U-306', 'F. Sato', '6100.00', 'Withdrawal', 'Crypto withdrawal', '', 'US', '0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f')
+  return rows.map(r => r.map(v => /[,"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n')
+}
+export function sampleEventsExchange(now = new Date()) {
+  const x = new Date(now), dd = `${x.getMonth() + 1}/${x.getDate()}/${x.getFullYear()}`
+  return ['Event ID,Timestamp,User ID,Event,Device,Location',
+    `XEV1,${dd} 03:02,U-302,Login from new device,Windows 11 / Firefox,Bucharest RO`,
+    `XEV2,${dd} 03:10,U-302,2FA reset,Windows 11 / Firefox,Bucharest RO`,
+    `XEV3,${dd} 03:22,U-302,Withdrawal address added,Windows 11 / Firefox,Bucharest RO`,
+    `XEV4,${dd} 10:40,U-304,Withdrawal address added,iPhone 15 / App,Austin US`].join('\n')
+}
+
 // Account events to go with sampleDay: the takeover sequence for M. Okafor
 export function sampleEvents(now = new Date()) {
   const x = new Date(now), dd = `${x.getMonth() + 1}/${x.getDate()}/${x.getFullYear()}`

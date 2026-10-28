@@ -20,7 +20,8 @@ const DAY = 86400000
 const money = n => '$' + Math.round(Number(n) || 0).toLocaleString()
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'
 const H = ({ children }) => <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', margin:'14px 0 6px' }}>{children}</div>
-const ACTIONS = { block_card: 'Block the card', hold_payment: 'Hold the payment' }
+const ACTIONS = { fi: { block_card: 'Block the card', hold_payment: 'Hold the payment' }, ce: { block_card: 'Lock the account', hold_payment: 'Hold the withdrawal' } }
+const SYSTEM = { fi: { block_card: 'card', hold_payment: 'payments' }, ce: { block_card: 'exchange admin', hold_payment: 'exchange admin' } }
 
 function script(a, institution) {
   const what = { account_takeover: 'changes to your online banking and a payment', card_testing: 'some small card charges', scam_victim: 'a large payment',
@@ -34,7 +35,8 @@ function script(a, institution) {
     'Remember: never ask for a full card number, PIN, password or one-time code.'].join('\n')
 }
 
-export function FraudAlertDetail({ a, covUser, writer, institution, onDone, route }) {
+export function FraudAlertDetail({ a, segment = 'fi', covUser, writer, institution, onDone, route }) {
+  const ce = segment === 'ce', LABEL = ACTIONS[segment] || ACTIONS.fi, SYS = SYSTEM[segment] || SYSTEM.fi
   const [txs, setTxs] = useState(null)
   const [log, setLog] = useState({ method: 'Call', outcome: 'Reached', note: '' })
   const [pending, setPending] = useState(null)        // protective action awaiting "done"
@@ -63,19 +65,19 @@ export function FraudAlertDetail({ a, covUser, writer, institution, onDone, rout
 
   const answers = [
     { key: 'genuine', label: 'Yes, it was me', tone: 'secondary', run: () => patch('closed', { disposition: { outcome: 'Customer confirmed genuine', ...base } }, 'alert.closed', { reason: 'Customer confirmed genuine' }) },
-    { key: 'desk', label: 'No — open a card dispute', tone: route?.desk ? 'primary' : 'secondary', run: () => {
+    !ce && { key: 'desk', label: 'No — open a card dispute', tone: route?.desk ? 'primary' : 'secondary', run: () => {
       const c = caseFrom({ category: 'fraud', _complaint: statement('Customer did not make these card transactions'), accountType: 'credit' })
       route.openDesk(c); patch('escalated', { escalatedTo: c.id, outcome: 'Not me — card dispute', ...base }, 'alert.escalated', { case: c.id, route: 'desk' }) } },
-    { key: 'recall', label: 'No — recall the transfer', tone: 'secondary', run: () => {
-      const c = caseFrom({ accountType: 'p2p', _complaint: statement('Customer did not authorise this transfer') })
-      route.recall(c); patch('escalated', { escalatedTo: c.id, outcome: 'Not me — recall', ...base }, 'alert.escalated', { case: c.id, route: 'recall' }) } },
+    { key: 'recall', label: ce ? 'No — ask the receiving exchange to freeze it' : 'No — recall the transfer', tone: 'secondary', run: () => {
+      const c = caseFrom({ accountType: ce ? 'crypto_exchange' : 'p2p', _complaint: statement(ce ? 'Customer did not authorise this withdrawal' : 'Customer did not authorise this transfer') })
+      route.recall(c, segment); patch('escalated', { escalatedTo: c.id, outcome: 'Not me — recall', ...base }, 'alert.escalated', { case: c.id, route: 'recall' }) } },
     { key: 'scam', label: 'They sent it, but were tricked', tone: 'secondary', run: () => {
       const c = caseFrom({ verdict: 'AUTHORIZED_PUSH_PAYMENT', accountType: 'p2p', _complaint: statement('Customer sent this payment themselves after being deceived'), status: 'closed', resolvedDate: new Date().toISOString(),
         closedAtIntake: { reason: 'no_rights', reasonLabel: 'No dispute rights', basis: 'authorised_push', basisLabel: 'The customer sent the payment themselves (wire, Zelle or another person-to-person transfer)', note: `From fraud alert ${a.id}`, ts: new Date().toISOString(), aiSuggested: '' } })
       route.scam(c); patch('escalated', { escalatedTo: c.id, outcome: 'Scam — no dispute rights, sent to Licit', ...base }, 'alert.escalated', { case: c.id, route: 'scam' }) } },
     { key: 'involved', label: 'The customer is involved', tone: 'secondary', run: () => {
       const id = route.toLicit(a, txs || []); patch('escalated', { escalatedTo: id, outcome: 'Customer involved — sent to Licit', ...base }, 'alert.escalated', { case: id, route: 'licit' }) } },
-  ]
+  ].filter(Boolean)
   const suggested = { desk: 'desk', recall: 'recall', scam: 'scam' }[FRAUD_RULES[a.rule]?.route] || null
 
   return (
@@ -117,7 +119,7 @@ export function FraudAlertDetail({ a, covUser, writer, institution, onDone, rout
         {/* Protect */}
         <H>PROTECT THE CUSTOMER</H>
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
-          {Object.entries(ACTIONS).map(([k, l]) => {
+          {Object.entries(LABEL).map(([k, l]) => {
             const done = (a.actions || []).find(x => x.type === k)
             return done ? <Badge key={k} tone="ok">{l.toUpperCase()} — DONE {when(done.ts).toUpperCase()}</Badge>
               : <Button key={k} variant={a.action === k ? 'danger' : 'secondary'} onClick={() => setPending(k)}>{l}{a.action === k ? ' (recommended)' : ''}</Button>
@@ -126,10 +128,10 @@ export function FraudAlertDetail({ a, covUser, writer, institution, onDone, rout
         {pending && (
           <div style={{ border:'1px solid #FCD34D', background:'#FFFBEB', padding:'10px 12px', marginTop:'8px' }}>
             <p className="display-font" style={{ fontSize:'14px', margin:'0 0 8px', color:'#3F3A35' }}>
-              Covalence isn’t connected to your {pending === 'block_card' ? 'card' : 'payments'} system yet. {ACTIONS[pending]} there, then confirm here so it’s on the record.
+              Covalence isn’t connected to your {SYS[pending]} system yet. {LABEL[pending]} there, then confirm here so it’s on the record.
             </p>
             <div style={{ display:'flex', gap:'8px' }}>
-              <Button small onClick={() => { const actions = [...(a.actions || []), { type: pending, ...base, status: 'done in external system' }]; setPending(null); patch('open', { actions }, 'alert.action', { action: pending }) }}>Done in the {pending === 'block_card' ? 'card' : 'payments'} system</Button>
+              <Button small onClick={() => { const actions = [...(a.actions || []), { type: pending, ...base, status: 'done in external system' }]; setPending(null); patch('open', { actions }, 'alert.action', { action: pending }) }}>Done in the {SYS[pending]} system</Button>
               <Button variant="quiet" onClick={() => setPending(null)}>Cancel</Button>
             </div>
           </div>
