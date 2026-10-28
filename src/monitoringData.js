@@ -42,3 +42,15 @@ export async function addAlerts(alerts) {
 export const listAlerts = status => rpc('tm_alerts_list', { p_status: status || null, p_limit: 2000 })
   .then(rows => (rows || []).map(r => ({ ...r.data, id: r.id, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at })))
 export const setAlert = (id, status, patch) => rpc('tm_alert_set', { p_id: id, p_status: status, p_patch: patch || {} })
+
+// ── Fraud: account events, confirmed-victim lookups, API keys (supabase_fraud.sql) ──
+export async function ingestEvents(events) {
+  let added = 0
+  for (let i = 0; i < events.length; i += CHUNK) added += (await rpc('tm_events_ingest', { p_rows: events.slice(i, i + CHUNK) })) || 0
+  return added
+}
+export const eventsWindow = (customers, since) => rpc('tm_events_window', { p_customers: customers, p_since: since }).then(d => d || [])
+export const windowByNames = (names, since) => rpc('tm_window_names', { p_names: names, p_since: since }).then(rows => (rows || []).map(r => ({ ...r, amount: Number(r.amount) })))
+export const createKey = label => rpc('intake_key_create', { p_label: label })
+export const listKeys = () => rpc('intake_keys_list').then(d => d || [])
+export const revokeKey = id => rpc('intake_key_revoke', { p_id: id })

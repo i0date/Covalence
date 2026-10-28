@@ -8,6 +8,7 @@ import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
 import { auditWrite } from './audit.js'
+import { amlCaseFrom } from './AlertsPanel.jsx'
 import { useTeam, useWorkflow, useFincrime, RemindersBell } from './workflow.jsx'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
@@ -155,12 +156,36 @@ export default function Covalence() {
   const closeAtIntake = (c, d) => {
     const now = new Date().toISOString(), by = covUser?.name || covUser?.email || 'Analyst'
     const kase = { ...c, closedAtIntake: { ...c.closedAtIntake, by },
-      history: [{ ts: now, event: 'closed_at_intake', reason: c.closedAtIntake.reasonLabel, by }],
+      history: [...(c.history || []), { ts: now, event: 'closed_at_intake', reason: c.closedAtIntake.reasonLabel, by }],
       ...(d.toLicit ? { sarReview: { flaggedAt: now, manual: true, level: 'referred', signals: ['intake'], by, referredFrom: 'Triage' } } : {}) }
     setOutcomes(prev => [kase, ...prev.filter(o => o.id !== c.id)])
     auditWrite('case.closed_at_intake', 'case', c.id, { reason: c.closedAtIntake.reasonLabel, basis: c.closedAtIntake.basisLabel || '', toLicit: !!d.toLicit, aiSuggested: c.closedAtIntake.aiSuggested })
     if (d.toLicit) auditWrite('aml.flagged', 'case', c.id, { level: 'referred', manual: true, from: 'Triage' })
   }
+  // Fraud alerts (001 Triage → Alerts): where the customer's answer sends the case
+  const fraudRoute = {
+    desk: true,
+    openDesk: c => { setOutcomes(prev => [c, ...prev]); setDeskOpenRequest({ case: c, t: Date.now() }); setActiveSection('desk') },
+    recall: c => {
+      setOutcomes(prev => [c, ...prev])
+      setDuoHandoff({ source: 'alert', caseId: c.id, accountType: 'p2p', classification: 'TRUE_FRAUD', routing: 'RECIPIENT_FI', routing_label: 'Recall from the receiving institution', amount: c.amount, merchant: c.merchant })
+      setActiveSection('duo')
+    },
+    scam: c => closeAtIntake(c, { toLicit: true }),
+    toLicit: (a, txs) => {
+      const c = amlCaseFrom(a, txs, covUser?.name || covUser?.email || 'Analyst')
+      setOutcomes(prev => [c, ...prev]); auditWrite('aml.flagged', 'case', c.id, { level: a.severity, from: 'Fraud alert' })
+      return c.id
+    },
+    trio: a => {
+      const now = new Date().toISOString(), id = 'TRI-' + Date.now().toString(36).toUpperCase()
+      window.dispatchEvent(new CustomEvent('cov:trio-create', { detail: { id, name: `Compromised merchant: ${a.merchant || a.customerName}`, type: 'fraud_wave', severity: 'HIGH',
+        detectionDate: now.slice(0, 10), affectedProduct: 'Cards', description: `${a.detail} Victims: ${(a.victims || []).map(v => `${v.name} (${v.caseId})`).join(', ')}.`,
+        status: 'active', linkedCaseIds: (a.victims || []).map(v => v.caseId), notes: [], cardholderNotified: 0, cardholderTotal: 0, createdAt: now, updatedAt: now, fromAlert: a.id } }))
+      return id
+    },
+  }
+
   // DFA scores claims for funding; a case with a confirmed sanctions match can't be funded or sold
   const scoreInDfa = claims => {
     const blocked = new Set(outcomes.filter(o => screeningStatus(o) === 'confirmed').map(o => o.id))
@@ -438,7 +463,7 @@ export default function Covalence() {
             onLoadDemo={loadDemo} onClearDemo={clearDemo} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
-          <TriageView onCloseAtIntake={closeAtIntake} onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
+          <TriageView appOutcomes={outcomes} setAppOutcomes={setOutcomes} settings={settings} covUser={covUser} fraudRoute={fraudRoute} onCloseAtIntake={closeAtIntake} onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
         </div>
         <div style={{ display: activeSection === 'desk' ? 'block' : 'none' }}>
           <DeskView

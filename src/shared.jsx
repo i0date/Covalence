@@ -7,7 +7,7 @@ import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
 import { FINCRIME_DEFAULTS } from './fincrime.js'
-import { TM_DEFAULTS } from './monitoring.mjs'
+import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 export class ErrorBoundary extends React.Component {
@@ -61,6 +61,8 @@ export const DEFAULT_SETTINGS = {
   ...FINCRIME_DEFAULTS,
   // Transaction monitoring rules (Settings → Financial crime)
   ...TM_DEFAULTS,
+  // Fraud alert rules and the customer-contact deadline (Settings → Financial crime)
+  ...FRAUD_DEFAULTS,
 }
 
 // ─── Business-day helpers (src/clocks.mjs, shared with the reminder emails) ──

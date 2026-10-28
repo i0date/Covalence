@@ -10,7 +10,7 @@
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
-  seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts',
+  seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -180,6 +180,34 @@ const HANDLERS = {
     const fresh = (p_rows || []).filter(a => !ids.has(a.id)).map(a => ({ id: a.id, data: a, status: 'open', created_at: now, updated_at: now }))
     write(K.tmAlerts, [...fresh, ...all])
     return fresh.length
+  },
+  tm_events_ingest: ({ p_rows }) => {
+    need(canWrite(), 'Your role can’t import events')
+    const all = read(K.tmEvents, []), ids = new Set(all.map(e => e.id))
+    const fresh = (p_rows || []).filter(e => !ids.has(e.id))
+    write(K.tmEvents, [...all, ...fresh].slice(-20000))
+    return fresh.length
+  },
+  tm_events_window: ({ p_customers, p_since }) => {
+    const want = new Set(p_customers || []), since = new Date(p_since || 0)
+    return read(K.tmEvents, []).filter(e => want.has(e.customerId) && new Date(e.ts) >= since)
+  },
+  tm_window_names: ({ p_names, p_since }) => {
+    const want = new Set((p_names || []).map(n => String(n).toLowerCase())), since = new Date(p_since || 0)
+    return read(K.tmTx, []).filter(t => t.channel === 'card' && want.has(String(t.customerName || '').toLowerCase()) && new Date(t.ts) >= since)
+  },
+  // Demo keys look real but only work in the demo; the intake API needs a signed-in workspace's key
+  intake_key_create: ({ p_label }) => {
+    need(isAdmin(), 'Only an institution admin can create API keys')
+    const key = 'cvl_' + Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b => b.toString(16).padStart(2, '0')).join('')
+    write(K.keys, [{ id: 'demo-' + Date.now(), label: p_label || 'API key', prefix: key.slice(0, 12), created_at: new Date().toISOString(), last_used_at: null, revoked_at: null }, ...read(K.keys, [])])
+    audit('intake_key.created', 'workspace', key.slice(0, 12), { label: p_label })
+    return key
+  },
+  intake_keys_list: () => canConfigure() ? read(K.keys, []) : [],
+  intake_key_revoke: ({ p_id }) => {
+    need(isAdmin(), 'Only an institution admin can revoke API keys')
+    write(K.keys, read(K.keys, []).map(k => k.id === p_id ? { ...k, revoked_at: new Date().toISOString() } : k))
   },
   tm_alerts_list: ({ p_status }) => read(K.tmAlerts, []).filter(a => !p_status || a.status === p_status),
   tm_alert_set: ({ p_id, p_status, p_patch }) => {
