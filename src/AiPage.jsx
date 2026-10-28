@@ -12,7 +12,7 @@ import { PROMPTS } from './ai.js'
 const MODEL = 'claude-sonnet-4-6'   // as set in api/analyze.js and api/triage.js
 
 const USES = [
-  ['Triage', 'Classifies a new claim: true fraud, first-party fraud, consumer dispute or authorised push payment. Suggests routing and whether to give provisional credit.', 'Decision support'],
+  ['Triage', 'Classifies a new claim: true fraud, first-party fraud, consumer dispute or authorised push payment. Suggests routing, whether to give provisional credit, and whether the claim should be closed at intake instead (no dispute rights, already refunded, recognised, a bank error, or a compliance referral).', 'Decision support'],
   ['Triage (exchanges)', 'The same for crypto exchange claims, plus whether a SAR/STR threshold is met.', 'Decision support'],
   ['Triage (exchanges)', 'Drafts an action plan and customer letter.', 'Draft'],
   ['Dispute Desk', 'Suggests the network reason code, writes the dispute summary, lists missing information.', 'Decision support'],

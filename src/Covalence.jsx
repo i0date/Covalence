@@ -7,6 +7,7 @@ import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
+import { auditWrite } from './audit.js'
 import { useTeam, useWorkflow, useFincrime, RemindersBell } from './workflow.jsx'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
@@ -150,6 +151,16 @@ export default function Covalence() {
   const [dataVersion,     setDataVersion]     = useState(0) // bump to remount tools after demo load/clear
   useOpenCaseListener(setOpenCaseId)
   const openSearch = React.useCallback(() => setSearchOpen(true), [])
+  // Triage closed a claim that isn't a dispute: keep it on the shared record, closed — and in Licit if referred
+  const closeAtIntake = (c, d) => {
+    const now = new Date().toISOString(), by = covUser?.name || covUser?.email || 'Analyst'
+    const kase = { ...c, closedAtIntake: { ...c.closedAtIntake, by },
+      history: [{ ts: now, event: 'closed_at_intake', reason: c.closedAtIntake.reasonLabel, by }],
+      ...(d.toLicit ? { sarReview: { flaggedAt: now, manual: true, level: 'referred', signals: ['intake'], by, referredFrom: 'Triage' } } : {}) }
+    setOutcomes(prev => [kase, ...prev.filter(o => o.id !== c.id)])
+    auditWrite('case.closed_at_intake', 'case', c.id, { reason: c.closedAtIntake.reasonLabel, basis: c.closedAtIntake.basisLabel || '', toLicit: !!d.toLicit, aiSuggested: c.closedAtIntake.aiSuggested })
+    if (d.toLicit) auditWrite('aml.flagged', 'case', c.id, { level: 'referred', manual: true, from: 'Triage' })
+  }
   // DFA scores claims for funding; a case with a confirmed sanctions match can't be funded or sold
   const scoreInDfa = claims => {
     const blocked = new Set(outcomes.filter(o => screeningStatus(o) === 'confirmed').map(o => o.id))
@@ -427,7 +438,7 @@ export default function Covalence() {
             onLoadDemo={loadDemo} onClearDemo={clearDemo} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
-          <TriageView onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
+          <TriageView onCloseAtIntake={closeAtIntake} onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
         </div>
         <div style={{ display: activeSection === 'desk' ? 'block' : 'none' }}>
           <DeskView

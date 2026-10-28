@@ -66,7 +66,7 @@ export function useFincrime({ outcomes, setOutcomes, settings, covUser }) {
   // Sanctions screening — up to 4 cases per pass
   useEffect(() => {
     if (!me || !canWrite() || settings?.screeningAuto === false) return
-    const due = outcomes.filter(c => open(c) && !busy.current.has(c.id) && (subjectsOf(c).length || walletsOf(c).length)
+    const due = outcomes.filter(c => (open(c) || c.sarReview) && !busy.current.has(c.id) && (subjectsOf(c).length || walletsOf(c).length)
       && (!c.screening || c.screening.key !== screeningKey(c))).slice(0, 4)
     due.forEach(c => {
       busy.current.add(c.id)
