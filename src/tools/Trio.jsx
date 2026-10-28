@@ -3,6 +3,7 @@
 import React from 'react'
 import { CaseLink } from '../CaseThread.jsx'
 import { mergeTrioIncidents, pullTrioFromSupa, pushTrioToSupa } from '../data.js'
+import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TRIO VIEW — fraud incident command
@@ -59,7 +60,7 @@ export function TrioView({ outcomes: _parentOutcomes }) {
     const parts  = (inc.participants||[]).join(', ') || 'None recorded'
     const notes  = (strategyNotes[inc.id]||[])
     const noteLines = notes.length ? notes.map(n => `  [${new Date(n.ts).toLocaleDateString()}] ${n.author}: ${n.text}`).join('\n') : '  No strategic annotations recorded.'
-    const sarFlag = (() => { try { const s = JSON.parse(localStorage.getItem('cov_settings')||'{}'); const t = parseFloat(s.sarThreshold)||5000; const allC = JSON.parse(localStorage.getItem('cov_outcomes')||'[]'); const total = allC.filter(c=>(inc.linkedCaseIds||[]).includes(c.id)).reduce((s,c)=>s+parseFloat(c.amount||0),0); return total>=t ? `⚠ SAR THRESHOLD: Linked case total $${total.toFixed(2)} meets or exceeds $${t.toLocaleString()} threshold. Review SAR/STR filing obligation.` : `Linked case total: $${total.toFixed(2)} (below SAR threshold of $${t.toLocaleString()})` } catch { return 'SAR assessment unavailable.' } })()
+    const sarFlag = (() => { try { const s = JSON.parse(localStorage.getItem('cov_settings')||'{}'); const t = parseFloat(s.sarThreshold)||5000; const allC = readCases(); const total = allC.filter(c=>(inc.linkedCaseIds||[]).includes(c.id)).reduce((s,c)=>s+parseFloat(c.amount||0),0); return total>=t ? `⚠ SAR THRESHOLD: Linked case total $${total.toFixed(2)} meets or exceeds $${t.toLocaleString()} threshold. Review SAR/STR filing obligation.` : `Linked case total: $${total.toFixed(2)} (below SAR threshold of $${t.toLocaleString()})` } catch { return 'SAR assessment unavailable.' } })()
     return `TRIO THREAT BRIEF
 ══════════════════════════════════════════════════════
 INCIDENT:       ${inc.name}
@@ -111,7 +112,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
   // allCases = Desk/Multi/File cases (cov_outcomes) + Triage intake log (triage_outcomes), deduplicated by id
   const allCases = React.useMemo(() => {
     try {
-      const desk    = JSON.parse(localStorage.getItem('cov_outcomes')    || '[]')
+      const desk    = readCases()
       const triage  = JSON.parse(localStorage.getItem('triage_outcomes') || '[]').map(t => ({
         ...t,
         _source: 'TRIAGE',
@@ -339,7 +340,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         const contCount  = allIncs.filter(i=>i.status==='contained').length
         const closeCount = closed.length
         // Exposure + SAR
-        const allOutcomesS  = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes')||'[]') } catch { return [] } })()
+        const allOutcomesS  = readCases()
         const sarThresholdV = parseFloat(settings?.sarThreshold)||5000
         const incidentSAR   = allIncs.map(inc => {
           const linked   = allOutcomesS.filter(c => (inc.linkedCaseIds||[]).includes(c.id))

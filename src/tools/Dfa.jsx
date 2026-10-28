@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { CheckCircle, XCircle, ChevronUp, ChevronDown, Plus, Upload, Download, X, AlertTriangle } from 'lucide-react'
 import { DFA_BASE_WIN, detectNetwork, saveOutcomes } from '../shared.jsx'
+import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 003 DFA — MODULE-LEVEL HELPERS
@@ -690,7 +691,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
     })
     // ── Reverse flow: annotate source cases in cov_outcomes with DFA score ──
     try {
-      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const all = readCases()
       const mappedIds = new Set(mapped.map(c => c.id))
       const updated = all.map(o => {
         if (!mappedIds.has(o.id)) return o

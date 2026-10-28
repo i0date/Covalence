@@ -8,6 +8,7 @@
 // the workspace). Admins and reviewers import; the import is audited.
 import React, { useMemo, useRef, useState } from 'react'
 import { auditWrite } from './audit.js'
+import { caseStoreBackend } from './caseStore.js'
 import { REASON_TITLES } from './shared.jsx'
 import { FIELDS, FIELD, MAX_BYTES, MAX_ROWS, SAMPLE_CSV, STATUSES, VERDICTS, buildImport, dateAmbiguous, detectDateFormat,
   distinctValues, guessMapping, guessStatus, guessVerdict, parseAmount, parseCsv, parseDate, signatureOf } from './csvImport.js'
@@ -15,8 +16,11 @@ import { Badge, Button, Input } from './ui.jsx'
 
 const TEMPLATES_KEY = 'cov_import_templates'
 const readTemplates = () => { try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]') } catch { return [] } }
-// Browsers keep about 5 million characters per site; stay well under it
-const STORAGE_BUDGET = 4_000_000
+// Cases live in IndexedDB, which can hold far more than the tools can work with in
+// memory, so cap the case count. Without IndexedDB (some private modes) they fall
+// back to localStorage, which keeps about 5 million characters per site.
+const CASE_BUDGET = 100_000
+const LOCAL_STORAGE_BUDGET = 4_000_000
 
 const H2 = ({ n, children }) => (
   <h2 className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', margin:'0 0 12px', display:'flex', alignItems:'baseline', gap:'10px' }}>
@@ -97,8 +101,9 @@ export function ImportPanel({ covUser, locked, outcomes, setOutcomes }) {
 
   const hardErrors = result ? result.errors.filter(e => !e.warning) : []
   const badRows = new Set(hardErrors.map(e => e.row))
-  const projected = result ? JSON.stringify(outcomes).length + JSON.stringify(result.creates).length : 0
-  const tooBig = projected > STORAGE_BUDGET
+  const tooBig = !!result && (caseStoreBackend() === 'indexeddb'
+    ? outcomes.length + result.creates.length > CASE_BUDGET
+    : JSON.stringify(outcomes).length + JSON.stringify(result.creates).length > LOCAL_STORAGE_BUDGET)
 
   const saveTemplate = () => {
     const name = templateName.trim(); if (!name || !file) return

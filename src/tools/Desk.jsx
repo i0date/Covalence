@@ -8,6 +8,7 @@ import { SUPA_KEY, SUPA_URL, pushCasesToSupa, uploadEvidence } from '../data.js'
 import { DEFAULT_SETTINGS, REASON_TITLES, daysUntil, estimateFundingGrade, loadDeskSession, notesText, saveOutcomes, toDfaClaim } from '../shared.jsx'
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withDecision } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
+import { readCases } from '../caseStore.js'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
 // Returns { systems, cardholder, merchant } arrays of { text, impact } items
@@ -281,11 +282,9 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   }, [])
 
   // ── Outcome tracking (60-day dispute log) ─────────────────────────────────
-  const [outcomes, setOutcomes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] }
-  })
+  const [outcomes, setOutcomes] = useState(readCases)
   useEffect(() => {
-    saveOutcomes(outcomes)   // writes to localStorage + notifies Multi via _covRefreshMulti
+    saveOutcomes(outcomes)   // writes to the case store + notifies Multi via _covRefreshMulti
     if (SUPA_URL && SUPA_KEY && outcomes.length > 0) {
       setSupaSyncStatus('syncing')
       pushCasesToSupa(outcomes)

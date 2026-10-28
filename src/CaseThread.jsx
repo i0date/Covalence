@@ -18,6 +18,7 @@ import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 import { CLOSED_STATUSES, FILE_STAGE_STATUSES, caseClocks, sortClocks } from './clocks.mjs'
 import { decisionsOf } from './ai.js'
 import { AiExplain } from './AiExplain.jsx'
+import { readCases, writeCases } from './caseStore.js'
 import { FincrimePanel } from './FincrimePanel.jsx'
 import { screeningStatus } from './fincrime.js'
 
@@ -769,7 +770,7 @@ function writeDemoToStorage(userEmail) {
   const { cases, triage } = buildDemoInstitution(userEmail)
   try {
     localStorage.setItem('triage_outcomes', JSON.stringify([...triage, ...readLS('triage_outcomes', []).filter(t => !isDemoCase(t))]))
-    localStorage.setItem('cov_outcomes', JSON.stringify([...cases, ...readLS('cov_outcomes', []).filter(o => !isDemoCase(o))]))
+    writeCases([...cases, ...readCases().filter(o => !isDemoCase(o))])
     localStorage.setItem('cov_demo_loaded', DEMO_VERSION)
   } catch {}
   clearDemoBackend()  // the demo backend re-seeds its history from these cases
@@ -787,7 +788,7 @@ export function seedDemoIfFirstVisit(userEmail) {
     if (loaded && loaded !== DEMO_VERSION) { writeDemoToStorage(userEmail); return true }
     if (localStorage.getItem('cov_demo_offered')) return false
     localStorage.setItem('cov_demo_offered', '1')
-    if (readLS('cov_outcomes', []).length > 0 || readLS('triage_outcomes', []).length > 0) return false
+    if (readCases().length > 0 || readLS('triage_outcomes', []).length > 0) return false
     writeDemoToStorage(userEmail)
     return true
   } catch { return false }
@@ -803,7 +804,7 @@ export function clearDemoInstitution(setOutcomes) {
   try {
     localStorage.setItem('triage_outcomes', JSON.stringify(readLS('triage_outcomes', []).filter(t => !isDemoCase(t))))
     // saveOutcomes merges rather than replaces, so remove demo rows from storage directly
-    localStorage.setItem('cov_outcomes', JSON.stringify(readLS('cov_outcomes', []).filter(o => !isDemoCase(o))))
+    writeCases(readCases().filter(o => !isDemoCase(o)))
     localStorage.removeItem('cov_demo_loaded')
   } catch {}
   clearDemoBackend()

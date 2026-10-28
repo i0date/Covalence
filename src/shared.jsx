@@ -6,6 +6,7 @@ import { recordDemoCaseEvent } from './demoBackend.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
+import { onCasesFromOtherTab, readCases, writeCases } from './caseStore.js'
 import { FINCRIME_DEFAULTS } from './fincrime.js'
 import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
 
@@ -164,7 +165,8 @@ export function notesList(n) {
 }
 export function notesText(n) { return notesList(n).map(x => x.text).join(' · ') }
 
-export function loadOutcomes()  { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } }
+// Cases live in IndexedDB behind an in-memory copy (see caseStore.js)
+export function loadOutcomes()  { return readCases() }
 // Case thread: any tool that changes a case gets an updatedAt stamp and, on a
 // status change, a history entry — so every case carries its own timeline
 // across Triage → Desk → Multi → File without each tool having to log it.
@@ -188,12 +190,10 @@ function stampCaseChanges(current, next) {
 }
 export function saveOutcomes(o) {
   try {
-    const current = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+    const current = readCases()
     const merged = mergeCases(current, stampCaseChanges(current, o))
-    window._covSaving = true
-    localStorage.setItem('cov_outcomes', JSON.stringify(merged))
+    writeCases(merged)
     if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
-    setTimeout(() => { window._covSaving = false }, 0)
     // ── Supabase as PRIMARY write (not backup) ─────────────────────────────
     if (SUPA_URL && SUPA_KEY && isSignedIn()) {
       if (window._covSyncStatus) window._covSyncStatus('syncing')
@@ -201,8 +201,10 @@ export function saveOutcomes(o) {
         .then(() => { if (window._covSyncStatus) window._covSyncStatus('synced') })
         .catch(() => { if (window._covSyncStatus) window._covSyncStatus('error') })
     }
-  } catch { window._covSaving = false }
+  } catch {}
 }
+// Subscribers hear about saves in this tab and, over the case store's channel, in other tabs
+onCasesFromOtherTab(list => { if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(list) } catch {} }) })
 export function registerOutcomeSubscriber(fn) {
   if (!window._covSubscribers) window._covSubscribers = new Set()
   window._covSubscribers.add(fn)
