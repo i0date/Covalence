@@ -1051,7 +1051,7 @@ Return ONLY valid JSON:
                   </div>
                   <button onClick={onGoToDuo} className="mono-font shrink-0 ml-4"
                     style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                    OPEN 005 DUO →
+                    OPEN 007 DUO →
                   </button>
                 </div>
               )}

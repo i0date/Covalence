@@ -61,17 +61,19 @@ function Tile({ label, value, sub, children, dim }) {
 
 const DAY = 86400000
 const short = k => k.text.replace(/ (left|overdue)$/, '')
-const BREACHED = { response: k => `OVERDUE ${short(k)}`, regE: () => 'REG E OVERDUE', file: () => 'FILE SLA MISSED', assign: () => 'NO OWNER' }
-const SOON     = { response: k => `DUE ${short(k)}`, regE: k => `REG E ${short(k)}`, file: k => `FILE IN ${short(k)}`, assign: k => `ASSIGN ${short(k)}` }
+const BREACHED = { response: k => `OVERDUE ${short(k)}`, regE: () => 'REG E OVERDUE', file: () => 'FILE SLA MISSED', assign: () => 'NO OWNER',
+  screen: () => 'SANCTIONS HIT', ofac: () => 'OFAC REPORT LATE', sar: () => 'SAR OVERDUE' }
+const SOON     = { response: k => `DUE ${short(k)}`, regE: k => `REG E ${short(k)}`, file: k => `FILE IN ${short(k)}`, assign: k => `ASSIGN ${short(k)}`,
+  screen: () => 'SANCTIONS HIT', ofac: k => `OFAC ${short(k)}`, sar: k => `SAR ${short(k)}` }
 
 // Each open case gets at most one reason, the most urgent one
 function reasonFor(c, settings, me) {
   const stage = stageOf(c)
-  if (stage === 'closed') return null
   const top = pressing(caseClocks(c, settings))[0]
+  if (stage === 'closed' && !top) return null   // closed disputes can still owe a sanctions or SAR decision
   if (top?.state === 'breached') return { rank: 0, tone: 'danger', label: BREACHED[top.key](top), why: `${top.label} — ${top.text}` }
   if (me && (c.escalatedTo || '').toLowerCase() === me) return { rank: 1, tone: 'danger', label: 'ESCALATED', why: `Escalated to you — ${c.escalationReason || 'needs review'}` }
-  if (top) return { rank: top.key === 'response' ? 1 : 2, tone: 'warn', label: SOON[top.key](top), why: `${top.label} — ${top.text}` }
+  if (top) return { rank: top.key === 'response' || top.key === 'screen' ? 1 : 2, tone: top.key === 'screen' ? 'danger' : 'warn', label: SOON[top.key](top), why: `${top.label} — ${top.text}` }
   if (stage === 'triage') return { rank: 3, tone: 'info', label: 'TRIAGED', why: 'Build the case in Desk' }
   if (stage === 'desk')   return { rank: 3, tone: 'info', label: 'NEW', why: 'Analyse and pick the reason code' }
   if (stage === 'multi')  return { rank: 4, tone: 'neutral', label: `BATCH ${settings?.batchFileTime || '15:00'}`, why: 'Queued — goes out with today’s batch' }

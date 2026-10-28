@@ -1,4 +1,4 @@
-// 005 DFA — Dispute Funding Assessor
+// 006 DFA — Dispute Funding Assessor
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { CheckCircle, XCircle, ChevronUp, ChevronDown, Plus, Upload, Download, X, AlertTriangle } from 'lucide-react'
@@ -726,7 +726,7 @@ export function DfaView({ dfaQueue, setDfaQueue, onGoToDuo, historicalOutcomes }
         <div className="border-b-2 border-black pb-6 mb-8 sm:pb-8 sm:mb-12">
           <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
             <div className="flex items-center gap-4 flex-wrap">
-              <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 005 — DFA</div>
+              <div className="mono-font text-xs tracking-widest text-stone-600">ISSUE Nº 006 — DFA</div>
               {Object.keys(historicalWinRates).length > 0 && (
                 <span className="mono-font text-[10px] tracking-widest px-2 py-0.5 border border-emerald-700 text-emerald-700">
                   ✓ {Object.keys(historicalWinRates).length} WIN RATE{Object.keys(historicalWinRates).length!==1?'S':''} CALIBRATED FROM YOUR HISTORY

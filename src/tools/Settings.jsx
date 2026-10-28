@@ -7,6 +7,7 @@ import { RetentionPanel } from '../RetentionPanel.jsx'
 import { WorkflowPanel } from '../WorkflowPanel.jsx'
 import { QaPanel } from '../QaPanel.jsx'
 import { ImportPanel } from '../ImportPanel.jsx'
+import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 
 export function SettingsView({ settings, setSettings, covUser, outcomes, setOutcomes, team }) {
@@ -21,7 +22,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
   // One section at a time, so the audit log doesn't push the settings down the page
-  const TABS = [['settings', 'Institution settings'], ...(workspace ? [['workflow', 'Workflow'], ['qa', 'Quality review'], ['import', 'Import cases'], ['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
+  const TABS = [['settings', 'Institution settings'], ...(workspace ? [['workflow', 'Workflow'], ['qa', 'Quality review'], ['fincrime', 'Financial crime'], ['import', 'Import cases'], ['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
   const [tab, setTab] = React.useState(() => { try { return localStorage.getItem('cov_settings_tab') || 'settings' } catch { return 'settings' } })
   const activeTab = TABS.some(([k]) => k === tab) ? tab : 'settings'
   const pickTab = k => { setTab(k); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
@@ -110,6 +111,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
 
       {activeTab === 'workflow'  && <WorkflowPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} team={team || []} />}
       {activeTab === 'qa'        && <QaPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
+      {activeTab === 'fincrime'  && <FincrimeSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} />}
       {activeTab === 'import'    && <ImportPanel covUser={covUser} locked={locked} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
       {activeTab === 'team'      && <TeamPanel covUser={covUser} />}
       {activeTab === 'audit'     && <AuditPanel covUser={covUser} />}

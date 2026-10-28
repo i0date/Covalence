@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
     <!-- Header -->
     <div style="background:#1A1814;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;">
       <div style="font-family:monospace;font-size:13px;letter-spacing:0.3em;color:#F5F1EA;font-weight:500;">COVALENCE</div>
-      <div style="font-family:monospace;font-size:9px;letter-spacing:0.12em;color:#7A7068;">ISSUE Nº 004 — DUO</div>
+      <div style="font-family:monospace;font-size:9px;letter-spacing:0.12em;color:#7A7068;">ISSUE Nº 007 — DUO</div>
     </div>
 
     <!-- Body -->
@@ -67,7 +67,7 @@ module.exports = async function handler(req, res) {
       </a>
 
       <p style="font-family:monospace;font-size:10px;color:#A8A29E;line-height:1.6;margin:0;">
-        Go to <strong>004 DUO</strong> → JOIN SESSION and enter the code above.<br>
+        Go to <strong>007 DUO</strong> → JOIN SESSION and enter the code above.<br>
         This session was created by ${fromInstitution}. If you were not expecting this, disregard.
       </p>
     </div>

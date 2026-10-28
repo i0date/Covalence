@@ -57,7 +57,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Seven tools, one workflow.
+            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
           </p>
           <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             COLLAPSE INTRO ↑
@@ -68,33 +68,36 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
           <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'32px', letterSpacing:'-0.02em', lineHeight:1 }}>
             The <span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
           </h1>
-          <span className="display-font text-stone-500" style={{ fontSize:'14px' }}>Seven tools, one workflow.</span>
+          <span className="display-font text-stone-500" style={{ fontSize:'14px' }}>Eight tools in three areas, one case record.</span>
           <button onClick={toggleBrief} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
             SHOW INTRO ↓
           </button>
         </div>
       )}
 
-      {/* ── The seven tools (orientation) + tour, under the Brief ── */}
+      {/* ── The eight tools in three areas (orientation) + tour, under the Brief ── */}
       <div className="mb-8 cov-home-tools" style={{ display:'flex', gap:'12px', alignItems:'stretch', flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:'1px', flexWrap:'wrap', background:'#D4CCBC', flex:'1 1 560px' }}>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', flex:'1 1 560px' }}>
           {[
-            { num:'001', name:'TRIAGE', section:'triage', bg:'#EDE9E3' },
-            { num:'002', name:'DESK',   section:'desk',   bg:'#E8E3DC' },
-            { num:'003', name:'MULTI',  section:'multi',  bg:'#E3DDD5' },
-            { num:'004', name:'FILE',   section:'file',   bg:'#DDD7CE' },
-            { num:'005', name:'DFA',    section:'dfa',    bg:'#D8D1C7' },
-            { num:'006', name:'DUO',    section:'duo',    bg:'#D2CBC1' },
-            { num:'007', name:'TRIO',   section:'trio',   bg:'#CCC4B8' },
-          ].map(({ num, name, section, bg }) => (
-            <button key={num} onClick={() => setActiveSection(section)}
-              className="mono-font"
-              style={{ background:bg, border:'none', cursor:'pointer', padding:'9px 14px', flex:'1 1 auto', textAlign:'left', transition:'background 0.12s', minWidth:'72px' }}
-              onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
-              onMouseLeave={e => e.currentTarget.style.background=bg}>
-              <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>{num}</div>
-              <div style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
-            </button>
+            ['DISPUTES', [['001', 'TRIAGE', 'triage', '#EDE9E3'], ['002', 'DESK', 'desk', '#E8E3DC'], ['003', 'MULTI', 'multi', '#E3DDD5'], ['004', 'FILE', 'file', '#DDD7CE']], '4 1 320px'],
+            ['COMPLIANCE', [['005', 'LICIT', 'licit', '#D8D1C7']], '1 1 90px'],
+            ['RECOVERY', [['006', 'DFA', 'dfa', '#D2CBC1'], ['007', 'DUO', 'duo', '#CCC4B8'], ['008', 'TRIO', 'trio', '#C6BEB2']], '3 1 240px'],
+          ].map(([area, tools, flex]) => (
+            <div key={area} style={{ flex, minWidth:0 }}>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.18em', color:'#6B6259', marginBottom:'4px' }}>{area}</div>
+              <div style={{ display:'flex', gap:'1px', background:'#D4CCBC' }}>
+                {tools.map(([num, name, section, bg]) => (
+                  <button key={num} onClick={() => setActiveSection(section)}
+                    className="mono-font"
+                    style={{ background:bg, border:'none', cursor:'pointer', padding:'9px 14px', flex:'1 1 auto', textAlign:'left', transition:'background 0.15s', minWidth:'72px' }}
+                    onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
+                    onMouseLeave={e => e.currentTarget.style.background=bg}>
+                    <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>{num}</div>
+                    <div style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
         <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
@@ -116,7 +119,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       {/* ── Your day: what needs attention, most urgent first ── */}
       <YourDay outcomes={outcomes} covUser={covUser} settings={settings} platformMode={platformMode} />
 
-      {/* ── 7-slide tour modal ── */}
+      {/* ── Tour: one slide per tool ── */}
       {tourOpen && (() => {
         const SLIDES = [
           { num:'001', name:'Triage', section:'triage', color:'#4C1D95',
@@ -135,15 +138,19 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             problem:'Filing a chargeback is not the end of a case. The network receives the package, a timer starts, and if the merchant representments — a response is required, grounded in the original submission.',
             tool:'File is a submission history log and lifecycle tracker. Every case filed through Covalence leaves a record here. The CB pipeline runs from 1st CB through NTW INVSTG → Merchant Resp → Pre-Arb → Arbitration → Won/Lost. Connect lives here — import disputes directly from Visa Resolve Online or Mastercard Connect via CSV, and configure live API access once network credentials are available.',
             detail:'Cases that advance to any post-filing stage stay visible here. Filter by All / Active / Won / Lost. Network integrations (Visa DMS, Mastercard MDRI, Ethoca, Verifi) are built and waiting on credentials.' },
-          { num:'005', name:'DFA', section:'dfa', color:'#1A1814',
+          { num:'005', name:'Licit', section:'licit', color:'#7F1D1D',
+            problem:'A dispute and a money-laundering case are often the same case. The romance-scam victim disputing a transfer is also the trail to a mule account, a sanctioned wallet, a SAR. Most institutions work them in separate systems and key the facts twice.',
+            tool:'Licit is the compliance desk on the same case record. Every case is screened against OFAC’s sanctions lists automatically; AML rules link cases by customer, payee and wallet; the SAR builder gathers the facts and drafts the narrative with every statement traced to a case.',
+            detail:'Deadlines are built in: one business day to review a sanctions hit, ten to report a confirmed match to OFAC, thirty from detection to decide on a SAR.' },
+          { num:'006', name:'DFA', section:'dfa', color:'#1A1814',
             problem:'A dispute portfolio is an asset. The right to recover from a filed chargeback has economic value before it is won. But the pricing of a dispute portfolio is opaque and often tilted against the institution selling.',
             tool:'The Dispute Funding Analyzer scores individual claims across recovery rate, filing window proximity, reason code strength, and documentation quality — graded A through D with estimated advance rates.',
             detail:'The portfolio view surfaces concentration risk, window risk, and the drag of low-grade claims on the aggregate score.' },
-          { num:'006', name:'Duo', section:'duo', color:'#1E3A5F',
+          { num:'007', name:'Duo', section:'duo', color:'#1E3A5F',
             problem:'Fraud does not stop at one institution. A card compromised in one breach surfaces at dozens of FIs within hours. The information that would interrupt these patterns is distributed across institutions with limited mechanisms to share it in time.',
             tool:'Duo is a real-time collaboration layer for two institutions working a shared case or fraud pattern. Both sides connect to a live session, contribute case data, and maintain a joint record — synced through Supabase.',
             detail:'The primary obstacle to inter-institutional coordination is not willingness but friction. Duo removes the friction.' },
-          { num:'007', name:'Trio', section:'trio', color:'#7F1D1D',
+          { num:'008', name:'Trio', section:'trio', color:'#7F1D1D',
             problem:'The hardest fraud events involve three parties simultaneously — your institution, the receiving platform or FI, and the cardholder population in between. These require coordination across all three layers at once.',
             tool:'Trio is an incident command module with two modes: Operational (war room, linked cases, SAR tracking, receiving FI coordination) and Strategy (pattern intelligence, post-incident debrief, threat brief generation).',
             detail:'Fraud incidents at scale are not case management problems. They are coordination problems. Trio is a room, not a record.' },
@@ -189,7 +196,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                   className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'6px 14px', background:'transparent', border:'1px solid #57534E', color:'#78716C', cursor:'pointer' }}>
                   OPEN {slide.name.toUpperCase()} →
                 </button>
-                {tourSlide < 6
+                {tourSlide < SLIDES.length - 1
                   ? <button onClick={() => setTourSlide(p => p+1)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>NEXT →</button>
                   : <button onClick={() => setTourOpen(false)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
                 }
@@ -247,7 +254,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         )
       })()}
 
-      {/* ── Cases: every case across all seven tools, with where it sits in the pipeline ── */}
+      {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
         const thread = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
         const FILTERS = [

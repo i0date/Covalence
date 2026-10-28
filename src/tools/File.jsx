@@ -6,7 +6,7 @@ import { SUPA_KEY, SUPA_URL, pushCasesToSupa } from '../data.js'
 import { registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 007 FILE VIEW
+// FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 const FILE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','won','lost','pending_arb','withdrawn']
 

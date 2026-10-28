@@ -33,6 +33,8 @@ export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
   'case.auto_assigned': 'Case auto-assigned', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
   'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported',
+  'sanctions.screened': 'Sanctions screening', 'sanctions.decided': 'Sanctions match decided', 'sanctions.reported': 'OFAC report recorded',
+  'aml.flagged': 'Flagged for SAR review', 'sar.decided': 'SAR decision', 'sar.filed': 'SAR filed', 'sar.drafted': 'SAR narrative saved',
   'case.edited': 'Case edited', 'case.viewed': 'Case viewed', 'evidence.uploaded': 'Evidence uploaded',
   'evidence.opened': 'Evidence opened', 'member.joined': 'Member joined', 'member.removed': 'Member removed',
   'member.role_changed': 'Role changed', 'invite.created': 'Invite sent', 'invite.revoked': 'Invite revoked',
@@ -44,6 +46,10 @@ export const AUDIT_LABELS = {
 }
 export function describeAudit(e) {
   const d = e.detail || {}
+  if (e.action === 'sanctions.screened') return d.status === 'clear' ? 'Clear' : `${d.hits} potential match${d.hits === 1 ? '' : 'es'}`
+  if (e.action === 'sanctions.decided') return `${d.outcome === 'true_match' ? 'Confirmed match' : 'False positive'}${d.note ? ` — ${d.note}` : ''}`
+  if (e.action === 'aml.flagged') return `${(d.level || '').toUpperCase()} · ${d.signals || ''}`
+  if (e.action === 'sar.decided') return `${d.decision === 'file' ? 'File a SAR' : 'No SAR'}${d.rationale ? ` — ${d.rationale}` : ''}`
   if (e.action === 'cases.imported') return `${d.file} · ${d.created} new · ${d.updated} updated · ${d.skipped} skipped · ${d.rejected} not imported`
   if (e.action === 'ai.reviewed') return `${d.verdict === 'agree' ? 'Agreed with' : 'Disagreed with'} ${d.answer || 'the AI'}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'qa.reviewed') return `${(d.result || '').toUpperCase()} · ${d.period || ''}${d.note ? ` — ${d.note}` : ''}`

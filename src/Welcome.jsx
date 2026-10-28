@@ -36,7 +36,7 @@ const CSS = `
 
 // A single case, drawn the way it appears inside the product
 function CasePreview() {
-  const stages = [['001','TRIAGE','done'],['002','DESK','done'],['003','MULTI','current'],['004','FILE','todo'],['005','DFA','todo']]
+  const stages = [['001','TRIAGE','done'],['002','DESK','done'],['003','MULTI','current'],['004','FILE','todo'],['005','LICIT','todo']]
   return (
     <div className="wl-preview" aria-hidden="true" style={{ maxWidth:'460px', background:'#FAF7F1', border:'1px solid #D4CCBC', boxShadow:'0 18px 40px -24px rgba(26,24,20,0.45)' }}>
       <div style={{ background:'#1A1814', padding:'14px 18px' }}>
@@ -109,8 +109,8 @@ export function WelcomePage({ children }) {
         </div>
         <CasePreview />
         <div>
-          <div className="wl-tools" aria-label="The seven tools">
-            {[['001','TRIAGE'],['002','DESK'],['003','MULTI'],['004','FILE'],['005','DFA'],['006','DUO'],['007','TRIO']].map(([n, l]) => <span key={n}><b>{n}</b>{l}</span>)}
+          <div className="wl-tools" aria-label="The eight tools">
+            {[['001','TRIAGE'],['002','DESK'],['003','MULTI'],['004','FILE'],['005','LICIT'],['006','DFA'],['007','DUO'],['008','TRIO']].map(([n, l]) => <span key={n}><b>{n}</b>{l}</span>)}
           </div>
           <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#A8A29E', marginTop:'14px' }}>BUILT BY A RISK, FRAUD &amp; COMPLIANCE PRACTITIONER</div>
           <a href="/ai" className="wl-mono" style={{ display:'inline-block', fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginTop:'8px' }}>HOW COVALENCE USES AI →</a>

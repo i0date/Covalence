@@ -21,6 +21,7 @@ export const PROMPTS = {
   merchant:       { version: 'merchant-defence@3', label: 'Desk — merchant defence assessment' },
   rep_letter:     { version: 'rep-letter@1',       label: 'Desk — representment letter (draft)' },
   mch_pre_arb:    { version: 'mch-pre-arb@1',      label: 'Desk — merchant pre-arbitration letter (draft)' },
+  sar_narrative:  { version: 'sar-narrative@1',    label: 'Licit — SAR narrative (draft)' },
 }
 
 // Appended to every decision prompt. Asks for the reasoning in a fixed shape,
