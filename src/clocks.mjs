@@ -94,7 +94,7 @@ export function caseClocks(c, settings, now = new Date()) {
     const due = new Date(new Date(c.date).getTime() + s.slaAssignHours * HOUR)
     out.push(clock('assign', 'Owner assigned', due, !!c.assignedTo, Math.max(HOUR, s.slaAssignHours * HOUR * 0.25), now))
   }
-  const offNetwork = ['p2p', 'crypto', 'crypto_exchange'].includes(c.accountType) && !c.network   // nothing to file with a card network
+  const offNetwork = (['p2p', 'crypto', 'crypto_exchange'].includes(c.accountType) && !c.network) || c.kind === 'aml'   // nothing to file with a card network
   if (c.date && !merchant && !offNetwork && s.slaFileBusinessDays > 0) {
     const due = addBusinessDays(c.date, s.slaFileBusinessDays)
     out.push(clock('file', 'Filed with the network', due, !!c.filedAt || FILE_STAGE_STATUSES.includes(c.status), DAY, now))

@@ -78,6 +78,7 @@ export const STAGES = [
 export function stageOf(c) {
   if (!c) return 'triage'
   if (c._triageOnly) return 'triage'
+  if (c.kind === 'aml') return 'licit'   // raised by transaction monitoring; worked only in Licit
   if (CLOSED_STATUSES.includes(c.status)) return 'closed'
   if (FILE_STAGE_STATUSES.includes(c.status)) return 'file'
   if (c.status === 'queued') return 'multi'
@@ -94,6 +95,7 @@ export function stageStates(c) {
   if (!c?._triageRecord && !c?._triageOnly && cur !== 'triage') out.triage = 'skipped'
   out.dfa = c?.dfaScore ? 'done' : 'optional'
   // Licit runs alongside the dispute: done when screened clear (or cleared), alert while a match or SAR waits
+  if (cur === 'licit') ['triage', 'desk', 'multi', 'file', 'dfa'].forEach(s => { out[s] = 'na' })
   const sc = screeningStatus(c)
   const sarPending = c?.sarReview && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt))
   out.licit = sc === 'potential' || (sc === 'confirmed' && !c.ofacReportedAt) || sarPending ? 'alert' : sc === 'none' ? 'todo' : 'done'
@@ -152,6 +154,12 @@ export function CaseLink({ id, style, className }) {
 // ── Next action per stage ─────────────────────────────────────────────────────
 function nextAction(c) {
   const stage = stageOf(c)
+  if (stage === 'licit') {
+    const r = c.sarReview
+    return { label:'Work it in Licit', go:'licit', urgent: true,
+      hint: r && !r.decision ? `AML case from transaction monitoring — SAR decision due ${new Date(new Date(r.flaggedAt).getTime() + 30 * 86400000).toLocaleDateString('en-US', { month:'short', day:'numeric' })}.`
+        : r?.decision === 'file' && !r.filedAt ? 'SAR to file — record the BSA ID once filed.' : 'AML case from transaction monitoring.' }
+  }
   if (stage === 'triage') return { label:'Build the case in Desk', go:'desk-handoff', hint:'Triage is done — carry the classification into a full dispute.' }
   if (stage === 'desk')   return { label:'Open in Desk', go:'desk', hint:'Analyse the complaint and pick the reason code.' }
   if (stage === 'multi')  return { label:'File in Multi', go:'multi', hint:'Queued — goes out with the next batch or file it now.' }
@@ -201,6 +209,8 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     if (t) timeline.push({ ts:t.date, kind:'TRIAGE', text:`Classified ${(t.verdict||'').replace(/_/g,' ').toLowerCase() || '—'}${t.routing ? ` · routed to ${t.routing.replace(/_/g,' ').toLowerCase()}` : ''}${t.confidence ? ` · ${t.confidence} confidence` : ''}` })
     ;(c.history || []).forEach(h => timeline.push(
       h.event === 'assigned'  ? { ts:h.ts, kind:'ASSIGNED',  text:`Assigned to ${h.to}`, by:h.by } :
+      h.event === 'created_from_alert' ? { ts:h.ts, kind:'FROM MONITORING', text:`Opened from alert: ${h.alert}`, by:h.by } :
+      h.event === 'alert_added' ? { ts:h.ts, kind:'ALERT ADDED', text:h.alert, by:h.by } :
       h.event === 'closed_at_intake' ? { ts:h.ts, kind:'CLOSED AT INTAKE', text:h.reason, by:h.by } :
       h.event === 'imported'  ? { ts:h.ts, kind:'IMPORTED',  text:`${h.update ? 'Updated from' : 'Imported from'} ${h.file || 'a file'}`, by:h.by } :
       h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
@@ -282,13 +292,13 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
               {STAGES.map(s => {
                 const v = st[s.id]
                 const bg = v === 'current' ? '#1A1814' : v === 'alert' ? '#7F1D1D' : v === 'done' ? '#E3DDD5' : '#F5F1EA'
-                const fg = v === 'current' || v === 'alert' ? '#F5F1EA' : v === 'todo' || v === 'optional' || v === 'skipped' ? '#A8A29E' : '#1A1814'
+                const fg = v === 'current' || v === 'alert' ? '#F5F1EA' : v === 'todo' || v === 'optional' || v === 'skipped' || v === 'na' ? '#A8A29E' : '#1A1814'
                 return (
                   <button key={s.id} onClick={() => stageClick(s.id)} title={`Open ${s.label}`}
                     className="mono-font" style={{ background:bg, color:fg, border:'none', padding:'9px 6px', cursor:'pointer', textAlign:'left' }}>
                     <div style={{ fontSize:'10px', letterSpacing:'0.2em', opacity:0.7 }}>{s.num}</div>
                     <div style={{ fontSize:'10px', letterSpacing:'0.08em', fontWeight:600 }}>{v === 'done' ? '✓ ' : ''}{s.label.toUpperCase()}</div>
-                    <div style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v === 'alert' ? 'REVIEW' : s.id === 'licit' && v === 'done' ? 'CLEAR' : s.id === 'licit' ? 'NOT SCREENED' : v.toUpperCase()}</div>
+                    <div style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'na' ? '—' : v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v === 'alert' ? 'REVIEW' : s.id === 'licit' && v === 'done' ? 'CLEAR' : s.id === 'licit' ? 'NOT SCREENED' : v.toUpperCase()}</div>
                   </button>
                 )
               })}
@@ -307,7 +317,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
 
           {/* Secondary actions */}
           <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-            {!c._triageOnly && <button className="cov-btn-secondary" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
+            {!c._triageOnly && c.kind !== 'aml' && <button className="cov-btn-secondary" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
             <button className="cov-btn-secondary" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
             <button className="cov-btn-secondary" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
             {/* Case file for regulators / legal — every role, demo included */}

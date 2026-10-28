@@ -6,13 +6,14 @@
 import React, { useEffect, useState } from 'react'
 import { CLOSED_STATUSES } from './clocks.mjs'
 import { FINCRIME_DEFAULTS, screeningStatus } from './fincrime.js'
+import { TM_DEFAULTS } from './monitoring.mjs'
 
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'18px 20px' }
 const H2 = ({ children }) => <h2 className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', margin:'0 0 12px', fontWeight:500 }}>{children}</h2>
 
 export function FincrimeSettings({ settings, set, locked, outcomes }) {
-  const s = { ...FINCRIME_DEFAULTS, ...settings }
+  const s = { ...FINCRIME_DEFAULTS, ...TM_DEFAULTS, ...settings }
   const [list, setList] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -58,6 +59,28 @@ export function FincrimeSettings({ settings, set, locked, outcomes }) {
             Cardholders, merchants and payees, and any crypto wallet addresses in a case, are screened. Wallets must match exactly. Ship and aircraft names are skipped.
             SAR thresholds for the AML signals are set under Institution settings ({(settings?.sarThreshold || 5000).toLocaleString()} for cards, {(settings?.sarThresholdCrypto || 10000).toLocaleString()} for crypto).
           </p>
+        </fieldset>
+      </section>
+
+      <section style={box}>
+        <H2>TRANSACTION MONITORING RULES</H2>
+        <fieldset disabled={locked} style={{ border:0, padding:0, margin:0, display:'grid', gap:'10px', opacity: locked ? 0.75 : 1 }}>
+          <label className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'center', cursor:'pointer' }}>
+            <input type="checkbox" checked={s.tmEnabled !== false} onChange={e => set('tmEnabled', e.target.checked)} /> Run the rules on every import
+          </label>
+          {[['tmCtr', 'Cash reporting threshold (structuring looks just under it)', 1000, 100000], ['tmRapidMin', 'Money in and back out within 3 days — at least', 500, 1000000],
+            ['tmFanCount', 'Senders paying in, or new payees, within 7 days — at least', 2, 100], ['tmVelocityMultiple', 'Outflow this week vs. the usual week — times', 2, 50],
+            ['tmVelocityMin', '…and at least', 500, 1000000], ['tmCryptoMin', 'Sent to crypto within 7 days — at least', 100, 1000000], ['tmRoundMin', 'Round-dollar payments of at least', 500, 1000000]].map(([k, l, min, max]) => (
+            <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', justifyContent:'space-between', gap:'12px', alignItems:'center' }}>
+              <span>{l}</span>
+              <input type="number" min={min} max={max} value={s[k] ?? TM_DEFAULTS[k]} onChange={e => set(k, Math.max(min, Math.min(max, Number(e.target.value) || min)))} className="cov-input" style={{ width:'110px', padding:'6px 8px', fontSize:'14px' }} aria-label={l} />
+            </label>
+          ))}
+          <label className="display-font" style={{ fontSize:'14px', display:'grid', gap:'4px' }}>
+            High-risk countries (ISO codes)
+            <input value={s.tmHighRiskCountries ?? TM_DEFAULTS.tmHighRiskCountries} onChange={e => set('tmHighRiskCountries', e.target.value.toUpperCase())} className="cov-input" style={{ padding:'6px 8px', fontSize:'14px' }} />
+            <span style={{ fontSize:'12px', color:'#6B6259' }}>Starts with FATF’s call-for-action list (IR, KP, MM). Add the grey-list and internal high-risk countries your policy names.</span>
+          </label>
         </fieldset>
       </section>
     </div>
