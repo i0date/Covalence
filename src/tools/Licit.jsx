@@ -227,6 +227,9 @@ function SarBuilder({ cases, clusters, settings, covUser, setOutcomes, preset })
     const prompt = `You are a BSA/AML investigator at a US financial institution writing the narrative for a Suspicious Activity Report (FinCEN SAR, Part V).
 
 Write a clear, factual narrative that answers who, what, when, where, why and how, in chronological order, in the third person. Use only the facts below. Do not speculate about guilt; describe the activity and why it is suspicious. Refer to cases by their case number. Keep it to 250–450 words.
+- Do not cite reporting thresholds, rules or regulations (for example CTR limits) unless they appear in the facts.
+- Do not describe systems, monitoring, investigations or contacts the facts don't mention; say where information came from (a customer statement, a sanctions screening).
+- State a sanctions match exactly as the facts give it: "confirmed" or "not yet decided".
 
 FACTS FROM THE CASE RECORDS:
 ${JSON.stringify(facts, null, 1)}
