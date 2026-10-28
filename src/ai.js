@@ -11,7 +11,7 @@
 
 // Bump a version whenever its prompt changes, so a record shows which wording produced it
 export const PROMPTS = {
-  triage_fi:      { version: 'triage-fi@3',        label: 'Triage — dispute classification' },
+  triage_fi:      { version: 'triage-fi@4',        label: 'Triage — dispute classification' },
   triage_ce:      { version: 'triage-exchange@3',  label: 'Triage — exchange claim classification' },
   ce_plan:        { version: 'exchange-plan@1',    label: 'Triage — exchange action plan (draft)' },
   desk_analysis:  { version: 'desk-analysis@3',    label: 'Desk — reason code and dispute summary' },
@@ -21,6 +21,7 @@ export const PROMPTS = {
   merchant:       { version: 'merchant-defence@3', label: 'Desk — merchant defence assessment' },
   rep_letter:     { version: 'rep-letter@1',       label: 'Desk — representment letter (draft)' },
   mch_pre_arb:    { version: 'mch-pre-arb@1',      label: 'Desk — merchant pre-arbitration letter (draft)' },
+  sar_narrative:  { version: 'sar-narrative@2',    label: 'Licit — SAR narrative (draft)' },
 }
 
 // Appended to every decision prompt. Asks for the reasoning in a fixed shape,

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CASE THREAD — one COV- case travelling through all seven tools
+// CASE THREAD — one COV- case travelling through all eight tools
 // ═══════════════════════════════════════════════════════════════════════════════
 // The tools stay first-class destinations. This module is the connective layer:
 //   • stageOf()      — where a case sits in Triage → Desk → Multi → File → DFA
@@ -19,6 +19,8 @@ import { CLOSED_STATUSES, FILE_STAGE_STATUSES, caseClocks, sortClocks } from './
 import { decisionsOf } from './ai.js'
 import { AiExplain } from './AiExplain.jsx'
 import { readCases, writeCases } from './caseStore.js'
+import { FincrimePanel } from './FincrimePanel.jsx'
+import { screeningStatus } from './fincrime.js'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -70,12 +72,14 @@ export const STAGES = [
   { id:'desk',   num:'002', label:'Desk'   },
   { id:'multi',  num:'003', label:'Multi'  },
   { id:'file',   num:'004', label:'File'   },
-  { id:'dfa',    num:'005', label:'DFA'    },
+  { id:'licit',  num:'005', label:'Licit'  },
+  { id:'dfa',    num:'006', label:'DFA'    },
 ]
 
 export function stageOf(c) {
   if (!c) return 'triage'
   if (c._triageOnly) return 'triage'
+  if (c.kind === 'aml') return 'licit'   // raised by transaction monitoring; worked only in Licit
   if (CLOSED_STATUSES.includes(c.status)) return 'closed'
   if (FILE_STAGE_STATUSES.includes(c.status)) return 'file'
   if (c.status === 'queued') return 'multi'
@@ -91,6 +95,11 @@ export function stageStates(c) {
   // A case that never went through Triage still counts Triage as passed once it is past intake
   if (!c?._triageRecord && !c?._triageOnly && cur !== 'triage') out.triage = 'skipped'
   out.dfa = c?.dfaScore ? 'done' : 'optional'
+  // Licit runs alongside the dispute: done when screened clear (or cleared), alert while a match or SAR waits
+  if (cur === 'licit') ['triage', 'desk', 'multi', 'file', 'dfa'].forEach(s => { out[s] = 'na' })
+  const sc = screeningStatus(c)
+  const sarPending = c?.sarReview && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt))
+  out.licit = sc === 'potential' || (sc === 'confirmed' && !c.ofacReportedAt) || sarPending ? 'alert' : sc === 'none' ? 'todo' : 'done'
   return out
 }
 const STATUS_LABEL = s => (s || 'pending').replace(/_/g, ' ').toUpperCase()
@@ -102,14 +111,14 @@ export function StatusChip({ status }) {
   return <span className="mono-font" style={{ fontSize:'10px', padding:'2px 6px', letterSpacing:'0.06em', background:STATUS_BG(status), color:STATUS_FG(status), whiteSpace:'nowrap' }}>{STATUS_LABEL(status)}</span>
 }
 
-// Compact five-dot pipeline for list rows
+// Compact pipeline dots for list rows
 export function PipelineDots({ c }) {
   const st = stageStates(c)
   return (
     <span title={`Stage: ${stageOf(c)}`} style={{ display:'inline-flex', gap:'3px', alignItems:'center' }}>
       {STAGES.map(s => {
         const v = st[s.id]
-        const bg = v === 'done' ? '#1A1814' : v === 'current' ? '#D97706' : 'transparent'
+        const bg = v === 'done' ? '#1A1814' : v === 'current' ? '#D97706' : v === 'alert' ? '#B91C1C' : 'transparent'
         const bd = v === 'todo' || v === 'optional' || v === 'skipped' ? '#C9C0B2' : bg
         return <span key={s.id} style={{ width:'7px', height:'7px', borderRadius:'50%', background:bg, border:`1px solid ${bd}`, display:'inline-block' }} />
       })}
@@ -146,6 +155,12 @@ export function CaseLink({ id, style, className }) {
 // ── Next action per stage ─────────────────────────────────────────────────────
 function nextAction(c) {
   const stage = stageOf(c)
+  if (stage === 'licit') {
+    const r = c.sarReview
+    return { label:'Work it in Licit', go:'licit', urgent: true,
+      hint: r && !r.decision ? `AML case from transaction monitoring — SAR decision due ${new Date(new Date(r.flaggedAt).getTime() + 30 * 86400000).toLocaleDateString('en-US', { month:'short', day:'numeric' })}.`
+        : r?.decision === 'file' && !r.filedAt ? 'SAR to file — record the BSA ID once filed.' : 'AML case from transaction monitoring.' }
+  }
   if (stage === 'triage') return { label:'Build the case in Desk', go:'desk-handoff', hint:'Triage is done — carry the classification into a full dispute.' }
   if (stage === 'desk')   return { label:'Open in Desk', go:'desk', hint:'Analyse the complaint and pick the reason code.' }
   if (stage === 'multi')  return { label:'File in Multi', go:'multi', hint:'Queued — goes out with the next batch or file it now.' }
@@ -195,6 +210,9 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     if (t) timeline.push({ ts:t.date, kind:'TRIAGE', text:`Classified ${(t.verdict||'').replace(/_/g,' ').toLowerCase() || '—'}${t.routing ? ` · routed to ${t.routing.replace(/_/g,' ').toLowerCase()}` : ''}${t.confidence ? ` · ${t.confidence} confidence` : ''}` })
     ;(c.history || []).forEach(h => timeline.push(
       h.event === 'assigned'  ? { ts:h.ts, kind:'ASSIGNED',  text:`Assigned to ${h.to}`, by:h.by } :
+      h.event === 'created_from_alert' ? { ts:h.ts, kind:'FROM MONITORING', text:`Opened from alert: ${h.alert}`, by:h.by } :
+      h.event === 'alert_added' ? { ts:h.ts, kind:'ALERT ADDED', text:h.alert, by:h.by } :
+      h.event === 'closed_at_intake' ? { ts:h.ts, kind:'CLOSED AT INTAKE', text:h.reason, by:h.by } :
       h.event === 'imported'  ? { ts:h.ts, kind:'IMPORTED',  text:`${h.update ? 'Updated from' : 'Imported from'} ${h.file || 'a file'}`, by:h.by } :
       h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
       { ts:h.ts, kind: h.event === 'created' ? 'OPENED' : 'STATUS',
@@ -271,17 +289,17 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           {/* Pipeline strip */}
           <div>
             <Label>PIPELINE</Label>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'1px', background:'#D4CCBC' }}>
+            <div style={{ display:'grid', gridTemplateColumns:`repeat(${STAGES.length},1fr)`, gap:'1px', background:'#D4CCBC' }}>
               {STAGES.map(s => {
                 const v = st[s.id]
-                const bg = v === 'current' ? '#1A1814' : v === 'done' ? '#E3DDD5' : '#F5F1EA'
-                const fg = v === 'current' ? '#F5F1EA' : v === 'todo' || v === 'optional' || v === 'skipped' ? '#A8A29E' : '#1A1814'
+                const bg = v === 'current' ? '#1A1814' : v === 'alert' ? '#7F1D1D' : v === 'done' ? '#E3DDD5' : '#F5F1EA'
+                const fg = v === 'current' || v === 'alert' ? '#F5F1EA' : v === 'todo' || v === 'optional' || v === 'skipped' || v === 'na' ? '#A8A29E' : '#1A1814'
                 return (
                   <button key={s.id} onClick={() => stageClick(s.id)} title={`Open ${s.label}`}
                     className="mono-font" style={{ background:bg, color:fg, border:'none', padding:'9px 6px', cursor:'pointer', textAlign:'left' }}>
                     <div style={{ fontSize:'10px', letterSpacing:'0.2em', opacity:0.7 }}>{s.num}</div>
                     <div style={{ fontSize:'10px', letterSpacing:'0.08em', fontWeight:600 }}>{v === 'done' ? '✓ ' : ''}{s.label.toUpperCase()}</div>
-                    <div style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v.toUpperCase()}</div>
+                    <div style={{ fontSize:'10px', letterSpacing:'0.1em', marginTop:'2px', opacity:0.75 }}>{v === 'na' ? '—' : v === 'skipped' ? 'DIRECT' : v === 'optional' ? 'OPTIONAL' : v === 'alert' ? 'REVIEW' : s.id === 'licit' && v === 'done' ? 'CLEAR' : s.id === 'licit' ? 'NOT SCREENED' : v.toUpperCase()}</div>
                   </button>
                 )
               })}
@@ -300,7 +318,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
 
           {/* Secondary actions */}
           <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-            {!c._triageOnly && <button className="cov-btn-secondary" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
+            {!c._triageOnly && c.kind !== 'aml' && <button className="cov-btn-secondary" onClick={() => { onScoreInDfa(c); onClose() }}>Score in DFA</button>}
             <button className="cov-btn-secondary" onClick={() => { onSendToDuo(c); onClose() }}>Coordinate in Duo</button>
             <button className="cov-btn-secondary" onClick={() => { onGo('trio'); onClose() }}>Link to Trio incident</button>
             {/* Case file for regulators / legal — every role, demo included */}
@@ -376,6 +394,14 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
               </div>
             )
           })()}
+
+          {/* Financial crime — sanctions screening, AML signals, open-source checks */}
+          {c && (
+            <div>
+              <Label>FINANCIAL CRIME</Label>
+              <FincrimePanel c={c} caseId={caseId} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} settings={settings} />
+            </div>
+          )}
 
           {/* Clocks — SLA targets and deadlines (Settings → Workflow) */}
           {c && (() => {
@@ -575,10 +601,13 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
         <>
           <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:'48px 0 0 0', background:'rgba(26,24,20,0.45)', zIndex:59 }} />
           <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, maxHeight:'calc(100vh - 48px)', overflowY:'auto', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
-            {nav.map(({ id, label }) => (
-              <button key={id} onClick={() => { onSelect(id); setOpen(false) }} className="mono-font cov-mobile-item" style={item(active === id)}>
-                {label.replace(/\s+/g, ' ')}
-              </button>
+            {nav.map(({ id, label, group }, i) => (
+              <React.Fragment key={id}>
+                {group && group !== nav[i - 1]?.group && <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.18em', color:'#78716C', padding:'12px 20px 4px' }}>{group.toUpperCase()}</div>}
+                <button onClick={() => { onSelect(id); setOpen(false) }} className="mono-font cov-mobile-item" style={item(active === id)}>
+                  {label.replace(/\s+/g, ' ')}
+                </button>
+              </React.Fragment>
             ))}
             {/* Account — moved here from the top bar on phones */}
             {user && (
@@ -659,6 +688,16 @@ export function buildDemoInstitution(userEmail) {
       history:h([11,'received'],[2,'rebuttal_prep','received']) },
     { id:'MCH-DEMO03', mode:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
     { id:'MCH-DEMO04', mode:'merchant', date:iso(45), merchant:'Northwind Electronics', amount:'98.00 USD', network:'VISA', status:'won', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', resolvedDate:iso(18), winProb:'HIGH', history:h([45,'received'],[41,'rebuttal_prep','received'],[37,'submitted','rebuttal_prep'],[18,'won','submitted']) },
+    // Financial crime: a romance / investment scam paying out to a wallet on OFAC's SDN list (the address is real and public)
+    { id:'COV-DEMO19', date:iso(3), merchant:'Bitvault Exchange', amount:'4600.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
+      _complaint:'Someone I met online talked me into buying USDT on Bitvault Exchange (bitvault-exchange.xyz) and sending it to 0x252a8bd2319d8a555b872990601221b3a2053bce for a "guaranteed" trading plan. Now I can’t withdraw anything.',
+      history:h([3,'received'],[2,'pending','received']) },
+    { id:'COV-DEMO20', date:iso(1), merchant:'Bitvault Exchange', amount:'4400.00 USD', accountType:'p2p', network:'', status:'received', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
+      _complaint:'They said I had to pay a release fee first, so I sent another payment to 0x252a8bd2319d8a555b872990601221b3a2053bce.',
+      history:h([1,'received']) },
+    { id:'COV-DEMO21', date:iso(6), merchant:'Bitvault Exchange', amount:'2000.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'L. Ferreira',
+      _complaint:'An investment adviser on a messaging app sent me to bitvault-exchange.xyz. My deposit shows on their site but I can’t withdraw.',
+      history:h([6,'received'],[5,'pending','received']) },
   ].map(c => ({ ...base, ...c, updatedAt: iso(0) }))
   addDemoAi(cases, iso)
   const triage = [
@@ -739,7 +778,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '5'
+const DEMO_VERSION = '6'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

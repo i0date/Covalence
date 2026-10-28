@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // SHORTCUTS — keyboard navigation for people who live in the queue
 // ═══════════════════════════════════════════════════════════════════════════════
-//   G then H/T/D/M/F/A/U/R/S   go to a tool          /  or ⌘K   search cases
+//   G then H/T/D/M/F/L/A/U/R/S go to a tool          /  or ⌘K   search cases
 //   J / K                      next / previous case on Home     Enter  open it
 //   E / N (case open)          export / add a note              ?  this list
 // Ignored while typing in a field. ⌘K lives in CaseSearch; E/N in CasePanel.
 import React, { useEffect, useRef, useState } from 'react'
 import { Kbd } from './ui.jsx'
 
-export const GO_KEYS = { h:'home', t:'triage', d:'desk', m:'multi', f:'file', a:'dfa', u:'duo', r:'trio', s:'settings' }
-const TOOL_NAMES = { home:'Home', triage:'Triage', desk:'Dispute Desk', multi:'Multi', file:'File', dfa:'DFA', duo:'Duo', trio:'Trio', settings:'Settings' }
+export const GO_KEYS = { h:'home', t:'triage', d:'desk', m:'multi', f:'file', l:'licit', a:'dfa', u:'duo', r:'trio', s:'settings' }
+const TOOL_NAMES = { home:'Home', triage:'Triage', desk:'Dispute Desk', multi:'Multi', file:'File', licit:'Licit', dfa:'DFA', duo:'Duo', trio:'Trio', settings:'Settings' }
 
 export const isTyping = e => {
   const t = e.target

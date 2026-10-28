@@ -7,6 +7,8 @@ import { DEFAULT_SETTINGS, loadOutcomes } from '../shared.jsx'
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
+import { IntakeClose } from '../IntakeClose.jsx'
+import { AlertsPanel } from '../AlertsPanel.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -29,7 +31,10 @@ const TX_TYPES = {
 const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
 const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
 
-export function TriageView({ onHandoff, onGoToDuo, onSendToDuo }) {
+export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake, appOutcomes, setAppOutcomes, settings, covUser, fraudRoute }) {
+  // Two ways in: alerts the bank's monitoring raised, and claims customers report
+  const [intakeTab, setIntakeTab] = useState(() => { try { return localStorage.getItem('cov_triage_tab') || 'claims' } catch { return 'claims' } })
+  const pickIntake = t => { setIntakeTab(t); try { localStorage.setItem('cov_triage_tab', t) } catch {} }
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')
@@ -402,6 +407,14 @@ ${isCardBased ? `MERCHANT RISK SIGNALS:
 - VFMP listed: ${vfmp || 'Unknown'}
 - Merchant dispute rate: ${merchantDisputeRate || 'Unknown'}
 - MCC risk tier: ${mccRisk || 'Unknown'}` : `MERCHANT SIGNALS: N/A — non-card payment rail.`}
+
+INTAKE DISPOSITION — not every claim is a dispute. Also say what should happen next:
+- PROCEED: there are dispute or fraud-claim rights; build the case.
+- CLOSE_RECOGNIZED: the customer's own account suggests they made or allowed the transaction and are not really disputing it.
+- CLOSE_ALREADY_CREDITED: the customer says the merchant has already refunded or credited it.
+- CLOSE_NO_DISPUTE_RIGHTS: no chargeback or Reg E error rights apply — e.g. a wire, Zelle or P2P payment the customer sent themselves (even if they were scammed), or a claim clearly outside the time limit.
+- CORRECT_BANK_ERROR: the institution itself made the error (duplicate posting, wrong amount posted by the bank).
+- REFER_TO_COMPLIANCE: not a dispute, but the activity suggests money laundering, a mule account or other suspicious activity by the customer.
 ${EXPLAIN_RULES}
 
 Return ONLY valid JSON, no markdown. Include ALL fields:
@@ -425,6 +438,8 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
   ],
   "risk_notes": "Caveats or watch-outs — or empty string.",
   "proceed_to_dispute": true | false,
+  "intake_disposition": "PROCEED" | "CLOSE_RECOGNIZED" | "CLOSE_ALREADY_CREDITED" | "CLOSE_NO_DISPUTE_RIGHTS" | "CORRECT_BANK_ERROR" | "REFER_TO_COMPLIANCE",
+  "disposition_reason": "1–2 sentences: why this disposition, citing the rail, timing or what the customer said.",
   ${EXPLAIN_JSON}
 }`
 
@@ -661,6 +676,24 @@ Return ONLY valid JSON:
     })
   }
 
+  // ── Close at intake: not every claim is a dispute ───────────────────────────
+  const [closing, setClosing] = useState(false)
+  const closeAtIntake = (d) => {
+    const rec = outcomes[0]
+    if (!rec || !result) return
+    const now = new Date().toISOString()
+    setOutcomes(prev => prev.map(o => o.id === rec.id ? { ...o, outcome: 'closed_intake', intakeClose: { reason: d.reason, reasonLabel: d.reasonLabel, toLicit: d.toLicit, ts: now } } : o))
+    onCloseAtIntake?.({
+      id: rec.id, date: rec.date || now, merchant: merchant || '—', amount: amount ? `${amount} ${currency}` : '—', network: network || '',
+      accountType, verdict: result.classification, confidence: result.confidence, status: d.status, resolvedDate: now,
+      cardholderName: d.customer || undefined, _complaint: customerReason, _transactionDate: transactionDate,
+      aiDecisions: rec.aiDecision ? [rec.aiDecision] : [],
+      closedAtIntake: { reason: d.reason, reasonLabel: d.reasonLabel, basis: d.basis, basisLabel: d.basisLabel, note: d.note, notice: d.notice, ts: now,
+        aiSuggested: result.intake_disposition || '' },
+    }, d)
+    setClosing(false)
+  }
+
   const handleProceedToDisputeDesk = () => {
     if (!result) return
     const caseId = outcomes[0]?.id ?? `T-${Date.now().toString(36).toUpperCase().slice(-5)}`
@@ -752,7 +785,17 @@ Return ONLY valid JSON:
             ? 'Crypto exchange fraud triage. Four verdicts. FinCEN + FINTRAC aware. Built for exchange fraud analysts handling ATO, pig butchering, stablecoin fraud, and consumer disputes on digital asset platforms.'
             : 'Classify incoming dispute claims before anything is filed. Four verdicts. Covers card, ACH, P2P, BNPL, and FI-held crypto — routed by payment rail and regulatory framework: Reg E, Reg Z, NACHA, or provider.'}
         </p>
-        {/* Platform mode toggle */}
+        {/* Alerts (the bank found it) | Claims (the customer reported it) */}
+        <div role="tablist" aria-label="Triage" className="mt-6" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC' }}>
+          {[['alerts', 'Alerts', 'The bank found it'], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
+            <button key={k} role="tab" aria-selected={intakeTab === k} onClick={() => pickIntake(k)} className="mono-font"
+              style={{ background:'none', border:'none', borderBottom: intakeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px', padding:'10px 16px', cursor:'pointer', textAlign:'left' }}>
+              <span style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: intakeTab === k ? '#1A1814' : '#6B6259', fontWeight:600 }}>{l.toUpperCase()}</span>
+              <span className="display-font" style={{ display:'block', fontSize:'12px', color:'#6B6259', letterSpacing:0 }}>{sub}</span>
+            </button>
+          ))}
+        </div>
+        {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
@@ -764,6 +807,13 @@ Return ONLY valid JSON:
         </div>
       </div>
 
+      {intakeTab === 'alerts' && (
+        <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
+          institution={settings?.duoInstitutionName || covUser?.institution || ''} />
+      )}
+
+      {/* Claims: kept mounted (hidden) so a half-written claim survives a look at the alerts */}
+      <div style={{ display: intakeTab === 'claims' ? 'block' : 'none' }}>
       {/* ── Two-column layout ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
 
@@ -1052,7 +1102,7 @@ Return ONLY valid JSON:
                   </div>
                   <button onClick={onGoToDuo} className="mono-font shrink-0 ml-4"
                     style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'7px 14px', background:'#064E3B', color:'#F0FDF4', border:'none', cursor:'pointer' }}>
-                    OPEN 005 DUO →
+                    OPEN 007 DUO →
                   </button>
                 </div>
               )}
@@ -1871,8 +1921,38 @@ Return ONLY valid JSON:
                 )
               })()}
 
+              {/* ── Not a dispute: close at intake (FI claims) ── */}
+              {!isCE && outcomes[0]?.intakeClose ? (
+                <div className="flex items-center gap-3 px-5 py-4 border" style={{ background:'#FAF7F1', borderColor:'#1A1814' }}>
+                  <CheckCircle className="w-5 h-5 shrink-0" style={{ color:'#1A1814' }} />
+                  <div>
+                    <div className="mono-font text-[10px] tracking-widest mb-0.5" style={{ color:'#57534E' }}>CLOSED AT INTAKE</div>
+                    <div className="display-font text-sm" style={{ color:'#1A1814' }}>
+                      Case {outcomes[0].id}: {outcomes[0].intakeClose.reasonLabel.toLowerCase()}.{outcomes[0].intakeClose.toLicit ? ' Sent to 005 Licit for AML review.' : ''} It stays on the case record, closed, and QA can sample it.
+                    </div>
+                  </div>
+                </div>
+              ) : !isCE && closing ? (
+                <IntakeClose result={result} form={{ merchant, amount: amount ? `${amount} ${currency}` : '', transactionDate }}
+                  institution={(() => { try { return JSON.parse(localStorage.getItem('cov_settings') || '{}').duoInstitutionName || '' } catch { return '' } })()}
+                  onClose={closeAtIntake} onCancel={() => setClosing(false)} />
+              ) : !isCE && !handedOff && (
+                <div className="border px-5 py-4 flex items-center justify-between gap-4 flex-wrap" style={{ borderColor: result.intake_disposition && result.intake_disposition !== 'PROCEED' ? '#1A1814' : '#D4CCBC', background:'#FAF7F1' }}>
+                  <div>
+                    <div className="mono-font text-[10px] tracking-widest mb-1" style={{ color:'#57534E' }}>{result.intake_disposition && result.intake_disposition !== 'PROCEED' ? 'AI SUGGESTS CLOSING AT INTAKE' : 'NOT A DISPUTE?'}</div>
+                    <div className="display-font text-sm" style={{ color:'#3F3A35', maxWidth:'560px' }}>
+                      {result.intake_disposition && result.intake_disposition !== 'PROCEED' ? result.disposition_reason
+                        : 'Customer recognises it, it was already refunded, there are no dispute rights, or it was our error — close it here with a reason.'}
+                    </div>
+                  </div>
+                  <button onClick={() => setClosing(true)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'9px 16px', background: result.intake_disposition && result.intake_disposition !== 'PROCEED' ? '#1A1814' : 'transparent', color: result.intake_disposition && result.intake_disposition !== 'PROCEED' ? '#F5F1EA' : '#1A1814', border:'1px solid #1A1814', cursor:'pointer' }}>
+                    CLOSE AT INTAKE →
+                  </button>
+                </div>
+              )}
+
               {/* ── Send to Dispute Desk ── */}
-              {handedOff ? (
+              {!isCE && outcomes[0]?.intakeClose ? null : handedOff ? (
                 <div className="flex items-center gap-3 px-5 py-4 border border-emerald-700" style={{ background: '#ECFDF5' }}>
                   <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0" />
                   <div>
@@ -2149,6 +2229,7 @@ Return ONLY valid JSON:
       <div className="mt-12 sm:mt-16 pt-6 flex flex-col sm:flex-row sm:items-baseline justify-between text-stone-500 gap-2" style={{ borderTop: '1px solid #D4CCBC' }}>
         <div className="mono-font text-xs tracking-widest">BUILT BY ADEOTI FASHOKUN — RISK &amp; TRUST OPERATIONS</div>
         <div className="display-font italic text-sm">"Classify before you file. The routing matters."</div>
+      </div>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-// 007 TRIO — incident command (operational + strategy)
+// 008 TRIO — incident command (operational + strategy)
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
 import { CaseLink } from '../CaseThread.jsx'
@@ -6,7 +6,7 @@ import { mergeTrioIncidents, pullTrioFromSupa, pushTrioToSupa } from '../data.js
 import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 005 TRIO VIEW — fraud incident command
+// TRIO VIEW — fraud incident command
 // ═══════════════════════════════════════════════════════════════════════════════
 export function TrioView({ outcomes: _parentOutcomes }) {
   const STORAGE_KEY = 'cov_trio_incidents'
@@ -154,6 +154,16 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
     pushTrioToSupa(updated).catch(() => {})
   }
 
+  // A compromised-merchant alert in 001 Triage opens an incident here
+  React.useEffect(() => {
+    const h = e => setIncidents(prev => {
+      if (prev.some(i => i.id === e.detail.id)) return prev
+      const next = [e.detail, ...prev]; saveIncidents(next); pushTrioToSupa(next).catch(() => {}); return next
+    })
+    window.addEventListener('cov:trio-create', h)
+    return () => window.removeEventListener('cov:trio-create', h)
+  }, [])
+
   const mergeIncidents = (fromId, intoId) => {
     setIncidents(prev => {
       const from = prev.find(i => i.id === fromId)
@@ -270,7 +280,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
       {/* ── Masthead ── */}
       <div className="mb-6 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
         <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 007 — TRIO</div>
+          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 008 — TRIO</div>
           <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
             <span style={{ fontWeight:700 }}>Tri</span><span style={{ fontStyle:'italic', fontWeight:500 }}>o</span>
           </h1>

@@ -7,6 +7,8 @@ import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
 import { onCasesFromOtherTab, readCases, writeCases } from './caseStore.js'
+import { FINCRIME_DEFAULTS } from './fincrime.js'
+import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 export class ErrorBoundary extends React.Component {
@@ -56,6 +58,12 @@ export const DEFAULT_SETTINGS = {
   ...WORKFLOW_DEFAULTS,
   // Quality review — monthly sample of closed cases (Settings → Quality review)
   ...QA_DEFAULTS,
+  // Financial crime — sanctions screening (Settings → Financial crime)
+  ...FINCRIME_DEFAULTS,
+  // Transaction monitoring rules (Settings → Financial crime)
+  ...TM_DEFAULTS,
+  // Fraud alert rules and the customer-contact deadline (Settings → Financial crime)
+  ...FRAUD_DEFAULTS,
 }
 
 // ─── Business-day helpers (src/clocks.mjs, shared with the reminder emails) ──
@@ -552,9 +560,9 @@ export const GLOBAL_CSS = `
   /* ── Case search rows ─────────────────────────────────────────────────── */
   .cov-search-row:hover { background:#EEE9E0 !important; }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
-  /* Top bar: the compact layout (page name + menu) is used up to 1099px — tablets and small laptops too */
+  /* Top bar: the compact layout (page name + menu) is used up to 1199px — tablets and small laptops too */
   .cov-nav-menu, .cov-nav-current { display:none; }
-  @media (max-width:1099px) {
+  @media (max-width:1199px) {
     .cov-nav-buttons { display:none !important; }
     .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-menu { display:block !important; }
@@ -562,8 +570,10 @@ export const GLOBAL_CSS = `
     .cov-nav-search { min-width:0 !important; }
     .cov-nav-search-label { display:none !important; }
   }
-  /* Laptop widths: icon + shortcut only, so the tab bar stays on one line */
-  @media (min-width:768px) and (max-width:1599px) {
+  /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
+  .cov-nav-num { display:none; }
+  /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */
+  @media (min-width:768px) {
     .cov-nav-buttons button { padding:14px 8px !important; letter-spacing:0.06em !important; }
     .cov-nav-collapse { display:none !important; }
     .cov-nav-search { min-width:0 !important; }
@@ -571,6 +581,11 @@ export const GLOBAL_CSS = `
   }
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
+  .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
+  @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+  /* phones: a swipeable row, so the cases stay near the top */
+  @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:80%; overflow-x:auto; scroll-snap-type:x mandatory; padding:12px 14px !important; }
+    .cov-yourday-insights > div { scroll-snap-align:start; } }
   @media(max-width:767px) {
     .cov-search-status { width:auto !important; }
     .cov-yourday-row { grid-template-columns:96px minmax(0,1fr) !important; padding:10px 14px !important; }
@@ -578,6 +593,9 @@ export const GLOBAL_CSS = `
     .cov-comingup-row { grid-template-columns:70px minmax(0,1fr) !important; }
     .cov-comingup-row > span:nth-child(2) { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
+    /* Your day: the hide/show control sits top-right, always in reach */
+    .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
+    .cov-yourday-head { padding-right:96px !important; }
     .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */

@@ -12,13 +12,14 @@ import { PROMPTS } from './ai.js'
 const MODEL = 'claude-sonnet-4-6'   // as set in api/analyze.js and api/triage.js
 
 const USES = [
-  ['Triage', 'Classifies a new claim: true fraud, first-party fraud, consumer dispute or authorised push payment. Suggests routing and whether to give provisional credit.', 'Decision support'],
+  ['Triage', 'Classifies a new claim: true fraud, first-party fraud, consumer dispute or authorised push payment. Suggests routing, whether to give provisional credit, and whether the claim should be closed at intake instead (no dispute rights, already refunded, recognised, a bank error, or a compliance referral).', 'Decision support'],
   ['Triage (exchanges)', 'The same for crypto exchange claims, plus whether a SAR/STR threshold is met.', 'Decision support'],
   ['Triage (exchanges)', 'Drafts an action plan and customer letter.', 'Draft'],
   ['Dispute Desk', 'Suggests the network reason code, writes the dispute summary, lists missing information.', 'Decision support'],
   ['Dispute Desk', 'Predicts the merchant’s likely rebuttal; drafts customer letters and pre-arbitration responses.', 'Draft'],
   ['Dispute Desk (merchants)', 'Rates the chance of winning a representment and suggests the defence.', 'Decision support'],
   ['Dispute Desk (merchants)', 'Drafts representment and pre-arbitration letters.', 'Draft'],
+  ['Licit', 'Drafts the narrative of a Suspicious Activity Report from the facts on the linked cases, listing where each statement comes from and what still needs adding.', 'Draft'],
 ]
 
 function Section({ n, title, children }) {
@@ -68,7 +69,7 @@ export default function AiPage() {
           <p style={{ marginTop:'12px' }}>
             <strong>Decision support</strong> means the AI suggests an answer and shows why; an analyst accepts or changes it.
             A <strong>draft</strong> is text an analyst reads and edits before it goes anywhere.
-            Nothing else in Covalence uses AI. Deadlines, SLA clocks, auto-assignment, escalation, DFA scoring and QA sampling follow fixed rules you can read in Settings.
+            Nothing else in Covalence uses AI. Deadlines, SLA clocks, auto-assignment, escalation, sanctions matching, AML signals, transaction-monitoring rules, DFA scoring and QA sampling follow fixed rules you can read in the app.
           </p>
         </Section>
 

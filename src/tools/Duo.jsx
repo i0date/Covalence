@@ -1,4 +1,4 @@
-// 006 DUO — two-institution coordination sessions and case links
+// 007 DUO — two-institution coordination sessions and case links
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
@@ -239,7 +239,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
   ) : null
   const DuoMasthead = ({ sub }) => (
     <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC' }}>
-      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 006 — DUO{sub ? ` · ${sub}` : ''}</div>
+      <div className="mono-font text-xs tracking-widest text-stone-600 mb-2">ISSUE Nº 007 — DUO{sub ? ` · ${sub}` : ''}</div>
       <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(36px,5vw,64px)', letterSpacing:'-0.03em' }}>Duo Mode</h1>
     </div>
   )
@@ -504,7 +504,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
         <div className="mb-6 pb-5" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', flexWrap:'wrap', gap:'12px', alignItems:'flex-start', justifyContent:'space-between' }}>
           <div style={{ flex:1, minWidth:'200px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px', flexWrap:'wrap' }}>
-              <div className="mono-font text-[10px] tracking-widest text-stone-400">ISSUE Nº 006 — DUO</div>
+              <div className="mono-font text-[10px] tracking-widest text-stone-400">ISSUE Nº 007 — DUO</div>
               <div className="mono-font text-[10px] tracking-widest px-2 py-0.5" style={{ color: st.color, background: st.bg, border: session.status === 'closed' ? 'none' : `1px solid ${st.color}30` }}>{st.label}</div>
             </div>
             <h1 className="display-font font-bold text-stone-900 leading-tight" style={{ fontSize:'clamp(18px,3vw,34px)', letterSpacing:'-0.02em' }}>

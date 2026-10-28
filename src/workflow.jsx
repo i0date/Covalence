@@ -11,7 +11,8 @@ import { createPortal } from 'react-dom'
 import { listTeam, canWrite } from './auth.js'
 import { auditWrite } from './audit.js'
 import { openCase } from './CaseThread.jsx'
-import { workflowChanges, applyChanges, remindersFor } from './clocks.mjs'
+import { workflowChanges, applyChanges, remindersFor, CLOSED_STATUSES } from './clocks.mjs'
+import { screenCase, screeningKey, subjectsOf, walletsOf, amlIndex, amlSignals, needsSarReview } from './fincrime.js'
 
 export const WORKFLOW_RUN_EVENT = 'cov:workflow-run'   // Settings → "Apply to existing cases"
 
@@ -49,6 +50,48 @@ export function useWorkflow({ outcomes, setOutcomes, settings, covUser, team }) 
     window.addEventListener(WORKFLOW_RUN_EVENT, h)
     return () => window.removeEventListener(WORKFLOW_RUN_EVENT, h)
   }, [run])
+}
+
+// ── Financial crime: screen new or changed cases, flag cases for SAR review ──
+// Screening runs a few cases a minute against OFAC (api/sanctions.js), so a
+// big import is worked through in the background. AML flags are rules over the
+// whole pool (fincrime.js); a flag starts the 30-day SAR clock.
+export function useFincrime({ outcomes, setOutcomes, settings, covUser }) {
+  const me = covUser?.email
+  const busy = useRef(new Set())
+  const [tick, setTick] = useState(0)
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 60000); return () => clearInterval(iv) }, [])
+  const open = c => !CLOSED_STATUSES.includes(c.status) && !c._triageOnly
+
+  // Sanctions screening — up to 4 cases per pass
+  useEffect(() => {
+    if (!me || !canWrite() || settings?.screeningAuto === false) return
+    const due = outcomes.filter(c => (open(c) || c.sarReview) && !busy.current.has(c.id) && (subjectsOf(c).length || walletsOf(c).length)
+      && (!c.screening || c.screening.key !== screeningKey(c))).slice(0, 4)
+    due.forEach(c => {
+      busy.current.add(c.id)
+      screenCase(c, settings, 'Automatic').then(rec => {
+        setOutcomes(prev => prev.map(o => o.id === c.id ? { ...o, screening: rec, screenings: [...(o.screenings || []), ...(o.screening ? [o.screening] : [])].slice(-5) } : o))
+        auditWrite('sanctions.screened', 'case', c.id, { status: rec.status, hits: rec.hits.length, list: rec.list?.fetchedAt || '' })
+      }).catch(() => {}).finally(() => setTimeout(() => busy.current.delete(c.id), 30000))
+    })
+  }, [outcomes, settings?.screeningAuto, settings?.screeningThreshold, me, tick])
+
+  // AML: flag open cases whose signals reach "medium" for SAR review
+  useEffect(() => {
+    if (!me || !canWrite()) return
+    const ix = amlIndex(outcomes), now = new Date().toISOString()
+    const flags = []
+    outcomes.forEach(c => {
+      if (!open(c) || c.sarReview) return
+      const a = amlSignals(c, outcomes, settings, ix)
+      if (needsSarReview(a)) flags.push([c.id, { flaggedAt: now, level: a.level, signals: a.signals.map(x => x.key) }])
+    })
+    if (!flags.length) return
+    const byId = new Map(flags)
+    setOutcomes(prev => prev.map(o => byId.has(o.id) && !o.sarReview ? { ...o, sarReview: byId.get(o.id) } : o))
+    flags.forEach(([id, f]) => auditWrite('aml.flagged', 'case', id, { level: f.level, signals: f.signals.join(', ') }))
+  }, [outcomes, settings?.sarThreshold, settings?.sarThresholdCrypto, me])
 }
 
 // ── Reminders bell ───────────────────────────────────────────────────────────

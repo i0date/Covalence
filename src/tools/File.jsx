@@ -7,7 +7,7 @@ import { registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 007 FILE VIEW
+// FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 const FILE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','won','lost','pending_arb','withdrawn']
 

@@ -75,16 +75,27 @@ function clock(key, label, due, done, warnMs, now) {
   return { key, label, due: due.toISOString(), left, state, text: done ? 'Done' : timeLeft(left) }
 }
 
-// The clocks running on one case (none once it's closed)
+// The clocks running on one case. The dispute's own clocks stop when it closes;
+// the financial-crime clocks (fincrime.js) run until their decision is recorded.
 export function caseClocks(c, settings, now = new Date()) {
-  if (!c || !isOpen(c)) return []
+  if (!c) return []
   const s = withDefaults(settings), out = []
+  const sc = c.screening
+  if (sc && sc.status === 'potential' && !sc.decision)       // review a possible sanctions match within a business day
+    out.push(clock('screen', 'Sanctions match reviewed', addBusinessDays(sc.ts, 1), false, DAY, now))
+  if (sc?.decision?.outcome === 'true_match')                // OFAC: report blocked or rejected property within 10 business days
+    out.push(clock('ofac', 'Report to OFAC', addBusinessDays(sc.decision.ts, 10), !!c.ofacReportedAt, 3 * DAY, now))
+  if (c.sarReview?.flaggedAt && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt)))
+    out.push(clock('sar', c.sarReview.decision === 'file' ? 'SAR filed with FinCEN' : 'SAR decision',   // FinCEN: 30 days from initial detection
+      new Date(new Date(c.sarReview.flaggedAt).getTime() + 30 * DAY), false, 7 * DAY, now))
+  if (!isOpen(c)) return out
   const merchant = c.mode === 'merchant'
   if (c.date && s.slaAssignHours > 0) {
     const due = new Date(new Date(c.date).getTime() + s.slaAssignHours * HOUR)
     out.push(clock('assign', 'Owner assigned', due, !!c.assignedTo, Math.max(HOUR, s.slaAssignHours * HOUR * 0.25), now))
   }
-  if (c.date && !merchant && s.slaFileBusinessDays > 0) {
+  const offNetwork = (['p2p', 'crypto', 'crypto_exchange'].includes(c.accountType) && !c.network) || c.kind === 'aml'   // nothing to file with a card network
+  if (c.date && !merchant && !offNetwork && s.slaFileBusinessDays > 0) {
     const due = addBusinessDays(c.date, s.slaFileBusinessDays)
     out.push(clock('file', 'Filed with the network', due, !!c.filedAt || FILE_STAGE_STATUSES.includes(c.status), DAY, now))
   }
@@ -169,8 +180,9 @@ export function remindersByPerson(cases, settings, now = new Date()) {
   const s = withDefaults(settings), out = new Map()
   const add = (email, item) => { if (!email) return; const e = email.toLowerCase(); if (!out.has(e)) out.set(e, []); out.get(e).push(item) }
   for (const c of cases || []) {
-    if (!c?.id || !isOpen(c)) continue
+    if (!c?.id) continue
     const top = pressing(caseClocks(c, s, now))[0]
+    if (!isOpen(c) && !top) continue   // a closed dispute can still owe a sanctions or SAR decision
     const owner = c.assignedTo || s.escalateTo
     if (top) add(owner, { c, kind: 'due', clock: top, key: `${c.id}:${top.key}:${top.state}` })
     if (c.escalatedTo && !(top && owner && owner.toLowerCase() === c.escalatedTo.toLowerCase()))
