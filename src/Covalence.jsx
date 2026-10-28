@@ -7,7 +7,7 @@ import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
-import { useTeam, useWorkflow, RemindersBell } from './workflow.jsx'
+import { useTeam, useWorkflow, useFincrime, RemindersBell } from './workflow.jsx'
 import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
 import { DeskView } from './tools/Desk.jsx'
@@ -152,6 +152,8 @@ export default function Covalence() {
   // Workflow: auto-assignment and escalation rules run on the case pool (Settings → Workflow)
   const team = useTeam(covUser)
   useWorkflow({ outcomes, setOutcomes, settings, covUser, team })
+  // Financial crime: sanctions screening and AML flags (Settings → Financial crime)
+  useFincrime({ outcomes, setOutcomes, settings, covUser })
   // Links in reminder emails: /?open=COV-123 opens that case once the app is ready
   useEffect(() => {
     if (!covUser) return

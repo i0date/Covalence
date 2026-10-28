@@ -18,6 +18,7 @@ import { auditWrite, auditList, AUDIT_LABELS, describeAudit } from './audit.js'
 import { CLOSED_STATUSES, FILE_STAGE_STATUSES, caseClocks, sortClocks } from './clocks.mjs'
 import { decisionsOf } from './ai.js'
 import { AiExplain } from './AiExplain.jsx'
+import { FincrimePanel } from './FincrimePanel.jsx'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -376,6 +377,14 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             )
           })()}
 
+          {/* Financial crime — sanctions screening, AML signals, open-source checks */}
+          {c && (
+            <div>
+              <Label>FINANCIAL CRIME</Label>
+              <FincrimePanel c={c} caseId={caseId} outcomes={outcomes} setOutcomes={setOutcomes} covUser={covUser} settings={settings} />
+            </div>
+          )}
+
           {/* Clocks — SLA targets and deadlines (Settings → Workflow) */}
           {c && (() => {
             const clocks = sortClocks(caseClocks(c, settings))
@@ -658,6 +667,16 @@ export function buildDemoInstitution(userEmail) {
       history:h([11,'received'],[2,'rebuttal_prep','received']) },
     { id:'MCH-DEMO03', mode:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
     { id:'MCH-DEMO04', mode:'merchant', date:iso(45), merchant:'Northwind Electronics', amount:'98.00 USD', network:'VISA', status:'won', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', resolvedDate:iso(18), winProb:'HIGH', history:h([45,'received'],[41,'rebuttal_prep','received'],[37,'submitted','rebuttal_prep'],[18,'won','submitted']) },
+    // Financial crime: a romance / investment scam paying out to a wallet on OFAC's SDN list (the address is real and public)
+    { id:'COV-DEMO19', date:iso(3), merchant:'Bitvault Exchange', amount:'4600.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
+      _complaint:'Someone I met online talked me into buying USDT on Bitvault Exchange (bitvault-exchange.xyz) and sending it to 0x252a8bd2319d8a555b872990601221b3a2053bce for a "guaranteed" trading plan. Now I can’t withdraw anything.',
+      history:h([3,'received'],[2,'pending','received']) },
+    { id:'COV-DEMO20', date:iso(1), merchant:'Bitvault Exchange', amount:'4400.00 USD', accountType:'p2p', network:'', status:'received', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
+      _complaint:'They said I had to pay a release fee first, so I sent another payment to 0x252a8bd2319d8a555b872990601221b3a2053bce.',
+      history:h([1,'received']) },
+    { id:'COV-DEMO21', date:iso(6), merchant:'Bitvault Exchange', amount:'2000.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'L. Ferreira',
+      _complaint:'An investment adviser on a messaging app sent me to bitvault-exchange.xyz. My deposit shows on their site but I can’t withdraw.',
+      history:h([6,'received'],[5,'pending','received']) },
   ].map(c => ({ ...base, ...c, updatedAt: iso(0) }))
   addDemoAi(cases, iso)
   const triage = [
@@ -738,7 +757,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '5'
+const DEMO_VERSION = '6'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

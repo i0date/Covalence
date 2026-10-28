@@ -6,6 +6,7 @@ import { recordDemoCaseEvent } from './demoBackend.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
+import { FINCRIME_DEFAULTS } from './fincrime.js'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
 export class ErrorBoundary extends React.Component {
@@ -55,6 +56,8 @@ export const DEFAULT_SETTINGS = {
   ...WORKFLOW_DEFAULTS,
   // Quality review — monthly sample of closed cases (Settings → Quality review)
   ...QA_DEFAULTS,
+  // Financial crime — sanctions screening (Settings → Financial crime)
+  ...FINCRIME_DEFAULTS,
 }
 
 // ─── Business-day helpers (src/clocks.mjs, shared with the reminder emails) ──
