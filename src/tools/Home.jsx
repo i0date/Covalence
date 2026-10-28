@@ -8,6 +8,8 @@ import { DEFAULT_SETTINGS } from '../shared.jsx'
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
+const RANGES = [['7', '7D'], ['30', '30D'], ['60', '60D'], ['90', '90D'], ['all', 'ALL']]
+
 export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo, covUser }) {
   // outcomes comes from the root, which stays in sync with every tool via the outcome subscribers
   const [tourOpen, setTourOpen] = React.useState(false)
@@ -28,17 +30,21 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   })
   const toggleBrief = () => setBriefOpen(o => { try { localStorage.setItem('cov_brief_open', o ? '0' : '1') } catch {} ; return !o })
   const [caseFilter, setCaseFilter] = React.useState('open')
-  // The full case list folds away (Your day already shows what needs attention); remembered per browser
-  const [casesOpen, setCasesOpen] = React.useState(() => { try { return localStorage.getItem('cov_home_cases_open') === '1' } catch { return false } })
-  const toggleCases = () => setCasesOpen(o => { try { localStorage.setItem('cov_home_cases_open', o ? '0' : '1') } catch {} return !o })
   const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
   const settings = React.useMemo(() => {
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
   }, [])
-  const windowDays = settings.trackerWindowDays || 60
-  const sixtyDaysAgo = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
-  const recent   = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
+  // The full case list folds away (Your day already shows what needs attention); how it starts is a default in Settings
+  const [casesOpen, setCasesOpen] = React.useState(() => settings.homeCasesOpen === 'open' || settings.homeCasesOpen === true)
+  const toggleCases = () => setCasesOpen(o => !o)
+  // The period the cases and numbers cover: starts at the Settings default, changeable here
+  const [range, setRange] = React.useState(() => RANGES.some(([v]) => v === String(settings.homeRange)) ? String(settings.homeRange) : '60')
+  const windowDays = range === 'all' ? null : Number(range)
+  const since = windowDays ? new Date(Date.now() - windowDays * 86400000) : null
+  const inRange = o => { if (!since) return true; const d = new Date(o.date || o.createdAt || o.ts || 0); return isNaN(d) || d > since }
+  const rangeText = windowDays ? `last ${windowDays} days` : 'all time'
+  const recent   = outcomes.filter(inRange)
   const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
@@ -202,9 +208,22 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         )
       })()}
 
+      {/* ── Date range for the cases and numbers below ── */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', margin:'4px 0 10px' }}>
+        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>CASES AND NUMBERS · {rangeText.toUpperCase()}</span>
+        <div role="group" aria-label="Date range" style={{ display:'flex', border:'1px solid #D4CCBC' }}>
+          {RANGES.map(([v, l], i) => (
+            <button key={v} onClick={() => setRange(v)} aria-pressed={range === v} className="mono-font"
+              style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 10px', border:'none', borderLeft: i ? '1px solid #D4CCBC' : 'none', cursor:'pointer',
+                background: range === v ? '#1A1814' : '#FAF7F1', color: range === v ? '#F5F1EA' : '#57534E' }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
       {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
-        const thread = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const thread = everything.filter(inRange)
         const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
         const FILTERS = [
           { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
@@ -215,7 +234,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         ]
         const f = FILTERS.find(x => x.id === caseFilter) || FILTERS[0]
         const rows = thread.filter(f.test)
-        if (thread.length === 0) return (
+        if (everything.length === 0) return (
           <div className="border border-stone-200 px-6 py-8 mb-5" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
             <div>
               <div className="display-font text-stone-500 italic" style={{ fontSize:'17px' }}>No cases yet.</div>
@@ -238,7 +257,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 <span><strong style={{ color:'#1A1814' }}>{open}</strong> OPEN</span>
                 <span><strong style={{ color:'#1A1814' }}>{action}</strong> NEED ACTION</span>
                 {overdue > 0 && <span style={{ color:'#B91C1C' }}><strong>{overdue}</strong> OVERDUE</span>}
-                <span>{thread.length} IN ALL</span>
+                <span>{thread.length} {windowDays ? `IN THE LAST ${windowDays} DAYS` : 'IN ALL'}</span>
               </span>
               <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#1A1814', whiteSpace:'nowrap' }}>{casesOpen ? 'HIDE ↑' : 'SHOW ↓'}</span>
             </button>
@@ -285,13 +304,12 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       {/* ── The numbers: one strip (snapshot figures can be turned off in Settings) ── */}
       {(() => {
         const cells = [
-          { label:'NEW',         value: active.length,                  sub:`opened in ${windowDays} days` },
+          { label:'NEW',         value: active.length,                  sub: windowDays ? `opened in ${windowDays} days` : 'opened, all time' },
           { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },
           { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—', sub:`${resolved.length} resolved` },
         ]
         if (settings.snapshotEnabled !== false) {
-          const cutoff = new Date(Date.now() - (settings.snapshotDays || 60) * 86400000)
-          const recent = outcomes.filter(o => o.date && new Date(o.date) >= cutoff)
+          const recent = outcomes.filter(o => o.date && inRange(o))
           const days = recent.filter(o => ['won','lost','withdrawn'].includes(o.status) && o.date && o.resolvedDate)
             .map(o => Math.max(0, Math.round((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)))
           const fraud = recent.filter(o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD').length

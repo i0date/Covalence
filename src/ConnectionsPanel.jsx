@@ -1,12 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONNECTIONS — Settings → Connections: send data straight to Covalence
 // ═══════════════════════════════════════════════════════════════════════════════
-// An institution's own systems (core banking, card processor, a fraud engine)
+// In: an institution's own systems (core banking, card processor, a fraud engine)
 // POST transactions, account events and alerts to /api/intake with an API key.
 // Admins create and revoke keys here; a key is shown once and only its hash is
 // stored (supabase_fraud.sql).
+// Out: when an analyst presses Hold / Block / Lock, and when new alerts arrive,
+// Covalence POSTs signed events to the institution's endpoint, and new alerts can
+// post to Slack (supabase_actions.sql, api/action.js).
 import React, { useEffect, useState } from 'react'
-import { createKey, listKeys, revokeKey } from './monitoringData.js'
+import { createKey, listKeys, revokeKey, getEndpoint, setEndpoint, rotateSecret, sendAction, intakeStatus } from './monitoringData.js'
 import { Badge, Button, Input } from './ui.jsx'
 
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'18px 20px', marginBottom:'20px' }
@@ -17,7 +20,8 @@ const Code = ({ children }) => <pre className="mono-font" style={{ fontSize:'12p
 export function ConnectionsPanel({ covUser }) {
   const [keys, setKeys] = useState([]), [label, setLabel] = useState(''), [fresh, setFresh] = useState(null), [err, setErr] = useState('')
   const admin = covUser?.role === 'admin'
-  const refresh = () => listKeys().then(setKeys).catch(e => setErr(e.message))
+  const [status, setStatus] = useState(null)
+  const refresh = () => { listKeys().then(setKeys).catch(e => setErr(e.message)); intakeStatus().then(setStatus).catch(() => {}) }
   useEffect(refresh, [])
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
 
@@ -27,7 +31,8 @@ export function ConnectionsPanel({ covUser }) {
       <p className="display-font" style={{ fontSize:'15px', color:'#3F3A35', lineHeight:1.55, margin:'0 0 10px', maxWidth:'780px' }}>
         Your core banking system, card processor or fraud engine can post transactions, account events and its own alerts the moment they happen. Covalence stores them, runs the fraud and AML rules for the customers involved, and the alerts appear in 001 Triage and 005 Licit within seconds — no daily file needed.
       </p>
-      {covUser?.demo && <p className="mono-font" style={{ fontSize:'11px', color:'#92400E', margin:'0 0 10px' }}>Demo: keys made here are for show and won’t work with the API. Signed-in workspaces get working keys.</p>}
+      {status && <LiveStatus status={status} />}
+      {covUser?.demo && <p className="mono-font" style={{ fontSize:'11px', color:'#92400E', margin:'10px 0 0' }}>Demo: keys made here are for show and won’t work with the API. Signed-in workspaces get working keys.</p>}
     </section>
 
     <section style={box}>
@@ -69,6 +74,8 @@ export function ConnectionsPanel({ covUser }) {
       )}
     </section>
 
+    <ActOnAlerts admin={admin} demo={!!covUser?.demo} origin={origin} />
+
     <section style={box}>
       <H2>HOW TO SEND DATA</H2>
       <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>One endpoint. Up to 1,000 of each per call; sending the same id twice is ignored.</p>
@@ -93,6 +100,102 @@ Content-Type: application/json
         <li><strong>Crypto exchanges:</strong> add <code>"segment": "ce"</code> to the body — withdrawals to wallets are judged as an exchange’s, and alerts land on Triage’s Crypto Exchange side.</li>
         <li>The answer lists what was stored, what was a duplicate, any rows with problems, and the ids of the alerts raised.</li>
       </ul>
+    </section>
+  </>)
+}
+
+// "Is data arriving?" — shown here and above the alerts in Triage and Licit
+export function LiveStatus({ status, compact }) {
+  const ago = status.last_received ? Date.now() - new Date(status.last_received).getTime() : null
+  const live = ago != null && ago < 24 * 3600000
+  const rel = ago == null ? '' : ago < 60000 ? 'just now' : ago < 3600000 ? `${Math.round(ago / 60000)} min ago` : ago < 86400000 ? `${Math.round(ago / 3600000)} h ago` : `${Math.round(ago / 86400000)} days ago`
+  const [dot, color, text] = live ? ['●', '#065F46', `LIVE — last data received ${rel}`]
+    : status.active_keys > 0 ? ['○', '#92400E', ago == null ? 'CONNECTED — waiting for the first data' : `CONNECTED — nothing received for ${rel.replace(' ago', '')}`]
+    : ['○', '#6B6259', 'NOT CONNECTED — your systems aren’t sending data yet']
+  return <div className="mono-font" role="status" style={{ fontSize: compact ? '10px' : '11px', letterSpacing:'0.1em', color }}>{dot} {text}</div>
+}
+
+const SEVS = [['high', 'High only'], ['medium', 'Medium and high'], ['low', 'Every alert'], ['off', 'Off']]
+function ActOnAlerts({ admin, demo, origin }) {
+  const [ep, setEp] = useState(undefined), [url, setUrl] = useState(''), [slack, setSlack] = useState(''), [min, setMin] = useState('high')
+  const [secret, setSecret] = useState(null), [msg, setMsg] = useState(null), [busy, setBusy] = useState(false)
+  const load = () => getEndpoint().then(e => { setEp(e); setUrl(e?.url || ''); setMin(e?.notify_min || 'high') }).catch(e => setMsg({ err: e.message }))
+  useEffect(() => { load() }, [])
+  const run = async (fn, okText) => { setBusy(true); setMsg(null); try { const r = await fn(); if (okText) setMsg({ ok: okText }); return r } catch (e) { setMsg({ err: e.message }) } finally { setBusy(false) } }
+  const save = (slackValue) => run(async () => { await setEndpoint(url.trim(), slackValue, min); setSlack(''); await load() }, 'Saved.')
+  const test = () => run(async () => {
+    const r = await sendAction({ test: true })
+    if (r.notConnected) throw new Error('Save an endpoint first')
+    if (!r.ok) throw new Error(r.error || 'No answer')
+    setMsg({ ok: r.demo ? 'Demo: a test event would be sent now.' : `Your endpoint answered ${r.status}${r.reference ? ` (reference ${r.reference})` : ''}.` })
+  })
+  const field = { padding:'8px 10px', fontSize:'14px', width:'100%', maxWidth:'520px' }
+  if (ep === undefined) return null
+
+  return (<>
+    <section style={box}>
+      <H2>ACT IN YOUR SYSTEMS</H2>
+      <p className="display-font" style={{ fontSize:'15px', color:'#3F3A35', lineHeight:1.55, margin:'0 0 12px', maxWidth:'780px' }}>
+        When an analyst presses <strong>Block the card</strong>, <strong>Hold the payment</strong> or <strong>Lock the account</strong>, Covalence sends a signed event to your endpoint and records its answer on the alert. New alerts are sent there too, so your own systems can react.
+      </p>
+      {admin ? (<div style={{ display:'grid', gap:'10px' }}>
+        <label className="display-font" style={{ fontSize:'13px', display:'grid', gap:'4px' }}>Your endpoint (https)
+          <Input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://fraud-actions.yourbank.com/covalence" aria-label="Endpoint URL" style={field} />
+        </label>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
+          <Button disabled={busy} onClick={() => save(null)}>Save</Button>
+          <Button variant="secondary" disabled={busy || !ep?.url} onClick={test}>Send a test event</Button>
+          <Button variant="quiet" disabled={busy} onClick={() => run(async () => { setSecret(await rotateSecret()); await load() })}>{ep?.has_secret ? 'Replace the signing secret' : 'Create a signing secret'}</Button>
+        </div>
+        {secret && (
+          <div role="status" style={{ border:'2px solid #065F46', background:'#ECFDF5', padding:'12px 14px' }}>
+            <div className="display-font" style={{ fontSize:'15px', color:'#064E3B', marginBottom:'6px' }}>Copy this secret into your receiver now — it won’t be shown again.</div>
+            <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+              <code className="mono-font" style={{ fontSize:'12px', background:'#FFFFFF', border:'1px solid #6EE7B7', padding:'6px 8px', overflowWrap:'anywhere' }}>{demo ? secret.slice(0, 14) + '… (demo)' : secret}</code>
+              <Button small onClick={() => navigator.clipboard?.writeText(secret)}>Copy</Button>
+              <Button variant="quiet" onClick={() => setSecret(null)}>Done</Button>
+            </div>
+          </div>
+        )}
+      </div>) : <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259', margin:0 }}>{ep?.url ? `Sending to ${ep.url}. ` : ''}Admins set this up.</p>}
+      {admin && ep && <p className="mono-font" style={{ fontSize:'11px', color:'#57534E', margin:'10px 0 0' }}>{ep.url ? `Sending to ${ep.url}` : 'No endpoint yet'} · {ep.has_secret ? 'signed' : 'not signed — create a secret'}</p>}
+    </section>
+
+    <section style={box}>
+      <H2>ALERT NOTIFICATIONS</H2>
+      <p className="display-font" style={{ fontSize:'15px', color:'#3F3A35', lineHeight:1.55, margin:'0 0 12px', maxWidth:'780px' }}>
+        New alerts from your connected systems post to a Slack channel within seconds, so nobody has to watch the queue. Email alerts follow once Covalence’s sending domain is verified.
+      </p>
+      {admin ? (<div style={{ display:'grid', gap:'10px' }}>
+        <label className="display-font" style={{ fontSize:'13px', display:'grid', gap:'4px' }}>Slack incoming webhook {ep?.slack_set && <span className="mono-font" style={{ fontSize:'11px', color:'#065F46' }}>● connected — paste a new one to replace it</span>}
+          <Input value={slack} onChange={e => setSlack(e.target.value)} placeholder={ep?.slack_set ? '•••• saved' : 'https://hooks.slack.com/services/…'} aria-label="Slack webhook URL" style={field} />
+        </label>
+        <label className="display-font" style={{ fontSize:'13px', display:'grid', gap:'4px', maxWidth:'260px' }}>Notify for
+          <select className="input-field" value={min} onChange={e => setMin(e.target.value)} style={{ padding:'8px 10px', fontSize:'14px' }}>{SEVS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </label>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+          <Button disabled={busy} onClick={() => save(slack.trim() ? slack.trim() : null)}>Save</Button>
+          {ep?.slack_set && <Button variant="quiet" disabled={busy} onClick={() => save('')}>Remove Slack</Button>}
+        </div>
+      </div>) : <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259', margin:0 }}>{ep?.slack_set ? `Posting ${SEVS.find(x => x[0] === ep.notify_min)?.[1].toLowerCase()} alerts to Slack. ` : ''}Admins set this up.</p>}
+      {msg && <p role={msg.err ? 'alert' : 'status'} className="mono-font" style={{ fontSize:'11px', color: msg.err ? '#991B1B' : '#065F46', margin:'10px 0 0' }}>{msg.err || msg.ok}</p>}
+    </section>
+
+    <section style={box}>
+      <H2>WHAT YOUR ENDPOINT RECEIVES</H2>
+      <Code>{`POST <your endpoint>
+Covalence-Event-Type: action.requested
+Covalence-Signature: t=1793170000,v1=5f2c…   (HMAC-SHA256 of "<t>.<body>" with your secret)
+
+{ "id": "evt_9c1…", "type": "action.requested", "created": "2026-10-28T08:45:12Z",
+  "data": { "action": "hold_payment", "segment": "fi", "alertId": "FR-…",
+            "customerId": "A-1005", "customerName": "M. Okafor", "amount": 2400,
+            "transactionIds": ["TX-88121"], "requestedBy": { "name": "…", "email": "…" } } }
+
+Answer 2xx when it's done — add { "reference": "HOLD-5521" } to show it on the alert.`}</Code>
+      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.5 }}>
+        Other events: <code>alert.created</code> (new alerts, with their customer and recommended action) and <code>covalence.test</code>. Check the signature and reject anything older than five minutes. Actions for crypto exchanges arrive as <code>block_card</code> (lock the account) and <code>hold_payment</code> (hold the withdrawal) with <code>"segment": "ce"</code>.
+      </p>
     </section>
   </>)
 }

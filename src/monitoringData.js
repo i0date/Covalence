@@ -54,3 +54,25 @@ export const windowByNames = (names, since) => rpc('tm_window_names', { p_names:
 export const createKey = label => rpc('intake_key_create', { p_label: label })
 export const listKeys = () => rpc('intake_keys_list').then(d => d || [])
 export const revokeKey = id => rpc('intake_key_revoke', { p_id: id })
+
+// ── Acting in the institution's systems, and notifications (supabase_actions.sql, api/action.js) ──
+export const getEndpoint = () => rpc('action_endpoint_get').then(d => (d && d[0]) || null)
+export const setEndpoint = (url, slackUrl, notifyMin) => rpc('action_endpoint_set', { p_url: url, p_slack_url: slackUrl, p_notify_min: notifyMin })
+export const rotateSecret = () => rpc('action_secret_rotate')
+export const intakeStatus = () => rpc('intake_status').then(d => (d && d[0]) || { active_keys: 0, last_received: null })
+export const markDemoFeed = () => { try { localStorage.setItem('cov_demo_feed_at', JSON.stringify(new Date().toISOString())) } catch {} }
+// Sends the action to the institution's endpoint. Answers { ok, reference, error } or
+// { notConnected: true } when no endpoint is set up. Demo: simulated, nothing leaves the browser.
+export async function sendAction(body) {
+  if (!isSignedIn()) {
+    await new Promise(r => setTimeout(r, 600))
+    let e = null; try { e = JSON.parse(localStorage.getItem('cov_demo_action_endpoint') || 'null') } catch {}
+    if (body.test && !e?.url) return { notConnected: true }
+    return { ok: true, demo: true, reference: 'DEMO-' + Math.random().toString(36).slice(2, 8).toUpperCase() }
+  }
+  const r = await fetch('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken()}` }, body: JSON.stringify(body) })
+  const d = await r.json().catch(() => ({}))
+  if (r.status === 409 && d.error === 'not_connected') return { notConnected: true }
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`)
+  return d
+}

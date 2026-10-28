@@ -27,6 +27,10 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
   const [tab, setTab] = React.useState(() => { try { return localStorage.getItem('cov_settings_tab') || 'settings' } catch { return 'settings' } })
   const activeTab = TABS.some(([k]) => k === tab) ? tab : 'settings'
   const pickTab = k => { setTab(k); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
+  React.useEffect(() => {
+    const h = e => { if (e.detail?.section === 'settings' && e.detail.tab) pickTab(e.detail.tab) }
+    window.addEventListener('cov:go', h); return () => window.removeEventListener('cov:go', h)
+  }, [])
 
   const Field = ({ label, hint, children }) => (
     <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
@@ -164,7 +168,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
 
         {/* ── Operational Defaults ── */}
         <Card title="OPERATIONAL DEFAULTS">
-          <Field label="Tracker Window (days)" hint="Days of cases shown in tracker and home screen.">
+          <Field label="Tracker Window (days)" hint="Days of cases shown in the tracker.">
             <Num field="trackerWindowDays" min={1} max={365} />
           </Field>
           <Field label="Batch Filing Time (daily auto-file)" hint="Queued fraud cases auto-file at this time daily when the Multi tab is open.">
@@ -192,16 +196,29 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
               {settings.dfaEnabled !== false ? 'DFA ON' : 'DFA OFF'}
             </button>
           </Field>
-          <Field label="Home Snapshot" hint="Show the rolling case snapshot on the home screen.">
+          <Field label="Home Snapshot" hint="Show resolution time, fraud / service split and top category in Home’s numbers.">
             <button onClick={() => set('snapshotEnabled', settings.snapshotEnabled === false ? true : false)}
               style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.snapshotEnabled !== false ? '#064E3B' : '#292524', color: settings.snapshotEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.snapshotEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
               <span style={{ fontSize:'10px' }}>{settings.snapshotEnabled !== false ? '●' : '○'}</span>
               {settings.snapshotEnabled !== false ? 'SNAPSHOT ON' : 'SNAPSHOT OFF'}
             </button>
           </Field>
-          <Field label="Snapshot Window (days)" hint="Number of days the home snapshot looks back. Default: 60.">
-              <Num field="snapshotDays" min={7} max={365} />
-            </Field>
+        </Card>
+
+        {/* ── Default views: where each screen starts for everyone at the institution ── */}
+        <Card title="DEFAULT VIEWS">
+          <Field label="Home date range" hint="The period Home’s cases and numbers cover when it opens. Anyone can change it on the page.">
+            <Sel field="homeRange" options={[['7','Last 7 days'],['30','Last 30 days'],['60','Last 60 days'],['90','Last 90 days'],['all','All time']]} />
+          </Field>
+          <Field label="Home case list" hint="Whether the full case list starts open or folded away.">
+            <Sel field="homeCasesOpen" options={[['closed','Folded away'],['open','Open']]} />
+          </Field>
+          <Field label="Triage opens on" hint="Alerts suit a team whose systems send data to Covalence; Claims suits one that starts from customer reports.">
+            <Sel field="triageDefaultTab" options={[['alerts','Alerts — the bank found it'],['claims','Claims — the customer reported it']]} />
+          </Field>
+          <Field label="Triage side" hint="Leave on automatic to follow the institution type (crypto exchanges open on the Crypto Exchange side).">
+            <Sel field="triageDefaultSide" options={[['auto','Automatic'],['fi','Financial Institution'],['ce','Crypto Exchange']]} />
+          </Field>
         </Card>
 
       </div>

@@ -140,6 +140,11 @@ export default function Covalence() {
     : demoUser ? { ...demoUser, institution: DEMO_INSTITUTION, institutionId: 'demo', role: demoRoleState, demo: true } : null
   if (!membership) setCurrentRole(demoUser ? demoRoleState : null)
   const [activeSection, setActiveSection] = useState('home')
+  // Any tool can send people elsewhere: dispatch 'cov:go' with { section, tab } (tab: a Settings tab)
+  useEffect(() => {
+    const h = e => { if (e.detail?.section) setActiveSection(e.detail.section) }
+    window.addEventListener('cov:go', h); return () => window.removeEventListener('cov:go', h)
+  }, [])
   const [outcomes,      setOutcomes]      = useState(loadOutcomes)
   const [settings,      setSettings]      = useState(loadSettings)
   const [platformMode,  setPlatformMode]  = useState('fi')

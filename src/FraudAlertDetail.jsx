@@ -3,8 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // The bank found it, so the work starts with the customer, not a claim form:
 //   1. why it fired (transactions, account events, the rule's reasoning)
-//   2. protect: block the card or hold the payment — placeholders until a card
-//      or payments system is connected; the action is recorded either way
+//   2. protect: block the card or hold the payment — sent to the institution's own
+//      systems as a signed event (Settings → Connections, api/action.js); where
+//      nothing is connected, done there by hand and confirmed here
 //   3. reach the customer: an outreach script and a log of attempts
 //   4. their answer routes it straight on — no re-classification:
 //      it was me → closed · not me (card) → Desk · not me (transfer) → recall in Duo
@@ -13,7 +14,7 @@
 import React, { useEffect, useState } from 'react'
 import { auditWrite } from './audit.js'
 import { EVENT_TYPES, FRAUD_RULES } from './monitoring.mjs'
-import { windowFor, setAlert } from './monitoringData.js'
+import { windowFor, setAlert, sendAction } from './monitoringData.js'
 import { Badge, Button } from './ui.jsx'
 
 const DAY = 86400000
@@ -39,7 +40,8 @@ export function FraudAlertDetail({ a, segment = 'fi', covUser, writer, instituti
   const ce = segment === 'ce', LABEL = ACTIONS[segment] || ACTIONS.fi, SYS = SYSTEM[segment] || SYSTEM.fi
   const [txs, setTxs] = useState(null)
   const [log, setLog] = useState({ method: 'Call', outcome: 'Reached', note: '' })
-  const [pending, setPending] = useState(null)        // protective action awaiting "done"
+  const [pending, setPending] = useState(null)        // protective action being confirmed
+  const [send, setSend] = useState(null)              // { busy } | { notConnected } | { error }
   const [err, setErr] = useState('')
   const who = covUser?.name || covUser?.email || 'Analyst'
   useEffect(() => {
@@ -121,19 +123,40 @@ export function FraudAlertDetail({ a, segment = 'fi', covUser, writer, instituti
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
           {Object.entries(LABEL).map(([k, l]) => {
             const done = (a.actions || []).find(x => x.type === k)
-            return done ? <Badge key={k} tone="ok">{l.toUpperCase()} — DONE {when(done.ts).toUpperCase()}</Badge>
-              : <Button key={k} variant={a.action === k ? 'danger' : 'secondary'} onClick={() => setPending(k)}>{l}{a.action === k ? ' (recommended)' : ''}</Button>
+            return done ? <Badge key={k} tone="ok">{l.toUpperCase()} — {done.status?.startsWith('sent') ? 'SENT' : 'DONE'} {when(done.ts).toUpperCase()}{done.reference ? ` · REF ${done.reference}` : ''}</Badge>
+              : <Button key={k} variant={a.action === k ? 'danger' : 'secondary'} onClick={() => { setSend(null); setPending(k) }}>{l}{a.action === k ? ' (recommended)' : ''}</Button>
           })}
         </div>
         {pending && (
           <div style={{ border:'1px solid #FCD34D', background:'#FFFBEB', padding:'10px 12px', marginTop:'8px' }}>
-            <p className="display-font" style={{ fontSize:'14px', margin:'0 0 8px', color:'#3F3A35' }}>
-              Covalence isn’t connected to your {SYS[pending]} system yet. {LABEL[pending]} there, then confirm here so it’s on the record.
-            </p>
-            <div style={{ display:'flex', gap:'8px' }}>
-              <Button small onClick={() => { const actions = [...(a.actions || []), { type: pending, ...base, status: 'done in external system' }]; setPending(null); patch('open', { actions }, 'alert.action', { action: pending }) }}>Done in the {SYS[pending]} system</Button>
-              <Button variant="quiet" onClick={() => setPending(null)}>Cancel</Button>
-            </div>
+            {send?.notConnected || send?.error ? (<>
+              <p className="display-font" style={{ fontSize:'14px', margin:'0 0 8px', color:'#3F3A35' }}>
+                {send.error ? <>Your {SYS[pending]} system didn’t confirm it: {send.error}. </> : <>Covalence isn’t connected to your {SYS[pending]} system yet (Settings → Connections). </>}
+                {LABEL[pending]} there, then confirm here so it’s on the record.
+              </p>
+              <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+                <Button small onClick={() => { const actions = [...(a.actions || []), { type: pending, ...base, status: 'done in external system' }]; setPending(null); setSend(null); patch('open', { actions }, 'alert.action', { action: pending, how: 'manual' }) }}>Done in the {SYS[pending]} system</Button>
+                {send.error && <Button small variant="secondary" onClick={() => setSend(null)}>Try again</Button>}
+                <Button variant="quiet" onClick={() => { setPending(null); setSend(null) }}>Cancel</Button>
+              </div>
+            </>) : (<>
+              <p className="display-font" style={{ fontSize:'14px', margin:'0 0 8px', color:'#3F3A35' }}>
+                {LABEL[pending]} for {a.customerName || a.customerId}{a.total ? ` (${money(a.total)})` : ''}? Covalence sends it to your {SYS[pending]} system and records the answer.
+              </p>
+              <div style={{ display:'flex', gap:'8px' }}>
+                <Button small variant="danger" disabled={send?.busy} onClick={async () => {
+                  setSend({ busy: true })
+                  try {
+                    const r = await sendAction({ alertId: a.id, action: pending })
+                    if (r.notConnected) return setSend({ notConnected: true })
+                    if (!r.ok) return setSend({ error: r.error || 'no answer' })
+                    const actions = [...(a.actions || []), { type: pending, ...base, status: r.demo ? 'sent (demo)' : 'sent', reference: r.reference || null, event: r.event || null }]
+                    setPending(null); setSend(null); patch('open', { actions }, 'alert.action', { action: pending, how: 'sent', reference: r.reference || null })
+                  } catch (e) { setSend({ error: e.message }) }
+                }}>{send?.busy ? 'Sending…' : `Yes — ${LABEL[pending].toLowerCase()}`}</Button>
+                <Button variant="quiet" disabled={send?.busy} onClick={() => setPending(null)}>Cancel</Button>
+              </div>
+            </>)}
           </div>
         )}
 

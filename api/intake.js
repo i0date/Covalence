@@ -10,8 +10,10 @@
 //   • Keys are looked up by SHA-256 hash; revoked keys are refused; each key is tied to one institution
 //   • Every row is validated and trimmed; ≤ 1000 per type, ≤ 2 MB per request
 //   • Per-key rate limit: 120 requests / 60 s; no CORS (server-to-server); each call is audited
+// New alerts notify Slack and the institution's endpoint (api/_webhook.js), if set up.
 
 const crypto = require('crypto')
+const wh = require('./_webhook.js')
 const RATE_LIMIT_MAX = 120, RATE_LIMIT_WINDOW_MS = 60 * 1000, MAX = 1000, MAX_BYTES = 2 * 1024 * 1024
 const DAY = 86400000
 const _rate = {}
@@ -106,6 +108,21 @@ module.exports = async function handler(req, res) {
     const freshIds = [...newTx.map(t => t.id), ...newEv.map(e => e.id)]
     const raised = [...m.evaluateFraud(history, events, freshIds, s, [], now, { segment }), ...m.evaluate(history.filter(t => new Date(t.ts) > now - 31 * DAY), newTx.map(t => t.id), s, now, { segment }), ...ext]
     const stored = raised.length ? await ins('tm_alerts', raised.map(a => ({ institution_id: inst, id: a.id, data: a, status: 'open' }))) : []
+
+    // Tell people: Slack, and a signed alert.created event to the institution's endpoint (Settings → Connections)
+    if (stored.length) {
+      const ep = (await rest(`action_endpoints?institution_id=eq.${inst}&select=url,secret,slack_url,notify_min`).catch(() => []))?.[0]
+      if (ep) {
+        const ids = new Set(stored.map(a => a.id)), fresh = raised.filter(a => ids.has(a.id))
+        const loud = fresh.filter(a => wh.meets(a.severity, ep.notify_min))
+        const appUrl = process.env.ALLOWED_ORIGIN || 'https://covalence.vercel.app'
+        await Promise.allSettled([
+          ep.slack_url && loud.length ? wh.notifySlack(ep.slack_url, loud, appUrl) : null,
+          ep.url ? wh.sendEvent(ep, 'alert.created', { alerts: fresh.map(a => ({ id: a.id, kind: a.kind, segment: a.segment || 'fi', rule: a.rule, label: a.label, severity: a.severity,
+            customerId: a.customerId, customerName: a.customerName || '', amount: a.total || 0, recommendedAction: a.action || null })) }) : null,
+        ])
+      }
+    }
 
     await rest(`intake_keys?id=eq.${keyRow.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_used_at: now.toISOString() }) }).catch(() => {})
     await rest('rpc/audit_add', { method: 'POST', body: JSON.stringify({ p_inst: inst, p_action: 'intake.received', p_entity: 'workspace', p_entity_id: keyRow.prefix,

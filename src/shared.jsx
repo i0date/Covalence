@@ -54,6 +54,11 @@ export const DEFAULT_SETTINGS = {
   // Home snapshot
   snapshotEnabled:      true,
   snapshotDays:         60,
+  // Default views (Settings → Institution settings): where each screen starts
+  homeRange:            '60',        // Home date range: 7 | 30 | 60 | 90 | all
+  homeCasesOpen:        'closed',    // Home case list starts: closed | open
+  triageDefaultTab:     'alerts',    // Triage opens on: alerts | claims
+  triageDefaultSide:    'auto',      // fi | ce | auto = from the institution type
   // Workflow — SLA targets, auto-assignment, escalation, reminders (Settings → Workflow)
   ...WORKFLOW_DEFAULTS,
   // Quality review — monthly sample of closed cases (Settings → Quality review)
