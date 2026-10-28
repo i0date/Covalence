@@ -6,6 +6,7 @@ import { SUPA_KEY, SUPA_URL } from '../data.js'
 import { DEFAULT_SETTINGS, loadOutcomes } from '../shared.jsx'
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
+import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -1772,7 +1773,7 @@ Return ONLY valid JSON:
                 const normMerchant = (s) => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'')
                 const thisMerchant = normMerchant(merchant)
                 // Pull from both stores
-                const deskCases = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes')||'[]') } catch { return [] } })()
+                const deskCases = readCases()
                 const triageCases = (() => { try { return JSON.parse(localStorage.getItem('triage_outcomes')||'[]') } catch { return [] } })()
                 const triageArchive = (() => { try { return JSON.parse(localStorage.getItem('triage_archive')||'[]') } catch { return [] } })()
                 // Match by merchant (fuzzy: normalized contains match)

@@ -19,6 +19,7 @@ import { MultiView } from './tools/Multi.jsx'
 import { SettingsView } from './tools/Settings.jsx'
 import { TriageView } from './tools/Triage.jsx'
 import { TrioView } from './tools/Trio.jsx'
+import { readCases, writeCases } from './caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
@@ -228,17 +229,15 @@ export default function Covalence() {
     window._covSyncStatus = setGlobalSyncStatus
     return () => { delete window._covSyncStatus }
   }, [])
-  // Subscribe to outcomes changes from any view in this tab + cross-tab storage events
+  // Subscribe to outcomes changes from any view in this tab and from other tabs
   useEffect(() => {
     const refresh = (merged) => {
-      const fresh = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const fresh = merged || readCases()
       _skipSaveRef.current = true
       setOutcomes(fresh)
     }
     const unregister = registerOutcomeSubscriber(refresh)
-    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
-    window.addEventListener('storage', storageHandler)
-    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
+    return unregister
   }, [])
   useEffect(() => { saveSettings(settings) }, [settings])
   // Demo visitors: settings changes go into Demo Bank's audit log, with old → new values
@@ -259,8 +258,7 @@ export default function Covalence() {
       try {
         const purged = new Set(await purgedCaseIds())
         if (purged.size) {
-          const keep = loadOutcomes().filter(o => !purged.has(o.id))
-          localStorage.setItem('cov_outcomes', JSON.stringify(keep))
+          writeCases(loadOutcomes().filter(o => !purged.has(o.id)))
           setOutcomes(l => l.filter(o => !purged.has(o.id)))
         }
       } catch {}

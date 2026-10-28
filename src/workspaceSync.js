@@ -8,6 +8,7 @@
 // On sign-out the workspace's data is removed from this browser.
 import { accessToken, canWrite, canConfigure } from './auth.js'
 import { isDemoCase } from './CaseThread.jsx'
+import { readCases, writeCases } from './caseStore.js'
 
 const SUPA_URL = import.meta.env?.VITE_SUPABASE_URL || ''
 const SUPA_KEY = import.meta.env?.VITE_SUPABASE_ANON_KEY || ''
@@ -150,7 +151,6 @@ export function stopWorkspaceSync({ clearLocal = true } = {}) {
     } else origRemove.call(localStorage, k)
   })
   // Shared cases and Trio incidents synced from the workspace
-  for (const k of ['cov_outcomes', 'cov_trio_incidents']) {
-    try { origSet.call(localStorage, k, JSON.stringify(JSON.parse(localStorage.getItem(k) || '[]').filter(isDemoCase))) } catch {}
-  }
+  writeCases(readCases().filter(isDemoCase))
+  try { origSet.call(localStorage, 'cov_trio_incidents', JSON.stringify(JSON.parse(localStorage.getItem('cov_trio_incidents') || '[]').filter(isDemoCase))) } catch {}
 }

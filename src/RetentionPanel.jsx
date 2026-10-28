@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react'
 import { retentionGet, retentionSet, retentionCandidates, legalHoldsList, accessToken, isSignedIn } from './auth.js'
 import { demoRpc } from './demoBackend.js'
 import { CaseLink } from './CaseThread.jsx'
+import { readCases } from './caseStore.js'
 
 const mono = { fontFamily:"'JetBrains Mono',monospace" }
 const YEARS = [1, 2, 3, 5, 7, 10]
@@ -39,7 +40,7 @@ export function RetentionPanel({ covUser }) {
       // Demo Bank: purge the demo cases in this browser and tell the open tools
       if (!isSignedIn()) {
         const n = await demoRpc('retention_purge', { p_case_ids: cands.map(c => c.case_id) })
-        const list = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+        const list = readCases()
         ;(window._covSubscribers || []).forEach(fn => { try { fn(list) } catch {} })
         setMsg(`Purged ${n} demo case${n === 1 ? '' : 's'} (demo evidence files are kept only for the browser session anyway).`)
         setCands(null); load(); setBusy(false); return

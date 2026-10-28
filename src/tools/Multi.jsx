@@ -4,26 +4,23 @@ import React from 'react'
 import { evidencePath, CaseLink } from '../CaseThread.jsx'
 import { fetchAgents } from '../data.js'
 import { notesList, registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
+import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── MULTI — Bulk dispute management ──────────────────────────────────────────
 export function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection, covUser }) {
-  // Read live from localStorage so DeskView changes appear immediately
-  const [outcomes, setLiveOutcomes] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return _propOutcomes || [] }
-  })
+  // Read live from the case store so DeskView changes appear immediately
+  const [outcomes, setLiveOutcomes] = React.useState(readCases)
   // Subscribe to all outcome changes (same-tab and cross-tab)
   React.useEffect(() => {
     const refresh = (merged) => {
-      const fresh = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const fresh = merged || readCases()
       setLiveOutcomes(fresh)
     }
     const unregister = registerOutcomeSubscriber(refresh)
-    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
-    window.addEventListener('storage', storageHandler)
-    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
+    return unregister
   }, [])
   // Wrapper that keeps localStorage + App state in sync
   const setOutcomes = React.useCallback((updater) => {

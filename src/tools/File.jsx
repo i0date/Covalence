@@ -4,6 +4,7 @@ import React from 'react'
 import { evidencePath, CaseLink } from '../CaseThread.jsx'
 import { SUPA_KEY, SUPA_URL, pushCasesToSupa } from '../data.js'
 import { registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
+import { readCases } from '../caseStore.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 007 FILE VIEW
@@ -24,20 +25,18 @@ export function FileView({ setActiveSection, setAppOutcomes }) {
   React.useEffect(() => {
     const refresh = (merged) => {
       try {
-        const all = merged || JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+        const all = merged || readCases()
         setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
       } catch {}
     }
     refresh() // initial load
     const unregister = registerOutcomeSubscriber(refresh)
-    const storageHandler = (e) => { if (e.key === 'cov_outcomes' && !window._covSaving) refresh() }
-    window.addEventListener('storage', storageHandler)
-    return () => { unregister(); window.removeEventListener('storage', storageHandler) }
+    return unregister
   }, [])
 
   const updateOutcome = (id, newStatus, patch = {}) => {
     try {
-      const all = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
+      const all = readCases()
       const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...patch } : o)
       saveOutcomes(updated)
       if (setAppOutcomes) setAppOutcomes(updated)

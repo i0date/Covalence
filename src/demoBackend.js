@@ -6,6 +6,7 @@
 // log, a team with roles, legal holds and retention, Duo with a scripted
 // counterparty, case links that get viewed and answered. Nothing here ever
 // reaches Supabase; signing in switches to the real backend.
+import { readCases, writeCases } from './caseStore.js'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
@@ -36,14 +37,21 @@ async function sha256(s) {
 }
 const hashOf = e => sha256([e.prev_hash, 'demo-bank', e.at, e.actor_email, e.action, e.entity, e.entity_id, JSON.stringify(e.detail)].join('|'))
 let chain = Promise.resolve()   // one append at a time keeps the chain linear
+let queued = []                 // events waiting for the next append; a 5,000-case import is one read and one write, not 5,000
 function audit(action, entity, entityId, detail, opts = {}) {
+  queued.push({ at: opts.at || new Date().toISOString(), actor_email: opts.actor ?? visitor().email,
+    action, entity: entity || '', entity_id: entityId || '', detail: detail || {} })
+  if (queued.length > 1) return chain   // already waiting on the append below
   chain = chain.then(async () => {
+    const batch = queued; queued = []
     const log = read(K.audit, [])
-    const prev = log.length ? log[log.length - 1].hash : ''
-    const e = { id: (log.length ? log[log.length - 1].id : 0) + 1, at: opts.at || new Date().toISOString(),
-      actor_email: opts.actor ?? visitor().email, action, entity: entity || '', entity_id: entityId || '', detail: detail || {}, prev_hash: prev }
-    e.hash = await hashOf(e)
-    log.push(e); write(K.audit, log)
+    for (const ev of batch) {
+      const last = log[log.length - 1]
+      const e = { id: (last ? last.id : 0) + 1, ...ev, prev_hash: last ? last.hash : '' }
+      e.hash = await hashOf(e)
+      log.push(e)
+    }
+    write(K.audit, log)
   }).catch(() => {})
   return chain
 }
@@ -87,7 +95,7 @@ export function ensureDemoSeeded() {
     TEAM.forEach(m => events.push({ at: ago(m.joined), actor: 'm.okafor@demo.bank', a: 'member.joined', e: 'member', id: m.email, d: { role: m.role } }))
     events.push({ at: ago(45), actor: 'm.okafor@demo.bank', a: 'settings.changed', e: 'settings', id: 'cov_settings', d: { fraudWindowDays: { from: 90, to: 120 } } })
     events.push({ at: ago(40), actor: 'm.okafor@demo.bank', a: 'retention.policy_changed', e: 'retention', id: '', d: { from_days: 2555, to_days: 1825 } })
-    const cases = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } })()
+    const cases = readCases()
     const actors = ['p.raman@demo.bank', 'd.ruiz@demo.bank', 'j.chen@demo.bank']
     cases.filter(c => /^(COV|MCH)-DEMO/.test(c.id)).forEach((c, i) => (c.history || []).forEach(h => events.push({
       at: h.ts, actor: actors[i % actors.length], a: h.event === 'created' ? 'case.created' : 'case.status_changed', e: 'case', id: c.id,
@@ -200,7 +208,7 @@ const HANDLERS = {
   retention_candidates: () => {
     const days = read(K.retention, 1825)
     const held = new Set(read(K.holds, []).map(h => h.case_id))
-    const cases = (() => { try { return JSON.parse(localStorage.getItem('cov_outcomes') || '[]') } catch { return [] } })()
+    const cases = readCases()
     return cases
       .filter(c => /^(COV|MCH)-DEMO/.test(c.id) && ['won','lost','withdrawn','resolved','closed'].includes(c.status) && !held.has(c.id))
       .map(c => ({ case_id: c.id, status: c.status, closed_on: c.resolvedDate || c.updatedAt || c.date }))
@@ -218,8 +226,7 @@ const HANDLERS = {
     need(isAdmin(), 'Only an institution admin can purge')
     const ok = new Set(HANDLERS.retention_candidates().map(c => c.case_id))
     const ids = (p_case_ids || []).filter(id => ok.has(id))
-    const cases = JSON.parse(localStorage.getItem('cov_outcomes') || '[]')
-    localStorage.setItem('cov_outcomes', JSON.stringify(cases.filter(c => !ids.includes(c.id))))
+    writeCases(readCases().filter(c => !ids.includes(c.id)))
     write(K.purged, [...read(K.purged, []), ...ids])
     ids.forEach(id => audit('case.purged', 'case', id, { reason: 'retention' }))
     if (ids.length) audit('retention.purged', 'retention', '', { cases: ids.length })
