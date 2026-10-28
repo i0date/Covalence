@@ -1222,7 +1222,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
     ? visibleOutcomes.filter(o => o.mode === 'merchant')
-    : visibleOutcomes.filter(o => o.mode !== 'merchant')
+    : visibleOutcomes.filter(o => o.mode !== 'merchant' && o.kind !== 'aml')   // AML cases live in Licit
   const wonCount        = trackerOutcomes.filter(o => o.status === 'won').length
   const lostCount       = trackerOutcomes.filter(o => o.status === 'lost').length
   const withdrawnCount  = trackerOutcomes.filter(o => o.status === 'withdrawn').length

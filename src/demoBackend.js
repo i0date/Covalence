@@ -10,7 +10,7 @@
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
-  seeded: 'cov_demo_backend', role: 'cov_demo_role',
+  seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -152,6 +152,40 @@ const publicSession = s => { const { script, nextLine, ...rest } = s; return res
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
 const HANDLERS = {
+  // Transaction monitoring (supabase_monitoring.sql) — kept to the last 20,000 transactions
+  tm_ingest: ({ p_rows }) => {
+    need(canWrite(), 'Your role can’t import transactions')
+    const all = read(K.tmTx, []), ids = new Set(all.map(t => t.id)), now = new Date().toISOString()
+    const fresh = (p_rows || []).filter(t => !ids.has(t.id)).map(t => ({ ...t, importedAt: now }))
+    write(K.tmTx, [...all, ...fresh].slice(-20000))
+    return fresh.length
+  },
+  tm_window: ({ p_customers, p_since }) => {
+    const want = new Set(p_customers || []), since = new Date(p_since || 0)
+    return read(K.tmTx, []).filter(t => want.has(t.customerId) && new Date(t.ts) >= since)
+  },
+  tm_batches: () => {
+    const by = new Map()
+    read(K.tmTx, []).forEach(t => {
+      const b = by.get(t.batch) || { batch: t.batch, transactions: 0, customers: new Set(), first_ts: t.ts, last_ts: t.ts, imported_at: t.importedAt }
+      b.transactions++; b.customers.add(t.customerId)
+      if (t.ts < b.first_ts) b.first_ts = t.ts; if (t.ts > b.last_ts) b.last_ts = t.ts; if (t.importedAt > b.imported_at) b.imported_at = t.importedAt
+      by.set(t.batch, b)
+    })
+    return [...by.values()].map(b => ({ ...b, customers: b.customers.size })).sort((a, b) => (b.imported_at || '').localeCompare(a.imported_at || ''))
+  },
+  tm_alerts_add: ({ p_rows }) => {
+    need(canWrite(), 'Your role can’t raise alerts')
+    const all = read(K.tmAlerts, []), ids = new Set(all.map(a => a.id)), now = new Date().toISOString()
+    const fresh = (p_rows || []).filter(a => !ids.has(a.id)).map(a => ({ id: a.id, data: a, status: 'open', created_at: now, updated_at: now }))
+    write(K.tmAlerts, [...fresh, ...all])
+    return fresh.length
+  },
+  tm_alerts_list: ({ p_status }) => read(K.tmAlerts, []).filter(a => !p_status || a.status === p_status),
+  tm_alert_set: ({ p_id, p_status, p_patch }) => {
+    need(canWrite(), 'Your role can’t change alerts')
+    write(K.tmAlerts, read(K.tmAlerts, []).map(a => a.id === p_id ? { ...a, status: p_status, data: { ...a.data, ...(p_patch || {}) }, updated_at: new Date().toISOString() } : a))
+  },
   // Team
   list_team: () => {
     const v = visitor()

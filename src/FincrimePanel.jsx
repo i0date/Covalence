@@ -73,6 +73,20 @@ export function FincrimePanel({ c, caseId, outcomes, setOutcomes, covUser, setti
 
   return (
     <div>
+      {/* ── Monitoring alerts behind an AML case ── */}
+      {c.alerts?.length > 0 && (<>
+        <H>MONITORING ALERTS ({c.alerts.length})</H>
+        {c.alerts.map(a => <P key={a.id}><strong>{a.label}</strong> — {a.detail} <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>({a.severity}, {day(a.to)})</span></P>)}
+        {c.tmTransactions?.length > 0 && (
+          <details style={{ margin:'4px 0 8px' }}>
+            <summary className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A5F', cursor:'pointer' }}>{c.tmTransactions.length} TRANSACTIONS</summary>
+            <ul className="mono-font" style={{ fontSize:'11px', color:'#1A1814', margin:'6px 0 0', paddingLeft:'16px', lineHeight:1.6 }}>
+              {c.tmTransactions.map(t => <li key={t.id}>{day(t.ts)} · {t.direction === 'in' ? 'in' : 'out'} ${Math.round(t.amount).toLocaleString()} · {t.channel}{t.counterparty ? ` · ${t.counterparty}` : ''}{t.country ? ` · ${t.country}` : ''}</li>)}
+            </ul>
+          </details>
+        )}
+      </>)}
+
       {/* ── Sanctions ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
         <H>SANCTIONS SCREENING</H>

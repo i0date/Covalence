@@ -62,12 +62,16 @@ export function jw(a, b) {
   return jaro + p * 0.1 * (1 - jaro)
 }
 
-// How alike two token lists are, in both directions, weighted by word length
+// Words so common in company names that matching on them means little
+const GENERIC = new Set(['trading', 'trade', 'traders', 'international', 'intl', 'global', 'group', 'holding', 'holdings', 'general', 'services', 'service',
+  'import', 'export', 'investment', 'investments', 'industries', 'industrial', 'enterprises', 'enterprise', 'commercial', 'company', 'corporation',
+  'logistics', 'shipping', 'solutions', 'technology', 'technologies', 'tech', 'capital', 'partners', 'ventures', 'management', 'development', 'energy'])
+// How alike two token lists are, in both directions, weighted by word length (generic business words count for little)
 export function nameScore(q, e) {
   if (!q.length || !e.length) return 0
   const side = (x, y) => {
     let sum = 0, w = 0
-    for (const a of x) { let best = 0; for (const b of y) { const s = jw(a, b); if (s > best) best = s } const wt = Math.min(a.length, 8); sum += best * wt; w += wt }
+    for (const a of x) { let best = 0; for (const b of y) { const s = jw(a, b); if (s > best) best = s } const wt = GENERIC.has(a) ? 0.25 : Math.min(a.length, 8); sum += best * wt; w += wt }
     return sum / w
   }
   return (side(q, e) + side(e, q)) / 2
@@ -114,6 +118,15 @@ const summary = (e, extra) => ({ uid: e.uid, list: e.list, name: e.name, type: e
   remarks: e.remarks.length > 300 ? e.remarks.slice(0, 300) + '…' : e.remarks, ...extra })
 
 // → hits, best first: [{ uid, list, name, type, programs, score, matchedName, alias }]
+// Enough of the name has to match, not just one shared word: at least two of the
+// query's meaningful words (or all of them, if it has fewer) must match a word in
+// the entry closely; an initial ("R.") counts when an entry word starts with it.
+function covers(q, e) {
+  const meaningful = q.filter(t => !GENERIC.has(t))
+  const need = Math.min(2, meaningful.length || 1)
+  const hit = meaningful.filter(t => t.length === 1 ? e.some(b => b[0] === t) : e.some(b => jw(t, b) >= 0.88)).length
+  return hit >= need
+}
 // Ships and aircraft are skipped unless asked for: their names ("MARIA GRACE") collide with people's
 export function screenName(index, name, { threshold = 0.9, limit = 5, skipTypes = ['vessel', 'aircraft'] } = {}) {
   const q = tokens(name)
@@ -130,7 +143,7 @@ export function screenName(index, name, { threshold = 0.9, limit = 5, skipTypes 
       if ((q.length === 1 || n.tokens.length === 1) && q.join(' ') !== n.tokens.join(' ')) { seen.set(key, 0); continue }
       const s = nameScore(q, n.tokens)
       seen.set(key, s)
-      if (s >= threshold) {
+      if (s >= threshold && covers(q, n.tokens)) {
         const id = e.list + ':' + e.uid
         const prev = seen.get('best:' + id)
         if (!prev || s > prev.score) seen.set('best:' + id, summary(e, { score: Math.round(s * 1000) / 1000, matchedName: n.text, alias: n.alias }))

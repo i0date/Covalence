@@ -14,6 +14,7 @@ import { CLOSED_STATUSES, caseClocks, parseAmount } from '../clocks.mjs'
 import { amlIndex, amlSignals, screeningStatus, walletsOf } from '../fincrime.js'
 import { EXPLAIN_RULES, aiDraftRecord, readAiJson } from '../ai.js'
 import { Badge, Button } from '../ui.jsx'
+import { AlertsPanel } from '../AlertsPanel.jsx'
 
 const DAY = 86400000
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
@@ -110,7 +111,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
   const clusters = useMemo(() => clustersOf(cases, settings), [cases, settings])
   const open = cases.filter(c => !CLOSED_STATUSES.includes(c.status))
 
-  const TABS = [['queue', 'Queue', potential.length + toReport.length + toDecide.length + toFile.length], ['investigations', 'Investigations', clusters.length], ['sar', 'SAR builder', toDecide.length + toFile.length], ['log', 'Screening log', null]]
+  const TABS = [['queue', 'Queue', potential.length + toReport.length + toDecide.length + toFile.length], ['alerts', 'Alerts', null], ['investigations', 'Investigations', clusters.length], ['sar', 'SAR builder', toDecide.length + toFile.length], ['log', 'Screening log', null]]
 
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -187,6 +188,8 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
         ))}
       </>)}
 
+      {tab === 'alerts' && <AlertsPanel outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} />}
+
       {tab === 'sar' && <SarBuilder cases={cases} clusters={clusters} settings={settings} covUser={covUser} setOutcomes={setOutcomes} preset={sarIds} />}
 
       {tab === 'log' && <ScreeningLog cases={cases} />}
@@ -218,6 +221,8 @@ function SarBuilder({ cases, clusters, settings, covUser, setOutcomes, preset })
       from: dates.length ? new Date(Math.min(...dates)) : null, to: dates.length ? new Date(Math.max(...dates)) : null,
       activity: [...new Set(amls.flatMap(a => a.signals.map(s => SAR_ACTIVITY[s.key] || s.label)))],
       sanctions: [...new Set(chosen.filter(c => ['potential', 'confirmed'].includes(screeningStatus(c))).flatMap(c => c.screening.hits.map(h => `${h.subject} ≈ ${h.name} (${h.list}, ${h.programs.replace(/\]\s*\[/g, ' · ')})${screeningStatus(c) === 'confirmed' ? ' — confirmed' : ' — not yet decided'}`)))],
+      monitoringAlerts: chosen.flatMap(c => (c.alerts || []).map(a => `${c.id}: ${a.label} — ${a.detail}`)),
+      transactions: chosen.flatMap(c => (c.tmTransactions || []).slice(0, 25).map(t => `${c.id}: ${t.ts.slice(0, 10)} ${t.direction} ${t.amount} ${t.currency} via ${t.channel}${t.counterparty ? ` ${t.direction === 'in' ? 'from' : 'to'} ${t.counterparty}` : ''}${t.country ? ` (${t.country})` : ''}`)),
       cases: chosen.map(c => ({ id: c.id, opened: (c.date || '').slice(0, 10), amount: c.amount, customer: c.cardholderName || '', payee: c.merchant || '', type: (c.verdict || '').replace(/_/g, ' ').toLowerCase(), statement: (c._complaint || '').slice(0, 400) })),
     }
   }, [ids.join(), cases, settings])
@@ -297,6 +302,7 @@ Return ONLY valid JSON:
           <dt style={{ color:'#57534E' }}>Amount</dt><dd style={{ margin:0 }}>{money(facts.total)} across {chosen.length} case{chosen.length === 1 ? '' : 's'}</dd>
           <dt style={{ color:'#57534E' }}>Dates</dt><dd style={{ margin:0 }}>{day(facts.from)} – {day(facts.to)}</dd>
           <dt style={{ color:'#57534E' }}>Activity</dt><dd style={{ margin:0 }}>{facts.activity.join(' · ') || '—'}</dd>
+          {facts.monitoringAlerts.length > 0 && <><dt style={{ color:'#57534E' }}>Monitoring</dt><dd style={{ margin:0 }}>{facts.monitoringAlerts.map((x, i) => <div key={i}>{x}</div>)}</dd></>}
           {facts.sanctions.length > 0 && <><dt style={{ color:'#57534E' }}>Sanctions</dt><dd style={{ margin:0, color:'#7F1D1D' }}>{facts.sanctions.join(' · ')}</dd></>}
         </dl>
       </section>
