@@ -603,9 +603,15 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
           <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, maxHeight:'calc(100vh - 48px)', overflowY:'auto', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
             {nav.map(({ id, label, group }, i) => (
               <React.Fragment key={id}>
-                {group && group !== nav[i - 1]?.group && <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.18em', color:'#78716C', padding:'12px 20px 4px' }}>{group.toUpperCase()}</div>}
-                <button onClick={() => { onSelect(id); setOpen(false) }} className="mono-font cov-mobile-item" style={item(active === id)}>
-                  {label.replace(/\s+/g, ' ')}
+                {/* Area headings are labels, not links: small, with a rule running out to the edge */}
+                {group && group !== nav[i - 1]?.group && (
+                  <div role="presentation" className="mono-font" style={{ display:'flex', alignItems:'center', gap:'10px', fontSize:'9px', letterSpacing:'0.24em', color:'#6B6259', padding:'16px 20px 6px', cursor:'default', userSelect:'none' }}>
+                    {group.toUpperCase()}<span aria-hidden="true" style={{ flex:1, height:'1px', background:'#2D2922' }} />
+                  </div>
+                )}
+                <button onClick={() => { onSelect(id); setOpen(false) }} className={`mono-font cov-mobile-item${group ? ' cov-mobile-sub' : ''}`}
+                  style={{ ...item(active === id), ...(group ? { paddingLeft:'32px' } : {}), ...(group && nav[i + 1]?.group === group ? { borderBottom:'none' } : {}) }}>
+                  {label.includes('  ') ? <><span style={{ color:'#57534E', marginRight:'10px' }}>{label.split('  ')[0]}</span>{label.split('  ')[1]}</> : label}
                 </button>
               </React.Fragment>
             ))}
