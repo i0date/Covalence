@@ -17,16 +17,19 @@ const day = d => d ? new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toL
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : ''
 const daysLeft = d => d ? Math.ceil((new Date(d + 'T23:59:59') - Date.now()) / 86400000) : null
 
-// Bank–merchant sessions linked by ARN: 314(b) doesn't apply (merchants can't register)
-export const DISPUTE_PURPOSES = [
-  'Resolve this chargeback — confirm the facts and agree an outcome',
-  'Arrange a refund in place of the chargeback',
-]
-export const PURPOSES = [
+// What a Duo session is for (supabase_duo_purpose.sql). Recovery is the default and
+// asks nothing; 314(b) applies only when the session investigates money laundering.
+export const SESSION_KINDS = {
+  recovery: { label: 'Recover funds or stop fraud', hint: 'Recalling a payment, freezing a beneficiary, stopping a scam. Institutions share what this needs every day; 314(b) isn’t needed.' },
+  aml:      { label: 'Investigate possible money laundering or terrorist financing', hint: '314(b) gives a safe harbor when both institutions are registered with FinCEN.' },
+  dispute:  { label: 'Resolve a chargeback', hint: 'The two sides of one card dispute. Official responses still go through the network.' },
+}
+export const AML_PURPOSES = [
   'Identify and report possible money laundering',
   'Identify and report possible terrorist financing',
   'Fraud that may involve money laundering (e.g. scam proceeds moving through accounts)',
 ]
+export const kindOf = st => st?.purpose?.kind || (st?.coordination ? 'dispute' : 'recovery')
 
 // ── Settings → Financial crime ───────────────────────────────────────────────
 export function SharingSettings({ admin }) {
@@ -44,7 +47,7 @@ export function SharingSettings({ admin }) {
     <section style={box}>
       <H2>INFORMATION SHARING — 314(b)</H2>
       <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.55, margin:'0 0 12px' }}>
-        Duo sessions share case details with another institution. Under Section 314(b) that sharing has a safe harbor when <strong>both</strong> institutions are registered with FinCEN and share to identify and report possible money laundering or terrorist financing. Each Duo session shows whether both sides are covered and keeps a record of every share.
+        Most Duo sessions recover funds or stop fraud, and don’t need 314(b). When a session investigates possible money laundering or terrorist financing, Section 314(b) gives a safe harbor if <strong>both</strong> institutions are registered with FinCEN. Those sessions show whether both sides are covered, and every session keeps a record of what was shared.
       </p>
       {v === undefined ? <p className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}>Loading…</p> : v === null ? null : (<>
         {v.registered && left != null && (
@@ -71,7 +74,7 @@ export function SharingSettings({ admin }) {
           </>)}
           <label className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
             <input type="checkbox" checked={!!v.require_both} onChange={e => up('require_both', e.target.checked)} style={{ marginTop:'4px' }} />
-            <span>Only share in Duo when both sides are registered <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>Otherwise analysts see a warning and can still share; each share is recorded as covered or not.</span></span>
+            <span>Only share money-laundering information in Duo when both sides are registered <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>Applies to sessions marked as a money-laundering investigation. Otherwise analysts see a warning and can still share. Recovery sessions are never blocked.</span></span>
           </label>
           {admin && <div><Button disabled={busy} onClick={save}>Save</Button></div>}
         </fieldset>
@@ -111,17 +114,24 @@ function Side({ s, label }) {
   )
 }
 
-export function DuoSharingBar({ st, myRole }) {
-  const [open, setOpen] = useState(false)
+export function DuoSharingBar({ st, myRole, sessionId, onChanged }) {
+  const [open, setOpen] = useState(false), [switching, setSwitching] = useState(false)
   if (!st) return null
   const mine = myRole === 'b' ? st.b : st.a, theirs = myRole === 'b' ? st.a : st.b
-  if (st.coordination) return (
-    <div className="mb-6" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'12px 14px' }}>
-      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', fontWeight:600, marginBottom:'4px' }}>DISPUTE COORDINATION — 314(b) DOESN’T APPLY</div>
-      <div className="display-font" style={{ fontSize:'13px', color:'#3F3A35', lineHeight:1.5 }}>
-        This session links the two sides of one chargeback, matched by its ARN. Merchants can’t register under 314(b), so share only what the dispute itself needs. Official responses still go through the card network and the acquirer.
+  const kind = kindOf(st)
+  const switcher = switching && <SharingPurpose sessionId={sessionId} current={kind} coordination={!!st.coordination} onDone={async () => { setSwitching(false); await onChanged?.() }} onCancel={() => setSwitching(false)} />
+  if (kind !== 'aml') return (
+    <div className="mb-6" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'10px 14px' }}>
+      <div style={{ display:'flex', gap:'10px', alignItems:'baseline', flexWrap:'wrap' }}>
+        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', fontWeight:600 }}>{kind === 'dispute' ? 'RESOLVING A CHARGEBACK' : 'RECOVERING FUNDS'} — 314(b) NOT NEEDED</span>
+        <span className="display-font" style={{ fontSize:'13px', color:'#3F3A35', flex:'1 1 260px' }}>
+          {kind === 'dispute'
+            ? 'This session links the two sides of one chargeback by its ARN. Share what the dispute needs; official responses still go through the card network and the acquirer.'
+            : 'Share what’s needed to recover the funds or stop the fraud. If you come to suspect money laundering or terrorist financing, switch this session to a 314(b) investigation.'}
+        </span>
+        {!st.coordination && <button type="button" onClick={() => setSwitching(v => !v)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', background:'transparent', border:0, padding:0, color:'#1A1814', cursor:'pointer', textDecoration:'underline' }}>{switching ? 'CANCEL' : 'CHANGE WHAT THIS SESSION IS FOR'}</button>}
       </div>
-      {st.purpose && <div className="display-font" style={{ fontSize:'12px', color:'#3F3A35', marginTop:'8px' }}>Purpose: {st.purpose.text} <span className="mono-font" style={{ fontSize:'10px', color:'#6B6259' }}>— {st.purpose.by || 'your team'}, {when(st.purpose.at)}</span></div>}
+      {switcher}
     </div>
   )
   const tone = st.safe_harbor ? { c:'#065F46', bg:'#ECFDF5', b:'#6EE7B7' } : { c:'#92400E', bg:'#FEF3C7', b:'#FCD34D' }
@@ -133,10 +143,12 @@ export function DuoSharingBar({ st, myRole }) {
     <div className="mb-6" style={{ border:`1px solid ${tone.b}`, background: tone.bg, padding:'12px 14px' }}>
       <div style={{ display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap', marginBottom:'8px' }}>
         <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color: tone.c, fontWeight:600 }}>
-          {st.safe_harbor ? '314(b) SAFE HARBOR — BOTH SIDES REGISTERED' : '314(b) — NOT COVERED'}
+          {st.safe_harbor ? 'MONEY-LAUNDERING INVESTIGATION · 314(b) SAFE HARBOR — BOTH SIDES REGISTERED' : 'MONEY-LAUNDERING INVESTIGATION · 314(b) — NOT COVERED'}
         </span>
-        {!st.safe_harbor && <span className="display-font" style={{ fontSize:'13px', color:'#78350F' }}>{why}{st.require_both ? ' Your institution only shares when both sides are covered.' : ' Share only what you could share without the safe harbor.'}</span>}
+        {!st.safe_harbor && <span className="display-font" style={{ fontSize:'13px', color:'#78350F' }}>{why}{st.require_both ? ' Your institution only shares money-laundering information when both sides are covered.' : ' Share only what you could share without the safe harbor.'}</span>}
+        <button type="button" onClick={() => setSwitching(v => !v)} className="mono-font" style={{ marginLeft:'auto', fontSize:'10px', letterSpacing:'0.1em', background:'transparent', border:0, padding:0, color:'#1A1814', cursor:'pointer', textDecoration:'underline' }}>{switching ? 'CANCEL' : 'CHANGE WHAT THIS SESSION IS FOR'}</button>
       </div>
+      {switcher}
       <div style={{ display:'flex', gap:'16px', flexWrap:'wrap' }}>
         <Side s={mine} label="YOU" /><Side s={theirs} label="THEM" />
       </div>
@@ -164,29 +176,40 @@ export function DuoSharingBar({ st, myRole }) {
   )
 }
 
-// Shown in place of POST ENTRY until this institution has said why it is sharing
-export function SharingPurpose({ sessionId, onDone, disabled, coordination = false }) {
-  const options = coordination ? DISPUTE_PURPOSES : PURPOSES
-  const [pick, setPick] = useState(options[coordination ? 0 : 2]), [note, setNote] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false)
+// Change what the session is for. Choosing an investigation asks which kind, for the 314(b) record.
+export function SharingPurpose({ sessionId, onDone, onCancel, current = 'recovery', coordination = false }) {
+  const kinds = coordination ? ['dispute'] : ['recovery', 'aml']
+  const [kind, setKind] = useState(current === 'aml' ? 'recovery' : 'aml'), [pick, setPick] = useState(AML_PURPOSES[2])
+  const [note, setNote] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false)
   const confirm = async () => {
     setBusy(true); setErr('')
-    try { await duoShareConfirm(sessionId, note.trim() ? `${pick} — ${note.trim()}` : pick); await onDone() } catch (e) { setErr(e.message) } finally { setBusy(false) }
+    const text = kind === 'aml' ? pick : SESSION_KINDS[kind].label
+    try { await duoShareConfirm(sessionId, note.trim() ? `${text} — ${note.trim()}` : text, kind); await onDone() } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   return (
-    <div style={{ border:'1px solid #C8C0B0', background:'#FAF7F1', padding:'12px 14px', marginTop:'8px' }}>
-      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>BEFORE YOU SHARE — WHY IS YOUR INSTITUTION SHARING?</div>
-      <div role="radiogroup" aria-label="Purpose of sharing" style={{ display:'grid', gap:'4px' }}>
-        {options.map(p => (
-          <label key={p} className="display-font" style={{ fontSize:'13px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
-            <input type="radio" name={`purpose-${sessionId}`} checked={pick === p} onChange={() => setPick(p)} style={{ marginTop:'4px' }} /> {p}
+    <div style={{ border:'1px solid #C8C0B0', background:'#FFFFFF', padding:'12px 14px', marginTop:'10px' }}>
+      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>WHAT IS THIS SESSION FOR?</div>
+      <div role="radiogroup" aria-label="What this session is for" style={{ display:'grid', gap:'6px' }}>
+        {kinds.map(k => (
+          <label key={k} className="display-font" style={{ fontSize:'13px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
+            <input type="radio" name={`kind-${sessionId}`} checked={kind === k} onChange={() => setKind(k)} style={{ marginTop:'4px' }} />
+            <span>{SESSION_KINDS[k].label}<span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>{SESSION_KINDS[k].hint}</span></span>
           </label>
         ))}
       </div>
-      <Input value={note} onChange={e => setNote(e.target.value)} placeholder="Optional: what you suspect, in a few words" aria-label="Purpose detail"
+      {kind === 'aml' && <div role="radiogroup" aria-label="What you suspect" style={{ display:'grid', gap:'4px', margin:'8px 0 0 22px' }}>
+        {AML_PURPOSES.map(p => (
+          <label key={p} className="display-font" style={{ fontSize:'12px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
+            <input type="radio" name={`aml-${sessionId}`} checked={pick === p} onChange={() => setPick(p)} style={{ marginTop:'3px' }} /> {p}
+          </label>
+        ))}
+      </div>}
+      <Input value={note} onChange={e => setNote(e.target.value)} placeholder="Optional: a few words for the record" aria-label="Purpose detail"
         style={{ marginTop:'8px', padding:'6px 8px', fontSize:'13px', width:'100%', boxSizing:'border-box' }} />
       <div style={{ display:'flex', gap:'10px', alignItems:'center', marginTop:'8px', flexWrap:'wrap' }}>
-        <Button disabled={busy || disabled} onClick={confirm}>{busy ? 'Saving…' : 'Confirm and continue'}</Button>
-        <span className="display-font" style={{ fontSize:'12px', color:'#6B6259' }}>Asked once per session; it goes on the sharing record and the audit log.</span>
+        <Button small disabled={busy || kind === current} onClick={confirm}>{busy ? 'Saving…' : 'Save'}</Button>
+        {onCancel && <Button variant="quiet" onClick={onCancel}>Cancel</Button>}
+        <span className="display-font" style={{ fontSize:'12px', color:'#6B6259' }}>It goes on the sharing record and the audit log.</span>
       </div>
       {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'6px 0 0' }}>{err}</p>}
     </div>

@@ -2,7 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
-import { DuoSharingBar, SharingPurpose, useDuoSharing } from '../SharingPanel.jsx'
+import { DuoSharingBar, kindOf, useDuoSharing } from '../SharingPanel.jsx'
 import { ArnInvites } from '../ArnInvites.jsx'
 import { LinkedCases } from '../LinkedCases.jsx'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
@@ -200,7 +200,6 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
 
   const handleAddEntry = async () => {
     if (!newEntry.trim() || !session) return
-    if (sharing && !sharing.purpose) { setError('Confirm why you are sharing first (below).'); return }
     setSaving(true); setError('')
     try {
       const field = myRole === 'a' ? 'notes_a' : 'notes_b'
@@ -500,6 +499,8 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
   // ── SESSION ───────────────────────────────────────────────────────────────────────
   if (phase === 'session' && session) {
     const claim        = session.claim || {}
+    // 314(b)'s require-both rule only ever blocks a money-laundering investigation
+    const shareBlocked = !!(sharing && kindOf(sharing) === 'aml' && sharing.require_both && !sharing.safe_harbor)
     const thread       = buildThread(session)
     const myName       = myRole === 'a' ? session.institution_a : session.institution_b
     const isCryptoClaim = claim.accountType === 'crypto' || claim.accountType === 'crypto_exchange'
@@ -586,7 +587,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
           </div>
         )}
 
-        <DuoSharingBar st={sharing} myRole={myRole} />
+        <DuoSharingBar st={sharing} myRole={myRole} sessionId={session.id} onChanged={reloadSharing} />
         {claim.kind === 'arn' && <LinkedCases session={session} covUser={covUser} />}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -702,13 +703,13 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
                 rows={3} placeholder="Findings, proposed resolution, agreed next steps…"
                 style={{ width:'100%', resize:'none', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.6, padding:'10px', border:'1px solid #C8C0B0', background:'#FFFFFF', boxSizing:'border-box', outline:'none' }} />
               {error && <div className="mono-font text-[10px] text-red-700 mt-1">{error}</div>}
-              {sharing && !sharing.purpose ? <SharingPurpose sessionId={session.id} onDone={reloadSharing} coordination={!!sharing.coordination} disabled={sharing.require_both && !sharing.safe_harbor && !sharing.coordination} /> :
               <div style={{ display:'flex', alignItems:'center', gap:'12px', marginTop:'8px', flexWrap:'wrap' }}>
-                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || (sharing?.require_both && !sharing.safe_harbor && !sharing.coordination)}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
+                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || shareBlocked}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
                 <div className="mono-font text-[10px] tracking-widest text-stone-400">
                   ⌘↵ to post · syncs every 5s{lastSync ? ` · ${lastSync.toLocaleTimeString()}` : ''}
                 </div>
-              </div>}
+              </div>
+              {shareBlocked && <div className="mono-font text-[10px] text-amber-800 mt-1">Your institution only shares money-laundering information when both sides are registered under 314(b). Switch the session back to recovery if that’s what it is.</div>}
             </div>
           </div>
         </div>
