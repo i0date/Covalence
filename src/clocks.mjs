@@ -10,6 +10,8 @@
 //   response  the network's next response deadline          (nextRespDate)
 //   regE      Reg E: 45 business days from provisional credit
 // Each clock is ok, soon (inside its warning window), breached, or met.
+import { isMerchantCase } from './sides.mjs'
+import { TO_ANSWER, respondBy } from './merchantQueue.mjs'
 
 export const CLOSED_STATUSES     = ['won','lost','withdrawn','resolved','closed']
 export const FILE_STAGE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','pending_arb','rebuttal_prep','submitted']
@@ -89,7 +91,7 @@ export function caseClocks(c, settings, now = new Date()) {
     out.push(clock('sar', c.sarReview.decision === 'file' ? 'SAR filed with FinCEN' : 'SAR decision',   // FinCEN: 30 days from initial detection
       new Date(new Date(c.sarReview.flaggedAt).getTime() + 30 * DAY), false, 7 * DAY, now))
   if (!isOpen(c)) return out
-  const merchant = c.mode === 'merchant'
+  const merchant = isMerchantCase(c)
   if (c.date && s.slaAssignHours > 0) {
     const due = new Date(new Date(c.date).getTime() + s.slaAssignHours * HOUR)
     out.push(clock('assign', 'Owner assigned', due, !!c.assignedTo, Math.max(HOUR, s.slaAssignHours * HOUR * 0.25), now))
@@ -101,6 +103,8 @@ export function caseClocks(c, settings, now = new Date()) {
   }
   // Date deadlines warn by whole days: "3 days ahead" includes the rest of today
   if (c.nextRespDate) out.push(clock('response', 'Response deadline', endOfDay(c.nextRespDate), false, (s.reminderLeadDays + 1) * DAY, now))
+  else if (merchant && TO_ANSWER.includes(c.status || 'received') && c.date)   // the acquirer's deadline to answer a chargeback
+    out.push(clock('response', 'Chargeback answered', respondBy(c, settings), false, (s.reminderLeadDays + 1) * DAY, now))
   if (c.provCreditDate && !merchant) {
     const due = addBusinessDays(c.provCreditDate, 45); due.setHours(23, 59, 59)
     out.push(clock('regE', 'Reg E 45-business-day limit', due, false, (s.regEWarnDays + 1) * DAY, now))

@@ -5,14 +5,19 @@ import { evidencePath, CaseLink } from '../CaseThread.jsx'
 import { SUPA_KEY, SUPA_URL, pushCasesToSupa } from '../data.js'
 import { registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 import { readCases } from '../caseStore.js'
+import { isSignedIn } from '../auth.js'
+import { recordDemoCaseEvent } from '../demoBackend.js'
+import { MerchantFile } from '../MerchantFile.jsx'
+import { doesIssuing, doesMerchant, isMerchantCase } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FILE VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 const FILE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','won','lost','pending_arb','withdrawn']
 
-export function FileView({ setActiveSection, setAppOutcomes }) {
+export function FileView({ setActiveSection, setAppOutcomes, platformMode = 'fi', setPlatformMode, sides = ['issuer'], covUser }) {
   const [filedCases, setFiledCases] = React.useState([])
+  const [allCases,   setAllCases]   = React.useState([])   // the merchant view reads every merchant case
   const [pkgModal2,  setPkgModal2]  = React.useState(null)
   const [fileSearch, setFileSearch] = React.useState('')
   const [fileFilter, setFileFilter] = React.useState('all') // all | active | won | lost
@@ -26,7 +31,8 @@ export function FileView({ setActiveSection, setAppOutcomes }) {
     const refresh = (merged) => {
       try {
         const all = merged || readCases()
-        setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+        setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status) && !isMerchantCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+        setAllCases(all)
       } catch {}
     }
     refresh() // initial load
@@ -34,13 +40,23 @@ export function FileView({ setActiveSection, setAppOutcomes }) {
     return unregister
   }, [])
 
+  // updatedAt marks the edit as newest, which also skips the case store's automatic
+  // history stamp — so a status change writes its own history entry here
   const updateOutcome = (id, newStatus, patch = {}) => {
     try {
-      const all = readCases()
-      const updated = all.map(o => o.id === id ? { ...o, status: newStatus, outcomeAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ...patch } : o)
+      const all = readCases(), now = new Date().toISOString()
+      let who = 'Agent'; try { who = covUser?.name || JSON.parse(localStorage.getItem('cov_user') || 'null')?.name || who } catch {}
+      const updated = all.map(o => {
+        if (o.id !== id) return o
+        const moved = newStatus !== o.status
+        const ev = { ts: now, event: 'status', from: o.status, status: newStatus, by: who }
+        if (moved && !isSignedIn()) recordDemoCaseEvent(o.id, ev)
+        return { ...o, status: newStatus, outcomeAt: now, updatedAt: now, ...(moved ? { history: [...(o.history || []), ev] } : {}), ...patch }
+      })
       saveOutcomes(updated)
       if (setAppOutcomes) setAppOutcomes(updated)
-      setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      setAllCases(updated)
+      setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status) && !isMerchantCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
       if (SUPA_URL && SUPA_KEY) pushCasesToSupa(updated).catch(()=>{})
     } catch {}
   }
@@ -89,11 +105,28 @@ ${'═'.repeat(64)}`
             <span style={{fontWeight:700}}>Fi</span><span style={{fontStyle:'italic',fontWeight:500}}>le</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{fontSize:'clamp(14px,1.8vw,16px)',lineHeight:1.6,maxWidth:'560px'}}>
-            Submission audit trail. Generate filing packages from Multi — they live here as a permanent record. Direct API submission is coming once network certification is in place.
+            {platformMode === 'merchant'
+              ? 'Every chargeback you’ve answered, until the cardholder’s bank decides — and after a win, whether the money came back and when the win is final.'
+              : 'Submission audit trail. Generate filing packages from Multi — they live here as a permanent record. Direct API submission is coming once network certification is in place.'}
           </p>
         </div>
         <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()}</div>
       </div>
+
+      {/* A workspace that works both sides switches here, the same switch as Desk's */}
+      {doesIssuing(sides) && doesMerchant(sides) && setPlatformMode && (
+        <div role="group" aria-label="Side" className="flex mb-8" style={{ flexWrap:'wrap' }}>
+          {[['fi', 'ISSUER / FI'], ['merchant', 'MERCHANT / ACQUIRER']].map(([k, l], i) => (
+            <button key={k} type="button" onClick={() => setPlatformMode(k)} aria-pressed={platformMode === k}
+              className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (i ? 'border-l-0 ' : '') + (platformMode === k ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>{l}</button>
+          ))}
+        </div>
+      )}
+
+      {platformMode === 'merchant' ? (
+        <MerchantFile cases={allCases} covUser={covUser} setActiveSection={setActiveSection}
+          update={(id, patch) => { const o = allCases.find(x => x.id === id); if (o) updateOutcome(id, patch.status || o.status, patch) }} />
+      ) : (<>
 
       {/* ── Tab switcher ── */}
       <div className="flex gap-0 mb-8 border-b border-stone-200">
@@ -301,6 +334,7 @@ ${'═'.repeat(64)}`
       {/* Package re-download modal */}
       </>
       }{/* end cases tab */}
+      </>)}{/* end issuer view */}
 
       {pkgModal2 && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:'24px'}}>

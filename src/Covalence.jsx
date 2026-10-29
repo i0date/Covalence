@@ -24,6 +24,7 @@ import { TrioView } from './tools/Trio.jsx'
 import { readCases, writeCases } from './caseStore.js'
 import { LicitView } from './tools/Licit.jsx'
 import { screeningStatus } from './fincrime.js'
+import { doesIssuing, doesMerchant, navFor, workspaceSides } from './sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
@@ -326,19 +327,16 @@ export default function Covalence() {
     pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
   }, [membership?.institution_id])
 
-  // Three areas: the dispute pipeline, the compliance desk, recovery and collaboration
-  const NAV = [
-    { id:'home',     label:'HOME' },
-    { id:'triage',   label:'001  TRIAGE', group:'Disputes' },
-    { id:'desk',     label:'002  DISPUTE DESK', group:'Disputes' },
-    { id:'multi',    label:'003  MULTI', group:'Disputes' },
-    { id:'file',     label:'004  FILE', group:'Disputes' },
-    { id:'licit',    label:'005  LICIT', group:'Compliance' },
-    { id:'dfa',      label:'006  DFA', group:'Recovery' },
-    { id:'duo',      label:'007  DUO', group:'Recovery' },
-    { id:'trio',     label:'008  TRIO', group:'Recovery' },
-    { id:'settings', label:'SETTINGS' },
-  ]
+  // The menu follows what the workspace does (sides.mjs): issuers get the dispute
+  // pipeline first; merchant-side workspaces get their chargebacks first. Every tool is listed.
+  const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
+  const NAV = navFor(sides)
+  // Desk opens on a side this workspace works
+  const sidesKey = sides.join(',')
+  useEffect(() => {
+    if (!doesIssuing(sides) && platformMode !== 'merchant') setPlatformMode('merchant')
+    if (!doesMerchant(sides) && platformMode !== 'fi') setPlatformMode('fi')
+  }, [sidesKey])
 
   if (!authReady) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
   if (session && !membershipChecked) return <div style={{ minHeight:'100vh', background:'#1A1814' }} />
@@ -468,7 +466,7 @@ export default function Covalence() {
             onLoadDemo={loadDemo} onClearDemo={clearDemo} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'triage' ? 'block' : 'none' }}>
-          <TriageView appOutcomes={outcomes} setAppOutcomes={setOutcomes} settings={settings} covUser={covUser} fraudRoute={fraudRoute} onCloseAtIntake={closeAtIntake} onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
+          <TriageView appOutcomes={outcomes} setAppOutcomes={setOutcomes} settings={settings} covUser={covUser} sides={sides} fraudRoute={fraudRoute} onCloseAtIntake={closeAtIntake} onHandoff={(h) => { setTriageHandoff(h); setActiveSection('desk') }} onGoToDuo={() => setActiveSection('duo')} onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }} />
         </div>
         <div style={{ display: activeSection === 'desk' ? 'block' : 'none' }}>
           <DeskView
@@ -479,16 +477,16 @@ export default function Covalence() {
             onScoreInDfa={(cases) => scoreInDfa(cases)}
             onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }}
             onGoToDuo={() => setActiveSection('duo')}
-            platformMode={platformMode} setPlatformMode={setPlatformMode}
+            platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} rootSettings={settings}
             covUser={covUser}
             deskOpenRequest={deskOpenRequest}
           />
         </div>
         <div style={{ display: activeSection === 'multi' ? 'block' : 'none' }}>
-          <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} />
+          <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} />
         </div>
         <div style={{ display: activeSection === 'file' ? 'block' : 'none' }}>
-          <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />
+          <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'licit' ? 'block' : 'none' }}>
           <LicitView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} />

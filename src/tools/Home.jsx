@@ -4,6 +4,11 @@ import React from 'react'
 import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { isMerchantCase } from '../sides.mjs'
+import { merchantQueue } from '../merchantQueue.mjs'
+import { merchantFile } from '../merchantFile.mjs'
+import { worstRatio } from '../chargebackRatio.mjs'
+import { ChargebackRatioPanel, ratioPct, ratiosFor } from '../ChargebackRatioPanel.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
@@ -32,9 +37,11 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const [caseFilter, setCaseFilter] = React.useState('open')
   const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
+  // The root's settings when given, so a change in Settings shows here without a reload
   const settings = React.useMemo(() => {
+    if (_ps) return { ...DEFAULT_SETTINGS, ..._ps }
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
-  }, [])
+  }, [_ps])
   // The full case list folds away (Your day already shows what needs attention); how it starts is a default in Settings
   const [casesOpen, setCasesOpen] = React.useState(() => settings.homeCasesOpen === 'open' || settings.homeCasesOpen === true)
   const toggleCases = () => setCasesOpen(o => !o)
@@ -45,7 +52,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const inRange = o => { if (!since) return true; const d = new Date(o.date || o.createdAt || o.ts || 0); return isNaN(d) || d > since }
   const rangeText = windowDays ? `last ${windowDays} days` : 'all time'
   const recent   = outcomes.filter(inRange)
-  const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
+  const active   = platformMode === 'merchant' ? recent.filter(o => isMerchantCase(o)) : recent.filter(o => !isMerchantCase(o))
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
@@ -222,7 +229,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
 
       {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
-        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : !isMerchantCase(o))
         const thread = everything.filter(inRange)
         const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
         const FILTERS = [
@@ -302,7 +309,37 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       })()}
 
       {/* ── The numbers: one strip (snapshot figures can be turned off in Settings) ── */}
-      {(() => {
+      {platformMode === 'merchant' ? (() => {
+        // Merchant side: chargebacks to answer, wins and money back, and the ratio the networks watch
+        const queue = merchantQueue(outcomes, settings)
+        const overdue = queue.filter(r => r.left != null && r.left < 0).length
+        const thisWeek = queue.filter(r => r.left != null && r.left >= 0 && r.left <= 7).length
+        const f = merchantFile(active)
+        const money = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        // Demo visitors haven't entered sales figures, so the ratio uses sample ones
+        const { ratios, demoSales } = ratiosFor(outcomes, settings, covUser)
+        const worst = worstRatio(ratios)
+        const cells = [
+          { label:'TO ANSWER', value: queue.length, sub: overdue ? `${overdue} overdue` : `${thisWeek} due this week`, alert: overdue > 0 },
+          { label:'WITH THE BANK', value: f.waiting.length + f.escalated.length, sub: f.escalated.length ? `${f.escalated.length} escalated` : 'responses waiting on a decision' },
+          { label:'WIN RATE', value: winRate !== null ? winRate + '%' : '—', sub: `${resolved.length} decided · ${rangeText}` },
+          { label:'RECOVERED', value: money(f.recovered), sub: 'money back from the acquirer' },
+          { label:'NOT BACK YET', value: money(f.outstanding), sub: f.notFinal ? `${f.notFinal} win${f.notFinal === 1 ? '' : 's'} not final` : 'from wins', alert: f.outstanding > 0 },
+          { label:'CHARGEBACK RATIO', value: ratioPct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
+        ]
+        return (<>
+          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
+            {cells.map(c => (
+              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color: c.alert ? '#92400E' : '#78716C' }}>{c.label}</div>
+                <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} attached />
+        </>)
+      })() : (() => {
         const cells = [
           { label:'NEW',         value: active.length,                  sub: windowDays ? `opened in ${windowDays} days` : 'opened, all time' },
           { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },

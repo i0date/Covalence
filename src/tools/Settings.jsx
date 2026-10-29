@@ -10,6 +10,7 @@ import { ImportPanel } from '../ImportPanel.jsx'
 import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { SIDES, alertsSource, doesMerchant, workspaceSides } from '../sides.mjs'
 
 export function SettingsView({ settings, setSettings, covUser, outcomes, setOutcomes, team }) {
   const [saved, setSaved] = React.useState(false)
@@ -21,6 +22,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
   const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
   // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
+  const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
   // One section at a time, so the audit log doesn't push the settings down the page
   const TABS = [['settings', 'Institution settings'], ...(workspace ? [['workflow', 'Workflow'], ['qa', 'Quality review'], ['fincrime', 'Financial crime'], ['import', 'Import cases'], ['connections', 'Connections'], ['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
@@ -52,8 +54,8 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
       placeholder={placeholder}
       style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'12px', color:'#1A1814', width:'100%', boxSizing:'border-box', outline:'none' }} />
   )
-  const Num = ({ field, hint, min, max }) => (
-    <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]} min={min} max={max}
+  const Num = ({ field, hint, min, max, step }) => (
+    <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]} min={min} max={max} step={step}
       onChange={e => set(field, Number(e.target.value))}
       style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'140px', outline:'none' }} />
   )
@@ -140,7 +142,18 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
             <Txt field="duoInstitutionName" placeholder="First Community Credit Union" />
           </Field>
           <Field label="Institution Type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
-            <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform']]} />
+            <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],['merchant','Merchant'],['processor','Payment Processor / Acquirer']]} />
+          </Field>
+          <Field label="What you do" hint="Sets the menu order and where each tool starts. Every tool stays on the menu. Leave as it is to follow the institution type.">
+            <div role="group" aria-label="What you do" style={{ display:'grid', gap:'6px' }}>
+              {SIDES.map(([k, l, d]) => (
+                <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
+                  <input type="checkbox" checked={sides.includes(k)} style={{ marginTop:'4px' }}
+                    onChange={e => { const next = e.target.checked ? [...sides, k] : sides.filter(x => x !== k); if (next.length) set('sides', SIDES.map(([x]) => x).filter(x => next.includes(x))) }} />
+                  <span>{l} <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>{d}</span></span>
+                </label>
+              ))}
+            </div>
           </Field>
           <Field label="Jurisdiction" hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules.">
             <Sel field="jurisdiction" options={[['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other']]} />
@@ -205,6 +218,27 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
           </Field>
         </Card>
 
+        {/* ── Merchant side: answering chargebacks (003 Multi) ── */}
+        {doesMerchant(sides) && (
+        <Card title="CHARGEBACKS AGAINST YOU">
+          <Field label="Days to answer" hint="Your acquirer’s deadline, counted from when a chargeback arrives. A case with its own response date uses that instead.">
+            <Num field="mchRespondDays" min={1} max={45} />
+          </Field>
+          <Field label="Accept chargebacks under ($)" hint="Multi recommends accepting these and can accept them in bulk. 0 turns it off.">
+            <Num field="mchAcceptBelow" min={0} max={10000} />
+          </Field>
+          <Field label="Cost to fight one ($)" hint="Staff time and fees to prepare a response. Multi recommends fighting only when the likely recovery is worth more.">
+            <Num field="mchFightCost" min={0} max={10000} />
+          </Field>
+          <Field label="Card sales per month — Visa / Mastercard" hint="For the chargeback ratio on Home: chargebacks in the last 30 days over these. Leave at 0 if you don’t know.">
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}><Num field="mchMonthlyTxVisa" min={0} max={100000000} /><Num field="mchMonthlyTxMc" min={0} max={100000000} /></div>
+          </Field>
+          <Field label="Ratio thresholds, % — Visa / Mastercard" hint="Defaults follow Visa VAMP (1.5% from 2026) and Mastercard ECM (1.5%). Use your acquirer’s figures if they differ; Home warns from two thirds of these.">
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}><Num field="mchRatioVisa" min={0.1} max={10} step={0.1} /><Num field="mchRatioMc" min={0.1} max={10} step={0.1} /></div>
+          </Field>
+        </Card>
+        )}
+
         {/* ── Default views: where each screen starts for everyone at the institution ── */}
         <Card title="DEFAULT VIEWS">
           <Field label="Home date range" hint="The period Home’s cases and numbers cover when it opens. Anyone can change it on the page.">
@@ -214,7 +248,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
             <Sel field="homeCasesOpen" options={[['closed','Folded away'],['open','Open']]} />
           </Field>
           <Field label="Triage opens on" hint="Alerts suit a team whose systems send data to Covalence; Claims suits one that starts from customer reports.">
-            <Sel field="triageDefaultTab" options={[['alerts','Alerts — the bank found it'],['claims','Claims — the customer reported it']]} />
+            <Sel field="triageDefaultTab" options={[['alerts',`Alerts — ${alertsSource(sides, settings.institutionType === 'exchange').toLowerCase()}`],['claims','Claims — the customer reported it']]} />
           </Field>
           <Field label="Triage side" hint="Leave on automatic to follow the institution type (crypto exchanges open on the Crypto Exchange side).">
             <Sel field="triageDefaultSide" options={[['auto','Automatic'],['fi','Financial Institution'],['ce','Crypto Exchange']]} />

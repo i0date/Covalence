@@ -305,7 +305,7 @@ export function buildImport({ rows, existing, options }) {
     creates.push({
       id: newId(o.merchantSide ? 'MCH-' : 'COV-', taken), ...c, status,
       category: categoryFor(c.verdict, c.network) || undefined,
-      ...(o.merchantSide ? { mode: 'merchant' } : {}),
+      ...(o.merchantSide ? { mode: 'merchant', side: 'merchant' } : {}),
       ...(CLOSED.includes(status) && !c.resolvedDate ? { resolvedDate: c.filedAt || c.date } : {}),
       notes: note ? [{ text: note, ts: now, author: 'Import' }] : [], docs: [],
       source: { type: 'csv', file: o.fileName || '', batch: o.batchId, row },
