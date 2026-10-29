@@ -5,12 +5,14 @@ import { evidencePath, CaseLink } from '../CaseThread.jsx'
 import { fetchAgents } from '../data.js'
 import { notesList, registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 import { readCases } from '../caseStore.js'
+import { MerchantQueue } from '../MerchantQueue.jsx'
+import { doesIssuing, doesMerchant } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── MULTI — Bulk dispute management ──────────────────────────────────────────
-export function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection, covUser }) {
+export function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection, covUser, platformMode = 'fi', setPlatformMode, sides = ['issuer'] }) {
   // Read live from the case store so DeskView changes appear immediately
   const [outcomes, setLiveOutcomes] = React.useState(readCases)
   // Subscribe to all outcome changes (same-tab and cross-tab)
@@ -356,22 +358,47 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
     setNoteOpen(prev => ({ ...prev, [id]: false }))
   }
 
+  // Merchant side: chargebacks filed against the merchant, waiting for an answer.
+  // A workspace that works both sides switches here, the same switch as Desk's.
+  const merchantView = platformMode === 'merchant'
+  const sideSwitch = doesIssuing(sides) && doesMerchant(sides) && setPlatformMode && (
+    <div role="group" aria-label="Side" className="flex mb-6" style={{ flexWrap:'wrap' }}>
+      {[['fi', 'ISSUER / FI'], ['merchant', 'MERCHANT / ACQUIRER']].map(([k, l], i) => (
+        <button key={k} type="button" onClick={() => setPlatformMode(k)} aria-pressed={platformMode === k}
+          className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (i ? 'border-l-0 ' : '') + (platformMode === k ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>{l}</button>
+      ))}
+    </div>
+  )
+  const header = (
+    <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'24px' }}>
+      <div>
+        <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 003 — MULTI</div>
+        <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
+          <span style={{ fontWeight:700 }}>Mul</span><span style={{ fontStyle:'italic', fontWeight:500 }}>ti</span>
+        </h1>
+        <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:'1.5', maxWidth:'520px' }}>
+          {merchantView
+            ? 'Every chargeback filed against you that still needs an answer, soonest deadline first, with a fight-or-accept call on each. Build the response in the Dispute Desk; accept the small ones here in bulk.'
+            : 'Bulk dispute operations. Queue fraud and service cases from the Dispute Desk, file fraud chargebacks in batch, and route service disputes for manual review.'}
+        </p>
+      </div>
+      <div className="mono-font text-xs tracking-widest text-stone-600 shrink-0">
+        {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
+      </div>
+    </div>
+  )
+  if (merchantView) return (
+    <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
+      {header}
+      {sideSwitch}
+      <MerchantQueue outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} setActiveSection={setActiveSection} />
+    </div>
+  )
+
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
-      <div className="mb-8 pb-6" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'24px' }}>
-        <div>
-          <div className="mono-font text-xs tracking-widest text-stone-400 mb-3">ISSUE Nº 003 — MULTI</div>
-          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,8vw,96px)', letterSpacing:'-0.03em' }}>
-            <span style={{ fontWeight:700 }}>Mul</span><span style={{ fontStyle:'italic', fontWeight:500 }}>ti</span>
-          </h1>
-          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:'1.5', maxWidth:'520px' }}>
-            Bulk dispute operations. Queue fraud and service cases from the Dispute Desk, file fraud chargebacks in batch, and route service disputes for manual review.
-          </p>
-        </div>
-        <div className="mono-font text-xs tracking-widest text-stone-600 shrink-0">
-          {new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}
-        </div>
-      </div>
+      {header}
+      {sideSwitch}
       {/* ── Tab switcher ── */}
       <div className="flex gap-0 mb-6 border-b border-stone-200">
         {[['queue','FILING QUEUE'],['myqueue','MY QUEUE'],['intel','INTEL']].map(([id,label])=>(

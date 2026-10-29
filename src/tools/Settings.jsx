@@ -10,7 +10,7 @@ import { ImportPanel } from '../ImportPanel.jsx'
 import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
-import { SIDES, alertsSource, workspaceSides } from '../sides.mjs'
+import { SIDES, alertsSource, doesMerchant, workspaceSides } from '../sides.mjs'
 
 export function SettingsView({ settings, setSettings, covUser, outcomes, setOutcomes, team }) {
   const [saved, setSaved] = React.useState(false)
@@ -217,6 +217,21 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
             </button>
           </Field>
         </Card>
+
+        {/* ── Merchant side: answering chargebacks (003 Multi) ── */}
+        {doesMerchant(sides) && (
+        <Card title="CHARGEBACKS AGAINST YOU">
+          <Field label="Days to answer" hint="Your acquirer’s deadline, counted from when a chargeback arrives. A case with its own response date uses that instead.">
+            <Num field="mchRespondDays" min={1} max={45} />
+          </Field>
+          <Field label="Accept chargebacks under ($)" hint="Multi recommends accepting these and can accept them in bulk. 0 turns it off.">
+            <Num field="mchAcceptBelow" min={0} max={10000} />
+          </Field>
+          <Field label="Cost to fight one ($)" hint="Staff time and fees to prepare a response. Multi recommends fighting only when the likely recovery is worth more.">
+            <Num field="mchFightCost" min={0} max={10000} />
+          </Field>
+        </Card>
+        )}
 
         {/* ── Default views: where each screen starts for everyone at the institution ── */}
         <Card title="DEFAULT VIEWS">

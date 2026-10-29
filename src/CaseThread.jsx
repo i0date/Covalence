@@ -694,6 +694,12 @@ export function buildDemoInstitution(userEmail) {
       history:h([11,'received'],[2,'rebuttal_prep','received']) },
     { id:'MCH-DEMO03', mode:'merchant', side:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
     { id:'MCH-DEMO04', mode:'merchant', side:'merchant', date:iso(45), merchant:'Northwind Electronics', amount:'98.00 USD', network:'VISA', status:'won', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', resolvedDate:iso(18), winProb:'HIGH', history:h([45,'received'],[41,'rebuttal_prep','received'],[37,'submitted','rebuttal_prep'],[18,'won','submitted']) },
+    // …and a typical week of new ones: small subscription chargebacks worth accepting, one past the deadline, one large
+    { id:'MCH-DEMO05', mode:'merchant', side:'merchant', date:iso(2),  merchant:'Northwind Electronics', amount:'12.99 USD', network:'VISA', status:'received', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', acquirer:'Demo Acquiring', cardholderName:'L. Park', winProb:'LOW', history:h([2,'received']) },
+    { id:'MCH-DEMO06', mode:'merchant', side:'merchant', date:iso(4),  merchant:'Northwind Electronics', amount:'18.50 USD', network:'MC', status:'received', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', cardholderName:'T. Brennan', winProb:'MEDIUM', history:h([4,'received']) },
+    { id:'MCH-DEMO07', mode:'merchant', side:'merchant', date:iso(1),  merchant:'Northwind Electronics', amount:'9.99 USD', network:'VISA', status:'received', reasonCode:'12.6.1', reasonTitle:'Duplicate Processing', acquirer:'Demo Acquiring', cardholderName:'M. Haddad', history:h([1,'received']) },
+    { id:'MCH-DEMO08', mode:'merchant', side:'merchant', date:iso(12), merchant:'Northwind Electronics', amount:'342.00 USD', network:'VISA', status:'received', reasonCode:'13.3', reasonTitle:'Not as Described or Defective Merchandise', acquirer:'Demo Acquiring', cardholderName:'S. Varga', winProb:'LOW', assignedTo:'p.raman@demo.bank', history:h([12,'received']) },
+    { id:'MCH-DEMO09', mode:'merchant', side:'merchant', date:iso(8),  merchant:'Northwind Electronics', amount:'2150.00 USD', network:'MC', status:'received', reasonCode:'4837', reasonTitle:'No Cardholder Authorization', acquirer:'Demo Acquiring', cardholderName:'K. Duarte', threeDSStatus:'authenticated', deliveryConfirmed:true, winProb:'MEDIUM', history:h([8,'received']) },
     // Financial crime: a romance / investment scam paying out to a wallet on OFAC's SDN list (the address is real and public)
     { id:'COV-DEMO19', date:iso(3), merchant:'Bitvault Exchange', amount:'4600.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
       _complaint:'Someone I met online talked me into buying USDT on Bitvault Exchange (bitvault-exchange.xyz) and sending it to 0x252a8bd2319d8a555b872990601221b3a2053bce for a "guaranteed" trading plan. Now I can’t withdraw anything.',
@@ -784,7 +790,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '6'
+const DEMO_VERSION = '7'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.
