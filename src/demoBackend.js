@@ -12,7 +12,7 @@ const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
-  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements',
+  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -559,6 +559,47 @@ const HANDLERS = {
     write(K.settle, st)
     audit('duo.settle_' + p_action, 'duo', s.id, { amount: Number(p_amount) || st[s.id].amount, ref: p_ref || null })
     return null
+  },
+
+  // Sound the alarm (supabase_alarms.sql): one open alarm at a time; another report joins it
+  alarm_list: () => { const all = read(K.alarms, []); return [...all.filter(a => a.status === 'open'), ...all.filter(a => a.status !== 'open').slice(0, 10)] },
+  alarm_raise: ({ p_level, p_title, p_do_now, p_next_minutes, p_confirmed }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    need(String(p_title || '').trim(), 'Say what’s happening in a few words')
+    const lvl = Math.min(3, Math.max(1, Number(p_level) || 1)), now = new Date().toISOString(), me = visitor()
+    need(lvl < 3 || canConfigure() || p_confirmed, 'Confirm that this is an active attack with real losses to raise a critical alarm')
+    const all = read(K.alarms, []), open = all.find(a => a.status === 'open')
+    const report = { by: me.name || 'You', email: me.email || '', at: now, level: lvl, note: open ? String(p_title).trim().slice(0, 200) : 'Raised' }
+    if (open) {
+      open.level = Math.max(open.level, lvl); open.reports = [...open.reports, report]; open.updated_at = now
+      write(K.alarms, all); audit('alarm.joined', 'alarm', open.id, { level: lvl, note: report.note })
+      return { id: open.id, joined: true, level: open.level }
+    }
+    const a = { id: 'demo-alarm-' + Math.random().toString(36).slice(2, 10), level: lvl, title: String(p_title).trim().slice(0, 200), do_now: String(p_do_now || '').trim().slice(0, 500),
+      owner_name: me.name || 'You', owner_email: me.email || '', raised_at: now, next_update_at: new Date(Date.now() + Math.min(480, Math.max(5, Number(p_next_minutes) || 30)) * 60000).toISOString(),
+      incident_id: '', reports: [report], status: 'open', stood_down_at: null, stood_down_by: '', stand_down_note: '', updated_at: now }
+    write(K.alarms, [a, ...all]); audit('alarm.raised', 'alarm', a.id, { level: lvl, title: a.title })
+    return { id: a.id, joined: false, level: lvl }
+  },
+  alarm_update: ({ p_id, p_action, p_level, p_do_now, p_next_minutes, p_owner_email, p_incident_id, p_note, p_confirmed }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const all = read(K.alarms, []), a = all.find(x => x.id === p_id && x.status === 'open'), now = new Date().toISOString()
+    need(a, 'That alarm isn’t open')
+    if (p_action === 'level') {
+      need(p_level >= 1 && p_level <= 3, 'Levels are 1 to 3')
+      need(p_level < 3 || canConfigure() || p_confirmed, 'Confirm that this is an active attack with real losses to raise a critical alarm')
+      audit('alarm.level_changed', 'alarm', a.id, { from: a.level, to: p_level, note: p_note || '' }); a.level = p_level
+    } else if (p_action === 'update') {
+      if (p_owner_email) { const m = read(K.team, []).find(t => t.email.toLowerCase() === String(p_owner_email).toLowerCase()); need(m, 'The owner has to be someone on your team'); a.owner_name = m.display_name; a.owner_email = m.email }
+      if (p_do_now != null) a.do_now = String(p_do_now).trim().slice(0, 500)
+      if (p_next_minutes != null) a.next_update_at = new Date(Date.now() + Math.min(480, Math.max(5, Number(p_next_minutes))) * 60000).toISOString()
+      audit('alarm.updated', 'alarm', a.id, { do_now: p_do_now, next_minutes: p_next_minutes, owner: p_owner_email })
+    } else if (p_action === 'incident') a.incident_id = String(p_incident_id || '').slice(0, 60)
+    else if (p_action === 'stand_down') {
+      Object.assign(a, { status: 'stood_down', stood_down_at: now, stood_down_by: visitor().name || 'You', stand_down_note: String(p_note || '').trim().slice(0, 500) })
+      audit('alarm.stood_down', 'alarm', a.id, { note: a.stand_down_note, level: a.level })
+    } else need(false, 'Unknown step')
+    a.updated_at = now; write(K.alarms, all); return null
   },
 
   // Case links: the counterparty opens the link and answers

@@ -71,4 +71,7 @@ async function notifySlack(slackUrl, alerts, appUrl) {
   return post(slackUrl, JSON.stringify({ text }))
 }
 
-module.exports = { sign, safeUrl, sendEvent, notifySlack, meets }
+// A plain Slack message (alarms)
+const postSlack = (slackUrl, text) => slackUrl ? post(slackUrl, JSON.stringify({ text })) : Promise.resolve(null)
+
+module.exports = { sign, safeUrl, sendEvent, notifySlack, postSlack, meets }

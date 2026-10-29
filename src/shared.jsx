@@ -583,6 +583,12 @@ export const GLOBAL_CSS = `
     .cov-nav-search { min-width:0 !important; }
     .cov-nav-search-label { display:none !important; }
   }
+  /* Sound the alarm: the full label on wide screens, "ALARM" down to phones, the flag alone on the smallest */
+  @media (max-width:1199px) { .cov-alarm-long { display:none !important; } }
+  @media (min-width:1200px) { .cov-alarm-short { display:none !important; } }
+  @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
+  @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
+  .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
   /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
   .cov-nav-num { display:none; }
   /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */

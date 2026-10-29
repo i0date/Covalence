@@ -26,6 +26,7 @@ import { LicitView } from './tools/Licit.jsx'
 import { screeningStatus } from './fincrime.js'
 import { doesIssuing, doesMerchant, navFor, workspaceSides } from './sides.mjs'
 import { useArnStageSync } from './useArnStageSync.js'
+import { AlarmBanner, AlarmButton, AlarmDialog } from './Alarms.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
@@ -385,6 +386,7 @@ export default function Covalence() {
               </React.Fragment>))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
+              <AlarmButton covUser={covUser} />
               {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
               <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search"
                 style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'5px 8px 5px 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
@@ -441,6 +443,10 @@ export default function Covalence() {
             READ-ONLY · AUDITOR ACCESS — you can view cases, the audit log and exports. Changes you make on screen aren’t saved.
           </div>
         )}
+
+        {/* ── Sound the alarm: the open alarm, for everyone, on every screen ── */}
+        <AlarmBanner covUser={covUser} />
+        <AlarmDialog covUser={covUser} sides={sides} />
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (
@@ -500,7 +506,7 @@ export default function Covalence() {
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed || covUser?.demo ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
-          <TrioView outcomes={outcomes} />
+          <TrioView outcomes={outcomes} sides={sides} />
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} outcomes={outcomes} setOutcomes={setOutcomes} team={team} />
