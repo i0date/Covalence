@@ -7,7 +7,8 @@
 // The sender isn't told whether a match exists; a Duo session opens for both
 // once the other side accepts.
 import React, { useEffect, useState } from 'react'
-import { arnFindOtherSide, arnInvites, loadMyDuoSessions, saveMyDuoSessions } from './data.js'
+import { arnFindOtherSide, arnInvites, arnLinkState, loadMyDuoSessions, saveMyDuoSessions } from './data.js'
+import { stageText } from './LinkedCases.jsx'
 import { Button, Input } from './ui.jsx'
 import { isMerchantCase } from './sides.mjs'
 
@@ -28,6 +29,9 @@ export function ArnLink({ c, setOutcomes, covUser, onClose }) {
   const readOnly = covUser?.role === 'auditor'
   const load = () => arnInvites().then(setInvites).catch(() => setInvites([]))
   useEffect(() => { load() }, [c.id])
+  const [link, setLink] = useState(null)   // the other side's shared stage and the settlement, once linked
+  const linkedId = invites.find(i => i.my_case_id === c.id && i.status === 'accepted')?.session_id
+  useEffect(() => { setLink(null); if (linkedId) arnLinkState(linkedId).then(setLink).catch(() => setLink(null)) }, [linkedId])
   if (!c.network && !c.arn) return null   // ARNs belong to card disputes
 
   const other = isMerchantCase(c) ? 'the cardholder’s bank' : 'the merchant'
@@ -68,6 +72,10 @@ export function ArnLink({ c, setOutcomes, covUser, onClose }) {
           <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
             <span className="display-font" style={{ fontSize:'13px', color:'#065F46' }}>✓ Linked with {linked.other_institution} in Duo session {linked.session_id}.</span>
             <Button small onClick={() => open(linked)}>Open in Duo</Button>
+            {link && <span className="display-font" style={{ fontSize:'12px', color:'#57534E', flexBasis:'100%' }}>
+              Their case: {link.them?.sync ? stageText(link.them.stage) || '—' : 'stage not shared'}
+              {link.settlement ? ` · Settling early: ${({ offered: 'refund offered', agreed: 'agreed, waiting for the refund', declined: 'offer declined', refunded: 'refunded, waiting for the withdrawal', withdrawn: 'settled' })[link.settlement.status]}` : ''}
+            </span>}
           </div>
         ) : waiting ? (
           <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>

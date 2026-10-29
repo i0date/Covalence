@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
 import { DuoSharingBar, SharingPurpose, useDuoSharing } from '../SharingPanel.jsx'
 import { ArnInvites } from '../ArnInvites.jsx'
+import { LinkedCases } from '../LinkedCases.jsx'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
 
 const DUO_STATUS = {
@@ -527,7 +528,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
                 : <span className="display-font font-normal text-stone-400" style={{ fontSize:'55%' }}> × awaiting respondent</span>}
             </h1>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', justifyContent:'flex-end', maxWidth:'100%' }}>
             {nextSt && nextStCfg && nextSt !== 'closed' && (
               <button onClick={() => handleStatusChange(nextSt)} className="mono-font"
                 style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'7px 12px', background:'transparent', border:`1px solid ${nextStCfg.color}`, color: nextStCfg.color, cursor:'pointer' }}>
@@ -540,7 +541,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
                 CLOSE SESSION
               </button>
             )}
-            <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' }}>
               <div>
                 {notifySent && (
                   <div className="mono-font text-[10px] tracking-widest text-emerald-700 border border-emerald-300 bg-emerald-50 px-2 py-1">INVITE SENT</div>
@@ -586,6 +587,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
         )}
 
         <DuoSharingBar st={sharing} myRole={myRole} />
+        {claim.kind === 'arn' && <LinkedCases session={session} covUser={covUser} />}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Claim panel */}
