@@ -10,6 +10,7 @@
 //   response  the network's next response deadline          (nextRespDate)
 //   regE      Reg E: 45 business days from provisional credit
 // Each clock is ok, soon (inside its warning window), breached, or met.
+import { isMerchantCase } from './sides.mjs'
 
 export const CLOSED_STATUSES     = ['won','lost','withdrawn','resolved','closed']
 export const FILE_STAGE_STATUSES = ['filed','network_invstg','representment','pre_arb','arbitration','pending_arb','rebuttal_prep','submitted']
@@ -89,7 +90,7 @@ export function caseClocks(c, settings, now = new Date()) {
     out.push(clock('sar', c.sarReview.decision === 'file' ? 'SAR filed with FinCEN' : 'SAR decision',   // FinCEN: 30 days from initial detection
       new Date(new Date(c.sarReview.flaggedAt).getTime() + 30 * DAY), false, 7 * DAY, now))
   if (!isOpen(c)) return out
-  const merchant = c.mode === 'merchant'
+  const merchant = isMerchantCase(c)
   if (c.date && s.slaAssignHours > 0) {
     const due = new Date(new Date(c.date).getTime() + s.slaAssignHours * HOUR)
     out.push(clock('assign', 'Owner assigned', due, !!c.assignedTo, Math.max(HOUR, s.slaAssignHours * HOUR * 0.25), now))

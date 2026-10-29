@@ -10,6 +10,7 @@ import { ImportPanel } from '../ImportPanel.jsx'
 import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { SIDES, alertsSource, workspaceSides } from '../sides.mjs'
 
 export function SettingsView({ settings, setSettings, covUser, outcomes, setOutcomes, team }) {
   const [saved, setSaved] = React.useState(false)
@@ -21,6 +22,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
   const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
   // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
+  const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
   // One section at a time, so the audit log doesn't push the settings down the page
   const TABS = [['settings', 'Institution settings'], ...(workspace ? [['workflow', 'Workflow'], ['qa', 'Quality review'], ['fincrime', 'Financial crime'], ['import', 'Import cases'], ['connections', 'Connections'], ['team', 'Team'], ['audit', 'Audit log'], ['retention', 'Data retention']] : [])]
@@ -140,7 +142,18 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
             <Txt field="duoInstitutionName" placeholder="First Community Credit Union" />
           </Field>
           <Field label="Institution Type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
-            <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform']]} />
+            <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],['merchant','Merchant'],['processor','Payment Processor / Acquirer']]} />
+          </Field>
+          <Field label="What you do" hint="Sets the menu order and where each tool starts. Every tool stays on the menu. Leave as it is to follow the institution type.">
+            <div role="group" aria-label="What you do" style={{ display:'grid', gap:'6px' }}>
+              {SIDES.map(([k, l, d]) => (
+                <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
+                  <input type="checkbox" checked={sides.includes(k)} style={{ marginTop:'4px' }}
+                    onChange={e => { const next = e.target.checked ? [...sides, k] : sides.filter(x => x !== k); if (next.length) set('sides', SIDES.map(([x]) => x).filter(x => next.includes(x))) }} />
+                  <span>{l} <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>{d}</span></span>
+                </label>
+              ))}
+            </div>
           </Field>
           <Field label="Jurisdiction" hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules.">
             <Sel field="jurisdiction" options={[['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other']]} />
@@ -214,7 +227,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
             <Sel field="homeCasesOpen" options={[['closed','Folded away'],['open','Open']]} />
           </Field>
           <Field label="Triage opens on" hint="Alerts suit a team whose systems send data to Covalence; Claims suits one that starts from customer reports.">
-            <Sel field="triageDefaultTab" options={[['alerts','Alerts — the bank found it'],['claims','Claims — the customer reported it']]} />
+            <Sel field="triageDefaultTab" options={[['alerts',`Alerts — ${alertsSource(sides, settings.institutionType === 'exchange').toLowerCase()}`],['claims','Claims — the customer reported it']]} />
           </Field>
           <Field label="Triage side" hint="Leave on automatic to follow the institution type (crypto exchanges open on the Crypto Exchange side).">
             <Sel field="triageDefaultSide" options={[['auto','Automatic'],['fi','Financial Institution'],['ce','Crypto Exchange']]} />

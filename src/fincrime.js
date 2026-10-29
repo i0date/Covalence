@@ -15,6 +15,7 @@
 //   (api/osint.js, public RDAP), and links to open sources and block explorers.
 import { parseAmount } from './clocks.mjs'
 import { findWallets } from './sanctionsMatch.mjs'
+import { isMerchantCase } from './sides.mjs'
 
 export const FINCRIME_DEFAULTS = { screeningAuto: true, screeningThreshold: 0.9 }
 const DAY = 86400000
@@ -25,7 +26,7 @@ const usable = n => n && n !== '—' && !/^unhosted wallet/i.test(n) && n.replac
 export function subjectsOf(c) {
   const out = []
   if (usable(c.cardholderName)) out.push({ role: 'Cardholder', name: c.cardholderName })
-  if (usable(c.merchant)) out.push({ role: c.mode === 'merchant' ? 'Customer' : 'Merchant / payee', name: c.merchant })
+  if (usable(c.merchant)) out.push({ role: isMerchantCase(c) ? 'Customer' : 'Merchant / payee', name: c.merchant })
   if (usable(c.counterparty)) out.push({ role: 'Counterparty', name: c.counterparty })
   return out
 }

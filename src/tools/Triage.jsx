@@ -9,6 +9,7 @@ import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
+import { alertsSource } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -31,7 +32,7 @@ const TX_TYPES = {
 const CRYPTO_MERCHANTS = ['coinbase', 'binance', 'kraken', 'bitbuy', 'newton', 'ndax', 'shakepay', 'gemini', 'crypto.com', 'bybit', 'kucoin', 'bitfinex', 'opensea', 'rarible', 'blur', 'magic eden']
 const isCryptoMerchantName = (name) => name && CRYPTO_MERCHANTS.some(k => name.toLowerCase().includes(k))
 
-export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake, appOutcomes, setAppOutcomes, settings, covUser, fraudRoute }) {
+export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake, appOutcomes, setAppOutcomes, settings, covUser, fraudRoute, sides = ['issuer'] }) {
   // Two ways in: alerts the bank's monitoring raised, and claims customers report
   // Where Triage starts is an institution default (Settings → Default views)
   const [intakeTab, setIntakeTab] = useState(() => settings?.triageDefaultTab === 'claims' ? 'claims' : 'alerts')
@@ -786,9 +787,9 @@ Return ONLY valid JSON:
             ? 'Crypto exchange fraud triage. Four verdicts. FinCEN + FINTRAC aware. Built for exchange fraud analysts handling ATO, pig butchering, stablecoin fraud, and consumer disputes on digital asset platforms.'
             : 'Classify incoming dispute claims before anything is filed. Four verdicts. Covers card, ACH, P2P, BNPL, and FI-held crypto — routed by payment rail and regulatory framework: Reg E, Reg Z, NACHA, or provider.'}
         </p>
-        {/* Alerts (the bank found it) | Claims (the customer reported it) */}
+        {/* Alerts (the FI, the exchange or the network found it) | Claims (the customer reported it) */}
         <div role="tablist" aria-label="Triage" className="mt-6" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC' }}>
-          {[['alerts', 'Alerts', 'The bank found it'], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
+          {[['alerts', 'Alerts', alertsSource(sides, isCE)], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
             <button key={k} role="tab" aria-selected={intakeTab === k} onClick={() => pickIntake(k)} className="mono-font"
               style={{ background:'none', border:'none', borderBottom: intakeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px', padding:'10px 16px', cursor:'pointer', textAlign:'left' }}>
               <span style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: intakeTab === k ? '#1A1814' : '#6B6259', fontWeight:600 }}>{l.toUpperCase()}</span>
@@ -797,7 +798,7 @@ Return ONLY valid JSON:
           ))}
         </div>
         {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
-        <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA' }}>
+        <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA', maxWidth: '100%', flexWrap: 'wrap' }}>
           {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"

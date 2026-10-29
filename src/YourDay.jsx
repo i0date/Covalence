@@ -11,6 +11,7 @@ import { allThreadCases, stageOf, openCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
 import { Badge, Button } from './ui.jsx'
 import { insights, greeting, daySummary, money, WEEKDAYS } from './insights.js'
+import { isMerchantCase } from './sides.mjs'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
 
@@ -91,7 +92,7 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
   const me = covUser?.email?.toLowerCase()
   const { items, scope, counts, comingUp, unowned } = useMemo(() => {
     const all = allThreadCases(outcomes)
-      .filter(c => (platformMode === 'merchant' ? c.mode === 'merchant' : c.mode !== 'merchant'))
+      .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)))
     const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
     const isMine = c => !!me && ((c.assignedTo || '').toLowerCase() === me || (c.escalatedTo || '').toLowerCase() === me)
     const mine = open.filter(x => isMine(x.c))
@@ -112,7 +113,7 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
   const shown = showAll ? items : items.slice(0, 6)
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
-  const ins = useMemo(() => insights(allThreadCases(outcomes).filter(c => (platformMode === 'merchant' ? c.mode === 'merchant' : c.mode !== 'merchant')),
+  const ins = useMemo(() => insights(allThreadCases(outcomes).filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c))),
     { me, settings }), [outcomes, me, settings, platformMode])
   const firstName = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
   const summary = daySummary({ total: items.length, urgent: counts.urgent, overdue: items.filter(x => x.r.rank === 0).length,

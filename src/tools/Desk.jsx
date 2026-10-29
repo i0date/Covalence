@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS, REASON_TITLES, daysUntil, estimateFundingGrade, loadD
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withDecision } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
+import { doesIssuing, doesMerchant, isMerchantCase } from '../sides.mjs'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
 // Returns { systems, cardholder, merchant } arrays of { text, impact } items
@@ -115,7 +116,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, covUser, setOutcomes: setRootOutcomes, deskOpenRequest }) {
+export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, sides = ['issuer', 'merchant'], covUser, setOutcomes: setRootOutcomes, deskOpenRequest }) {
   // Restore previous session so navigation away doesn't wipe in-progress analysis
   const _sess = React.useRef(loadDeskSession()).current
   const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
@@ -264,7 +265,7 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
     const fireAlerts = () => {
       if (Notification.permission !== 'granted') return
       outcomes.forEach(o => {
-        if (!o.provCreditDate || o.mode === 'merchant') return
+        if (!o.provCreditDate || isMerchantCase(o)) return
         const pc45 = addBusinessDays(o.provCreditDate, 45)
         const d = Math.ceil((pc45 - new Date()) / 86400000)
         if (d === 3 || d === 1) {
@@ -905,7 +906,7 @@ Return ONLY valid JSON:
         reasonTitle: REASON_TITLES[mchCode] || (mchCode ? 'Chargeback — ' + mchCode : 'Merchant chargeback'),
         status: 'received',
         resolvedDate: null,
-        mode: 'merchant',
+        mode: 'merchant', side: 'merchant',
         threeDSStatus: mchThreeDS,
         deliveryConfirmed: mchDeliveryConfirmed,
         refundPolicyShown: mchRefundPolicyShown,
@@ -1005,8 +1006,8 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
   // ── CBR calculations (merchant mode) ──────────────────────────────────────
   // Auto-populate CBR from tracker (current calendar month)
   const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  const autoMchCount = outcomes.filter(o => o.mode === 'merchant' && new Date(o.date) >= thisMonthStart).length
-  const autoMchAmt   = Math.round(outcomes.filter(o => o.mode === 'merchant' && new Date(o.date) >= thisMonthStart)
+  const autoMchCount = outcomes.filter(o => isMerchantCase(o) && new Date(o.date) >= thisMonthStart).length
+  const autoMchAmt   = Math.round(outcomes.filter(o => isMerchantCase(o) && new Date(o.date) >= thisMonthStart)
     .reduce((sum, o) => sum + (parseFloat((o.amount || '').replace(/[^0-9.]/g, '')) || 0), 0))
   const effectiveCbrDisputes = mchCbDisputes !== '' ? mchCbDisputes : String(autoMchCount)
   const effectiveCbrAmount   = mchCbAmount   !== '' ? mchCbAmount   : String(autoMchAmt)
@@ -1050,7 +1051,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
   const exportCSV = () => {
     const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
     const isMerchant = platformMode === 'merchant'
-    const rows = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo && (isMerchant ? o.mode === 'merchant' : o.mode !== 'merchant'))
+    const rows = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo && (isMerchant ? isMerchantCase(o) : !isMerchantCase(o)))
     // Export DFA-compatible schema so this CSV can be uploaded directly to DisputeFundingAssessor
     const headers = ['id','code','amount','filed_days_ago','window_days','avs_mismatch','no_3ds','delivery_confirmed','merchant_acknowledged','pin_verified','vfmp_enrolled','strong_docs','merchant_cbr','prior_claims','note','status','resolved_date']
     const csv = [
@@ -1220,8 +1221,8 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
   const sixtyDaysAgo = new Date(Date.now() - (settings.trackerWindowDays || 60) * 24 * 60 * 60 * 1000)
   const visibleOutcomes = outcomes.filter(o => new Date(o.date) > sixtyDaysAgo)
   const trackerOutcomes = platformMode === 'merchant'
-    ? visibleOutcomes.filter(o => o.mode === 'merchant')
-    : visibleOutcomes.filter(o => o.mode !== 'merchant' && o.kind !== 'aml')   // AML cases live in Licit
+    ? visibleOutcomes.filter(o => isMerchantCase(o))
+    : visibleOutcomes.filter(o => !isMerchantCase(o) && o.kind !== 'aml')   // AML cases live in Licit
   const wonCount        = trackerOutcomes.filter(o => o.status === 'won').length
   const lostCount       = trackerOutcomes.filter(o => o.status === 'lost').length
   const withdrawnCount  = trackerOutcomes.filter(o => o.status === 'withdrawn').length
@@ -1288,7 +1289,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
     else if (trackerFilter === 'won')  list = list.filter(o => o.status === 'won')
     else if (trackerFilter === 'lost') list = list.filter(o => o.status === 'lost')
     else if (trackerFilter === 'fundable') list = list.filter(o => {
-      if (o.mode === 'merchant') return false
+      if (isMerchantCase(o)) return false
       const dfaG = estimateFundingGrade(o.reasonCode, o.amount, { threeDSStatus: o.threeDSStatus, deliveryConfirmed: o.deliveryConfirmed, liabilityShift: o.liabilityShift, refundPolicyShown: o.refundPolicyShown, priorOrders: o.priorOrders, winProb: o.winProb, confidence: o.confidence })
       return dfaG && (dfaG.label === 'A' || dfaG.label === 'B')
     })
@@ -1355,10 +1356,10 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               ? 'An operational tool for translating customer complaints into compliant dispute summaries — with a built-in evidence package and merchant defense preview for every case.'
               : 'Build your representment case, fight chargebacks with evidence, and monitor your chargeback ratio against Visa and Mastercard network thresholds.'}
           </p>
-          <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
+          {doesIssuing(sides) && doesMerchant(sides) && <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
             <button onClick={() => { setPlatformMode('fi'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
             <button onClick={() => { setPlatformMode('merchant'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
-          </div>
+          </div>}
           {/* ── Mode indicator strip ── */}
           <div style={{ marginTop:'12px', padding:'10px 16px', borderLeft:'3px solid ' + (platformMode === 'fi' ? '#1D4ED8' : '#92400E'), background: platformMode === 'fi' ? '#EFF6FF' : '#FFFBEB' }}>
             <span className="mono-font text-[10px] tracking-widest" style={{ color: platformMode === 'fi' ? '#1E3A8A' : '#78350F', fontWeight: 700 }}>
@@ -2402,7 +2403,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               onClick={() => {
                 const id = 'MCH-' + Date.now().toString(36).toUpperCase()
                 const rec = {
-                  id, mode: 'merchant', status: mchOutcome === 'pre_arb' ? 'pre_arb' : mchOutcome === 'won' || mchOutcome === 'no_response' ? 'won' : 'lost',
+                  id, mode: 'merchant', side: 'merchant', status: mchOutcome === 'pre_arb' ? 'pre_arb' : mchOutcome === 'won' || mchOutcome === 'no_response' ? 'won' : 'lost',
                   date: mchOrderDate || new Date().toISOString().split('T')[0],
                   merchant: merchant || '', amount: amount || '', currency: currency || 'CAD',
                   reasonCode: mchReasonCode || '', network: network || 'visa',
@@ -3313,7 +3314,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                       onChange={e => markCaseOutcome(o.id, e.target.value)}
                                       style={{ fontSize: '13px', padding: '8px 10px' }}
                                     >
-                                      {o.mode === 'merchant' ? (<>
+                                      {isMerchantCase(o) ? (<>
                                         <option value="pending">Chargeback received — preparing representment</option>
                                         <option value="filed">Representment filed — awaiting acquirer decision</option>
                                         <option value="investigating">Investigating — under internal review</option>
@@ -3337,7 +3338,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     </select>
                                   </div>
                                 </div>
-                                {o.mode === 'merchant' && (
+                                {isMerchantCase(o) && (
                                   <div className="grid gap-3 mob-1col" style={{ gridTemplateColumns: '1fr 1fr' }}>
                                     <div>
                                       <label className="mono-font text-[10px] tracking-widest text-stone-400 block mb-1">DATE SUBMITTED TO ACQUIRER</label>
@@ -3399,20 +3400,20 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 <div className="pr-2">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="mono-font text-xs text-stone-600">{o.reasonCode}</span>
-                                    {o.mode === 'merchant' && o.winProb && (
+                                    {isMerchantCase(o) && o.winProb && (
                                       <span className={'mono-font text-[10px] tracking-widest px-1.5 py-0.5 ' + (o.winProb === 'HIGH' ? 'bg-emerald-900 text-emerald-50' : o.winProb === 'LOW' ? 'bg-red-900 text-red-50' : 'bg-amber-800 text-amber-50')}>{o.winProb}</span>
                                     )}
                                     {o.dfaScore && <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold" style={{background:'#1E3A5F',color:'#BAE6FD'}} title="DFA Fundability Score">DFA {o.dfaScore}</span>}
                                   </div>
                                   {notesText(o.notes) && <p className="display-font text-[11px] text-stone-400 truncate mt-0.5 italic">{notesText(o.notes)}</p>}
-                                  {o.mode === 'merchant' && o.submitDate && (
+                                  {isMerchantCase(o) && o.submitDate && (
                                     <p className="mono-font text-[10px] text-emerald-700 mt-0.5">
                                       REPMT FILED {new Date(o.submitDate + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                                       {o.trackingRef && <> · {o.trackingRef}</>}
                                     </p>
                                   )}
                                   {/* SAR flag — FI mode, fraud cases above threshold */}
-                                  {o.mode !== 'merchant' && (() => {
+                                  {!isMerchantCase(o) && (() => {
                                     const amtNum = parseFloat((o.amount||'').replace(/[^0-9.]/g,''))
                                     const isFraudLike = (o.classification||'').includes('FRAUD') || (o.reasonCode||'').match(/10\.[0-9]|4853|UA/)
                                     if (!isFraudLike || !(amtNum >= settings.sarThreshold)) return null
@@ -3452,7 +3453,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                   </div>
                                 </div>
                                 {/* DFA grade badge — FI only; merchant rows show winProb badge in reason cell */}
-                                {o.mode !== 'merchant' ? (() => {
+                                {!isMerchantCase(o) ? (() => {
                                   const dfaG = estimateFundingGrade(o.reasonCode, o.amount, { threeDSStatus: o.threeDSStatus, deliveryConfirmed: o.deliveryConfirmed, liabilityShift: o.liabilityShift, refundPolicyShown: o.refundPolicyShown, priorOrders: o.priorOrders, winProb: o.winProb, confidence: o.confidence })
                                   return dfaG
                                     ? <span className={`mono-font text-[10px] font-bold px-1.5 py-0.5 ${dfaG.bg} ${dfaG.text} justify-self-start`} title={`Estimated DFA funding grade — ${dfaG.label} based on reason code and amount. Open DFA for full underwriting.`}>{dfaG.label}</span>
@@ -3461,7 +3462,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                 <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%',overflow:'hidden'}}>
 
                                   {/* ── PENDING (FI only) ───────────────────── */}
-                                  {o.mode !== 'merchant' && (!o.status || o.status === 'pending') && (<>
+                                  {!isMerchantCase(o) && (!o.status || o.status === 'pending') && (<>
                                     <button onClick={() => advanceStage(o.id,'investigating')} title="Agent is investigating" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-600 text-blue-700 hover:bg-blue-50 whitespace-nowrap transition-colors">INVSTG</button>
                                     <button onClick={() => advanceStage(o.id,'queued')} title="Move to batch filing queue" className="mono-font text-[10px] px-1.5 py-0.5 border border-violet-600 text-violet-700 hover:bg-violet-50 whitespace-nowrap transition-colors">IN QUEUE</button>
                                     <button onClick={() => advanceStage(o.id,'filed')} title="Mark chargeback as filed with network" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
@@ -3472,30 +3473,30 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                   </>)}
 
                                   {/* ── MERCHANT: RECEIVED ──────────────────── */}
-                                  {o.mode === 'merchant' && (o.status === 'received' || !o.status || o.status === 'pending') && (<>
+                                  {isMerchantCase(o) && (o.status === 'received' || !o.status || o.status === 'pending') && (<>
                                     <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-orange-800 text-orange-50">RECEIVED</span>
                                     <button onClick={() => advanceStage(o.id,'rebuttal_prep')} title="Begin preparing representment rebuttal" className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-700 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">PREP REBUTTAL</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede — do not fight this chargeback" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
                                   </>)}
 
                                   {/* ── INVSTG (FI only) ───────────────────── */}
-                                  {o.mode !== 'merchant' && o.status === 'investigating' && (<>
+                                  {!isMerchantCase(o) && o.status === 'investigating' && (<>
                                     <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-blue-900 text-blue-50">INVSTG</span>
                                     <button onClick={() => advanceStage(o.id,'filed')} title="Done investigating — file chargeback with network" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">FILED</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
-                                    {o.mode !== 'merchant' && (
+                                    {!isMerchantCase(o) && (
                                       o.escalation === 'lea_referral'
                                         ? <span className="mono-font text-[10px] px-1.5 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA ✓</span>
                                         : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>
                                     )}
-                                    {o.mode !== 'merchant' && !o.provCreditDate && (
+                                    {!isMerchantCase(o) && !o.provCreditDate && (
                                       <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
                                     )}
                                     <button onClick={() => revertCase(o.id)} title="Back to pending" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-300 text-stone-400 hover:text-stone-700 hover:border-stone-500 whitespace-nowrap transition-colors">↩ PENDING</button>
                                   </>)}
 
                                   {/* ── IN QUEUE (FI only) ──────────────────── */}
-                                  {o.mode !== 'merchant' && o.status === 'queued' && (<>
+                                  {!isMerchantCase(o) && o.status === 'queued' && (<>
                                     <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-violet-900 text-violet-50">IN QUEUE</span>
                                     {!o.provCreditDate && (
                                       <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
@@ -3504,7 +3505,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                   </>)}
 
                                   {/* ── MERCHANT: REBUTTAL PREP ─────────────── */}
-                                  {o.mode === 'merchant' && o.status === 'rebuttal_prep' && (<>
+                                  {isMerchantCase(o) && o.status === 'rebuttal_prep' && (<>
                                     <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-amber-800 text-amber-50">REBUTTAL PREP</span>
                                     <button onClick={() => advanceStage(o.id,'submitted')} title="Representment submitted to acquirer" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-700 text-stone-800 hover:bg-stone-50 whitespace-nowrap transition-colors">SUBMITTED</button>
                                     <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Concede this chargeback" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">CONCEDE</button>
@@ -3512,7 +3513,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                   </>)}
 
                                   {/* ── MERCHANT: SUBMITTED ─────────────────── */}
-                                  {o.mode === 'merchant' && o.status === 'submitted' && (<>
+                                  {isMerchantCase(o) && o.status === 'submitted' && (<>
                                     <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">SUBMITTED</span>
                                     <button onClick={() => markCaseOutcome(o.id,'won')} title="Representment won — chargeback reversed" className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
                                     <button onClick={() => markCaseOutcome(o.id,'lost')} title="Representment lost — chargeback upheld" className="mono-font text-[10px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
@@ -3521,12 +3522,12 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
                                   {/* ── FILED (FI) / legacy merchant filed ─── */}
                                   {o.status === 'filed' && (<>
-                                    {o.mode === 'merchant'
+                                    {isMerchantCase(o)
                                       ? <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-700 text-stone-200">SUBMITTED (legacy)</span>
                                       : <span className="mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap bg-stone-900 text-stone-50">FILED</span>}
                                     <button onClick={() => markCaseOutcome(o.id,'won')} title="Case won" className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">WON</button>
                                     <button onClick={() => markCaseOutcome(o.id,'lost')} title="Case lost" className="mono-font text-[10px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">LOST</button>
-                                    {o.mode !== 'merchant' && (<>
+                                    {!isMerchantCase(o) && (<>
                                       <button onClick={() => markCaseOutcome(o.id,'withdrawn')} title="Withdraw case" className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-500 hover:bg-stone-50 whitespace-nowrap transition-colors">WD</button>
                                       {!o.provCreditDate && (
                                         <button onClick={() => markProvCredit(o.id)} title="Log provisional credit (Reg E)" className="mono-font text-[10px] px-1.5 py-0.5 border border-blue-500 text-blue-600 hover:bg-blue-50 whitespace-nowrap transition-colors">PC</button>
@@ -3554,7 +3555,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     <span className={`mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap ${o.status==='won'?'bg-emerald-900 text-emerald-50':o.status==='lost'?'bg-red-900 text-red-50':'bg-stone-600 text-stone-50'}`}>
                                       {o.status === 'withdrawn' ? 'WD' : o.status.toUpperCase()}
                                     </span>
-                                    {o.status === 'lost' && o.mode !== 'merchant' && (<>
+                                    {o.status === 'lost' && !isMerchantCase(o) && (<>
                                       {o.escalation === 'lea_referral'
                                         ? <span className="mono-font text-[10px] px-1 py-0.5 bg-orange-900 text-orange-50 whitespace-nowrap" title="Law enforcement referral flagged">LEA✓</span>
                                         : <button onClick={() => escalateCase(o.id,'lea_referral')} title="Flag for law enforcement referral" className="mono-font text-[10px] px-1.5 py-0.5 border border-orange-600 text-orange-700 hover:bg-orange-50 whitespace-nowrap transition-colors">LEA</button>}
@@ -3567,7 +3568,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1 justify-end" style={{minWidth:0}}>
-                                    {o.mode !== 'merchant' && onScoreInDfa && (
+                                    {!isMerchantCase(o) && onScoreInDfa && (
                                       <button
                                         onClick={() => onScoreInDfa([toDfaClaim(o)])}
                                         className="mono-font text-[10px] px-2 py-0.5 border border-emerald-700 text-emerald-700 hover:bg-emerald-50 transition-colors whitespace-nowrap"
@@ -3624,7 +3625,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                             )}
 
                             {/* Provisional credit deadline row */}
-                            {!isEditing && o.provCreditDate && o.mode !== 'merchant' && (
+                            {!isEditing && o.provCreditDate && !isMerchantCase(o) && (
                               <div className="px-4 pb-2 flex items-center gap-4 flex-wrap" style={{ background: '#EEF2FF' }}>
                                 <span className="mono-font text-[10px] text-blue-800 tracking-wider">PC LOGGED: {new Date(o.provCreditDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                                 <button

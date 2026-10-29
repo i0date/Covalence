@@ -4,6 +4,7 @@ import React from 'react'
 import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { isMerchantCase } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
@@ -45,7 +46,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const inRange = o => { if (!since) return true; const d = new Date(o.date || o.createdAt || o.ts || 0); return isNaN(d) || d > since }
   const rangeText = windowDays ? `last ${windowDays} days` : 'all time'
   const recent   = outcomes.filter(inRange)
-  const active   = platformMode === 'merchant' ? recent.filter(o => o.mode === 'merchant') : recent.filter(o => o.mode !== 'merchant')
+  const active   = platformMode === 'merchant' ? recent.filter(o => isMerchantCase(o)) : recent.filter(o => !isMerchantCase(o))
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
@@ -222,7 +223,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
 
       {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
-        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? o.mode === 'merchant' : o.mode !== 'merchant')
+        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : !isMerchantCase(o))
         const thread = everything.filter(inRange)
         const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
         const FILTERS = [
