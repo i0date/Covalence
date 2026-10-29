@@ -54,8 +54,8 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
       placeholder={placeholder}
       style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'12px', color:'#1A1814', width:'100%', boxSizing:'border-box', outline:'none' }} />
   )
-  const Num = ({ field, hint, min, max }) => (
-    <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]} min={min} max={max}
+  const Num = ({ field, hint, min, max, step }) => (
+    <input type="number" value={settings[field] ?? DEFAULT_SETTINGS[field]} min={min} max={max} step={step}
       onChange={e => set(field, Number(e.target.value))}
       style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'140px', outline:'none' }} />
   )
@@ -229,6 +229,12 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
           </Field>
           <Field label="Cost to fight one ($)" hint="Staff time and fees to prepare a response. Multi recommends fighting only when the likely recovery is worth more.">
             <Num field="mchFightCost" min={0} max={10000} />
+          </Field>
+          <Field label="Card sales per month — Visa / Mastercard" hint="For the chargeback ratio on Home: chargebacks in the last 30 days over these. Leave at 0 if you don’t know.">
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}><Num field="mchMonthlyTxVisa" min={0} max={100000000} /><Num field="mchMonthlyTxMc" min={0} max={100000000} /></div>
+          </Field>
+          <Field label="Ratio thresholds, % — Visa / Mastercard" hint="Defaults follow Visa VAMP (1.5% from 2026) and Mastercard ECM (1.5%). Use your acquirer’s figures if they differ; Home warns from two thirds of these.">
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}><Num field="mchRatioVisa" min={0.1} max={10} step={0.1} /><Num field="mchRatioMc" min={0.1} max={10} step={0.1} /></div>
           </Field>
         </Card>
         )}

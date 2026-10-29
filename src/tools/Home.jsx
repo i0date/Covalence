@@ -5,6 +5,9 @@ import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { isMerchantCase } from '../sides.mjs'
+import { merchantQueue } from '../merchantQueue.mjs'
+import { merchantFile } from '../merchantFile.mjs'
+import { chargebackRatios, worstRatio } from '../chargebackRatio.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
@@ -33,9 +36,11 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const [caseFilter, setCaseFilter] = React.useState('open')
   const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
+  // The root's settings when given, so a change in Settings shows here without a reload
   const settings = React.useMemo(() => {
+    if (_ps) return { ...DEFAULT_SETTINGS, ..._ps }
     try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('cov_settings') || '{}') } } catch { return { ...DEFAULT_SETTINGS } }
-  }, [])
+  }, [_ps])
   // The full case list folds away (Your day already shows what needs attention); how it starts is a default in Settings
   const [casesOpen, setCasesOpen] = React.useState(() => settings.homeCasesOpen === 'open' || settings.homeCasesOpen === true)
   const toggleCases = () => setCasesOpen(o => !o)
@@ -303,7 +308,69 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       })()}
 
       {/* ── The numbers: one strip (snapshot figures can be turned off in Settings) ── */}
-      {(() => {
+      {platformMode === 'merchant' ? (() => {
+        // Merchant side: chargebacks to answer, wins and money back, and the ratio the networks watch
+        const queue = merchantQueue(outcomes, settings)
+        const overdue = queue.filter(r => r.left != null && r.left < 0).length
+        const thisWeek = queue.filter(r => r.left != null && r.left >= 0 && r.left <= 7).length
+        const f = merchantFile(active)
+        const money = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        // Demo visitors haven't entered sales figures, so the ratio uses sample ones
+        const demoSales = !!covUser?.demo && !covUser?.authed && !settings.mchMonthlyTxVisa && !settings.mchMonthlyTxMc
+        const ratios = chargebackRatios(outcomes, demoSales ? { ...settings, mchMonthlyTxVisa: 900, mchMonthlyTxMc: 300 } : settings)
+        const worst = worstRatio(ratios)
+        const pct = r => r.ratio == null ? '—' : r.ratio.toFixed(2) + '%'
+        const tone = { over:'#991B1B', over_ratio:'#92400E', approaching:'#92400E', ok:'#065F46', unknown:'#78716C' }
+        const cells = [
+          { label:'TO ANSWER', value: queue.length, sub: overdue ? `${overdue} overdue` : `${thisWeek} due this week`, alert: overdue > 0 },
+          { label:'WITH THE BANK', value: f.waiting.length + f.escalated.length, sub: f.escalated.length ? `${f.escalated.length} escalated` : 'responses waiting on a decision' },
+          { label:'WIN RATE', value: winRate !== null ? winRate + '%' : '—', sub: `${resolved.length} decided · ${rangeText}` },
+          { label:'RECOVERED', value: money(f.recovered), sub: 'money back from the acquirer' },
+          { label:'NOT BACK YET', value: money(f.outstanding), sub: f.notFinal ? `${f.notFinal} win${f.notFinal === 1 ? '' : 's'} not final` : 'from wins', alert: f.outstanding > 0 },
+          { label:'CHARGEBACK RATIO', value: pct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
+        ]
+        const say = r => ({
+          unknown: `Add your monthly ${r.label} sales in Settings → Chargebacks against you to see this.`,
+          ok: `Within ${r.label}’s ${r.limit}% threshold. Covalence warns from ${r.warnAt.toFixed(1)}%.`,
+          approaching: `Approaching ${r.label}’s ${r.limit}% threshold. Look at the reason codes driving it in 003 Multi.`,
+          over_ratio: `Above ${r.limit}%, but under the ${r.minCount.toLocaleString('en-US')} chargebacks ${r.label} ${r.program} needs before it enrols a merchant. Your acquirer may still act on it.`,
+          over: `Above ${r.label}’s threshold with enough volume to be enrolled in ${r.program}. Talk to your acquirer now — fines and higher fees follow.`,
+        })[r.state]
+        return (<>
+          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
+            {cells.map(c => (
+              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color: c.alert ? '#92400E' : '#78716C' }}>{c.label}</div>
+                <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <section aria-label="Chargeback ratio" style={{ border:'1px solid #D4CCBC', borderTop:'none', background:'#FFFFFF', padding:'14px 18px' }}>
+            <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C', marginBottom:'10px' }}>CHARGEBACK RATIO · LAST 30 DAYS{demoSales ? ' · DEMO SALES FIGURES' : ''}</div>
+            <div style={{ display:'grid', gap:'14px' }}>
+              {ratios.map(r => (
+                <div key={r.key}>
+                  <div style={{ display:'flex', justifyContent:'space-between', gap:'10px', flexWrap:'wrap', alignItems:'baseline' }}>
+                    <span className="display-font" style={{ fontSize:'15px', color:'#1A1814' }}>{r.label} <span className="mono-font" style={{ fontSize:'10px', color:'#78716C' }}>{r.program}</span></span>
+                    <span className="mono-font" style={{ fontSize:'12px', fontWeight:600, color: tone[r.state] }}>{pct(r)} <span style={{ fontWeight:400, color:'#78716C' }}>· {r.count} chargeback{r.count === 1 ? '' : 's'}{r.sales ? ` on ${r.sales.toLocaleString('en-US')} sales` : ''}</span></span>
+                  </div>
+                  {r.ratio != null && (
+                    <div role="img" aria-label={`${r.label} ratio ${pct(r)} against a ${r.limit}% threshold`} style={{ position:'relative', height:'6px', background:'#EDE8E0', marginTop:'6px' }}>
+                      <div style={{ position:'absolute', inset:'0 auto 0 0', width: Math.min(100, r.ratio / (r.limit * 1.5) * 100) + '%', background: tone[r.state] }} />
+                      <div title={`${r.limit}% threshold`} style={{ position:'absolute', top:'-3px', bottom:'-3px', left: (100 / 1.5) + '%', width:'2px', background:'#1A1814' }} />
+                    </div>
+                  )}
+                  <div className="display-font" style={{ fontSize:'12px', color:'#57534E', marginTop:'4px' }}>{say(r)}</div>
+                </div>
+              ))}
+            </div>
+            <p className="display-font" style={{ fontSize:'11px', color:'#78716C', margin:'12px 0 0', lineHeight:1.5 }}>
+              Every chargeback counts, including ones you win. Visa also counts fraud reports that never became chargebacks, which Covalence doesn’t see, so Visa’s own figure can be higher. Thresholds are settings; your acquirer’s terms are what apply.
+            </p>
+          </section>
+        </>)
+      })() : (() => {
         const cells = [
           { label:'NEW',         value: active.length,                  sub: windowDays ? `opened in ${windowDays} days` : 'opened, all time' },
           { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },
