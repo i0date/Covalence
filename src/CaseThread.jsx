@@ -700,6 +700,15 @@ export function buildDemoInstitution(userEmail) {
     { id:'MCH-DEMO07', mode:'merchant', side:'merchant', date:iso(1),  merchant:'Northwind Electronics', amount:'9.99 USD', network:'VISA', status:'received', reasonCode:'12.6.1', reasonTitle:'Duplicate Processing', acquirer:'Demo Acquiring', cardholderName:'M. Haddad', history:h([1,'received']) },
     { id:'MCH-DEMO08', mode:'merchant', side:'merchant', date:iso(12), merchant:'Northwind Electronics', amount:'342.00 USD', network:'VISA', status:'received', reasonCode:'13.3', reasonTitle:'Not as Described or Defective Merchandise', acquirer:'Demo Acquiring', cardholderName:'S. Varga', winProb:'LOW', assignedTo:'p.raman@demo.bank', history:h([12,'received']) },
     { id:'MCH-DEMO09', mode:'merchant', side:'merchant', date:iso(8),  merchant:'Northwind Electronics', amount:'2150.00 USD', network:'MC', status:'received', reasonCode:'4837', reasonTitle:'No Cardholder Authorization', acquirer:'Demo Acquiring', cardholderName:'K. Duarte', threeDSStatus:'authenticated', deliveryConfirmed:true, winProb:'MEDIUM', history:h([8,'received']) },
+    // Answered ones: a win that's final with the money back, a recent win that came back short, an escalation, a loss
+    { id:'MCH-DEMO10', mode:'merchant', side:'merchant', date:iso(80), merchant:'Northwind Electronics', amount:'560.00 USD', network:'MC', status:'won', reasonCode:'4837', reasonTitle:'No Cardholder Authorization', acquirer:'Demo Acquiring', cardholderName:'S. Varga', winProb:'HIGH', resolvedDate:iso(50), reversal:{ amount:560, date:ymd(-44) },
+      history:h([80,'received'],[76,'rebuttal_prep','received'],[72,'submitted','rebuttal_prep'],[50,'won','submitted']) },
+    { id:'MCH-DEMO11', mode:'merchant', side:'merchant', date:iso(40), merchant:'Northwind Electronics', amount:'820.00 USD', network:'VISA', status:'won', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', acquirer:'Demo Acquiring', cardholderName:'R. Achterberg', threeDSStatus:'authenticated', winProb:'HIGH', resolvedDate:iso(6), reversal:{ amount:795, date:ymd(-2) },
+      history:h([40,'received'],[37,'rebuttal_prep','received'],[33,'submitted','rebuttal_prep'],[6,'won','submitted']) },
+    { id:'MCH-DEMO12', mode:'merchant', side:'merchant', date:iso(60), merchant:'Northwind Electronics', amount:'430.00 USD', network:'MC', status:'pre_arb', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', cardholderName:'J. Ilunga', winProb:'MEDIUM', nextRespDate:ymd(6),
+      history:h([60,'received'],[57,'rebuttal_prep','received'],[52,'submitted','rebuttal_prep'],[9,'pre_arb','submitted']) },
+    { id:'MCH-DEMO13', mode:'merchant', side:'merchant', date:iso(48), merchant:'Northwind Electronics', amount:'129.00 USD', network:'VISA', status:'lost', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', acquirer:'Demo Acquiring', cardholderName:'E. Novak', winProb:'MEDIUM', resolvedDate:iso(10),
+      history:h([48,'received'],[45,'rebuttal_prep','received'],[41,'submitted','rebuttal_prep'],[10,'lost','submitted']) },
     // Financial crime: a romance / investment scam paying out to a wallet on OFAC's SDN list (the address is real and public)
     { id:'COV-DEMO19', date:iso(3), merchant:'Bitvault Exchange', amount:'4600.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
       _complaint:'Someone I met online talked me into buying USDT on Bitvault Exchange (bitvault-exchange.xyz) and sending it to 0x252a8bd2319d8a555b872990601221b3a2053bce for a "guaranteed" trading plan. Now I can’t withdraw anything.',
@@ -790,7 +799,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '7'
+const DEMO_VERSION = '8'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

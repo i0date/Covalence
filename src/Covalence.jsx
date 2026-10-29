@@ -486,7 +486,7 @@ export default function Covalence() {
           <MultiView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setActiveSection={setActiveSection} covUser={covUser} platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} />
         </div>
         <div style={{ display: activeSection === 'file' ? 'block' : 'none' }}>
-          <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} />
+          <FileView setActiveSection={setActiveSection} setAppOutcomes={setOutcomes} platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'licit' ? 'block' : 'none' }}>
           <LicitView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} />
