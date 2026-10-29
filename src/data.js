@@ -28,7 +28,8 @@ function supaH() {
 // the app keeps working until the SQL has been run.
 const _rpcMissing = new Set()
 // Duo and case links work for demo visitors too, against Demo Bank's in-browser backend
-const DEMO_RPCS = new Set(['duo_get', 'duo_create', 'duo_update', 'duo_find', 'case_link_create', 'case_link_activity'])
+const DEMO_RPCS = new Set(['duo_get', 'duo_create', 'duo_update', 'duo_find', 'case_link_create', 'case_link_activity',
+  'sharing_get', 'sharing_set', 'duo_sharing_status', 'duo_share_confirm'])
 async function supaRpc(fn, args, fallback) {
   if (!isSignedIn() && DEMO_RPCS.has(fn)) return demoRpc(fn, args)
   if (!_rpcMissing.has(fn)) {
@@ -77,6 +78,16 @@ export async function duoFind(institution) {
     return r.json()
   }) || []
 }
+// ── 314(b) information sharing (supabase_314b.sql) ───────────────────────────
+// Errors come back as PostgREST JSON; show the database's own sentence
+const rpcMsg = e => { try { return JSON.parse(e.message).message || e.message } catch { return e.message } }
+const plain = p => p.catch(e => { throw new Error(rpcMsg(e)) })
+export const sharingGet = () => plain(supaRpc('sharing_get', {})).then(firstRow)
+export const sharingSet = (v) => plain(supaRpc('sharing_set', { p_registered: !!v.registered, p_expires_on: v.registered ? v.expires_on || null : null,
+  p_contact_name: v.contact_name || '', p_contact_email: v.contact_email || '', p_require_both: !!v.require_both }))
+export const duoSharingStatus = id => plain(supaRpc('duo_sharing_status', { p_id: id }))
+export const duoShareConfirm = (id, purpose) => plain(supaRpc('duo_share_confirm', { p_id: id, p_purpose: purpose }))
+
 export async function caseLinkCreate(body) {
   return firstRow(await supaRpc('case_link_create', { p: body }, async () => {
     const r = await fetch(`${SUPA_URL}/rest/v1/duo_case_links`, { method:'POST', headers: supaH(), body: JSON.stringify(body) })

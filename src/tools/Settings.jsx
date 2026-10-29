@@ -118,7 +118,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
 
       {activeTab === 'workflow'  && <WorkflowPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} team={team || []} />}
       {activeTab === 'qa'        && <QaPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
-      {activeTab === 'fincrime'  && <FincrimeSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} />}
+      {activeTab === 'fincrime'  && <FincrimeSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} admin={covUser?.role === 'admin'} />}
       {activeTab === 'connections' && <ConnectionsPanel covUser={covUser} />}
       {activeTab === 'import'    && <ImportPanel covUser={covUser} locked={locked} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
       {activeTab === 'team'      && <TeamPanel covUser={covUser} />}

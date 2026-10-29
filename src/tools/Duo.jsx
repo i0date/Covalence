@@ -2,6 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
+import { DuoSharingBar, SharingPurpose, useDuoSharing } from '../SharingPanel.jsx'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
 
 const DUO_STATUS = {
@@ -36,6 +37,8 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
   // Session type for Duo (standard or crypto exchange)
   const [sessionType,   setSessionType]   = useState('standard')
   // Crypto session fields (for crypto handoffs)
+  // 314(b): both sides' registration, this side's purpose and sharing record (SharingPanel.jsx)
+  const [sharing, reloadSharing] = useDuoSharing(phase === 'session' ? session?.id : null, session?.institution_b || '')
   const [cryptoFields,  setCryptoFields]  = useState({ asset_type:'', wallet_addresses:'', transaction_ids:'', amount_crypto:'', amount_usd:'' })
   // External link state
   const [linkType,      setLinkType]      = useState('standard') // 'standard' | 'crypto'
@@ -99,6 +102,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
     if (phase !== 'session' || !session) { clearInterval(pollRef.current); return }
     pollRef.current = setInterval(async () => {
       try { const fresh = await duoGet(session.id); if (fresh) { setSession(fresh); setLastSync(new Date()) } } catch {}
+      reloadSharing()   // a registration can change on either side mid-session
     }, 5000)
     return () => clearInterval(pollRef.current)
   }, [phase, session && session.id])
@@ -188,6 +192,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
 
   const handleAddEntry = async () => {
     if (!newEntry.trim() || !session) return
+    if (sharing && !sharing.purpose) { setError('Confirm why you are sharing first (below).'); return }
     setSaving(true); setError('')
     try {
       const field = myRole === 'a' ? 'notes_a' : 'notes_b'
@@ -195,7 +200,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
       const next = [...existing, { text: newEntry.trim(), ts: new Date().toISOString() }]
       const updated = await duoPatch(session.id, { [field]: JSON.stringify(next) })
       if (updated) { setSession(updated); setLastSync(new Date()) }
-      setNewEntry('')
+      setNewEntry(''); reloadSharing()
     } catch (e) { setError(e.message) }
     setSaving(false)
   }
@@ -205,7 +210,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
     try {
       const updated = await duoPatch(session.id, { status })
       if (updated) {
-        setSession(updated); setLastSync(new Date()); updateLocalStatus(session.id, status)
+        setSession(updated); setLastSync(new Date()); updateLocalStatus(session.id, status); reloadSharing()
         try {
           const auditKey = `duo_audit_${session.id}`
           const existing = JSON.parse(localStorage.getItem(auditKey) || '[]')
@@ -572,6 +577,8 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           </div>
         )}
 
+        <DuoSharingBar st={sharing} myRole={myRole} />
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Claim panel */}
           <div>
@@ -685,12 +692,13 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                 rows={3} placeholder="Findings, proposed resolution, agreed next steps…"
                 style={{ width:'100%', resize:'none', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.6, padding:'10px', border:'1px solid #C8C0B0', background:'#FFFFFF', boxSizing:'border-box', outline:'none' }} />
               {error && <div className="mono-font text-[10px] text-red-700 mt-1">{error}</div>}
+              {sharing && !sharing.purpose ? <SharingPurpose sessionId={session.id} onDone={reloadSharing} disabled={sharing.require_both && !sharing.safe_harbor} /> :
               <div style={{ display:'flex', alignItems:'center', gap:'12px', marginTop:'8px', flexWrap:'wrap' }}>
-                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim()}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
+                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || (sharing?.require_both && !sharing.safe_harbor)}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
                 <div className="mono-font text-[10px] tracking-widest text-stone-400">
                   ⌘↵ to post · syncs every 5s{lastSync ? ` · ${lastSync.toLocaleTimeString()}` : ''}
                 </div>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

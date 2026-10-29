@@ -40,7 +40,7 @@ export const AUDIT_LABELS = {
   'evidence.opened': 'Evidence opened', 'member.joined': 'Member joined', 'member.removed': 'Member removed',
   'member.role_changed': 'Role changed', 'invite.created': 'Invite sent', 'invite.revoked': 'Invite revoked',
   'invite.accepted': 'Invite accepted', 'duo.created': 'Duo session opened', 'duo.joined': 'Duo session joined',
-  'duo.status_changed': 'Duo status changed', 'case_link.created': 'Case link sent', 'settings.changed': 'Settings changed',
+  'duo.status_changed': 'Duo status changed', 'duo.info_shared': 'Information shared in Duo', 'duo.sharing_purpose': 'Sharing purpose confirmed', 'sharing.updated': '314(b) registration updated', 'case_link.created': 'Case link sent', 'settings.changed': 'Settings changed',
   'workspace.updated': 'Workspace data updated', 'audit.exported': 'Audit log exported',
   'case.exported': 'Case file exported', 'case.legal_hold_on': 'Legal hold placed', 'case.legal_hold_off': 'Legal hold lifted',
   'case.purged': 'Case purged (retention)', 'retention.policy_changed': 'Retention period changed', 'retention.purged': 'Retention purge run',
@@ -66,6 +66,9 @@ export function describeAudit(e) {
   if (e.action === 'case.escalated') return `to ${d.to} · ${d.reason || ''}`
   if (e.action === 'reminders.sent') return `${d.recipients ?? 0} people · ${d.items ?? 0} items`
   if (e.action === 'settings.changed') return Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v.from ?? '—')} → ${JSON.stringify(v.to ?? '—')}`).join(' · ')
+  if (e.action === 'duo.info_shared') return `with ${d.with || 'the other institution'} · ${d.safe_harbor ? 'under the 314(b) safe harbor' : 'not covered by 314(b)'}`
+  if (e.action === 'duo.sharing_purpose') return `${d.purpose}${d.safe_harbor ? ' · 314(b) covered' : ' · not covered by 314(b)'}`
+  if (e.action === 'sharing.updated') return d.registered ? `Registered until ${d.expires_on} · contact ${d.contact}${d.require_both ? ' · Duo requires both sides' : ''}` : 'Not registered'
   if (d.from !== undefined || d.to !== undefined) return `${d.from ?? '—'} → ${d.to ?? '—'}`
   return Object.entries(d).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`).join(' · ')
 }

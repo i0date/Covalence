@@ -12,6 +12,7 @@ const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
+  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -154,6 +155,18 @@ function settle(s) {
   s.updated_at = new Date().toISOString()
   return s
 }
+// ── 314(b): Demo Bank and Harbor Credit Union are both registered ──────────────
+const inDays = d => new Date(Date.now() + d * DAY).toISOString().slice(0, 10)
+const mySharing = () => read(K.sharing, { registered: true, expires_on: inDays(240), contact_name: 'Marcus Okafor', contact_email: 'm.okafor@demo.bank', require_both: false, updated_at: null })
+const HARBOR_SHARING = () => ({ institution: COUNTERPARTY, registered: true, expires_on: inDays(150), contact_name: 'Alex Moreno', contact_email: 'bsa@harbor.cu' })
+const sharingValid = x => !!(x && x.registered && x.expires_on && x.expires_on >= new Date().toISOString().slice(0, 10))
+const shareLogs = () => read(K.shareLog, { HCU7Q2: [{ kind: 'purpose', at: new Date(Date.now() - DAY).toISOString(), safe_harbor: true, by: 'Diego Ruiz',
+  detail: { purpose: 'Identify and report possible money laundering — proceeds of an impersonation scam moving to the receiving account' } }] })
+function logShare(id, entry) {
+  const all = shareLogs(); all[id] = [{ at: new Date().toISOString(), by: visitor().name || 'You', ...entry }, ...(all[id] || [])].slice(0, 100); write(K.shareLog, all)
+}
+const covered = s => !!s.institution_b && sharingValid(mySharing()) && sharingValid(HARBOR_SHARING())
+
 const sessions = () => read(K.duo, {})
 const saveSession = s => { const all = sessions(); all[s.id] = s; write(K.duo, all); return s }
 const publicSession = s => { const { script, nextLine, ...rest } = s; return rest }
@@ -352,8 +365,17 @@ const HANDLERS = {
     if (!s) return []
     settle(s)
     const before = thread(s.notes_a).length
-    if (p.notes_a !== undefined) s.notes_a = p.notes_a
-    if (p.status && p.status !== s.status) { audit('duo.status_changed', 'duo', s.id, { from: s.status, to: p.status }); s.status = p.status }
+    if (p.notes_a !== undefined && p.notes_a !== s.notes_a) {
+      need((shareLogs()[s.id] || []).some(x => x.kind === 'purpose'), 'Confirm why you are sharing (314(b)) before posting in this session')
+      need(covered(s) || !mySharing().require_both, 'Your institution only shares in Duo when both sides are registered under 314(b)')
+      logShare(s.id, { kind: 'message', safe_harbor: covered(s), detail: { with: s.institution_b || '' } })
+      audit('duo.info_shared', 'duo', s.id, { with: s.institution_b || '', safe_harbor: covered(s) })
+      s.notes_a = p.notes_a
+    }
+    if (p.status && p.status !== s.status) {
+      logShare(s.id, { kind: 'status', safe_harbor: covered(s), detail: { from: s.status, to: p.status } })
+      audit('duo.status_changed', 'duo', s.id, { from: s.status, to: p.status }); s.status = p.status
+    }
     // The counterparty answers each new message from Demo Bank
     if (thread(s.notes_a).length > before && s.institution_b && (s.nextLine ?? 0) < HARBOR_LINES.length) {
       s.script = [...(s.script || []), { at: Date.now() + 5000, type: 'say', text: HARBOR_LINES[s.nextLine ?? 0] }]
@@ -363,6 +385,39 @@ const HANDLERS = {
     return [publicSession(saveSession(s))]
   },
   duo_find: () => Object.values(sessions()).map(s => ({ id: s.id, institution_a: s.institution_a, institution_b: s.institution_b, status: s.status, created_at: s.created_at })),
+
+  // 314(b) information sharing (supabase_314b.sql)
+  sharing_get: () => [mySharing()],
+  sharing_set: ({ p_registered, p_expires_on, p_contact_name, p_contact_email, p_require_both }) => {
+    need(isAdmin(), 'Only an institution admin can change the 314(b) registration')
+    const today = new Date().toISOString().slice(0, 10)
+    if (p_registered) {
+      need(p_expires_on, 'Enter the date your 314(b) registration expires')
+      need(p_expires_on >= today, 'That registration has expired — renew it with FinCEN first')
+      need(p_expires_on <= inDays(400), 'A 314(b) registration lasts one year — check the expiry date')
+      need(String(p_contact_name || '').trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(p_contact_email || '').trim()), 'Enter the point of contact named in the registration, with an email address')
+    }
+    write(K.sharing, { registered: !!p_registered, expires_on: p_registered ? p_expires_on : null, contact_name: String(p_contact_name || '').trim(),
+      contact_email: String(p_contact_email || '').trim(), require_both: !!p_require_both, updated_at: new Date().toISOString() })
+    audit('sharing.updated', 'workspace', '314b', { registered: !!p_registered, expires_on: p_expires_on || null, contact: String(p_contact_email || '').trim(), require_both: !!p_require_both })
+    return null
+  },
+  duo_sharing_status: ({ p_id }) => {
+    const s = sessions()[String(p_id || '').toUpperCase()]
+    if (!s) return null
+    const me = mySharing(), log = shareLogs()[s.id] || [], purpose = log.find(x => x.kind === 'purpose')
+    return { a: { institution: DEMO_INSTITUTION, ...me, valid: sharingValid(me) }, b: s.institution_b ? { ...HARBOR_SHARING(), valid: sharingValid(HARBOR_SHARING()) } : null,
+      safe_harbor: covered(s), require_both: !!me.require_both, purpose: purpose ? { at: purpose.at, by: purpose.by, text: purpose.detail.purpose } : null, log }
+  },
+  duo_share_confirm: ({ p_id, p_purpose }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const s = sessions()[String(p_id || '').toUpperCase()]
+    need(s, 'Your institution is not part of this Duo session')
+    need(String(p_purpose || '').trim(), 'Say why you are sharing')
+    logShare(s.id, { kind: 'purpose', safe_harbor: covered(s), detail: { purpose: String(p_purpose).trim().slice(0, 500) } })
+    audit('duo.sharing_purpose', 'duo', s.id, { purpose: String(p_purpose).trim().slice(0, 500), safe_harbor: covered(s) })
+    return null
+  },
 
   // Case links: the counterparty opens the link and answers
   case_link_create: ({ p }) => {

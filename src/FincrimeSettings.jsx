@@ -7,12 +7,13 @@ import React, { useEffect, useState } from 'react'
 import { CLOSED_STATUSES } from './clocks.mjs'
 import { FINCRIME_DEFAULTS, screeningStatus } from './fincrime.js'
 import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
+import { SharingSettings } from './SharingPanel.jsx'
 
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'18px 20px' }
 const H2 = ({ children }) => <h2 className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', margin:'0 0 12px', fontWeight:500 }}>{children}</h2>
 
-export function FincrimeSettings({ settings, set, locked, outcomes }) {
+export function FincrimeSettings({ settings, set, locked, outcomes, admin }) {
   const s = { ...FINCRIME_DEFAULTS, ...TM_DEFAULTS, ...FRAUD_DEFAULTS, ...settings }
   const [list, setList] = useState(null)
   const [err, setErr] = useState('')
@@ -61,6 +62,8 @@ export function FincrimeSettings({ settings, set, locked, outcomes }) {
           </p>
         </fieldset>
       </section>
+
+      <SharingSettings admin={admin} />
 
       <section style={box}>
         <H2>FRAUD ALERTS (001 TRIAGE)</H2>
