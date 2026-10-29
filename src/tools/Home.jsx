@@ -4,6 +4,7 @@ import React from 'react'
 import { YourDay } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
+import { GetSetUp } from '../GetSetUp.jsx'
 import { isMerchantCase } from '../sides.mjs'
 import { merchantQueue } from '../merchantQueue.mjs'
 import { merchantFile } from '../merchantFile.mjs'
@@ -18,25 +19,11 @@ const RANGES = [['7', '7D'], ['30', '30D'], ['60', '60D'], ['90', '90D'], ['all'
 export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo, covUser }) {
   // outcomes comes from the root, which stays in sync with every tool via the outcome subscribers
   const [tourOpen, setTourOpen] = React.useState(false)
-  // Adaptive Brief: full intro for the first few visits, then a one-line version that can be expanded
-  const [briefOpen, setBriefOpen] = React.useState(() => {
-    try {
-      const pref = localStorage.getItem('cov_brief_open')
-      if (pref !== null) return pref === '1'
-      // One visit per browser session (Home remounts on demo load and in dev StrictMode)
-      let visits = parseInt(localStorage.getItem('cov_home_visits') || '0')
-      if (!sessionStorage.getItem('cov_visit_counted')) {
-        visits += 1
-        localStorage.setItem('cov_home_visits', String(visits))
-        sessionStorage.setItem('cov_visit_counted', '1')
-      }
-      return visits <= 3
-    } catch { return true }
-  })
-  const toggleBrief = () => setBriefOpen(o => { try { localStorage.setItem('cov_brief_open', o ? '0' : '1') } catch {} ; return !o })
   const [caseFilter, setCaseFilter] = React.useState('open')
   const hasDemo = outcomes.some(isDemoCase)
   const [tourSlide, setTourSlide] = React.useState(0)
+  const openTour = () => { setTourSlide(0); setTourOpen(true) }
+  const finishTour = () => { try { localStorage.setItem('cov_tour_done', '1') } catch {}; setTourOpen(false) }
   // The root's settings when given, so a change in Settings shows here without a reload
   const settings = React.useMemo(() => {
     if (_ps) return { ...DEFAULT_SETTINGS, ..._ps }
@@ -60,70 +47,16 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
 
   return (
     <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      {briefOpen ? (
-        <div className="mb-10 pb-8" style={{ borderBottom:'1px solid #D4CCBC' }}>
-          <h1 className="display-font font-bold text-stone-900 leading-none" style={{ fontSize:'clamp(48px,7vw,80px)', letterSpacing:'-0.02em', lineHeight:1.05 }}>
-            The<br /><span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
-          </h1>
-          <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.6vw,16px)', maxWidth:'520px', lineHeight:1.5 }}>
-            From first call to final submission — triage disputes, build the case, queue for batch filing, generate network-compliant packages, screen against sanctions and work AML investigations and SARs, score portfolios for funding, coordinate across institutions, and command fraud incidents. Eight tools in three areas, one case record.
-          </p>
-          <button onClick={toggleBrief} className="mono-font" style={{ marginTop:'14px', fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
-            COLLAPSE INTRO ↑
-          </button>
+      {/* Show, don't tell: Home opens on what needs attention. A demo gets one line; a new workspace, its setup steps. */}
+      {hasDemo ? (
+        <div className="mb-5 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
+          <span>DEMO INSTITUTION — fictional cases, kept in this browser only</span>
+          <span style={{ display:'flex', gap:'14px' }}>
+            <button onClick={openTour} style={{ background:'none', border:'none', color:'#1A1814', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.12em', padding:0, textDecoration:'underline' }}>TAKE THE TOUR</button>
+            <button onClick={onClearDemo} style={{ background:'none', border:'none', color:'#78716C', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.12em', padding:0, textDecoration:'underline' }}>CLEAR DEMO DATA</button>
+          </span>
         </div>
-      ) : (
-        <div className="mb-6 pb-4" style={{ borderBottom:'1px solid #D4CCBC', display:'flex', alignItems:'baseline', gap:'14px', flexWrap:'wrap' }}>
-          <h1 className="display-font font-bold text-stone-900" style={{ fontSize:'32px', letterSpacing:'-0.02em', lineHeight:1 }}>
-            The <span style={{ fontStyle:'italic', fontWeight:500 }}>Brief</span>
-          </h1>
-          <span className="display-font text-stone-500" style={{ fontSize:'14px' }}>Eight tools in three areas, one case record.</span>
-          <button onClick={toggleBrief} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', background:'none', border:'none', color:'#A8A29E', cursor:'pointer', padding:0 }}>
-            SHOW INTRO ↓
-          </button>
-        </div>
-      )}
-
-      {/* ── The eight tools in three areas (orientation) + tour, under the Brief ── */}
-      <div className="mb-8 cov-home-tools" style={{ display:'flex', gap:'12px', alignItems:'stretch', flexWrap:'wrap' }}>
-        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', flex:'1 1 560px' }}>
-          {[
-            ['DISPUTES', [['001', 'TRIAGE', 'triage', '#EDE9E3'], ['002', 'DESK', 'desk', '#E8E3DC'], ['003', 'MULTI', 'multi', '#E3DDD5'], ['004', 'FILE', 'file', '#DDD7CE']], '4 1 320px'],
-            ['COMPLIANCE', [['005', 'LICIT', 'licit', '#D8D1C7']], '1 1 90px'],
-            ['RECOVERY', [['006', 'DFA', 'dfa', '#D2CBC1'], ['007', 'DUO', 'duo', '#CCC4B8'], ['008', 'TRIO', 'trio', '#C6BEB2']], '3 1 240px'],
-          ].map(([area, tools, flex]) => (
-            <div key={area} style={{ flex, minWidth:0 }}>
-              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.18em', color:'#6B6259', marginBottom:'4px' }}>{area}</div>
-              <div style={{ display:'flex', gap:'1px', background:'#D4CCBC' }}>
-                {tools.map(([num, name, section, bg]) => (
-                  <button key={num} onClick={() => setActiveSection(section)}
-                    className="mono-font"
-                    style={{ background:bg, border:'none', cursor:'pointer', padding:'9px 14px', flex:'1 1 auto', textAlign:'left', transition:'background 0.15s', minWidth:'72px' }}
-                    onMouseEnter={e => e.currentTarget.style.background='#B8B0A4'}
-                    onMouseLeave={e => e.currentTarget.style.background=bg}>
-                    <div style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>{num}</div>
-                    <div style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1A1814', fontWeight:700 }}>{name}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <button onClick={() => { setTourSlide(0); setTourOpen(true) }}
-          className="mono-font"
-          style={{ fontSize:'10px', letterSpacing:'0.16em', padding:'9px 18px', background:'#2D2922', border:'none', color:'#E8E3DC', cursor:'pointer', transition:'all 0.15s', whiteSpace:'nowrap' }}
-          onMouseEnter={e => { e.currentTarget.style.background='#1A1814'; e.currentTarget.style.color='#FAF7F1' }}
-          onMouseLeave={e => { e.currentTarget.style.background='#2D2922'; e.currentTarget.style.color='#E8E3DC' }}>
-          ◎ &nbsp;TAKE THE TOUR
-        </button>
-      </div>
-
-      {hasDemo && (
-        <div className="mb-6 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap', border:'1px dashed #B8B0A4', padding:'10px 14px', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
-          <span>DEMO INSTITUTION LOADED — fictional cases across every stage. They stay in this browser and are never shared.</span>
-          <button onClick={onClearDemo} style={{ background:'none', border:'1px solid #78716C', color:'#57534E', padding:'4px 10px', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.12em' }}>CLEAR DEMO DATA</button>
-        </div>
-      )}
+      ) : <GetSetUp outcomes={outcomes} settings={settings} covUser={covUser} onTour={openTour} />}
 
       {/* ── Your day: what needs attention, most urgent first ── */}
       <YourDay outcomes={outcomes} covUser={covUser} settings={settings} platformMode={platformMode} />
@@ -181,7 +114,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               </div>
               {/* Slide */}
               <div style={{ padding:'32px 28px', flex:1 }}>
-                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', marginBottom:'8px' }}>{slide.num} — {tourSlide+1} OF 7</div>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', marginBottom:'8px' }}>{slide.num} — {tourSlide+1} OF {SLIDES.length}</div>
                 <div className="display-font" style={{ fontSize:'28px', fontWeight:700, color:'#F5F1EA', lineHeight:1.1, marginBottom:'24px' }}>
                   {slide.name.split('').map((c,i) => <span key={i} style={{ fontStyle: i>0&&i%3===0?'italic':'normal' }}>{c}</span>)}
                 </div>
@@ -207,7 +140,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 </button>
                 {tourSlide < SLIDES.length - 1
                   ? <button onClick={() => setTourSlide(p => p+1)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>NEXT →</button>
-                  : <button onClick={() => setTourOpen(false)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
+                  : <button onClick={finishTour} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'8px 16px', background:'#D4CCBC', border:'none', color:'#1A1814', cursor:'pointer' }}>DONE ✓</button>
                 }
               </div>
             </div>
