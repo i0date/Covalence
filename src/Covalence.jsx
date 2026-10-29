@@ -398,7 +398,7 @@ export default function Covalence() {
               </button>
 
               {SUPA_URL && SUPA_KEY && covUser?.authed && globalSyncStatus !== 'idle' && (
-                <span className="mono-font" style={{fontSize:'10px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
+                <span className="mono-font cov-sync-pill" style={{fontSize:'10px',letterSpacing:'0.12em',padding:'3px 8px',border:'1px solid',
                   color: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669',
                   borderColor: globalSyncStatus==='syncing'?'#D97706':globalSyncStatus==='error'?'#DC2626':'#059669'}}>
                   <span className="desktop-only">{globalSyncStatus==='syncing'?'↻ SYNC':globalSyncStatus==='error'?'✗ SYNC ERROR':'✓ LIVE'}</span>
@@ -430,7 +430,7 @@ export default function Covalence() {
               <RemindersBell cases={outcomes} covUser={covUser} settings={settings} />
               <button onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="mono-font desktop-only cov-nav-collapse"
                 style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',width:'28px',height:'28px',cursor:'pointer',fontSize:'12px'}}>?</button>
-              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole}
+              <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole} syncStatus={globalSyncStatus}
                 onSignIn={!covUser?.authed && authAvailable ? () => setShowSignIn(true) : null}
                 onSignOut={() => { if (covUser?.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }} />
             </div>
