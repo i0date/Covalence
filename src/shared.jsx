@@ -35,6 +35,9 @@ export const DEFAULT_SETTINGS = {
   duoInstitutionName:   '',
   institutionType:      '',          // bank | credit_union | fintech | mse | exchange | merchant | processor
   sides:                [],          // issuer | acquirer | merchant — empty: implied by the type (sides.mjs)
+  mchRespondDays:       10,          // merchant side: days to answer a chargeback (merchantQueue.mjs)
+  mchAcceptBelow:       25,          // …recommend accepting chargebacks under this amount
+  mchFightCost:         25,          // …what one response costs to prepare
   jurisdiction:         '',          // us | ca | uk | other
   regulatoryRegime:     '',          // reg_e | fcac | fca | other
   // SAR/STR thresholds by payment type
