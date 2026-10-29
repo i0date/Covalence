@@ -583,7 +583,7 @@ export function CaseSearch({ outcomes, open, setOpen }) {
 }
 
 // ── Mobile menu ───────────────────────────────────────────────────────────────
-export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, roles, onRole }) {
+export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, roles, onRole, syncStatus }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
     if (!open) return
@@ -604,7 +604,16 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
       {open && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:'48px 0 0 0', background:'rgba(26,24,20,0.45)', zIndex:59 }} />
-          <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, maxHeight:'calc(100vh - 48px)', overflowY:'auto', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
+          {/* Height in CSS (.cov-mobile-menu): 100vh runs under Safari's address bar and hid Sign out */}
+          <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, overflowY:'auto', overscrollBehavior:'contain', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
+            {/* Sound the alarm — always reachable on phones, whatever fits in the top bar */}
+            {(user?.authed || user?.demo) && (
+              <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('cov:alarm-open')) }} className="mono-font"
+                style={{ display:'flex', alignItems:'center', gap:'10px', width:'100%', textAlign:'left', padding:'14px 20px', background:'#2D2922', color:'#F5F1EA', border:'none', borderBottom:'1px solid #C9A86C', fontSize:'11px', letterSpacing:'0.14em', fontWeight:700, cursor:'pointer' }}>
+                <span aria-hidden="true" style={{ color:'#C9A86C' }}>⚑</span> SOUND THE ALARM
+                <span className="display-font" style={{ marginLeft:'auto', fontWeight:400, letterSpacing:0, fontSize:'12px', color:'#A8A29E' }}>Fraud wave or attack</span>
+              </button>
+            )}
             {nav.map(({ id, label, group }, i) => (
               <React.Fragment key={id}>
                 {/* Area headings are labels, not links: small, with a rule running out to the edge */}
@@ -621,10 +630,11 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
             ))}
             {/* Account — moved here from the top bar on phones */}
             {user && (
-              <div style={{ padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', borderTop:'1px solid #3D3A35' }}>
-                <div style={{ minWidth:0 }}>
+              <div style={{ padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap', borderTop:'1px solid #3D3A35' }}>
+                <div style={{ minWidth:0, flex:'1 1 160px' }}>
                   <div className="mono-font" style={{ fontSize:'11px', color:'#E7E4DF', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</div>
-                  <div className="mono-font" style={{ fontSize:'10px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
+                  <div className="mono-font" style={{ fontSize:'10px', color:'#78716C', letterSpacing:'0.08em', marginTop:'3px', overflowWrap:'anywhere' }}>{user.authed ? user.institution : 'DEMO — not signed in'}</div>
+                  {user.authed && syncStatus && syncStatus !== 'idle' && <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.08em', marginTop:'3px', color: syncStatus === 'error' ? '#F87171' : syncStatus === 'syncing' ? '#FBBF24' : '#6EE7B7' }}>{syncStatus === 'error' ? '✗ Sync error' : syncStatus === 'syncing' ? '↻ Syncing' : '● Live — saved to your workspace'}</div>}
                   {user.demo && roles && onRole && (
                     <label className="mono-font" style={{ fontSize:'10px', color:'#78716C', letterSpacing:'0.1em', display:'flex', alignItems:'center', gap:'6px', marginTop:'8px' }}>
                       VIEW AS
@@ -634,7 +644,7 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
                     </label>
                   )}
                 </div>
-                <div style={{ display:'flex', gap:'8px', flexShrink:0 }}>
+                <div style={{ display:'flex', gap:'8px', flexShrink:0, flexWrap:'wrap' }}>
                   {onSignIn && <button onClick={() => { setOpen(false); onSignIn() }} className="mono-font cov-mobile-acct" style={{ background:'transparent', border:'1px solid #D6CFC4', color:'#E7E4DF', padding:'8px 12px', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer' }}>SIGN IN</button>}
                   <button onClick={() => { setOpen(false); onSignOut() }} className="mono-font cov-mobile-acct" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#A8A29E', padding:'8px 12px', fontSize:'10px', letterSpacing:'0.1em', cursor:'pointer' }}>{user.authed ? 'SIGN OUT' : 'LEAVE DEMO'}</button>
                 </div>

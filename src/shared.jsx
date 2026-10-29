@@ -589,6 +589,10 @@ export const GLOBAL_CSS = `
   @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
   @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
   .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
+  /* Phone menu: fit the visible screen (100dvh excludes Safari's address bar) and clear the home indicator */
+  .cov-mobile-menu { max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); padding-bottom:env(safe-area-inset-bottom); }
+  /* Phones: the sync status moves into the menu so the top bar keeps room for the alarm */
+  @media (max-width:480px) { .cov-sync-pill { display:none !important; } }
   /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
   .cov-nav-num { display:none; }
   /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */

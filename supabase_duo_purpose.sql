@@ -55,7 +55,7 @@ begin
     'require_both', coalesce((select require_both from info_sharing where institution_id = me), false),
     'purpose', (select jsonb_build_object('at', l.at, 'by', coalesce(m.display_name, m.email, ''), 'text', l.detail->>'purpose', 'kind', coalesce(l.detail->>'kind', 'aml'), 'auto', coalesce((l.detail->>'auto')::boolean, false))
                 from duo_sharing_log l left join memberships m on m.user_id = l.user_id and m.institution_id = me
-                where l.session_id = s.id::text and l.institution_id = me and l.kind = 'purpose' order by l.at desc limit 1),
+                where l.session_id = s.id::text and l.institution_id = me and l.kind = 'purpose' order by l.at desc, l.id desc limit 1),
     'log', coalesce((select jsonb_agg(jsonb_build_object('kind', l.kind, 'at', l.at, 'safe_harbor', l.safe_harbor, 'by', coalesce(m.display_name, m.email, ''), 'detail', l.detail) order by l.at desc)
                      from (select * from duo_sharing_log where session_id = s.id::text and institution_id = me order by at desc limit 100) l
                      left join memberships m on m.user_id = l.user_id and m.institution_id = me), '[]'::jsonb));
@@ -88,7 +88,7 @@ begin
     covered := cur.institution_b_id is not null and sharing_valid(cur.institution_a_id) and sharing_valid(cur.institution_b_id);
     other   := case side when 'a' then cur.institution_b else cur.institution_a end;
     if shared then
-      purpose := (select coalesce(detail->>'kind', 'aml') from duo_sharing_log where session_id = cur.id::text and institution_id = me and kind = 'purpose' order by at desc limit 1);
+      purpose := (select coalesce(detail->>'kind', 'aml') from duo_sharing_log where session_id = cur.id::text and institution_id = me and kind = 'purpose' order by at desc, id desc limit 1);
       if purpose is null then   -- nobody said otherwise: recovering funds, or resolving the chargeback
         purpose := case when duo_is_coordination(cur.claim) then 'dispute' else 'recovery' end;
         insert into duo_sharing_log (session_id, institution_id, kind, safe_harbor, detail)
