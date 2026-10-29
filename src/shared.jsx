@@ -38,6 +38,10 @@ export const DEFAULT_SETTINGS = {
   mchRespondDays:       10,          // merchant side: days to answer a chargeback (merchantQueue.mjs)
   mchAcceptBelow:       25,          // …recommend accepting chargebacks under this amount
   mchFightCost:         25,          // …what one response costs to prepare
+  mchMonthlyTxVisa:     0,           // …card sales per month, for the chargeback ratio on Home (chargebackRatio.mjs)
+  mchMonthlyTxMc:       0,
+  mchRatioVisa:         1.5,         // …ratio thresholds, %
+  mchRatioMc:           1.5,
   jurisdiction:         '',          // us | ca | uk | other
   regulatoryRegime:     '',          // reg_e | fcac | fca | other
   // SAR/STR thresholds by payment type
