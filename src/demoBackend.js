@@ -12,7 +12,7 @@ const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
-  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log',
+  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -149,7 +149,7 @@ function settle(s) {
       s.institution_b = COUNTERPARTY
       audit('duo.joined', 'duo', s.id, { by: COUNTERPARTY }, { actor: '' })
     }
-    if (x.type === 'say') s.notes_b = JSON.stringify([...thread(s.notes_b), { text: x.text, ts: new Date(x.at).toISOString() }])
+    if (x.type === 'say') { const f = theirField(s); s[f] = JSON.stringify([...thread(s[f]), { text: x.text, ts: new Date(x.at).toISOString() }]) }
   })
   s.script = s.script.filter(x => x.at > now)
   s.updated_at = new Date().toISOString()
@@ -165,11 +165,46 @@ const shareLogs = () => read(K.shareLog, { HCU7Q2: [{ kind: 'purpose', at: new D
 function logShare(id, entry) {
   const all = shareLogs(); all[id] = [{ at: new Date().toISOString(), by: visitor().name || 'You', ...entry }, ...(all[id] || [])].slice(0, 100); write(K.shareLog, all)
 }
-const covered = s => !!s.institution_b && sharingValid(mySharing()) && sharingValid(HARBOR_SHARING())
+// Demo Bank is side A in sessions it opened and side B in ARN sessions a merchant opened
+const myField    = s => s.institution_a === DEMO_INSTITUTION ? 'notes_a' : 'notes_b'
+const theirField = s => myField(s) === 'notes_a' ? 'notes_b' : 'notes_a'
+const theirName  = s => s.institution_a === DEMO_INSTITUTION ? s.institution_b : s.institution_a
+const isArn      = s => s.claim?.kind === 'arn'
+// Merchants can't register under 314(b); an ARN session with one is dispute coordination
+const theirSharing = s => theirName(s) === COUNTERPARTY ? HARBOR_SHARING() : { institution: theirName(s) || '', registered: false, expires_on: null, contact_name: '', contact_email: '' }
+const covered = s => !!s.institution_b && sharingValid(mySharing()) && sharingValid(theirSharing(s))
+const coordination = s => isArn(s) && ['merchant', 'acquirer'].includes(s.claim?.sides?.a) || isArn(s) && ['merchant', 'acquirer'].includes(s.claim?.sides?.b)
 
 const sessions = () => read(K.duo, {})
 const saveSession = s => { const all = sessions(); all[s.id] = s; write(K.duo, all); return s }
 const publicSession = s => { const { script, nextLine, ...rest } = s; return rest }
+
+const isMerchantSide = c => c.side ? c.side !== 'issuer' : c.mode === 'merchant'
+const ARN_LINES_MERCHANT = [
+  'Thanks. We’ll issue the refund today and send the reference here once it’s through.',
+  'Refunded — reference BF-RF-20417. Please withdraw the chargeback on your side so we aren’t charged twice.',
+]
+const ARN_LINES_ISSUER = [
+  'Harbor Credit Union here — we see the chargeback on our side. What evidence do you have?',
+  'That delivery confirmation and 3-D Secure result answer it. We’ll accept your response rather than go to Pre-Arbitration.',
+]
+const arnInvites = () => read(K.arn, [{ id: 'demo-arn-in-1', direction: 'in', status: 'pending', my_case_id: 'COV-DEMO06', other_institution: 'Brightline Fitness',
+  other_side: 'merchant', arn_last4: '4821', amount: '', network: 'VISA', created_at: new Date(Date.now() - 3 * 3600000).toISOString() }])
+function openArnSession({ a, b, sides, cases, i, opening, lines }) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''; for (let k = 0; k < 6; k++) code += chars[Math.floor(Math.random() * chars.length)]
+  const now = new Date().toISOString(), c = readCases().find(x => x.id === i.my_case_id) || {}
+  const opener = opening ? JSON.stringify([{ text: opening, ts: now }]) : '[]'
+  saveSession({ id: code, institution_a: a, institution_b: b, status: 'active', created_at: now, updated_at: now, script: [], nextLine: 0, lines,
+    claim: { kind: 'arn', arn: '…' + (i.arn_last4 || ''), amount: c.amount || i.amount || '', network: c.network || i.network || '', reasonCode: c.reasonCode || '', sides, cases },
+    notes_a: a === DEMO_INSTITUTION ? '[]' : opener, notes_b: b === DEMO_INSTITUTION ? '[]' : opener })
+  try {
+    const role = a === DEMO_INSTITUTION ? 'a' : 'b'
+    const mine = JSON.parse(localStorage.getItem('duo_my_sessions') || '[]').filter(x => x.id !== code)
+    localStorage.setItem('duo_my_sessions', JSON.stringify([{ id: code, role, myInstitution: DEMO_INSTITUTION, joinedAt: now, lastStatus: 'active', caseId: i.my_case_id }, ...mine]))
+  } catch {}
+  return code
+}
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
 const HANDLERS = {
@@ -364,21 +399,21 @@ const HANDLERS = {
     const s = sessions()[String(p_id || '').toUpperCase()]
     if (!s) return []
     settle(s)
-    const before = thread(s.notes_a).length
-    if (p.notes_a !== undefined && p.notes_a !== s.notes_a) {
+    const f = myField(s), before = thread(s[f]).length, lines = s.lines || HARBOR_LINES
+    if (p[f] !== undefined && p[f] !== s[f]) {
       need((shareLogs()[s.id] || []).some(x => x.kind === 'purpose'), 'Confirm why you are sharing (314(b)) before posting in this session')
-      need(covered(s) || !mySharing().require_both, 'Your institution only shares in Duo when both sides are registered under 314(b)')
-      logShare(s.id, { kind: 'message', safe_harbor: covered(s), detail: { with: s.institution_b || '' } })
-      audit('duo.info_shared', 'duo', s.id, { with: s.institution_b || '', safe_harbor: covered(s) })
-      s.notes_a = p.notes_a
+      need(covered(s) || coordination(s) || !mySharing().require_both, 'Your institution only shares in Duo when both sides are registered under 314(b)')
+      logShare(s.id, { kind: 'message', safe_harbor: covered(s), detail: { with: theirName(s) || '' } })
+      audit('duo.info_shared', 'duo', s.id, { with: theirName(s) || '', safe_harbor: covered(s) })
+      s[f] = p[f]
     }
     if (p.status && p.status !== s.status) {
       logShare(s.id, { kind: 'status', safe_harbor: covered(s), detail: { from: s.status, to: p.status } })
       audit('duo.status_changed', 'duo', s.id, { from: s.status, to: p.status }); s.status = p.status
     }
     // The counterparty answers each new message from Demo Bank
-    if (thread(s.notes_a).length > before && s.institution_b && (s.nextLine ?? 0) < HARBOR_LINES.length) {
-      s.script = [...(s.script || []), { at: Date.now() + 5000, type: 'say', text: HARBOR_LINES[s.nextLine ?? 0] }]
+    if (thread(s[f]).length > before && s.institution_b && (s.nextLine ?? 0) < lines.length) {
+      s.script = [...(s.script || []), { at: Date.now() + 5000, type: 'say', text: lines[s.nextLine ?? 0] }]
       s.nextLine = (s.nextLine ?? 0) + 1
     }
     s.updated_at = new Date().toISOString()
@@ -406,7 +441,10 @@ const HANDLERS = {
     const s = sessions()[String(p_id || '').toUpperCase()]
     if (!s) return null
     const me = mySharing(), log = shareLogs()[s.id] || [], purpose = log.find(x => x.kind === 'purpose')
-    return { a: { institution: DEMO_INSTITUTION, ...me, valid: sharingValid(me) }, b: s.institution_b ? { ...HARBOR_SHARING(), valid: sharingValid(HARBOR_SHARING()) } : null,
+    const mine = { institution: DEMO_INSTITUTION, ...me, valid: sharingValid(me) }
+    const theirs = s.institution_b ? { ...theirSharing(s), valid: sharingValid(theirSharing(s)) } : null
+    const weAreA = s.institution_a === DEMO_INSTITUTION
+    return { a: weAreA ? mine : theirs, b: weAreA ? theirs : mine, coordination: coordination(s),
       safe_harbor: covered(s), require_both: !!me.require_both, purpose: purpose ? { at: purpose.at, by: purpose.by, text: purpose.detail.purpose } : null, log }
   },
   duo_share_confirm: ({ p_id, p_purpose }) => {
@@ -417,6 +455,48 @@ const HANDLERS = {
     logShare(s.id, { kind: 'purpose', safe_harbor: covered(s), detail: { purpose: String(p_purpose).trim().slice(0, 500) } })
     audit('duo.sharing_purpose', 'duo', s.id, { purpose: String(p_purpose).trim().slice(0, 500), safe_harbor: covered(s) })
     return null
+  },
+
+  // Linking by ARN (supabase_arn.sql). Seeded: Brightline Fitness (a merchant) has
+  // invited Demo Bank on the issuer case COV-DEMO06. Demo Bank's own lookups find
+  // Harbor Credit Union as the issuer, who accepts a few seconds later.
+  arn_find_other_side: ({ p_case_id }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const c = readCases().find(x => x.id === p_case_id)
+    need(c, 'This case hasn’t synced yet — try again in a moment')
+    need(/^[0-9]{23}$/.test(c.arn || ''), 'Add the case’s 23-digit ARN first')
+    const mine = isMerchantSide(c) ? 'merchant' : 'issuer'
+    const all = arnInvites()
+    if (!all.some(i => i.direction === 'out' && i.my_case_id === c.id))
+      write(K.arn, [{ id: 'demo-arn-' + Math.random().toString(36).slice(2, 10), direction: 'out', status: 'pending', my_case_id: c.id, my_side: mine,
+        other_institution: mine === 'merchant' ? COUNTERPARTY : 'Northwind Electronics', other_side: mine === 'merchant' ? 'issuer' : 'merchant',
+        arn_last4: c.arn.slice(-4), amount: c.amount, network: c.network, reasonCode: c.reasonCode, acceptAt: Date.now() + 6000, created_at: new Date().toISOString() }, ...all])
+    audit('duo.arn_lookup', 'case', c.id, { arn_last4: c.arn.slice(-4) })
+    return { sent: true }
+  },
+  arn_invites: () => {
+    const all = arnInvites().map(i => {
+      if (i.direction !== 'out' || i.status !== 'pending' || Date.now() < i.acceptAt) return i
+      const code = openArnSession({ a: DEMO_INSTITUTION, b: i.other_institution, sides: { a: i.my_side, b: i.other_side }, cases: { a: i.my_case_id, b: 'their case' }, i,
+        lines: ARN_LINES_ISSUER })
+      audit('duo.arn_linked', 'case', i.my_case_id, { session: code }, { actor: '' })
+      return { ...i, status: 'accepted', session_id: code }
+    })
+    write(K.arn, all)
+    // An outgoing invite is only shown once accepted, as in the database
+    return all.filter(i => i.direction === 'in' || i.status === 'accepted')
+  },
+  arn_invite_respond: ({ p_id, p_accept }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const all = arnInvites(), i = all.find(x => x.id === p_id && x.direction === 'in' && x.status === 'pending')
+    need(i, 'That invite isn’t waiting for an answer')
+    if (!p_accept) { write(K.arn, all.map(x => x === i ? { ...x, status: 'declined' } : x)); audit('duo.arn_declined', 'case', i.my_case_id, {}); return null }
+    const code = openArnSession({ a: i.other_institution, b: DEMO_INSTITUTION, sides: { a: i.other_side, b: 'issuer' }, cases: { a: 'their case', b: i.my_case_id }, i,
+      opening: 'Brightline Fitness here. Your cardholder’s cancellation reached us two days after the billing date. Rather than fight it, we’ll refund the $89 directly — would you withdraw the chargeback?',
+      lines: ARN_LINES_MERCHANT })
+    write(K.arn, all.map(x => x === i ? { ...x, status: 'accepted', session_id: code } : x))
+    audit('duo.arn_linked', 'case', i.my_case_id, { session: code })
+    return code
   },
 
   // Case links: the counterparty opens the link and answers

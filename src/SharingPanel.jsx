@@ -17,6 +17,11 @@ const day = d => d ? new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toL
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : ''
 const daysLeft = d => d ? Math.ceil((new Date(d + 'T23:59:59') - Date.now()) / 86400000) : null
 
+// Bank–merchant sessions linked by ARN: 314(b) doesn't apply (merchants can't register)
+export const DISPUTE_PURPOSES = [
+  'Resolve this chargeback — confirm the facts and agree an outcome',
+  'Arrange a refund in place of the chargeback',
+]
 export const PURPOSES = [
   'Identify and report possible money laundering',
   'Identify and report possible terrorist financing',
@@ -110,6 +115,15 @@ export function DuoSharingBar({ st, myRole }) {
   const [open, setOpen] = useState(false)
   if (!st) return null
   const mine = myRole === 'b' ? st.b : st.a, theirs = myRole === 'b' ? st.a : st.b
+  if (st.coordination) return (
+    <div className="mb-6" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'12px 14px' }}>
+      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', fontWeight:600, marginBottom:'4px' }}>DISPUTE COORDINATION — 314(b) DOESN’T APPLY</div>
+      <div className="display-font" style={{ fontSize:'13px', color:'#3F3A35', lineHeight:1.5 }}>
+        This session links the two sides of one chargeback, matched by its ARN. Merchants can’t register under 314(b), so share only what the dispute itself needs. Official responses still go through the card network and the acquirer.
+      </div>
+      {st.purpose && <div className="display-font" style={{ fontSize:'12px', color:'#3F3A35', marginTop:'8px' }}>Purpose: {st.purpose.text} <span className="mono-font" style={{ fontSize:'10px', color:'#6B6259' }}>— {st.purpose.by || 'your team'}, {when(st.purpose.at)}</span></div>}
+    </div>
+  )
   const tone = st.safe_harbor ? { c:'#065F46', bg:'#ECFDF5', b:'#6EE7B7' } : { c:'#92400E', bg:'#FEF3C7', b:'#FCD34D' }
   const why = st.safe_harbor ? null : !theirs ? 'The other institution hasn’t joined, so coverage can’t be checked yet.'
     : !mine?.valid ? 'Your institution has no current 314(b) registration (Settings → Financial crime).'
@@ -151,8 +165,9 @@ export function DuoSharingBar({ st, myRole }) {
 }
 
 // Shown in place of POST ENTRY until this institution has said why it is sharing
-export function SharingPurpose({ sessionId, onDone, disabled }) {
-  const [pick, setPick] = useState(PURPOSES[2]), [note, setNote] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false)
+export function SharingPurpose({ sessionId, onDone, disabled, coordination = false }) {
+  const options = coordination ? DISPUTE_PURPOSES : PURPOSES
+  const [pick, setPick] = useState(options[coordination ? 0 : 2]), [note, setNote] = useState(''), [err, setErr] = useState(''), [busy, setBusy] = useState(false)
   const confirm = async () => {
     setBusy(true); setErr('')
     try { await duoShareConfirm(sessionId, note.trim() ? `${pick} — ${note.trim()}` : pick); await onDone() } catch (e) { setErr(e.message) } finally { setBusy(false) }
@@ -161,7 +176,7 @@ export function SharingPurpose({ sessionId, onDone, disabled }) {
     <div style={{ border:'1px solid #C8C0B0', background:'#FAF7F1', padding:'12px 14px', marginTop:'8px' }}>
       <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'6px' }}>BEFORE YOU SHARE — WHY IS YOUR INSTITUTION SHARING?</div>
       <div role="radiogroup" aria-label="Purpose of sharing" style={{ display:'grid', gap:'4px' }}>
-        {PURPOSES.map(p => (
+        {options.map(p => (
           <label key={p} className="display-font" style={{ fontSize:'13px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
             <input type="radio" name={`purpose-${sessionId}`} checked={pick === p} onChange={() => setPick(p)} style={{ marginTop:'4px' }} /> {p}
           </label>
