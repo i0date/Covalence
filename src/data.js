@@ -29,7 +29,7 @@ function supaH() {
 const _rpcMissing = new Set()
 // Duo and case links work for demo visitors too, against Demo Bank's in-browser backend
 const DEMO_RPCS = new Set(['duo_get', 'duo_create', 'duo_update', 'duo_find', 'case_link_create', 'case_link_activity',
-  'sharing_get', 'sharing_set', 'duo_sharing_status', 'duo_share_confirm'])
+  'sharing_get', 'sharing_set', 'duo_sharing_status', 'duo_share_confirm', 'arn_find_other_side', 'arn_invites', 'arn_invite_respond'])
 async function supaRpc(fn, args, fallback) {
   if (!isSignedIn() && DEMO_RPCS.has(fn)) return demoRpc(fn, args)
   if (!_rpcMissing.has(fn)) {
@@ -87,6 +87,10 @@ export const sharingSet = (v) => plain(supaRpc('sharing_set', { p_registered: !!
   p_contact_name: v.contact_name || '', p_contact_email: v.contact_email || '', p_require_both: !!v.require_both }))
 export const duoSharingStatus = id => plain(supaRpc('duo_sharing_status', { p_id: id }))
 export const duoShareConfirm = (id, purpose) => plain(supaRpc('duo_share_confirm', { p_id: id, p_purpose: purpose }))
+// ── Linking cases by ARN (supabase_arn.sql) ──────────────────────────────────
+export const arnFindOtherSide = caseId => plain(supaRpc('arn_find_other_side', { p_case_id: caseId }))
+export const arnInvites = () => plain(supaRpc('arn_invites', {})).then(r => Array.isArray(r) ? r : [])
+export const arnInviteRespond = (id, accept) => plain(supaRpc('arn_invite_respond', { p_id: id, p_accept: !!accept }))
 
 export async function caseLinkCreate(body) {
   return firstRow(await supaRpc('case_link_create', { p: body }, async () => {

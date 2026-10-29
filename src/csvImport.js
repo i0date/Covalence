@@ -58,7 +58,8 @@ export function parseCsv(input) {
 // ─── Covalence fields ─────────────────────────────────────────────────────────
 // type: text | date | amount | email | status | verdict | network | cardType
 export const FIELDS = [
-  { key:'externalRef',     label:'Case reference',        type:'text',    hint:'The case number in your current system. Used to spot cases already imported.', syn:['case id','case number','case no','case ref','reference','ref','dispute id','dispute number','claim id','claim number','ticket','arn','external id'] },
+  { key:'externalRef',     label:'Case reference',        type:'text',    hint:'The case number in your current system. Used to spot cases already imported.', syn:['case id','case number','case no','case ref','reference','ref','dispute id','dispute number','claim id','claim number','ticket','external id'] },
+  { key:'arn',             label:'ARN',                   type:'text',    hint:'The chargeback’s 23-digit Acquirer Reference Number. Lets Duo find the other side of the dispute.', syn:['arn','acquirer reference number','acquirer reference','acquirer ref','arn number'] },
   { key:'date',            label:'Date opened',           type:'date',    required:true, syn:['date opened','opened','open date','created','created date','date created','received','date received','report date','dispute date','claim date','date'] },
   { key:'merchant',        label:'Merchant / payee',      type:'text',    required:true, syn:['merchant','merchant name','payee','recipient','descriptor','merchant descriptor','beneficiary','counterparty'] },
   { key:'amount',          label:'Amount',                type:'amount',  required:true, syn:['amount','disputed amount','dispute amount','claim amount','transaction amount','txn amount','value','loss amount','amt'] },
@@ -290,6 +291,9 @@ export function buildImport({ rows, existing, options }) {
     const ownerOnly = errors.length - before === 1 && errors[errors.length - 1].field === FIELD.assignedTo.label
     if (errors.length > before && !ownerOnly) return
     if (ownerOnly) errors[errors.length - 1].warning = true   // the case still imports, just unassigned
+    // ARN: 23 digits, stored without spaces so Duo can match it (supabase_arn.sql); a bad one is a warning
+    const rawArn = get(r, 'arn')
+    if (rawArn) { const d = rawArn.replace(/\D/g, ''); if (d.length === 23) c.arn = d; else { err(FIELD.arn.label, `“${rawArn}” isn’t a 23-digit ARN — imported without it`); errors[errors.length - 1].warning = true } }
 
     const note = get(r, 'note')
     const stamp = { ts: now, event: 'imported', file: o.fileName || '', batch: o.batchId, by: o.by || 'Import' }

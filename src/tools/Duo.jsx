@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
 import { DuoSharingBar, SharingPurpose, useDuoSharing } from '../SharingPanel.jsx'
+import { ArnInvites } from '../ArnInvites.jsx'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
 
 const DUO_STATUS = {
@@ -16,7 +17,7 @@ const DUO_STATUS = {
 const DUO_STATUS_ORDER         = ['active','in_discussion','agreed','closed']
 const DUO_STATUS_ORDER_CRYPTO  = ['active','freeze_requested','freeze_confirmed','closed']
 
-export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }) {
+export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, covUser }) {
   const [phase,         setPhase]        = useState('dashboard')
   const [myRole,        setMyRole]       = useState(null)
   const [session,       setSession]      = useState(null)
@@ -143,6 +144,12 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
     } catch (e) { setError(e.message) }
     setLoading(false)
   }
+  // Other tools open a session here (a case linked by ARN): dispatch 'cov:duo-open' with { id, role }
+  const openRef = useRef(openSession); openRef.current = openSession
+  useEffect(() => {
+    const h = e => { if (e.detail?.id) openRef.current({ id: e.detail.id, role: e.detail.role || 'a' }) }
+    window.addEventListener('cov:duo-open', h); return () => window.removeEventListener('cov:duo-open', h)
+  }, [])
 
   const handleCreate = async () => {
     if (!myInstitution.trim()) { setError('Enter your institution name.'); return }
@@ -277,6 +284,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
           {onSignIn && <BtnPrimary onClick={onSignIn}>SIGN IN</BtnPrimary>}
         </div>
       )}
+      {authInstitution && <ArnInvites readOnly={covUser?.role === 'auditor'} onOpen={(code, caseId) => { persistSession(code, 'b', authInstitution, 'active', caseId); openSession({ id: code, role: 'b' }) }} />}
       <div style={{ display:'flex', gap:'10px', flexWrap:'wrap', marginBottom:'40px', ...(configured && !authInstitution ? { opacity:0.4, pointerEvents:'none' } : {}) }}>
         <BtnPrimary onClick={() => { setError(''); setMyInstitution(authInstitution || ''); setPhase('creating') }}>CREATE SESSION</BtnPrimary>
         <BtnSecondary onClick={() => { setError(''); setMyInstitution(authInstitution || ''); setJoinCode(''); setPhase('joining') }}>JOIN SESSION</BtnSecondary>
@@ -499,7 +507,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
     const stIdx        = statusOrder.indexOf(session.status)
     const nextSt       = stIdx < statusOrder.length - 1 ? statusOrder[stIdx + 1] : null
     const nextStCfg    = nextSt ? DUO_STATUS[nextSt] : null
-    const STANDARD_KEYS = ['caseId','merchant','amount','reasonCode','date','status','classification']
+    const STANDARD_KEYS = ['caseId','merchant','amount','network','reasonCode','arn','date','status','classification']
     const CRYPTO_KEYS   = ['caseId','asset_type','amount_crypto','amount_usd','classification']
     const claimEntries  = Object.entries(claim).filter(([k]) => (isCryptoClaim ? CRYPTO_KEYS : STANDARD_KEYS).includes(k))
 
@@ -692,9 +700,9 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn }
                 rows={3} placeholder="Findings, proposed resolution, agreed next steps…"
                 style={{ width:'100%', resize:'none', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.6, padding:'10px', border:'1px solid #C8C0B0', background:'#FFFFFF', boxSizing:'border-box', outline:'none' }} />
               {error && <div className="mono-font text-[10px] text-red-700 mt-1">{error}</div>}
-              {sharing && !sharing.purpose ? <SharingPurpose sessionId={session.id} onDone={reloadSharing} disabled={sharing.require_both && !sharing.safe_harbor} /> :
+              {sharing && !sharing.purpose ? <SharingPurpose sessionId={session.id} onDone={reloadSharing} coordination={!!sharing.coordination} disabled={sharing.require_both && !sharing.safe_harbor && !sharing.coordination} /> :
               <div style={{ display:'flex', alignItems:'center', gap:'12px', marginTop:'8px', flexWrap:'wrap' }}>
-                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || (sharing?.require_both && !sharing.safe_harbor)}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
+                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || (sharing?.require_both && !sharing.safe_harbor && !sharing.coordination)}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
                 <div className="mono-font text-[10px] tracking-widest text-stone-400">
                   ⌘↵ to post · syncs every 5s{lastSync ? ` · ${lastSync.toLocaleTimeString()}` : ''}
                 </div>

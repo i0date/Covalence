@@ -21,6 +21,7 @@ import { AiExplain } from './AiExplain.jsx'
 import { readCases, writeCases } from './caseStore.js'
 import { FincrimePanel } from './FincrimePanel.jsx'
 import { screeningStatus } from './fincrime.js'
+import { ArnLink } from './ArnLink.jsx'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -348,6 +349,9 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             )}
           </div>
 
+          {/* The other side of a card dispute, by ARN */}
+          {!c._triageOnly && <ArnLink c={c} setOutcomes={setOutcomes} covUser={covUser} onClose={onClose} />}
+
           {/* AI analysis */}
           {(c.ai?.summary || c._triageRecord) && (
             <div>
@@ -670,7 +674,7 @@ export function buildDemoInstitution(userEmail) {
     { id:'COV-DEMO05', date:iso(9),  merchant:'Atlas Furniture', amount:'1980.00 USD', network:'VISA', status:'queued', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', cardholderName:'S. Laurent', confidence:'MEDIUM',
       ai:{ summary:'Sofa ordered with a promised 3-week delivery; nothing received after 9 weeks and the merchant has stopped responding.', rationale:'Expected delivery date passed, merchant contact attempts logged', missing:['Order confirmation with promised delivery date'], ts:iso(8) },
       history:h([9,'received'],[8,'queued','received']) },
-    { id:'COV-DEMO06', date:iso(18), merchant:'Brightline Fitness', amount:'89.00 USD', network:'VISA', status:'filed', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'K. Novak', filedAt:iso(12), filedBy:'Demo Analyst', history:h([18,'received'],[15,'queued','received'],[12,'filed','queued']) },
+    { id:'COV-DEMO06', arn:'74912346081500418864821', date:iso(18), merchant:'Brightline Fitness', amount:'89.00 USD', network:'VISA', status:'filed', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'K. Novak', filedAt:iso(12), filedBy:'Demo Analyst', history:h([18,'received'],[15,'queued','received'],[12,'filed','queued']) },
     { id:'COV-DEMO07', date:iso(25), merchant:'Pacific Rail Tickets', amount:'264.50 USD', network:'MC', status:'network_invstg', category:'mc_fraud', verdict:'TRUE_FRAUD', reasonCode:'4837', reasonTitle:'No Cardholder Authorization', cardholderName:'L. Haddad', filedAt:iso(20), history:h([25,'received'],[22,'queued','received'],[20,'filed','queued'],[9,'network_invstg','filed']) },
     { id:'COV-DEMO08', date:iso(34), merchant:'Copperleaf Hotels', amount:'1415.75 USD', network:'VISA', status:'representment', category:'consumer_dispute', verdict:'CONSUMER_DISPUTE', reasonCode:'13.6', reasonTitle:'Credit Not Processed', cardholderName:'R. Asante', filedAt:iso(28), nextRespDate:ymd(3), provCreditDate:iso(30), assignedTo:me,
       notes:[{ text:'Merchant representment claims refund was issued — no credit visible on statement. Requesting ARN.', ts:iso(2), author:'Demo Analyst' }],
@@ -689,7 +693,7 @@ export function buildDemoInstitution(userEmail) {
       history:[{ ts:'2020-06-03T09:05:00.000Z', event:'created', status:'received', by:'Demo Analyst' }, { ts:'2020-08-19T12:00:00.000Z', event:'status', from:'representment', status:'lost', by:'Demo Analyst' }] },
     // Merchant / acquirer side — chargebacks received against the merchant (Desk merchant mode)
     { id:'MCH-DEMO01', mode:'merchant', side:'merchant', date:iso(3),  merchant:'Northwind Electronics', amount:'689.00 USD', network:'VISA', status:'received', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, winProb:'HIGH', history:h([3,'received']) },
-    { id:'MCH-DEMO02', mode:'merchant', side:'merchant', date:iso(11), merchant:'Northwind Electronics', amount:'1249.99 USD', network:'VISA', status:'rebuttal_prep', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, liabilityShift:true, winProb:'HIGH', nextRespDate:ymd(4),
+    { id:'MCH-DEMO02', mode:'merchant', side:'merchant', arn:'24692166110700931957302', date:iso(11), merchant:'Northwind Electronics', amount:'1249.99 USD', network:'VISA', status:'rebuttal_prep', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', acquirer:'Demo Acquiring', threeDSStatus:'authenticated', deliveryConfirmed:true, liabilityShift:true, winProb:'HIGH', nextRespDate:ymd(4),
       notes:[{ text:'3DS authenticated — liability shift applies. Pulling delivery photo and IP match for rebuttal.', ts:iso(1), author:'Demo Analyst' }],
       history:h([11,'received'],[2,'rebuttal_prep','received']) },
     { id:'MCH-DEMO03', mode:'merchant', side:'merchant', date:iso(26), merchant:'Northwind Electronics', amount:'214.50 USD', network:'MC', status:'submitted', reasonCode:'4853', reasonTitle:'Cardholder Dispute', acquirer:'Demo Acquiring', threeDSStatus:'none', deliveryConfirmed:true, winProb:'MEDIUM', history:h([26,'received'],[20,'rebuttal_prep','received'],[15,'submitted','rebuttal_prep']) },
@@ -799,7 +803,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '8'
+const DEMO_VERSION = '9'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

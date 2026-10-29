@@ -495,7 +495,7 @@ export default function Covalence() {
           <DfaView dfaQueue={dfaQueue} setDfaQueue={setDfaQueue} onGoToDuo={() => setActiveSection('duo')} historicalOutcomes={outcomes} />
         </div>
         <div style={{ display: activeSection === 'duo' ? 'block' : 'none' }}>
-          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed || covUser?.demo ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} />
+          <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed || covUser?.demo ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} />
