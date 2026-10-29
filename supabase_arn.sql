@@ -198,7 +198,7 @@ begin
     if r.status is distinct from cur.status then
       insert into duo_sharing_log (session_id, institution_id, kind, safe_harbor, detail)
       values (cur.id::text, me, 'status', covered, jsonb_build_object('from', cur.status, 'to', r.status));
-      perform audit_add(me, 'duo.status_changed', 'duo', cur.id::text, jsonb_build_object('from', cur.status, 'to', r.status));
+      -- the audit entry itself comes from the audit_duo trigger (supabase_workspace_audit.sql)
     end if;
   end if;
 
