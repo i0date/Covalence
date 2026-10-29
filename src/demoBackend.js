@@ -7,12 +7,13 @@
 // counterparty, case links that get viewed and answered. Nothing here ever
 // reaches Supabase; signing in switches to the real backend.
 import { readCases, writeCases } from './caseStore.js'
+import { normaliseClaim, claimClock, missingForDesk } from './claims.mjs'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
-  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms',
+  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms', claims: 'cov_demo_claims',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -212,6 +213,38 @@ function openArnSession({ a, b, sides, cases, i, opening, lines }) {
 }
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
+// Three claims as Demo Bank's app would send them: two complete, one missing the claim type and consent
+function demoClaims() {
+  const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
+  const raw = [
+    { id: 'APP-55102', channel: 'app', reportedAt: ago(3), claimType: 'unauth_cnp',
+      customer: { id: 'A-2231', name: 'Dana Whitfield', email: 'dana.w@example.com', accountType: 'debit', accountOpened: '2019-04-02' },
+      transactions: [{ id: 'TX-90311', ts: ago(30), amount: -84.5, currency: 'USD', merchant: 'SHOPZ*GADGETHUB', merchantCategory: 'Electronics', merchantLocation: 'Online', network: 'Visa', channel: 'card_not_present' },
+                     { id: 'TX-90318', ts: ago(29), amount: -212, currency: 'USD', merchant: 'SHOPZ*GADGETHUB', merchantCategory: 'Electronics', merchantLocation: 'Online', network: 'Visa', channel: 'card_not_present' }],
+      answers: { recognisesTransaction: false, cardInPossession: true, sharedCardDetails: false, otherPeopleUseCard: false },
+      statement: 'Two charges from a shop I’ve never heard of. My card has been in my wallet the whole time and I haven’t shared the number with anyone.',
+      attachments: [], consent: { given: true, at: ago(3), text: 'I confirm this is accurate and authorise Demo Bank to investigate.' } },
+    { id: 'APP-55107', channel: 'app', reportedAt: ago(26), claimType: 'non_receipt',
+      customer: { id: 'A-1180', name: 'Marcus Lee', accountType: 'credit' },
+      transactions: [{ id: 'TX-88720', ts: ago(24 * 19), amount: -349.99, currency: 'USD', merchant: 'NORTHWIND FURNITURE', merchantCategory: 'Furniture', network: 'Mastercard', channel: 'card_not_present' }],
+      answers: { recognisesTransaction: true, contactedMerchant: true, expectedDelivery: '2026-10-15' },
+      statement: 'Ordered a desk, paid, never arrived. The merchant stopped answering emails.',
+      attachments: [{ name: 'order-confirmation.pdf', type: 'application/pdf', url: 'https://files.demo.bank/claims/55107/order.pdf' }], consent: { given: true, at: ago(26) } },
+    { id: 'WEB-30014', channel: 'web', reportedAt: ago(50), claimType: '',
+      customer: { id: 'A-3307', name: 'Priya Nair', accountType: 'p2p' },
+      transactions: [{ id: 'TX-87502', ts: ago(54), amount: -1500, currency: 'USD', merchant: 'Zelle to J. Carter', channel: 'zelle' }],
+      answers: { recognisesTransaction: true, contactedByCaller: 'Someone saying they were from the bank’s fraud team' },
+      statement: 'Got a call from the bank, they said my account was hacked and to move money to a safe account.',
+      attachments: [], consent: { given: false } },
+  ]
+  return raw.map((b, i) => {
+    const { claim } = normaliseClaim(b, new Date(now)), missing = missingForDesk(claim)
+    return { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84'][i], external_id: b.id, channel: claim.channel, segment: 'fi', status: 'received', ready: !missing.length,
+      data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app' }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
+      case_id: '', reported_at: claim.reportedAt, created_at: claim.reportedAt, updated_at: claim.reportedAt }
+  })
+}
+
 const HANDLERS = {
   // Transaction monitoring (supabase_monitoring.sql) — kept to the last 20,000 transactions
   tm_ingest: ({ p_rows }) => {
@@ -559,6 +592,27 @@ const HANDLERS = {
     write(K.settle, st)
     audit('duo.settle_' + p_action, 'duo', s.id, { amount: Number(p_amount) || st[s.id].amount, ref: p_ref || null })
     return null
+  },
+
+  // Claims from the bank's app (supabase_claims.sql, api/claims.js): three arrive the first time Triage → Claims opens
+  claims_list: () => {
+    let all = read(K.claims, null)
+    if (!all) { all = demoClaims(); write(K.claims, all) }
+    return [...all.filter(c => c.status !== 'closed').sort((a, b) => a.reported_at.localeCompare(b.reported_at)), ...all.filter(c => c.status === 'closed')]
+  },
+  claim_set: ({ p_id, p_status, p_note, p_public, p_case_id }) => {
+    need(canWrite(), 'Your role can’t change claims')
+    need(['in_review', 'with_desk', 'closed'].includes(p_status), 'Unknown claim status')
+    const all = read(K.claims, []), c = all.find(x => x.id === p_id)
+    need(c, 'No such claim'); need(c.status !== 'closed', 'This claim is already closed')
+    if (c.status === p_status) return { id: c.id, status: c.status, changed: false }
+    need(p_status !== 'closed' || String(p_note || '').trim(), 'Say why the claim is closed')
+    const at = new Date().toISOString()
+    Object.assign(c, { status: p_status, updated_at: at, case_id: p_case_id || c.case_id,
+      history: [...c.history, { status: p_status, at, by: visitor().name || 'You', note: String(p_note || '').trim(), public: String(p_public || '').trim() }] })
+    write(K.claims, all)
+    audit('claim.status_changed', 'claim', c.id, { status: p_status, note: String(p_note || '').slice(0, 200), case: c.case_id })
+    return { id: c.id, status: c.status, changed: true }
   },
 
   // Sound the alarm (supabase_alarms.sql): one open alarm at a time; another report joins it

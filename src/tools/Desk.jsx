@@ -319,6 +319,7 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   const deskRootRef = useRef(null)
   // COV- number the next analysis should reuse (set by a Triage handoff or by opening a tracked case)
   const pendingCaseIdRef = useRef(null)
+  const pendingIntakeRef = useRef(null)   // a claim from the bank's app: { claimId, reference, channel, reportedAt }
   // Case panel → "Open in Desk": pre-fill the form from the case (no automatic AI re-run)
   useEffect(() => {
     const o = deskOpenRequest?.case
@@ -344,6 +345,7 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   useEffect(() => {
     if (!triageHandoff) return
     pendingCaseIdRef.current = /^COV-/.test(triageHandoff.caseId || '') ? triageHandoff.caseId : null
+    pendingIntakeRef.current = triageHandoff.intake || null
     if (triageHandoff.merchant)         setMerchant(triageHandoff.merchant)
     if (triageHandoff.amount)           setAmount(triageHandoff.amount)
     if (triageHandoff.currency)         setCurrency(triageHandoff.currency)
@@ -538,14 +540,16 @@ Return ONLY a valid JSON object:
       // Save to outcome log with behavioral signals for DFA.
       // A case opened from Triage or the tracker keeps its COV- number, so the
       // same record travels Triage → Desk → Multi → File → DFA.
-      const _reuseId = pendingCaseIdRef.current
-      pendingCaseIdRef.current = null
+      const _reuseId = pendingCaseIdRef.current, _intake = pendingIntakeRef.current
+      pendingCaseIdRef.current = null; pendingIntakeRef.current = null
       const _newCaseId = _reuseId || 'COV-' + Date.now().toString(36).toUpperCase().slice(-6)
       setCurrentDeskCaseId(_newCaseId)
       setOutcomes(prev => { const prior = prev.find(p => p.id === _newCaseId); return [{
         ...(prior || {}),
         id: _newCaseId,
-        date: prior?.date || new Date().toISOString(),
+        // A claim from the bank's app: the case's clocks start when the customer reported it
+        date: prior?.date || _intake?.reportedAt || new Date().toISOString(),
+        ...(_intake ? { intake: _intake } : {}),
         merchant: merchant || '—',
         amount: amount ? amount + ' ' + currency : '—',
         network: network === 'visa' ? 'VISA' : 'MC',
