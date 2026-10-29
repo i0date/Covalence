@@ -2,9 +2,10 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
-import { DuoSharingBar, kindOf, useDuoSharing } from '../SharingPanel.jsx'
+import { AML_PURPOSES, DuoSharingBar, SESSION_KINDS, kindOf, useDuoSharing } from '../SharingPanel.jsx'
 import { ArnInvites } from '../ArnInvites.jsx'
 import { LinkedCases } from '../LinkedCases.jsx'
+import { duoShareConfirm } from '../data.js'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
 
 const DUO_STATUS = {
@@ -38,6 +39,9 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
   const [recoverLoading,setRecoverLoading] = useState(false)
   // Session type for Duo (standard or crypto exchange)
   const [sessionType,   setSessionType]   = useState('standard')
+  // What the session is for: recovery (no 314(b) step) or a money-laundering investigation (314(b))
+  const [sessionPurpose, setSessionPurpose] = useState('recovery')
+  const [amlPurpose,     setAmlPurpose]     = useState(AML_PURPOSES[2])
   // Crypto session fields (for crypto handoffs)
   // 314(b): both sides' registration, this side's purpose and sharing record (SharingPanel.jsx)
   const [sharing, reloadSharing] = useDuoSharing(phase === 'session' ? session?.id : null, session?.institution_b || '')
@@ -174,6 +178,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
       const sess = created || { id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '[]', notes_b: '[]', status: 'active' }
       setSession(sess); setMyRole('a'); setLastSync(new Date())
       persistSession(id, 'a', myInstitution.trim(), 'active', claim.caseId)
+      if (sessionPurpose === 'aml') await duoShareConfirm(id, amlPurpose, 'aml').catch(() => {})   // recovery needs nothing recorded up front
       if (setDuoHandoff) setDuoHandoff(null)
       setPhase('session')
     } catch (e) { setError(e.message) }
@@ -414,6 +419,25 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
               </button>
             ))}
           </div>
+        </div>
+
+        {/* What the session is for — recovery needs no 314(b) step */}
+        <div>
+          <label className="cov-label">WHAT IS THIS SESSION FOR?</label>
+          <div style={{ display:'flex', gap:'2px', flexWrap:'wrap' }}>
+            {[['recovery','RECOVER FUNDS / STOP FRAUD'],['aml','MONEY-LAUNDERING INVESTIGATION · 314(b)']].map(([val, label]) => (
+              <button key={val} type="button" onClick={() => setSessionPurpose(val)} aria-pressed={sessionPurpose === val} className="mono-font"
+                style={{ flex:'1 1 200px', padding:'9px 8px', fontSize:'10px', letterSpacing:'0.1em', border:'1px solid #C8C0B0', cursor:'pointer', background: sessionPurpose === val ? '#1A1814' : 'transparent', color: sessionPurpose === val ? '#F5F1EA' : '#6B5F4D' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="display-font" style={{ fontSize:'12px', color:'#6B6259', margin:'6px 0 0', lineHeight:1.45 }}>{SESSION_KINDS[sessionPurpose].hint}</p>
+          {sessionPurpose === 'aml' && (
+            <select className="cov-input" value={amlPurpose} onChange={e => setAmlPurpose(e.target.value)} aria-label="What you suspect" style={{ marginTop:'6px', fontSize:'13px', width:'100%' }}>
+              {AML_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
         </div>
 
         <div>

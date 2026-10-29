@@ -129,7 +129,7 @@ export function DuoSharingBar({ st, myRole, sessionId, onChanged }) {
             ? 'This session links the two sides of one chargeback by its ARN. Share what the dispute needs; official responses still go through the card network and the acquirer.'
             : 'Share what’s needed to recover the funds or stop the fraud. If you come to suspect money laundering or terrorist financing, switch this session to a 314(b) investigation.'}
         </span>
-        {!st.coordination && <button type="button" onClick={() => setSwitching(v => !v)} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', background:'transparent', border:0, padding:0, color:'#1A1814', cursor:'pointer', textDecoration:'underline' }}>{switching ? 'CANCEL' : 'CHANGE WHAT THIS SESSION IS FOR'}</button>}
+        {!st.coordination && !switching && <Button small variant="secondary" onClick={() => setSwitching(true)}>Make this a 314(b) investigation</Button>}
       </div>
       {switcher}
     </div>
@@ -146,7 +146,7 @@ export function DuoSharingBar({ st, myRole, sessionId, onChanged }) {
           {st.safe_harbor ? 'MONEY-LAUNDERING INVESTIGATION · 314(b) SAFE HARBOR — BOTH SIDES REGISTERED' : 'MONEY-LAUNDERING INVESTIGATION · 314(b) — NOT COVERED'}
         </span>
         {!st.safe_harbor && <span className="display-font" style={{ fontSize:'13px', color:'#78350F' }}>{why}{st.require_both ? ' Your institution only shares money-laundering information when both sides are covered.' : ' Share only what you could share without the safe harbor.'}</span>}
-        <button type="button" onClick={() => setSwitching(v => !v)} className="mono-font" style={{ marginLeft:'auto', fontSize:'10px', letterSpacing:'0.1em', background:'transparent', border:0, padding:0, color:'#1A1814', cursor:'pointer', textDecoration:'underline' }}>{switching ? 'CANCEL' : 'CHANGE WHAT THIS SESSION IS FOR'}</button>
+        {!switching && <span style={{ marginLeft:'auto' }}><Button variant="quiet" onClick={() => setSwitching(true)}>Switch back to recovery</Button></span>}
       </div>
       {switcher}
       <div style={{ display:'flex', gap:'16px', flexWrap:'wrap' }}>
