@@ -477,7 +477,7 @@ export default function Covalence() {
             onScoreInDfa={(cases) => scoreInDfa(cases)}
             onSendToDuo={(claim) => { setDuoHandoff(claim); setActiveSection('duo') }}
             onGoToDuo={() => setActiveSection('duo')}
-            platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides}
+            platformMode={platformMode} setPlatformMode={setPlatformMode} sides={sides} rootSettings={settings}
             covUser={covUser}
             deskOpenRequest={deskOpenRequest}
           />
