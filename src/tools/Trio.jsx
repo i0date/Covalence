@@ -4,11 +4,13 @@ import React from 'react'
 import { CaseLink } from '../CaseThread.jsx'
 import { mergeTrioIncidents, pullTrioFromSupa, pushTrioToSupa } from '../data.js'
 import { readCases } from '../caseStore.js'
+import { INCIDENT_TYPES, playbookFor, typesFor } from '../trioPlaybooks.mjs'
+import { doesIssuing } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TRIO VIEW — fraud incident command
 // ═══════════════════════════════════════════════════════════════════════════════
-export function TrioView({ outcomes: _parentOutcomes }) {
+export function TrioView({ outcomes: _parentOutcomes, sides = ['issuer'] }) {
   const STORAGE_KEY = 'cov_trio_incidents'
   const loadIncidents = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
   const saveIncidents = (arr) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch {} }
@@ -242,6 +244,20 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
     setForm({ name:'', type:'fraud_wave', severity:'HIGH', detectionDate: new Date().toISOString().split('T')[0], affectedProduct:'', description:'' })
   }
 
+  // A level 2 or 3 alarm opens an incident here (Alarms.jsx): 'cov:trio-create' with { name, severity, description, alarmId, reply }
+  const persistRef = React.useRef(persist); persistRef.current = persist
+  React.useEffect(() => {
+    const h = e => {
+      const d = e.detail || {}
+      const inc = { id: 'TRI-' + Date.now().toString(36).toUpperCase(), name: String(d.name || 'Alarm').slice(0, 200), type: d.type || 'other', severity: d.severity || 'HIGH',
+        detectionDate: new Date().toISOString().split('T')[0], affectedProduct: '', description: d.description || '', status: 'active', linkedCaseIds: [], notes: [],
+        cardholderNotified: 0, cardholderTotal: 0, alarmId: d.alarmId || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      persistRef.current([inc, ...loadIncidents()]); setActiveId(inc.id)
+      if (typeof d.reply === 'function') d.reply(inc.id)
+    }
+    window.addEventListener('cov:trio-create', h); return () => window.removeEventListener('cov:trio-create', h)
+  }, [])
+
   const updateIncident = (id, patch) => {
     persist(incidents.map(i => i.id === id ? { ...i, ...patch, updatedAt: new Date().toISOString() } : i))
   }
@@ -272,7 +288,9 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
   const SEV_COLORS = { LOW:'#065F46', MEDIUM:'#92400E', HIGH:'#B45309', CRITICAL:'#991B1B' }
   const SEV_BG     = { LOW:'#ECFDF5', MEDIUM:'#FEF3C7', HIGH:'#FEF3C7', CRITICAL:'#FEF2F2' }
   const STATUS_COLORS = { active:'#991B1B', contained:'#92400E', closed:'#78716C' }
-  const TYPE_LABELS = { fraud_wave:'Fraud Wave', bin_attack:'BIN Attack', ato:'Account Takeover', platform_compromise:'Platform Compromise', p2p_scam:'P2P Scam Campaign', other:'Other' }
+  // Incident types and their playbooks (trioPlaybooks.mjs); a merchant-side workspace sees its own first
+  const TYPE_LABELS = Object.fromEntries(Object.entries(INCIDENT_TYPES).map(([k, t]) => [k, t.label]))
+  const TYPE_OPTIONS = typesFor(!doesIssuing(sides))
 
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -358,13 +376,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         })
         const maxInc = Math.max(...incTimeline.map(m=>m.count),1)
         // Playbook helpers
-        const PLAYBOOK_STEPS = {
-          fraud_wave:        { immediate:['Freeze approvals on flagged BIN range','Alert BSA Officer — SAR threshold assessment','Notify card operations to monitor velocity'], containment:['Block compromised BIN range at auth layer','Issue replacement cards to affected cardholders','Coordinate with network fraud desk'], recovery:['File chargebacks for confirmed fraud transactions','Submit fraud dispute batch through Covalence Multi','Pursue cross-institutional recovery via Duo if applicable'] },
-          account_takeover:  { immediate:['Lock affected accounts pending re-authentication','Alert cardholder via registered contact','Engage identity verification for re-access'], containment:['Reset credentials and MFA on all compromised accounts','Audit recent transactions for unauthorized activity','Flag associated devices/IPs in fraud rules'], recovery:['Initiate provisional credits for unauthorized transactions','File representments for all confirmed ATO-linked disputes','Document for SAR filing if threshold met'] },
-          social_engineering:{ immediate:['Brief front-line staff on active social engineering pattern','Issue internal alert with attack vector description','Escalate to compliance if customer funds were transferred'], containment:['Freeze any accounts involved in mule activity','Alert receiving institutions via Duo coordination','Enhance verification on affected account types'], recovery:['Pursue wire recall if transfer is recent','File SARs on mule accounts','Coordinate with LEA if losses exceed reporting threshold'] },
-          merchant_breach:   { immediate:['Identify full cardholder population at risk from breach','Alert affected cardholders with reissuance guidance','Report to network via compromise management program'], containment:['Reissue compromised cards — prioritize high-balance accounts','Enhance monitoring on exposed PANs','File CAMS report with card networks'], recovery:['Track dispute rate on compromised cards for 90 days','File chargebacks for confirmed fraud from breach window','Recover from merchant or acquirer where applicable'] },
-        }
-        const getSteps = (type) => PLAYBOOK_STEPS[type] || { immediate:['Assess scope and affected accounts','Alert relevant teams','Engage BSA Officer for SAR review'], containment:['Isolate affected accounts or channels','Enhance transaction monitoring'], recovery:['File chargebacks for confirmed losses','Document for regulatory reporting'] }
+        const getSteps = playbookFor
         const generatePlaybookText = (inc) => {
           const steps = getSteps(inc.type)
           const sd    = structuredDebriefs[inc.id]||{}
@@ -765,7 +777,7 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                     <label className="mono-font text-[10px] tracking-widest text-stone-500 block mb-1">TYPE</label>
                     <select className="w-full border border-stone-300 px-2 py-1.5 mono-font text-[10px]" style={{ background:'#FAF7F1' }}
                       value={form.type} onChange={e => setForm(f => ({...f, type: e.target.value}))}>
-                      {Object.entries(TYPE_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                      {TYPE_OPTIONS.map(([v, t]) => <option key={v} value={v}>{t.label}{t.side === 'merchant' ? ' (merchant)' : ''}</option>)}
                     </select>
                   </div>
                   <div>
@@ -924,6 +936,33 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
                 </div>
               )}
             </div>
+
+            {/* Playbook: the first steps for this kind of incident, ticked off as they're done */}
+            {(() => {
+              const pb = playbookFor(activeIncident.type), done = new Set(activeIncident.playbookDone || [])
+              const total = pb.immediate.length + pb.containment.length + pb.recovery.length
+              const toggle = k => updateIncident(activeIncident.id, { playbookDone: done.has(k) ? [...done].filter(x => x !== k) : [...done, k] })
+              return (
+                <div className="mb-6" style={{ border:'1px solid #D4CCBC', background:'#FFFFFF', padding:'14px 16px' }}>
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <div className="mono-font text-[10px] tracking-widest text-stone-500">PLAYBOOK · {(TYPE_LABELS[activeIncident.type] || activeIncident.type || 'Other').toUpperCase()}</div>
+                    <div className="mono-font text-[10px] tracking-widest text-stone-500">{done.size} OF {total} DONE</div>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'12px' }}>
+                    {[['immediate', 'NOW — FIRST TWO HOURS'], ['containment', 'CONTAIN'], ['recovery', 'RECOVER']].map(([k, l]) => (
+                      <div key={k}>
+                        <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-1">{l}</div>
+                        {pb[k].map((step, i) => { const key = k + ':' + i; return (
+                          <label key={key} className="display-font" style={{ display:'flex', gap:'8px', alignItems:'flex-start', fontSize:'13px', lineHeight:1.4, padding:'3px 0', cursor:'pointer', color: done.has(key) ? '#78716C' : '#1A1814' }}>
+                            <input type="checkbox" checked={done.has(key)} onChange={() => toggle(key)} style={{ marginTop:'3px' }} />
+                            <span style={{ textDecoration: done.has(key) ? 'line-through' : 'none' }}>{step}</span>
+                          </label>) })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Stats row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
