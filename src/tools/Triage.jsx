@@ -10,6 +10,9 @@ import { readCases } from '../caseStore.js'
 import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
 import { alertsSource } from '../sides.mjs'
+import { AppClaims } from '../AppClaims.jsx'
+import { setClaim } from '../claimsData.js'
+import { CLAIM_TYPES, claimTotal } from '../claims.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -638,6 +641,42 @@ Return ONLY valid JSON:
     }
   }
 
+  // ── A claim from the bank's app: fill the form from what the customer told the app ──
+  const [activeClaim, setActiveClaim] = useState(null)
+  const fillFromClaim = (c) => {
+    const d = c.data || {}, tx = d.transactions || [], first = tx[0] || {}
+    const answers = Object.entries(d.answers || {}).map(([q, a]) => `${q.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}: ${a === true ? 'yes' : a === false ? 'no' : a}`)
+    const story = [d.statement, answers.length ? `Answers in the app — ${answers.join('; ')}.` : '', tx.length > 1 ? `${tx.length} transactions: ${tx.map(t => `${t.merchant || t.id} ${t.amount}`).join(', ')}.` : ''].filter(Boolean).join('\n')
+    const total = claimTotal(d).toFixed(2), date = first.ts ? first.ts.slice(0, 10) : ''
+    setResult(null); setError(null); setHandedOff(false)
+    if ((c.segment || 'fi') === 'ce') {
+      setCeAmount(total); setCeCurrency(first.currency || 'USD'); setCeTxDate(date); setCeComplaint(story); setCeFlaggedBy(['agent', 'phone'].includes(c.channel) ? 'Customer-reported (phone / live agent)' : 'Customer-reported (app / support ticket)')
+    } else {
+      const t = d.customer?.accountType || ''
+      setAccountType(t); setMerchant(first.merchant || ''); setAmount(total); setCurrency(first.currency || 'USD'); setTransactionDate(date)
+      setFlaggedBy(['agent', 'phone'].includes(c.channel) ? 'Customer-reported (inbound call)' : 'Customer-reported (app / self-serve)')
+      setClaimType(CLAIM_TYPES[d.claimType] && d.claimType !== 'other' ? d.claimType : '')
+      const ch = (first.channel || '').toLowerCase()
+      if (['debit', 'credit'].includes(t) && /not_present|online|cnp|ecom/.test(ch)) setTransactionType('Card-Not-Present (Online)')
+      else if (['debit', 'credit'].includes(t) && /present|pos|chip|tap/.test(ch)) setTransactionType('Card-Present (In-person)')
+      else if (t === 'p2p' && /zelle/.test(ch)) setTransactionType('Zelle')
+      setCustomerReason(story)
+      if (d.answers?.cardInPossession === true) setCardPossession('Yes — card in hand')
+      if (d.answers?.cardInPossession === false) setCardPossession('No — card lost or stolen')
+      const n = (first.network || '').toLowerCase()
+      const net = n.includes('visa') ? 'Visa' : n.includes('master') ? 'Mastercard' : n.includes('amex') || n.includes('american') ? 'American Express' : n.includes('interac') ? 'Interac' : ''
+      if (net) setNetwork(t === 'credit' || net === 'Interac' ? net : net === 'American Express' ? '' : `${net} (Debit)`)
+    }
+    setActiveClaim(c)
+    setTimeout(() => document.getElementById('triage-claim-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+  const claimIntake = () => activeClaim ? { claimId: activeClaim.id, reference: activeClaim.external_id, channel: activeClaim.channel, reportedAt: activeClaim.reported_at } : undefined
+  const moveClaim = (status, opts) => {
+    if (!activeClaim) return
+    setClaim(activeClaim.id, status, opts).then(() => window.dispatchEvent(new Event('cov:claims-changed'))).catch(() => {})
+    setActiveClaim(null)
+  }
+
   const reloadCase = (o) => {
     if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
     if (o.amount && o.amount !== '—') {
@@ -692,7 +731,9 @@ Return ONLY valid JSON:
       aiDecisions: rec.aiDecision ? [rec.aiDecision] : [],
       closedAtIntake: { reason: d.reason, reasonLabel: d.reasonLabel, basis: d.basis, basisLabel: d.basisLabel, note: d.note, notice: d.notice, ts: now,
         aiSuggested: result.intake_disposition || '' },
+      ...(activeClaim ? { intake: claimIntake() } : {}),
     }, d)
+    moveClaim('closed', { note: `Closed at intake: ${d.reasonLabel || d.reason}` })
     setClosing(false)
   }
 
@@ -711,6 +752,7 @@ Return ONLY valid JSON:
         transactionDate: ceTxDate,
         complaint: ceComplaint.slice(0, 800),
         notes: '',
+        intake: claimIntake(),
       })
     } else {
       onHandoff({
@@ -724,8 +766,10 @@ Return ONLY valid JSON:
         transactionDate,
         complaint: customerReason.slice(0, 800),
         notes: '',
+        intake: claimIntake(),
       })
     }
+    moveClaim('with_desk', { publicNote: 'We’re investigating your claim.' })
     setHandedOff(true)
   }
 
@@ -816,8 +860,16 @@ Return ONLY valid JSON:
 
       {/* Claims: kept mounted (hidden) so a half-written claim survives a look at the alerts */}
       <div style={{ display: intakeTab === 'claims' ? 'block' : 'none' }}>
+      {/* Claims the customer reported in the bank's app, waiting to be triaged */}
+      <AppClaims segment={triageChannelMode} activeId={activeClaim?.id} onTriage={fillFromClaim} />
+      {activeClaim && (
+        <div className="mono-font" role="status" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1E3A5F', margin:'0 0 16px', display:'flex', gap:'12px', flexWrap:'wrap' }}>
+          <span>TRIAGING {activeClaim.external_id} · {(activeClaim.data?.customer?.name || '').toUpperCase()} — FILLED FROM THE APP; CHECK IT, THEN RUN TRIAGE</span>
+          <button type="button" onClick={() => setActiveClaim(null)} className="mono-font" style={{ fontSize:'11px', background:'none', border:0, padding:0, color:'#57534E', textDecoration:'underline', cursor:'pointer' }}>STOP</button>
+        </div>
+      )}
       {/* ── Two-column layout ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+      <div id="triage-claim-form" className="grid grid-cols-1 lg:grid-cols-2 gap-12" style={{ scrollMarginTop:'80px' }}>
 
         {/* ══ LEFT: Inputs ══════════════════════════════════════════════════════ */}
         <div>

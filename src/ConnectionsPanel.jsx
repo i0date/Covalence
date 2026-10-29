@@ -101,6 +101,37 @@ Content-Type: application/json
         <li>The answer lists what was stored, what was a duplicate, any rows with problems, and the ids of the alerts raised.</li>
       </ul>
     </section>
+
+    <section style={box}>
+      <H2>CLAIMS FROM YOUR APP</H2>
+      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>When a customer reports a problem in your app or on your website, send the claim here with the same key. It lands in 001 Triage → Claims, tagged with where it came from, with the Reg E or Reg Z clock running from the customer’s report.</p>
+      <Code>{`POST ${origin}/api/claims
+Authorization: Bearer cvl_…
+Content-Type: application/json
+
+{
+  "id": "APP-55102",                       // your reference; sending it again is ignored
+  "channel": "app",                         // app, web, agent or phone
+  "reportedAt": "2026-10-29T09:14:00Z",
+  "claimType": "unauth_cnp",
+  "customer": { "id": "A-2231", "name": "Dana Whitfield", "accountType": "debit" },
+  "transactions": [{ "id": "TX-90311", "ts": "2026-10-28T02:10:00Z", "amount": -84.50,
+                     "currency": "USD", "merchant": "SHOPZ*GADGETHUB", "network": "Visa" }],
+  "answers": { "recognisesTransaction": false, "cardInPossession": true },
+  "statement": "Two charges from a shop I’ve never heard of…",
+  "attachments": [{ "name": "receipt.pdf", "url": "https://files.yourbank.com/…" }],
+  "consent": { "given": true, "at": "2026-10-29T09:14:00Z" }
+}
+
+GET ${origin}/api/claims?reference=APP-55102     → where the claim is now`}</Code>
+      <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+        <li><strong>Required:</strong> id, customer.id, and at least one transaction with id, ts and amount. Everything else makes the claim faster to work.</li>
+        <li><strong>Ready for Desk:</strong> a claim with its type, the account type, every merchant, the customer’s own account, their consent and (for unauthorised claims) “Is this yours?” answered no is marked ready. The answer says what’s missing.</li>
+        <li><strong>Account types:</strong> debit, credit, p2p, ach_eft, bnpl, crypto. Claim types are the ones in Triage’s list, such as unauth_card_present, unauth_cnp, ato, non_receipt, not_as_described, duplicate_charge, impersonation.</li>
+        <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
+        <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint above as a signed <code>claim.updated</code> event, so your app can tell the customer.</li>
+      </ul>
+    </section>
   </>)
 }
 

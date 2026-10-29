@@ -53,6 +53,8 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 
 ## 3. Disputes from the bank's app
 
+Built so far (claims API PR): `/api/claims` with `supabase_claims.sql`; claims land in Triage → Claims tagged by channel, with the Reg E / Reg Z clock from the customer's report and *Ready for Desk*; "Triage this" fills the claim form; handing off or closing moves the claim on and sends `claim.updated`; the Desk case keeps the claim and starts its clocks at the report. Still to do: AI triage on arrival, provisional credit / filed / resolved events from the case, adaptive questions, "Is this yours?" screen, the hosted form.
+
 1. **Claims API (`/api/claims`, keyed like `/api/intake`).** The bank's app posts the claim:
    - the customer;
    - the transaction or transactions from the bank's own records;
