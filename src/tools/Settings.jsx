@@ -10,7 +10,7 @@ import { ImportPanel } from '../ImportPanel.jsx'
 import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
-import { SIDES, alertsSource, doesIssuing, workspaceSides } from '../sides.mjs'
+import { SIDES, alertsSource, workspaceSides } from '../sides.mjs'
 
 export function SettingsView({ settings, setSettings, covUser, outcomes, setOutcomes, team }) {
   const [saved, setSaved] = React.useState(false)
@@ -144,7 +144,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
           <Field label="Institution Type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
             <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],['merchant','Merchant'],['processor','Payment Processor / Acquirer']]} />
           </Field>
-          <Field label="What you do" hint="Sets the menu order and where each tool starts. Every tool stays available. Leave as it is to follow the institution type.">
+          <Field label="What you do" hint="Sets the menu order and where each tool starts. Every tool stays on the menu. Leave as it is to follow the institution type.">
             <div role="group" aria-label="What you do" style={{ display:'grid', gap:'6px' }}>
               {SIDES.map(([k, l, d]) => (
                 <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
@@ -155,13 +155,6 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
               ))}
             </div>
           </Field>
-          {!doesIssuing(sides) && (
-            <Field label="" hint="Triage, Licit and DFA are built around issuing. They move to the end of the menu under More.">
-              <label className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'center', cursor:'pointer' }}>
-                <input type="checkbox" checked={!!settings.showAllTools} onChange={e => set('showAllTools', e.target.checked)} /> Show all tools on the menu
-              </label>
-            </Field>
-          )}
           <Field label="Jurisdiction" hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules.">
             <Sel field="jurisdiction" options={[['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other']]} />
           </Field>

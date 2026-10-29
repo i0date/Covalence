@@ -35,20 +35,19 @@ export function workspaceSides(settings, { demo = false } = {}) {
 export const doesIssuing  = sides => sides.includes('issuer')
 export const doesMerchant = sides => sides.includes('merchant') || sides.includes('acquirer')
 
-// The menu, in the order that suits the workspace. Tools a merchant-side workspace
-// doesn't use yet move to the end under "More", or off the menu until "Show all tools".
+// The menu, in the order that suits the workspace. Every tool is always on it:
+// merchant-side workspaces get their chargeback tools first, then the rest.
 const TOOLS = {
   triage: '001  TRIAGE', desk: '002  DISPUTE DESK', multi: '003  MULTI', file: '004  FILE',
   licit: '005  LICIT', dfa: '006  DFA', duo: '007  DUO', trio: '008  TRIO',
 }
 const ISSUER_NAV = [['triage', 'Disputes'], ['desk', 'Disputes'], ['multi', 'Disputes'], ['file', 'Disputes'],
   ['licit', 'Compliance'], ['dfa', 'Recovery'], ['duo', 'Recovery'], ['trio', 'Recovery']]
-const MERCHANT_NAV = [['multi', 'Chargebacks'], ['desk', 'Chargebacks'], ['file', 'Chargebacks'], ['duo', 'Collaboration'], ['trio', 'Collaboration']]
-const MERCHANT_MORE = ['triage', 'licit', 'dfa']
+const MERCHANT_NAV = [['multi', 'Chargebacks'], ['desk', 'Chargebacks'], ['file', 'Chargebacks'], ['triage', 'Chargebacks'],
+  ['duo', 'Collaboration'], ['trio', 'Collaboration'], ['licit', 'Compliance'], ['dfa', 'Recovery']]
 
-export function navFor(sides, showAll = false) {
-  const rows = doesIssuing(sides) ? ISSUER_NAV
-    : [...MERCHANT_NAV, ...(showAll ? MERCHANT_MORE.map(id => [id, 'More']) : [])]
+export function navFor(sides) {
+  const rows = doesIssuing(sides) ? ISSUER_NAV : MERCHANT_NAV
   return [{ id: 'home', label: 'HOME' }, ...rows.map(([id, group]) => ({ id, label: TOOLS[id], group })), { id: 'settings', label: 'SETTINGS' }]
 }
 

@@ -328,9 +328,9 @@ export default function Covalence() {
   }, [membership?.institution_id])
 
   // The menu follows what the workspace does (sides.mjs): issuers get the dispute
-  // pipeline, compliance and recovery; merchant-side workspaces get their chargebacks first
+  // pipeline first; merchant-side workspaces get their chargebacks first. Every tool is listed.
   const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
-  const NAV = navFor(sides, settings.showAllTools)
+  const NAV = navFor(sides)
   // Desk opens on a side this workspace works
   const sidesKey = sides.join(',')
   useEffect(() => {

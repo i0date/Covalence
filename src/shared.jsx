@@ -35,7 +35,6 @@ export const DEFAULT_SETTINGS = {
   duoInstitutionName:   '',
   institutionType:      '',          // bank | credit_union | fintech | mse | exchange | merchant | processor
   sides:                [],          // issuer | acquirer | merchant — empty: implied by the type (sides.mjs)
-  showAllTools:         false,       // merchant-side workspaces: keep Triage, Licit and DFA on the menu
   jurisdiction:         '',          // us | ca | uk | other
   regulatoryRegime:     '',          // reg_e | fcac | fca | other
   // SAR/STR thresholds by payment type
