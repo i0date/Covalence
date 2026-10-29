@@ -655,7 +655,9 @@ Return ONLY valid JSON:
       const t = d.customer?.accountType || ''
       setAccountType(t); setMerchant(first.merchant || ''); setAmount(total); setCurrency(first.currency || 'USD'); setTransactionDate(date)
       setFlaggedBy(['agent', 'phone'].includes(c.channel) ? 'Customer-reported (inbound call)' : 'Customer-reported (app / self-serve)')
-      setClaimType(CLAIM_TYPES[d.claimType] && d.claimType !== 'other' ? d.claimType : '')
+      // The customer's choice; if they didn't make one, AI triage's reading of the claim
+      const type = CLAIM_TYPES[d.claimType] && d.claimType !== 'other' ? d.claimType : CLAIM_TYPES[d.ai?.claimType] && d.ai.claimType !== 'other' ? d.ai.claimType : ''
+      setClaimType(type)
       const ch = (first.channel || '').toLowerCase()
       if (['debit', 'credit'].includes(t) && /not_present|online|cnp|ecom/.test(ch)) setTransactionType('Card-Not-Present (Online)')
       else if (['debit', 'credit'].includes(t) && /present|pos|chip|tap/.test(ch)) setTransactionType('Card-Present (In-person)')

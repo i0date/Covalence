@@ -10,7 +10,8 @@
 -- moves through four statuses the bank can show its customer:
 --   received → in_review → with_desk (investigating) | closed
 -- api/claims.js writes new claims with the service role; analysts move them on
--- through claim_set, which keeps a history and audits every change.
+-- through claim_set, which keeps a history and audits every change; claim_step
+-- records the Desk case's provisional credit, filing and resolution.
 -- =============================================================================
 
 create table if not exists public.app_claims (
@@ -65,10 +66,37 @@ begin
   return jsonb_build_object('id', cur.id, 'status', cur.status, 'changed', true);
 end $$;
 
+-- A step on the Desk case (src/claims.mjs caseSteps): provisional credit, filed, resolved.
+-- Each step is recorded once; resolving closes the claim with the case's outcome.
+create or replace function public.claim_step(p_id text, p_step text, p_outcome text default '', p_public text default '', p_case_id text default '')
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare me uuid := my_institution(); cur app_claims; who text;
+begin
+  perform need_write();
+  if p_step not in ('provisional_credit', 'filed', 'resolved') then raise exception 'Unknown claim step'; end if;
+  if p_step = 'resolved' and p_outcome not in ('won', 'lost', 'withdrawn', 'resolved') then raise exception 'Say how the case was resolved'; end if;
+  select * into cur from app_claims where institution_id = me and id = p_id for update;
+  if not found then raise exception 'No such claim'; end if;
+  if cur.status = 'closed' or exists (select 1 from jsonb_array_elements(cur.history) h where h->>'step' = p_step) then
+    return jsonb_build_object('id', cur.id, 'status', cur.status, 'changed', false);
+  end if;
+  select coalesce(nullif(m.display_name, ''), m.email) into who from memberships m where m.user_id = auth.uid() and m.institution_id = me limit 1;
+  update app_claims set updated_at = now(),
+    status = case when p_step = 'resolved' then 'closed' else 'with_desk' end,
+    case_id = case when coalesce(p_case_id, '') <> '' then left(p_case_id, 120) else case_id end,
+    history = history || jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+      'status', case when p_step = 'resolved' then 'closed' else 'with_desk' end, 'step', p_step, 'at', now(), 'by', coalesce(who, ''),
+      'outcome', nullif(p_outcome, ''), 'note', 'From the Desk case ' || left(coalesce(p_case_id, ''), 120), 'public', left(trim(coalesce(p_public, '')), 300))))
+  where institution_id = me and id = p_id returning * into cur;
+  perform audit_add(me, 'claim.step', 'claim', cur.id, jsonb_build_object('step', p_step, 'outcome', p_outcome, 'case', cur.case_id));
+  return jsonb_build_object('id', cur.id, 'status', cur.status, 'changed', true);
+end $$;
+
 do $$
 declare f text;
 begin
-  foreach f in array array['claims_list()', 'claim_set(text,text,text,text,text)']
+  foreach f in array array['claims_list()', 'claim_set(text,text,text,text,text)', 'claim_step(text,text,text,text,text)']
   loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
@@ -82,4 +110,4 @@ where n.nspname = 'public' and c.relname = 'app_claims'
 union all
 select p.proname, null, has_function_privilege('anon', p.oid, 'execute')
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-where n.nspname = 'public' and p.proname in ('claims_list', 'claim_set');
+where n.nspname = 'public' and p.proname in ('claims_list', 'claim_set', 'claim_step');

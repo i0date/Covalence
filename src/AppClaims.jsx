@@ -4,13 +4,16 @@
 // The bank's systems post claims to /api/claims (api/claims.js). Each arrives
 // tagged with where it came from, with its Reg E or Reg Z clock already running
 // from the customer's report, and marked Ready for Desk when nothing is missing.
-// "Triage this" fills the claim form below; handing it to the Desk or closing it
-// moves the claim on, and the bank's app is told (claim.updated).
+// AI triage reads each claim as it arrives and suggests the kind of problem, the
+// route and what to ask the customer. "Triage this" fills the claim form below;
+// handing it to the Desk or closing it moves the claim on, and the bank's app is
+// told (claim.updated). Once it's with the Desk, the case's provisional credit,
+// filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
-import { listClaims, setClaim } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, claimTotal } from './claims.mjs'
+import { listClaims, setClaim, triageClaim } from './claimsData.js'
+import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, claimTotal } from './claims.mjs'
 import { timeLeft } from './clocks.mjs'
-import { canWrite } from './auth.js'
+import { canWrite, isSignedIn } from './auth.js'
 import { Badge, Button, Select } from './ui.jsx'
 
 const money = (n, cur = 'USD') => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: cur.length === 3 ? cur : 'USD' })
@@ -18,6 +21,7 @@ const ago = ts => { const m = Math.round((Date.now() - new Date(ts)) / 60000); r
 const day = d => new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const words = k => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
 const answerText = v => v === true ? 'Yes' : v === false ? 'No' : String(v)
+const ROUTES = { dispute: 'Dispute', fraud: 'Fraud', scam: 'Scam', not_a_dispute: 'Not a dispute' }
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
 // Due in → a tone: overdue red, two business days or less amber
@@ -42,7 +46,8 @@ export function AppClaims({ segment, activeId, onTriage }) {
     return () => { clearInterval(t); window.removeEventListener('cov:claims-changed', on) }
   }, [])
   if (claims === null) return null
-  const mine = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
+  const open_ = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
+  const waiting = open_.filter(c => c.status !== 'with_desk'), mine = [...waiting, ...open_.filter(c => c.status === 'with_desk')]
   if (!mine.length && !err) return (
     <p className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#6B6259', margin:'0 0 28px' }}>
       FROM YOUR APP · NOTHING WAITING — claims your customers report in your app arrive here (Settings → Connections).
@@ -59,17 +64,23 @@ export function AppClaims({ segment, activeId, onTriage }) {
     try { await setClaim(c.id, 'closed', { note: reason, publicNote: reason === 'The customer withdrew the claim' ? 'Closed at your request.' : '' }); setClosing(null); load() }
     catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
+  const rerun = async c => {
+    setBusy(true)
+    try { await triageClaim(c.id); load() }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
 
   return (
     <section aria-label="Claims from your app" style={{ marginBottom:'36px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {mine.length} WAITING</h2>
+        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {waiting.length} WAITING{mine.length > waiting.length ? ` · ${mine.length - waiting.length} WITH THE DESK` : ''}</h2>
         <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259' }}>OLDEST FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</span>
       </div>
       {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'0 0 8px' }}>{err}</p>}
       <ul style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
         {mine.map(c => {
-          const d = c.data || {}, k = clockOf(c), tx = d.transactions || [], expanded = open === c.id, active = activeId === c.id
+          const d = c.data || {}, k = clockOf(c), tx = d.transactions || [], expanded = open === c.id, active = activeId === c.id, ai = d.ai, onDesk = c.status === 'with_desk'
+          const steps = (c.history || []).filter(h => h.step)
           const merchants = [...new Set(tx.map(t => t.merchant).filter(Boolean))]
           return (
             <li key={c.id} style={{ borderBottom:'1px solid #D4CCBC', background: active ? '#F3EEE4' : 'transparent' }}>
@@ -78,9 +89,11 @@ export function AppClaims({ segment, activeId, onTriage }) {
                   style={{ flex:'1 1 320px', minWidth:0, textAlign:'left', background:'none', border:0, padding:0, cursor:'pointer' }}>
                   <span style={{ display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center', marginBottom:'4px' }}>
                     <Badge tone="info">{(CHANNELS[c.channel] || c.channel).toUpperCase()}</Badge>
-                    {c.ready ? <Badge tone="ok">READY FOR DESK</Badge> : <Badge>NEEDS A LOOK</Badge>}
+                    {onDesk ? <Badge tone="dark">WITH THE DESK{c.case_id ? ` · ${c.case_id}` : ''}</Badge> : c.ready ? <Badge tone="ok">READY FOR DESK</Badge> : <Badge>NEEDS A LOOK</Badge>}
                     {c.status === 'in_review' && <Badge tone="dark">IN REVIEW</Badge>}
-                    {k && <Badge tone={k.tone} title={`${k.what} by ${day(k.due)}`}>{k.rule.toUpperCase()} · {k.text.toUpperCase()}</Badge>}
+                    {steps.map(h => <Badge key={h.step} tone="ok">{STEPS[h.step].toUpperCase()}</Badge>)}
+                    {!onDesk && ai && <Badge tone={ai.priority === 'urgent' ? 'danger' : 'neutral'} title={ai.summary}>AI · {ROUTES[ai.route].toUpperCase()}{ai.priority === 'urgent' ? ' · URGENT' : ''}</Badge>}
+                    {!onDesk && !steps.length && k && <Badge tone={k.tone} title={`${k.what} by ${day(k.due)}`}>{k.rule.toUpperCase()} · {k.text.toUpperCase()}</Badge>}
                   </span>
                   <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814' }}>
                     {d.customer?.name || d.customer?.id} · {money(claimTotal(d), tx[0]?.currency)}{merchants.length ? ` · ${merchants.slice(0, 2).join(', ')}${merchants.length > 2 ? '…' : ''}` : ''}
@@ -91,7 +104,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
                 </button>
                 {writer && (
                   <span style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-                    <Button small disabled={busy} onClick={() => triage(c)}>{active ? 'In the form below' : 'Triage this'}</Button>
+                    {!onDesk && <Button small disabled={busy} onClick={() => triage(c)}>{active ? 'In the form below' : 'Triage this'}</Button>}
                     <Button small variant="quiet" disabled={busy} onClick={() => setClosing(closing === c.id ? null : c.id)}>Close</Button>
                   </span>
                 )}
@@ -108,6 +121,24 @@ export function AppClaims({ segment, activeId, onTriage }) {
 
               {expanded && (
                 <div className="display-font" style={{ fontSize:'13px', color:'#3F3A35', padding:'0 4px 14px', display:'grid', gap:'10px' }}>
+                  {ai && (
+                    <div style={{ borderLeft:'2px solid #1E3A5F', paddingLeft:'10px', display:'grid', gap:'4px' }}>
+                      <p className="mono-font" style={{ margin:0, fontSize:'10px', letterSpacing:'0.12em', color:'#1E3A5F' }}>
+                        AI TRIAGE · {ROUTES[ai.route].toUpperCase()} · {ai.priority.toUpperCase()} PRIORITY · {ai.confidence.toUpperCase()} CONFIDENCE
+                      </p>
+                      <p style={{ margin:0 }}>{ai.summary}</p>
+                      {ai.claimType !== d.claimType && <p style={{ margin:0, color:'#92400E' }}>Reads as {CLAIM_TYPES[ai.claimType] || ai.claimType}{d.claimType ? `, not ${CLAIM_TYPES[d.claimType] || d.claimType} as the customer chose` : ''}.</p>}
+                      {ai.reasons?.length > 0 && <ul style={{ margin:0, paddingLeft:'18px', listStyle:'disc' }}>{ai.reasons.map(r => <li key={r}>{r}</li>)}</ul>}
+                      {ai.askCustomer?.length > 0 && <p style={{ margin:0 }}><span style={{ color:'#6B6259' }}>Ask the customer:</span> {ai.askCustomer.join(' ')}</p>}
+                      <p className="mono-font" style={{ margin:0, fontSize:'10px', letterSpacing:'0.08em', color:'#6B6259' }}>A SUGGESTION FROM THE CLAIM AS SENT — YOU DECIDE IN TRIAGE</p>
+                    </div>
+                  )}
+                  {!ai && writer && isSignedIn() && !onDesk && (
+                    <p style={{ margin:0, display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+                      <span style={{ color:'#6B6259' }}>{Date.now() - new Date(c.created_at) < 120000 ? 'AI triage is reading this claim.' : 'AI triage didn’t finish for this claim.'}</span>
+                      <Button small variant="quiet" disabled={busy} onClick={() => rerun(c)}>Run AI triage</Button>
+                    </p>
+                  )}
                   {d.statement && <blockquote style={{ margin:0, paddingLeft:'10px', borderLeft:'2px solid #D4CCBC', fontStyle:'italic' }}>“{d.statement}”</blockquote>}
                   {!c.ready && d.missing?.length > 0 && <p style={{ margin:0, color:'#92400E' }}>Missing for the Desk: {d.missing.map(x => x.replace(/ \(\w+\)$/, '')).join('; ')}.</p>}
                   {k && <p style={{ margin:0 }}>{k.rule}: {k.what.toLowerCase()} by {day(k.due)}.</p>}
@@ -128,6 +159,11 @@ export function AppClaims({ segment, activeId, onTriage }) {
                     </dl>
                   )}
                   {d.attachments?.length > 0 && <p style={{ margin:0 }}>Attachments: {d.attachments.map(a => a.name || 'file').join(', ')} (held in your systems)</p>}
+                  {(c.history || []).length > 1 && (
+                    <ol style={{ margin:0, paddingLeft:'18px', listStyle:'decimal', fontSize:'12px', color:'#57534E' }} aria-label="What the customer has been told">
+                      {c.history.map((h, i) => <li key={i}>{day(h.at)} · {h.step ? STEPS[h.step] : STATUSES[h.status] || h.status}{h.outcome ? `: ${OUTCOMES[h.outcome] || h.outcome}` : ''}{h.public ? ` — “${h.public}”` : ''}</li>)}
+                    </ol>
+                  )}
                   <p className="mono-font" style={{ margin:0, fontSize:'10px', letterSpacing:'0.08em', color: d.consent?.given ? '#065F46' : '#92400E' }}>
                     {d.consent?.given ? `CONSENT GIVEN${d.consent.at ? ' ' + day(d.consent.at).toUpperCase() : ''}` : 'NO CONSENT RECORDED'} · {c.id}
                   </p>

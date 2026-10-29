@@ -109,5 +109,38 @@ export const claimIdFrom = hex => 'CLM-' + hex.slice(0, 10).toUpperCase()
 export const publicStatus = row => ({
   id: row.id, reference: row.external_id ?? row.externalId, status: row.status, statusText: STATUSES[row.status] || row.status,
   receivedAt: row.created_at ?? row.createdAt, updatedAt: row.updated_at ?? row.updatedAt,
-  history: (row.history || []).map(h => ({ status: h.status, at: h.at, ...(h.public ? { note: h.public } : {}) })),
+  ...(row.history?.some(h => h.outcome) ? { outcome: row.history.findLast(h => h.outcome).outcome } : {}),
+  history: (row.history || []).map(h => ({ status: h.status, ...(h.step ? { step: h.step } : {}), at: h.at, ...(h.public ? { note: h.public } : {}) })),
 })
+
+// ── Steps on the Desk ──
+// Once a claim is with the Desk, three moves on its case are sent to the bank's
+// app as their own events (claim.provisional_credit, claim.filed, claim.resolved),
+// each once. Resolving the case closes the claim.
+export const STEPS = { provisional_credit: 'Provisional credit given', filed: 'Dispute filed', resolved: 'Resolved' }
+export const OUTCOMES = { won: 'In the customer’s favour', lost: 'The charge stands', withdrawn: 'Withdrawn', resolved: 'Resolved' }
+// What the bank may show its customer at each step (wording to review with counsel)
+export const STEP_NOTES = {
+  provisional_credit: 'We’ve given you a temporary credit while we investigate.',
+  filed: 'We’ve formally disputed the transaction with the merchant’s bank.',
+  won: 'Your claim was resolved in your favour.',
+  lost: 'We’ve finished investigating and the charge stands. We’ll write to you with the reasons.',
+  withdrawn: 'Your claim was withdrawn.',
+  resolved: 'Your claim is resolved.',
+}
+const FILED = ['filed', 'representment', 'pre_arb', 'submitted'], ENDED = ['won', 'lost', 'withdrawn', 'resolved']
+
+// The steps a case linked to a claim reached between two saves: [{ claimId, caseId, step, outcome? }].
+// Only cases that existed before count, so loading cases on a new device sends nothing.
+export function caseSteps(before, after) {
+  const was = new Map((before || []).map(c => [c.id, c])), out = []
+  for (const c of after || []) {
+    const p = was.get(c.id), claimId = c.intake?.claimId
+    if (!p || !claimId) continue
+    const add = (step, extra) => out.push({ claimId, caseId: c.id, step, ...extra })
+    if ((c.provCreditDate || c.pcIssued) && !(p.provCreditDate || p.pcIssued)) add('provisional_credit')
+    if (FILED.includes(c.status) && !FILED.includes(p.status) && !ENDED.includes(p.status)) add('filed')
+    if (ENDED.includes(c.status) && !ENDED.includes(p.status)) add('resolved', { outcome: c.status })
+  }
+  return out
+}

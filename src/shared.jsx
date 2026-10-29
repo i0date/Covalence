@@ -8,6 +8,7 @@ import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
 import { onCasesFromOtherTab, readCases, writeCases } from './caseStore.js'
 import { FINCRIME_DEFAULTS } from './fincrime.js'
+import { sendCaseSteps } from './claimsData.js'
 import { TM_DEFAULTS, FRAUD_DEFAULTS } from './monitoring.mjs'
 
 // ─── Error boundary ───────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ export function saveOutcomes(o) {
     const current = readCases()
     const merged = mergeCases(current, stampCaseChanges(current, o))
     writeCases(merged)
+    sendCaseSteps(current, merged)   // cases from the bank's app: provisional credit, filed, resolved
     if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(merged) } catch {} })
     // ── Supabase as PRIMARY write (not backup) ─────────────────────────────
     if (SUPA_URL && SUPA_KEY && isSignedIn()) {

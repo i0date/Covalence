@@ -237,10 +237,23 @@ function demoClaims() {
       statement: 'Got a call from the bank, they said my account was hacked and to move money to a safe account.',
       attachments: [], consent: { given: false } },
   ]
+  // What AI triage on arrival (api/claims.js) would make of each
+  const ai = [
+    { summary: 'Two online charges at an electronics shop the customer doesn’t recognise, a day apart, with the card still in their possession. Looks like card details were stolen and used online.',
+      claimType: 'unauth_cnp', route: 'fraud', priority: 'normal', confidence: 'high',
+      reasons: ['The customer doesn’t recognise either charge', 'Card in hand and details not shared, so card-not-present use', 'Same merchant twice within a day, a common testing pattern'], askCustomer: [] },
+    { summary: 'A desk ordered online and paid for, not delivered by the expected date, and the merchant has stopped replying. A not-received dispute with an order confirmation attached.',
+      claimType: 'non_receipt', route: 'dispute', priority: 'normal', confidence: 'high',
+      reasons: ['The customer recognises the charge, so it isn’t fraud', 'Expected delivery date has passed', 'They tried the merchant first, as the networks expect'], askCustomer: ['Has anything been delivered since 15 October, even partly?'] },
+    { summary: 'The customer moved $1,500 by Zelle after a caller claiming to be the bank’s fraud team told them to. The customer made the payment themselves, so this is an impersonation scam, not unauthorised use.',
+      claimType: 'impersonation', route: 'scam', priority: 'urgent', confidence: 'high',
+      reasons: ['A caller posing as the bank asked for a transfer to a “safe account”', 'The customer sent the payment themselves', 'The scammer may call again, and consent to investigate is missing'],
+      askCustomer: ['Did you share any codes, passwords or card details with the caller?', 'Are they still in touch with you, or asking for more money?', 'Do you agree to us investigating and contacting the receiving bank?'] },
+  ]
   return raw.map((b, i) => {
     const { claim } = normaliseClaim(b, new Date(now)), missing = missingForDesk(claim)
     return { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84'][i], external_id: b.id, channel: claim.channel, segment: 'fi', status: 'received', ready: !missing.length,
-      data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app' }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
+      data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app', ai: { ...ai[i], at: claim.reportedAt } }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
       case_id: '', reported_at: claim.reportedAt, created_at: claim.reportedAt, updated_at: claim.reportedAt }
   })
 }
@@ -598,6 +611,11 @@ const HANDLERS = {
   claims_list: () => {
     let all = read(K.claims, null)
     if (!all) { all = demoClaims(); write(K.claims, all) }
+    else if (all.some(c => !c.data.ai)) {   // seeded before AI triage: add its reading of the demo claims
+      const fresh = demoClaims()
+      all.forEach(c => { const f = fresh.find(x => x.id === c.id); if (f && !c.data.ai) c.data = { ...c.data, ai: f.data.ai } })
+      write(K.claims, all)
+    }
     return [...all.filter(c => c.status !== 'closed').sort((a, b) => a.reported_at.localeCompare(b.reported_at)), ...all.filter(c => c.status === 'closed')]
   },
   claim_set: ({ p_id, p_status, p_note, p_public, p_case_id }) => {
@@ -612,6 +630,20 @@ const HANDLERS = {
       history: [...c.history, { status: p_status, at, by: visitor().name || 'You', note: String(p_note || '').trim(), public: String(p_public || '').trim() }] })
     write(K.claims, all)
     audit('claim.status_changed', 'claim', c.id, { status: p_status, note: String(p_note || '').slice(0, 200), case: c.case_id })
+    return { id: c.id, status: c.status, changed: true }
+  },
+  claim_step: ({ p_id, p_step, p_outcome, p_public, p_case_id }) => {
+    need(canWrite(), 'Your role can’t change claims')
+    need(['provisional_credit', 'filed', 'resolved'].includes(p_step), 'Unknown claim step')
+    need(p_step !== 'resolved' || ['won', 'lost', 'withdrawn', 'resolved'].includes(p_outcome), 'Say how the case was resolved')
+    const all = read(K.claims, []), c = all.find(x => x.id === p_id)
+    need(c, 'No such claim')
+    if (c.status === 'closed' || c.history.some(h => h.step === p_step)) return { id: c.id, status: c.status, changed: false }
+    const at = new Date().toISOString(), status = p_step === 'resolved' ? 'closed' : 'with_desk'
+    Object.assign(c, { status, updated_at: at, case_id: p_case_id || c.case_id,
+      history: [...c.history, { status, step: p_step, at, by: visitor().name || 'You', ...(p_outcome ? { outcome: p_outcome } : {}), note: `From the Desk case ${p_case_id || ''}`.trim(), public: String(p_public || '').trim() }] })
+    write(K.claims, all)
+    audit('claim.step', 'claim', c.id, { step: p_step, outcome: p_outcome || '', case: c.case_id })
     return { id: c.id, status: c.status, changed: true }
   },
 

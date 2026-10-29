@@ -129,7 +129,8 @@ GET ${origin}/api/claims?reference=APP-55102     → where the claim is now`}</C
         <li><strong>Ready for Desk:</strong> a claim with its type, the account type, every merchant, the customer’s own account, their consent and (for unauthorised claims) “Is this yours?” answered no is marked ready. The answer says what’s missing.</li>
         <li><strong>Account types:</strong> debit, credit, p2p, ach_eft, bnpl, crypto. Claim types are the ones in Triage’s list, such as unauth_card_present, unauth_cnp, ato, non_receipt, not_as_described, duplicate_charge, impersonation.</li>
         <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
-        <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint above as a signed <code>claim.updated</code> event, so your app can tell the customer.</li>
+        <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint above as a signed <code>claim.updated</code> event, so your app can tell the customer. Once the claim is with the Desk, its case sends <code>claim.provisional_credit</code>, <code>claim.filed</code> and <code>claim.resolved</code> (with <code>outcome</code>), each once, with a note you can show the customer.</li>
+        <li><strong>AI triage:</strong> each claim is read as it arrives, without the customer’s name or contact details, and your analysts see a suggested route and questions in Triage → Claims. It suggests; they decide.</li>
       </ul>
     </section>
   </>)
