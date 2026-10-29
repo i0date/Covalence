@@ -87,7 +87,8 @@ export const sharingGet = () => plain(supaRpc('sharing_get', {})).then(firstRow)
 export const sharingSet = (v) => plain(supaRpc('sharing_set', { p_registered: !!v.registered, p_expires_on: v.registered ? v.expires_on || null : null,
   p_contact_name: v.contact_name || '', p_contact_email: v.contact_email || '', p_require_both: !!v.require_both }))
 export const duoSharingStatus = id => plain(supaRpc('duo_sharing_status', { p_id: id }))
-export const duoShareConfirm = (id, purpose) => plain(supaRpc('duo_share_confirm', { p_id: id, p_purpose: purpose }))
+// kind: recovery | dispute | aml (supabase_duo_purpose.sql)
+export const duoShareConfirm = (id, purpose, kind = 'aml') => plain(supaRpc('duo_share_confirm', { p_id: id, p_purpose: purpose, p_kind: kind }))
 // ── Linking cases by ARN (supabase_arn.sql) ──────────────────────────────────
 export const arnFindOtherSide = caseId => plain(supaRpc('arn_find_other_side', { p_case_id: caseId }))
 export const arnInvites = () => plain(supaRpc('arn_invites', {})).then(r => Array.isArray(r) ? r : [])

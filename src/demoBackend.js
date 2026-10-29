@@ -161,7 +161,7 @@ const mySharing = () => read(K.sharing, { registered: true, expires_on: inDays(2
 const HARBOR_SHARING = () => ({ institution: COUNTERPARTY, registered: true, expires_on: inDays(150), contact_name: 'Alex Moreno', contact_email: 'bsa@harbor.cu' })
 const sharingValid = x => !!(x && x.registered && x.expires_on && x.expires_on >= new Date().toISOString().slice(0, 10))
 const shareLogs = () => read(K.shareLog, { HCU7Q2: [{ kind: 'purpose', at: new Date(Date.now() - DAY).toISOString(), safe_harbor: true, by: 'Diego Ruiz',
-  detail: { purpose: 'Identify and report possible money laundering — proceeds of an impersonation scam moving to the receiving account' } }] })
+  detail: { kind: 'recovery', purpose: 'Recover funds or stop fraud — recall of an impersonation-scam payment' } }] })
 function logShare(id, entry) {
   const all = shareLogs(); all[id] = [{ at: new Date().toISOString(), by: visitor().name || 'You', ...entry }, ...(all[id] || [])].slice(0, 100); write(K.shareLog, all)
 }
@@ -406,8 +406,12 @@ const HANDLERS = {
     settle(s)
     const f = myField(s), before = thread(s[f]).length, lines = s.lines || HARBOR_LINES
     if (p[f] !== undefined && p[f] !== s[f]) {
-      need((shareLogs()[s.id] || []).some(x => x.kind === 'purpose'), 'Confirm why you are sharing (314(b)) before posting in this session')
-      need(covered(s) || coordination(s) || !mySharing().require_both, 'Your institution only shares in Duo when both sides are registered under 314(b)')
+      // Nobody said otherwise: the session recovers funds (or resolves the chargeback). 314(b)'s rule is for aml sessions only.
+      let purpose = (shareLogs()[s.id] || []).find(x => x.kind === 'purpose')
+      if (!purpose) { const kind = coordination(s) ? 'dispute' : 'recovery'
+        logShare(s.id, { kind: 'purpose', safe_harbor: covered(s), detail: { kind, auto: true, purpose: kind === 'dispute' ? 'Resolve this chargeback' : 'Recover funds or stop fraud' } })
+        purpose = (shareLogs()[s.id] || []).find(x => x.kind === 'purpose') }
+      need((purpose.detail.kind || 'aml') !== 'aml' || covered(s) || !mySharing().require_both, 'Your institution only shares money-laundering information in Duo when both sides are registered under 314(b)')
       logShare(s.id, { kind: 'message', safe_harbor: covered(s), detail: { with: theirName(s) || '' } })
       audit('duo.info_shared', 'duo', s.id, { with: theirName(s) || '', safe_harbor: covered(s) })
       s[f] = p[f]
@@ -450,15 +454,16 @@ const HANDLERS = {
     const theirs = s.institution_b ? { ...theirSharing(s), valid: sharingValid(theirSharing(s)) } : null
     const weAreA = s.institution_a === DEMO_INSTITUTION
     return { a: weAreA ? mine : theirs, b: weAreA ? theirs : mine, coordination: coordination(s),
-      safe_harbor: covered(s), require_both: !!me.require_both, purpose: purpose ? { at: purpose.at, by: purpose.by, text: purpose.detail.purpose } : null, log }
+      safe_harbor: covered(s), require_both: !!me.require_both, purpose: purpose ? { at: purpose.at, by: purpose.by, text: purpose.detail.purpose, kind: purpose.detail.kind || 'aml', auto: !!purpose.detail.auto } : null, log }
   },
-  duo_share_confirm: ({ p_id, p_purpose }) => {
+  duo_share_confirm: ({ p_id, p_purpose, p_kind }) => {
+    need(['recovery', 'aml', 'dispute'].includes(p_kind), 'Pick what the session is for')
     need(canWrite(), 'Your role (auditor) is read-only')
     const s = sessions()[String(p_id || '').toUpperCase()]
     need(s, 'Your institution is not part of this Duo session')
     need(String(p_purpose || '').trim(), 'Say why you are sharing')
-    logShare(s.id, { kind: 'purpose', safe_harbor: covered(s), detail: { purpose: String(p_purpose).trim().slice(0, 500) } })
-    audit('duo.sharing_purpose', 'duo', s.id, { purpose: String(p_purpose).trim().slice(0, 500), safe_harbor: covered(s) })
+    logShare(s.id, { kind: 'purpose', safe_harbor: covered(s), detail: { kind: p_kind, purpose: String(p_purpose).trim().slice(0, 500) } })
+    audit('duo.sharing_purpose', 'duo', s.id, { kind: p_kind, purpose: String(p_purpose).trim().slice(0, 500), safe_harbor: covered(s) })
     return null
   },
 

@@ -2,9 +2,10 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { useState, useRef, useEffect } from 'react'
 import { AlertTriangle, ArrowRight, CheckCircle, Check, Copy, X } from 'lucide-react'
-import { DuoSharingBar, SharingPurpose, useDuoSharing } from '../SharingPanel.jsx'
+import { AML_PURPOSES, DuoSharingBar, SESSION_KINDS, kindOf, useDuoSharing } from '../SharingPanel.jsx'
 import { ArnInvites } from '../ArnInvites.jsx'
 import { LinkedCases } from '../LinkedCases.jsx'
+import { duoShareConfirm } from '../data.js'
 import { SUPA_KEY, SUPA_URL, buildThread, caseLinkActivity, caseLinkCreate, duoCreate, duoFind, duoGet, duoPatch, genDuoCode, loadMyDuoSessions, parseThread, saveMyDuoSessions } from '../data.js'
 
 const DUO_STATUS = {
@@ -38,6 +39,9 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
   const [recoverLoading,setRecoverLoading] = useState(false)
   // Session type for Duo (standard or crypto exchange)
   const [sessionType,   setSessionType]   = useState('standard')
+  // What the session is for: recovery (no 314(b) step) or a money-laundering investigation (314(b))
+  const [sessionPurpose, setSessionPurpose] = useState('recovery')
+  const [amlPurpose,     setAmlPurpose]     = useState(AML_PURPOSES[2])
   // Crypto session fields (for crypto handoffs)
   // 314(b): both sides' registration, this side's purpose and sharing record (SharingPanel.jsx)
   const [sharing, reloadSharing] = useDuoSharing(phase === 'session' ? session?.id : null, session?.institution_b || '')
@@ -174,6 +178,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
       const sess = created || { id, institution_a: myInstitution.trim(), institution_b: '', claim, notes_a: '[]', notes_b: '[]', status: 'active' }
       setSession(sess); setMyRole('a'); setLastSync(new Date())
       persistSession(id, 'a', myInstitution.trim(), 'active', claim.caseId)
+      if (sessionPurpose === 'aml') await duoShareConfirm(id, amlPurpose, 'aml').catch(() => {})   // recovery needs nothing recorded up front
       if (setDuoHandoff) setDuoHandoff(null)
       setPhase('session')
     } catch (e) { setError(e.message) }
@@ -200,7 +205,6 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
 
   const handleAddEntry = async () => {
     if (!newEntry.trim() || !session) return
-    if (sharing && !sharing.purpose) { setError('Confirm why you are sharing first (below).'); return }
     setSaving(true); setError('')
     try {
       const field = myRole === 'a' ? 'notes_a' : 'notes_b'
@@ -417,6 +421,25 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
           </div>
         </div>
 
+        {/* What the session is for — recovery needs no 314(b) step */}
+        <div>
+          <label className="cov-label">WHAT IS THIS SESSION FOR?</label>
+          <div style={{ display:'flex', gap:'2px', flexWrap:'wrap' }}>
+            {[['recovery','RECOVER FUNDS / STOP FRAUD'],['aml','MONEY-LAUNDERING INVESTIGATION · 314(b)']].map(([val, label]) => (
+              <button key={val} type="button" onClick={() => setSessionPurpose(val)} aria-pressed={sessionPurpose === val} className="mono-font"
+                style={{ flex:'1 1 200px', padding:'9px 8px', fontSize:'10px', letterSpacing:'0.1em', border:'1px solid #C8C0B0', cursor:'pointer', background: sessionPurpose === val ? '#1A1814' : 'transparent', color: sessionPurpose === val ? '#F5F1EA' : '#6B5F4D' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="display-font" style={{ fontSize:'12px', color:'#6B6259', margin:'6px 0 0', lineHeight:1.45 }}>{SESSION_KINDS[sessionPurpose].hint}</p>
+          {sessionPurpose === 'aml' && (
+            <select className="cov-input" value={amlPurpose} onChange={e => setAmlPurpose(e.target.value)} aria-label="What you suspect" style={{ marginTop:'6px', fontSize:'13px', width:'100%' }}>
+              {AML_PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+        </div>
+
         <div>
           <label className="cov-label">YOUR INSTITUTION NAME</label>
           <input className="cov-input mono-font" value={myInstitution} onChange={e => setMyInstitution(e.target.value)} readOnly={!!authInstitution} title={authInstitution ? 'From your signed-in workspace' : undefined}
@@ -500,6 +523,8 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
   // ── SESSION ───────────────────────────────────────────────────────────────────────
   if (phase === 'session' && session) {
     const claim        = session.claim || {}
+    // 314(b)'s require-both rule only ever blocks a money-laundering investigation
+    const shareBlocked = !!(sharing && kindOf(sharing) === 'aml' && sharing.require_both && !sharing.safe_harbor)
     const thread       = buildThread(session)
     const myName       = myRole === 'a' ? session.institution_a : session.institution_b
     const isCryptoClaim = claim.accountType === 'crypto' || claim.accountType === 'crypto_exchange'
@@ -586,7 +611,7 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
           </div>
         )}
 
-        <DuoSharingBar st={sharing} myRole={myRole} />
+        <DuoSharingBar st={sharing} myRole={myRole} sessionId={session.id} onChanged={reloadSharing} />
         {claim.kind === 'arn' && <LinkedCases session={session} covUser={covUser} />}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -702,13 +727,13 @@ export function DuoView({ duoHandoff, setDuoHandoff, authInstitution, onSignIn, 
                 rows={3} placeholder="Findings, proposed resolution, agreed next steps…"
                 style={{ width:'100%', resize:'none', fontSize:'13px', fontFamily:'Georgia,"Times New Roman",serif', lineHeight:1.6, padding:'10px', border:'1px solid #C8C0B0', background:'#FFFFFF', boxSizing:'border-box', outline:'none' }} />
               {error && <div className="mono-font text-[10px] text-red-700 mt-1">{error}</div>}
-              {sharing && !sharing.purpose ? <SharingPurpose sessionId={session.id} onDone={reloadSharing} coordination={!!sharing.coordination} disabled={sharing.require_both && !sharing.safe_harbor && !sharing.coordination} /> :
               <div style={{ display:'flex', alignItems:'center', gap:'12px', marginTop:'8px', flexWrap:'wrap' }}>
-                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || (sharing?.require_both && !sharing.safe_harbor && !sharing.coordination)}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
+                <BtnPrimary onClick={handleAddEntry} disabled={saving || !newEntry.trim() || shareBlocked}>{saving ? 'POSTING…' : 'POST ENTRY'}</BtnPrimary>
                 <div className="mono-font text-[10px] tracking-widest text-stone-400">
                   ⌘↵ to post · syncs every 5s{lastSync ? ` · ${lastSync.toLocaleTimeString()}` : ''}
                 </div>
-              </div>}
+              </div>
+              {shareBlocked && <div className="mono-font text-[10px] text-amber-800 mt-1">Your institution only shares money-laundering information when both sides are registered under 314(b). Switch the session back to recovery if that’s what it is.</div>}
             </div>
           </div>
         </div>
