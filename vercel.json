@@ -7,7 +7,8 @@
     "api/analyze.js": { "maxDuration": 60 },
     "api/reminders.js": { "maxDuration": 60 },
     "api/sanctions.js": { "maxDuration": 60 },
-    "api/intake.js": { "maxDuration": 30 }
+    "api/intake.js": { "maxDuration": 30 },
+    "api/claims.js": { "maxDuration": 60 }
   },
   "crons": [
     { "path": "/api/reminders", "schedule": "0 12 * * 1-5" },
