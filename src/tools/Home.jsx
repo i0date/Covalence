@@ -7,7 +7,8 @@ import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { isMerchantCase } from '../sides.mjs'
 import { merchantQueue } from '../merchantQueue.mjs'
 import { merchantFile } from '../merchantFile.mjs'
-import { chargebackRatios, worstRatio } from '../chargebackRatio.mjs'
+import { worstRatio } from '../chargebackRatio.mjs'
+import { ChargebackRatioPanel, ratioPct, ratiosFor } from '../ChargebackRatioPanel.jsx'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HOME VIEW
@@ -316,26 +317,16 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
         const f = merchantFile(active)
         const money = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
         // Demo visitors haven't entered sales figures, so the ratio uses sample ones
-        const demoSales = !!covUser?.demo && !covUser?.authed && !settings.mchMonthlyTxVisa && !settings.mchMonthlyTxMc
-        const ratios = chargebackRatios(outcomes, demoSales ? { ...settings, mchMonthlyTxVisa: 900, mchMonthlyTxMc: 300 } : settings)
+        const { ratios, demoSales } = ratiosFor(outcomes, settings, covUser)
         const worst = worstRatio(ratios)
-        const pct = r => r.ratio == null ? '—' : r.ratio.toFixed(2) + '%'
-        const tone = { over:'#991B1B', over_ratio:'#92400E', approaching:'#92400E', ok:'#065F46', unknown:'#78716C' }
         const cells = [
           { label:'TO ANSWER', value: queue.length, sub: overdue ? `${overdue} overdue` : `${thisWeek} due this week`, alert: overdue > 0 },
           { label:'WITH THE BANK', value: f.waiting.length + f.escalated.length, sub: f.escalated.length ? `${f.escalated.length} escalated` : 'responses waiting on a decision' },
           { label:'WIN RATE', value: winRate !== null ? winRate + '%' : '—', sub: `${resolved.length} decided · ${rangeText}` },
           { label:'RECOVERED', value: money(f.recovered), sub: 'money back from the acquirer' },
           { label:'NOT BACK YET', value: money(f.outstanding), sub: f.notFinal ? `${f.notFinal} win${f.notFinal === 1 ? '' : 's'} not final` : 'from wins', alert: f.outstanding > 0 },
-          { label:'CHARGEBACK RATIO', value: pct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
+          { label:'CHARGEBACK RATIO', value: ratioPct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
         ]
-        const say = r => ({
-          unknown: `Add your monthly ${r.label} sales in Settings → Chargebacks against you to see this.`,
-          ok: `Within ${r.label}’s ${r.limit}% threshold. Covalence warns from ${r.warnAt.toFixed(1)}%.`,
-          approaching: `Approaching ${r.label}’s ${r.limit}% threshold. Look at the reason codes driving it in 003 Multi.`,
-          over_ratio: `Above ${r.limit}%, but under the ${r.minCount.toLocaleString('en-US')} chargebacks ${r.label} ${r.program} needs before it enrols a merchant. Your acquirer may still act on it.`,
-          over: `Above ${r.label}’s threshold with enough volume to be enrolled in ${r.program}. Talk to your acquirer now — fines and higher fees follow.`,
-        })[r.state]
         return (<>
           <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
             {cells.map(c => (
@@ -346,29 +337,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
               </div>
             ))}
           </div>
-          <section aria-label="Chargeback ratio" style={{ border:'1px solid #D4CCBC', borderTop:'none', background:'#FFFFFF', padding:'14px 18px' }}>
-            <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C', marginBottom:'10px' }}>CHARGEBACK RATIO · LAST 30 DAYS{demoSales ? ' · DEMO SALES FIGURES' : ''}</div>
-            <div style={{ display:'grid', gap:'14px' }}>
-              {ratios.map(r => (
-                <div key={r.key}>
-                  <div style={{ display:'flex', justifyContent:'space-between', gap:'10px', flexWrap:'wrap', alignItems:'baseline' }}>
-                    <span className="display-font" style={{ fontSize:'15px', color:'#1A1814' }}>{r.label} <span className="mono-font" style={{ fontSize:'10px', color:'#78716C' }}>{r.program}</span></span>
-                    <span className="mono-font" style={{ fontSize:'12px', fontWeight:600, color: tone[r.state] }}>{pct(r)} <span style={{ fontWeight:400, color:'#78716C' }}>· {r.count} chargeback{r.count === 1 ? '' : 's'}{r.sales ? ` on ${r.sales.toLocaleString('en-US')} sales` : ''}</span></span>
-                  </div>
-                  {r.ratio != null && (
-                    <div role="img" aria-label={`${r.label} ratio ${pct(r)} against a ${r.limit}% threshold`} style={{ position:'relative', height:'6px', background:'#EDE8E0', marginTop:'6px' }}>
-                      <div style={{ position:'absolute', inset:'0 auto 0 0', width: Math.min(100, r.ratio / (r.limit * 1.5) * 100) + '%', background: tone[r.state] }} />
-                      <div title={`${r.limit}% threshold`} style={{ position:'absolute', top:'-3px', bottom:'-3px', left: (100 / 1.5) + '%', width:'2px', background:'#1A1814' }} />
-                    </div>
-                  )}
-                  <div className="display-font" style={{ fontSize:'12px', color:'#57534E', marginTop:'4px' }}>{say(r)}</div>
-                </div>
-              ))}
-            </div>
-            <p className="display-font" style={{ fontSize:'11px', color:'#78716C', margin:'12px 0 0', lineHeight:1.5 }}>
-              Every chargeback counts, including ones you win. Visa also counts fraud reports that never became chargebacks, which Covalence doesn’t see, so Visa’s own figure can be higher. Thresholds are settings; your acquirer’s terms are what apply.
-            </p>
-          </section>
+          <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} attached />
         </>)
       })() : (() => {
         const cells = [

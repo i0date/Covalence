@@ -10,6 +10,7 @@ import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withD
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { doesIssuing, doesMerchant, isMerchantCase } from '../sides.mjs'
+import { ChargebackRatioPanel, ratiosFor } from '../ChargebackRatioPanel.jsx'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
 // Returns { systems, cardholder, merchant } arrays of { text, impact } items
@@ -116,7 +117,7 @@ const NACHA_RETURN_CODES = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // 002 DISPUTE DESK — full view
 // ═══════════════════════════════════════════════════════════════════════════════
-export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, sides = ['issuer', 'merchant'], covUser, setOutcomes: setRootOutcomes, deskOpenRequest }) {
+export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreInDfa, onSendToDuo, onGoToDuo, platformMode, setPlatformMode, sides = ['issuer', 'merchant'], rootSettings, covUser, setOutcomes: setRootOutcomes, deskOpenRequest }) {
   // Restore previous session so navigation away doesn't wipe in-progress analysis
   const _sess = React.useRef(loadDeskSession()).current
   const [quickDueDateRow, setQuickDueDateRow] = React.useState(null)  // row id with inline date picker open
@@ -191,9 +192,6 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   const [mchRefundPolicyShown, setMchRefundPolicyShown]     = useState('unknown')
   const [mchPriorOrders, setMchPriorOrders]                 = useState('')
   const [mchIpLogs, setMchIpLogs]                           = useState('')
-  const [mchCbDisputes, setMchCbDisputes]                   = useState('')
-  const [mchCbTransactions, setMchCbTransactions]           = useState('')
-  const [mchCbAmount, setMchCbAmount]                       = useState('')
   const [mchResult, setMchResult]                           = useState(null)
   const [mchLoading, setMchLoading]                         = useState(false)
   const [mchError, setMchError]                             = useState(null)
@@ -1003,22 +1001,6 @@ Yours faithfully,
 ${merchant || '[Merchant Name]'} — Disputes Team`
   }
 
-  // ── CBR calculations (merchant mode) ──────────────────────────────────────
-  // Auto-populate CBR from tracker (current calendar month)
-  const thisMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  const autoMchCount = outcomes.filter(o => isMerchantCase(o) && new Date(o.date) >= thisMonthStart).length
-  const autoMchAmt   = Math.round(outcomes.filter(o => isMerchantCase(o) && new Date(o.date) >= thisMonthStart)
-    .reduce((sum, o) => sum + (parseFloat((o.amount || '').replace(/[^0-9.]/g, '')) || 0), 0))
-  const effectiveCbrDisputes = mchCbDisputes !== '' ? mchCbDisputes : String(autoMchCount)
-  const effectiveCbrAmount   = mchCbAmount   !== '' ? mchCbAmount   : String(autoMchAmt)
-  const cbrPct = (effectiveCbrDisputes && mchCbTransactions && parseFloat(mchCbTransactions) > 0)
-    ? (parseFloat(effectiveCbrDisputes) / parseFloat(mchCbTransactions)) * 100
-    : null
-  const cbrAmtNum     = parseFloat(effectiveCbrAmount) || 0
-  const visaVdmpBreach = cbrPct !== null && cbrPct >= 0.9  && cbrAmtNum >= 75000
-  const visaVdmpWarn   = cbrPct !== null && cbrPct >= 0.65 && !visaVdmpBreach
-  const mcMdmpBreach   = cbrPct !== null && cbrPct >= 1.5  && cbrAmtNum >= 1000
-  const mcMdmpWarn     = cbrPct !== null && cbrPct >= 1.0  && !mcMdmpBreach
 
 
   // ── Outcome tracker helpers ────────────────────────────────────────────────
@@ -3975,92 +3957,9 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                 <span className="mono-font text-xs text-stone-500">06</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Chargeback Ratio Monitor</h2>
               </div>
-              <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">Network monitoring thresholds. Dispute count and volume are auto-filled from your tracker — enter total monthly transactions to compute your CBR.</p>
+              <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">The same figures as Home: chargebacks in the last 30 days against Visa VAMP and Mastercard ECM. Set your monthly card sales and the thresholds in <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('cov:go', { detail: { section: 'settings', tab: 'settings' } }))} className="underline" style={{ background:'none', border:0, padding:0, cursor:'pointer', color:'#1A1814', font:'inherit' }}>Settings → Chargebacks against you</button>.</p>
 
-              {/* CBR inputs */}
-              <div className="border border-stone-300 p-4 mb-6" style={{ background: '#EEE9E0' }}>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="input-label">DISPUTES THIS MONTH</label>
-                    <input type="number" value={mchCbDisputes !== '' ? mchCbDisputes : String(autoMchCount)} onChange={e => setMchCbDisputes(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
-                  </div>
-                  <div>
-                    <label className="input-label">TOTAL TXNS THIS MONTH</label>
-                    <input type="number" value={mchCbTransactions} onChange={e => setMchCbTransactions(e.target.value)} placeholder="enter total" className="input-field mono-font" style={{ fontSize: '13px' }} />
-                    <div className="mono-font text-[10px] text-stone-400 mt-1">required to calculate CBR%</div>
-                  </div>
-                  <div>
-                    <label className="input-label">DISPUTE VOLUME ($)</label>
-                    <input type="number" value={mchCbAmount !== '' ? mchCbAmount : String(autoMchAmt)} onChange={e => setMchCbAmount(e.target.value)} className="input-field mono-font" style={{ fontSize: '13px' }} />
-                  </div>
-                </div>
-                {!mchCbTransactions && (
-                  <div className="mono-font text-[10px] text-stone-500 mt-3">↑ Enter your total monthly transaction count above to compute CBR% and check thresholds.</div>
-                )}
-                {cbrPct !== null && (
-                  <div className={'mono-font text-xs px-3 py-2 mt-3 flex flex-wrap items-center gap-3 ' + (visaVdmpBreach || mcMdmpBreach ? 'bg-red-900 text-red-50' : visaVdmpWarn || mcMdmpWarn ? 'bg-amber-800 text-amber-50' : 'bg-emerald-900 text-emerald-50')}>
-                    <span className="font-bold">CBR: {cbrPct.toFixed(3)}%</span>
-                    {visaVdmpBreach && <span>VISA VDMP BREACH — {cbrPct.toFixed(2)}% above 0.90%</span>}
-                    {!visaVdmpBreach && visaVdmpWarn && <span>Approaching VISA VDMP ({cbrPct.toFixed(2)}%)</span>}
-                    {mcMdmpBreach && <span>MC MDMP BREACH — {cbrPct.toFixed(2)}% above 1.50%</span>}
-                    {!mcMdmpBreach && mcMdmpWarn && <span>Approaching MC MDMP ({cbrPct.toFixed(2)}%)</span>}
-                    {!visaVdmpBreach && !visaVdmpWarn && !mcMdmpBreach && !mcMdmpWarn && <span>Within network thresholds</span>}
-                  </div>
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className={'border-2 p-5 ' + (visaVdmpBreach ? 'border-red-700 bg-red-50' : visaVdmpWarn ? 'border-amber-600 bg-amber-50' : 'border-stone-300 bg-stone-50')}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="mono-font text-xs tracking-widest text-stone-600 mb-1">VISA VDMP</div>
-                      <div className="display-font font-semibold text-stone-900">Visa Dispute Monitoring Programme</div>
-                    </div>
-                    <span className={'mono-font text-[10px] px-2 py-1 ' + (visaVdmpBreach ? 'bg-red-900 text-red-50' : visaVdmpWarn ? 'bg-amber-800 text-amber-50' : 'bg-emerald-900 text-emerald-50')}>
-                      {visaVdmpBreach ? 'BREACH' : visaVdmpWarn ? 'WARNING' : 'OK'}
-                    </span>
-                  </div>
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">THRESHOLD</span><span className="mono-font text-[11px] text-stone-700">≥ 0.90% CBR AND ≥ $75,000</span></div>
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">YOUR CBR</span><span className={'mono-font text-sm font-bold ' + (visaVdmpBreach ? 'text-red-800' : visaVdmpWarn ? 'text-amber-800' : 'text-emerald-800')}>{cbrPct !== null ? cbrPct.toFixed(3) + '%' : '—'}</span></div>
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">DISPUTE VOLUME</span><span className={'mono-font text-[11px] font-bold ' + (cbrAmtNum >= 75000 ? 'text-red-700' : 'text-stone-700')}>${cbrAmtNum.toLocaleString()}</span></div>
-                  </div>
-                  <div style={{ height: '6px', background: '#D4CCBC', borderRadius: '2px' }}>
-                    <div style={{ height: '100%', width: Math.min(cbrPct / 1.5 * 100, 100) + '%', background: visaVdmpBreach ? '#991b1b' : visaVdmpWarn ? '#92400e' : '#064e3b', borderRadius: '2px', transition: 'width 0.4s' }} />
-                  </div>
-                  <div className={'mt-3 display-font text-[13px] leading-snug ' + (visaVdmpBreach ? 'text-red-800' : visaVdmpWarn ? 'text-amber-800' : 'text-emerald-800')}>
-                    {visaVdmpBreach ? 'Breach. Expect fines from $50/month escalating to $25,000/month. MID termination risk after 12 months.' : visaVdmpWarn ? 'Approaching VDMP. If dispute volume also reaches $75k you will be enrolled. Review top dispute codes now.' : 'Within Visa VDMP thresholds. Next threshold: 0.90% CBR + $75k volume.'}
-                  </div>
-                </div>
-                <div className={'border-2 p-5 ' + (mcMdmpBreach ? 'border-red-700 bg-red-50' : mcMdmpWarn ? 'border-amber-600 bg-amber-50' : 'border-stone-300 bg-stone-50')}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="mono-font text-xs tracking-widest text-stone-600 mb-1">MC MDMP</div>
-                      <div className="display-font font-semibold text-stone-900">Mastercard Dispute Monitoring Programme</div>
-                    </div>
-                    <span className={'mono-font text-[10px] px-2 py-1 ' + (mcMdmpBreach ? 'bg-red-900 text-red-50' : mcMdmpWarn ? 'bg-amber-800 text-amber-50' : 'bg-emerald-900 text-emerald-50')}>
-                      {mcMdmpBreach ? 'BREACH' : mcMdmpWarn ? 'WARNING' : 'OK'}
-                    </span>
-                  </div>
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">THRESHOLD</span><span className="mono-font text-[11px] text-stone-700">≥ 1.50% CBR AND ≥ $1,000</span></div>
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">YOUR CBR</span><span className={'mono-font text-sm font-bold ' + (mcMdmpBreach ? 'text-red-800' : mcMdmpWarn ? 'text-amber-800' : 'text-emerald-800')}>{cbrPct !== null ? cbrPct.toFixed(3) + '%' : '—'}</span></div>
-                    <div className="flex items-center justify-between"><span className="mono-font text-[11px] text-stone-500">DISPUTE VOLUME</span><span className={'mono-font text-[11px] font-bold ' + (cbrAmtNum >= 1000 ? 'text-stone-800' : 'text-stone-500')}>${cbrAmtNum.toLocaleString()}</span></div>
-                  </div>
-                  <div style={{ height: '6px', background: '#D4CCBC', borderRadius: '2px' }}>
-                    <div style={{ height: '100%', width: Math.min(cbrPct / 2.5 * 100, 100) + '%', background: mcMdmpBreach ? '#991b1b' : mcMdmpWarn ? '#92400e' : '#064e3b', borderRadius: '2px', transition: 'width 0.4s' }} />
-                  </div>
-                  <div className={'mt-3 display-font text-[13px] leading-snug ' + (mcMdmpBreach ? 'text-red-800' : mcMdmpWarn ? 'text-amber-800' : 'text-emerald-800')}>
-                    {mcMdmpBreach ? 'Breach. Fines start at $100/month. Termination risk after 3 months. Mastercard threshold is lower than Visa — hits SMBs faster.' : mcMdmpWarn ? 'Approaching MC MDMP. Remediate by reducing disputes or increasing transaction volume.' : 'Within Mastercard MDMP thresholds. Next: 1.50% CBR + $1,000 dispute volume.'}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 border border-stone-200 p-4 bg-stone-50">
-                <div className="mono-font text-[10px] tracking-widest text-stone-400 mb-2">MONITORING PROGRAM PENALTIES</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 display-font text-[13px] text-stone-600" style={{ lineHeight: '1.5' }}>
-                  <div><strong className="text-stone-800">Visa VDMP</strong> — $50/month (months 1–4), escalating to $25,000/month (month 10+). MID termination risk after 12 months without remediation.</div>
-                  <div><strong className="text-stone-800">MC MDMP</strong> — $100/month + $1,000 per dispute exceeding threshold (months 1–2), escalating from month 3. Termination review at month 3.</div>
-                </div>
-              </div>
+              {(() => { const { ratios, demoSales } = ratiosFor(outcomes, rootSettings || settings, covUser); return <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} /> })()}
             </div>
           </>
         )}
