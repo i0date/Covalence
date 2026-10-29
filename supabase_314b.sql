@@ -126,7 +126,8 @@ begin
 end $$;
 
 -- duo_update (from supabase_roles_retention.sql), now checking and recording
--- each message this institution adds, and recording status changes
+-- each message this institution adds, and recording status changes in the
+-- sharing record
 create or replace function public.duo_update(p_id text, p jsonb)
 returns setof public.duo_sessions
 language plpgsql security definer set search_path = public as $$
@@ -166,7 +167,7 @@ begin
     if r.status is distinct from cur.status then
       insert into duo_sharing_log (session_id, institution_id, kind, safe_harbor, detail)
       values (cur.id::text, me, 'status', covered, jsonb_build_object('from', cur.status, 'to', r.status));
-      perform audit_add(me, 'duo.status_changed', 'duo', cur.id::text, jsonb_build_object('from', cur.status, 'to', r.status));
+      -- the audit entry itself comes from the audit_duo trigger (supabase_workspace_audit.sql)
     end if;
   end if;
 
