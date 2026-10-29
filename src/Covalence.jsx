@@ -25,6 +25,7 @@ import { readCases, writeCases } from './caseStore.js'
 import { LicitView } from './tools/Licit.jsx'
 import { screeningStatus } from './fincrime.js'
 import { doesIssuing, doesMerchant, navFor, workspaceSides } from './sides.mjs'
+import { useArnStageSync } from './useArnStageSync.js'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOGIN GATE — identity capture on first visit
@@ -209,6 +210,7 @@ export default function Covalence() {
   useWorkflow({ outcomes, setOutcomes, settings, covUser, team })
   // Financial crime: sanctions screening and AML flags (Settings → Financial crime)
   useFincrime({ outcomes, setOutcomes, settings, covUser })
+  useArnStageSync(outcomes, setOutcomes)
   // Links in reminder emails: /?open=COV-123 opens that case once the app is ready
   useEffect(() => {
     if (!covUser) return

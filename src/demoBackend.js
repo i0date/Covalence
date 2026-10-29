@@ -12,7 +12,7 @@ const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
-  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites',
+  sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -190,11 +190,16 @@ const ARN_LINES_ISSUER = [
 ]
 const arnInvites = () => read(K.arn, [{ id: 'demo-arn-in-1', direction: 'in', status: 'pending', my_case_id: 'COV-DEMO06', other_institution: 'Brightline Fitness',
   other_side: 'merchant', arn_last4: '4821', amount: '', network: 'VISA', created_at: new Date(Date.now() - 3 * 3600000).toISOString() }])
+const amountOf = v => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0
 function openArnSession({ a, b, sides, cases, i, opening, lines }) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''; for (let k = 0; k < 6; k++) code += chars[Math.floor(Math.random() * chars.length)]
   const now = new Date().toISOString(), c = readCases().find(x => x.id === i.my_case_id) || {}
   const opener = opening ? JSON.stringify([{ text: opening, ts: now }]) : '[]'
+  // The other side shares its stage; Brightline also offers a refund straight away
+  const theirStage = sides[a === DEMO_INSTITUTION ? 'b' : 'a'] === 'issuer' ? 'filed' : 'received'
+  const states = read(K.arnState, {}); states[code] = { me: { sync: false, stage: '', stage_at: null }, them: { sync: true, stage: theirStage, stage_at: now } }; write(K.arnState, states)
+  if (opening) { const st = read(K.settle, {}); st[code] = { status: 'offered', amount: amountOf(c.amount || i.amount), note: 'Full refund of the order', by_me: false, offered_at: now }; write(K.settle, st) }
   saveSession({ id: code, institution_a: a, institution_b: b, status: 'active', created_at: now, updated_at: now, script: [], nextLine: 0, lines,
     claim: { kind: 'arn', arn: '…' + (i.arn_last4 || ''), amount: c.amount || i.amount || '', network: c.network || i.network || '', reasonCode: c.reasonCode || '', sides, cases },
     notes_a: a === DEMO_INSTITUTION ? '[]' : opener, notes_b: b === DEMO_INSTITUTION ? '[]' : opener })
@@ -497,6 +502,58 @@ const HANDLERS = {
     write(K.arn, all.map(x => x === i ? { ...x, status: 'accepted', session_id: code } : x))
     audit('duo.arn_linked', 'case', i.my_case_id, { session: code })
     return code
+  },
+
+  // Linked cases (supabase_arn_sync.sql): the other side's next settlement step
+  // happens a few seconds after Demo Bank's
+  arn_link_state: ({ p_id }) => {
+    const s = sessions()[String(p_id || '').toUpperCase()]
+    if (!s || !isArn(s)) return null
+    const st = read(K.settle, {}), states = read(K.arnState, {}), x = st[s.id]
+    if (x?.next && Date.now() >= x.next.at) {
+      const { step, ref } = x.next, now = new Date().toISOString()
+      Object.assign(x, step === 'agreed' ? { status: 'agreed', agreed_at: now } : step === 'refunded' ? { status: 'refunded', refunded_at: now, refund_ref: ref } : { status: 'withdrawn', withdrawn_at: now })
+      delete x.next; write(K.settle, st)
+      audit('duo.settle_' + (step === 'agreed' ? 'agree' : step), 'duo', s.id, { amount: x.amount, by: theirName(s) }, { actor: '' })
+      if (states[s.id] && step === 'withdrawn') { states[s.id].them = { ...states[s.id].them, stage: 'withdrawn', stage_at: now }; write(K.arnState, states) }
+    }
+    const weAreA = s.institution_a === DEMO_INSTITUTION, me = states[s.id]?.me || { sync: false }, them = states[s.id]?.them || { sync: false }
+    return { my_side: s.claim.sides[weAreA ? 'a' : 'b'], their_side: s.claim.sides[weAreA ? 'b' : 'a'], my_case: s.claim.cases[weAreA ? 'a' : 'b'],
+      me, them: them.sync ? them : { sync: false, stage: null, stage_at: null }, settlement: st[s.id] ? (({ next, ...rest }) => rest)(st[s.id]) : null }
+  },
+  arn_publish_stage: ({ p_id, p_stage, p_sync }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const s = sessions()[String(p_id || '').toUpperCase()]
+    need(s && isArn(s), 'Your institution is not part of this linked session')
+    const states = read(K.arnState, {}), cur = states[s.id] || { me: {}, them: { sync: false } }
+    cur.me = { sync: !!p_sync, stage: p_stage || '', stage_at: cur.me?.stage === p_stage ? cur.me.stage_at : new Date().toISOString() }
+    states[s.id] = cur; write(K.arnState, states)
+    audit('duo.stage_synced', 'duo', s.id, { stage: p_stage || '', shared: !!p_sync })
+    return null
+  },
+  arn_settle: ({ p_id, p_action, p_amount, p_ref }) => {
+    need(canWrite(), 'Your role (auditor) is read-only')
+    const s = sessions()[String(p_id || '').toUpperCase()]
+    need(s && isArn(s), 'Your institution is not part of this linked session')
+    const merchant = ['merchant', 'acquirer'].includes(s.claim.sides[s.institution_a === DEMO_INSTITUTION ? 'a' : 'b'])
+    const st = read(K.settle, {}), x = st[s.id], now = new Date().toISOString(), soon = Date.now() + 6000
+    if (p_action === 'offer') {
+      need(merchant, 'The merchant side offers the refund'); need(!x || x.status === 'declined', 'There’s already an offer in this session'); need(Number(p_amount) > 0, 'Enter the refund amount')
+      st[s.id] = { status: 'offered', amount: Number(p_amount), note: '', by_me: true, offered_at: now, next: { at: soon, step: 'agreed' } }
+    } else if (p_action === 'agree' || p_action === 'decline') {
+      need(!merchant, 'The cardholder’s bank answers the offer'); need(x?.status === 'offered', 'There’s no offer waiting for an answer')
+      Object.assign(x, p_action === 'agree' ? { status: 'agreed', agreed_at: now, next: { at: soon, step: 'refunded', ref: 'BF-RF-20417' } } : { status: 'declined' })
+    } else if (p_action === 'refunded') {
+      need(merchant, 'The merchant side records the refund'); need(x?.status === 'agreed', 'The bank hasn’t agreed yet'); need(String(p_ref || '').trim(), 'Enter the refund reference')
+      Object.assign(x, { status: 'refunded', refunded_at: now, refund_ref: String(p_ref).trim(), next: { at: soon, step: 'withdrawn' } })
+    } else if (p_action === 'withdrawn') {
+      need(!merchant, 'The cardholder’s bank withdraws the chargeback'); need(x?.status === 'refunded', 'The refund hasn’t been recorded yet')
+      Object.assign(x, { status: 'withdrawn', withdrawn_at: now })
+      const states = read(K.arnState, {}); if (states[s.id]?.them?.sync) { states[s.id].them = { ...states[s.id].them, stage: 'withdrawn', stage_at: now }; write(K.arnState, states) }
+    } else need(false, 'Unknown step')
+    write(K.settle, st)
+    audit('duo.settle_' + p_action, 'duo', s.id, { amount: Number(p_amount) || st[s.id].amount, ref: p_ref || null })
+    return null
   },
 
   // Case links: the counterparty opens the link and answers

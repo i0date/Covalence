@@ -129,13 +129,14 @@ export function MerchantFile({ cases, update, covUser, setActiveSection }) {
 
       <H2>CLOSED</H2>
       <div className="display-font" style={{ fontSize:'14px', color:'#3F3A35' }}>
-        {f.lost.length} lost ({money(f.lost.reduce((n, c) => n + amountOf(c), 0))}) · {f.accepted.length} accepted without a fight ({money(f.accepted.reduce((n, c) => n + amountOf(c), 0))})
+        {f.lost.length} lost ({money(f.lost.reduce((n, c) => n + amountOf(c), 0))}) · {f.accepted.length} accepted or settled without a fight ({money(f.accepted.reduce((n, c) => n + amountOf(c), 0))})
         {(f.lost.length + f.accepted.length) > 0 && <> · <button type="button" onClick={() => setShowClosed(v => !v)} aria-expanded={showClosed} className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', background:'none', border:0, padding:0, cursor:'pointer', textDecoration:'underline', color:'#57534E' }}>{showClosed ? 'HIDE' : 'SHOW'}</button></>}
       </div>
       {showClosed && (
         <div style={{ marginTop:'8px' }}><Box>
           {[...f.lost, ...f.accepted].map(c => (
-            <Row key={c.id} c={c} right={<div className="mono-font" style={{ fontSize:'10px', color:'#78716C' }}>{c.status === 'lost' ? 'LOST' : 'ACCEPTED'}</div>}>
+            <Row key={c.id} c={c} right={<div className="mono-font" style={{ fontSize:'10px', color:'#78716C' }}>{c.status === 'lost' ? 'LOST' : c.settled ? 'SETTLED' : 'ACCEPTED'}</div>}>
+              {c.settled && <Check>Settled early in Duo: refunded ${Number(c.settled.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{c.settled.ref ? ` (${c.settled.ref})` : ''} and the bank withdrew the chargeback.</Check>}
               {c.accepted?.reason && <Check tone="info">Accepted by {c.accepted.by}: {c.accepted.reason}</Check>}
             </Row>
           ))}

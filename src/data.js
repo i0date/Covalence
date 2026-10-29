@@ -29,7 +29,8 @@ function supaH() {
 const _rpcMissing = new Set()
 // Duo and case links work for demo visitors too, against Demo Bank's in-browser backend
 const DEMO_RPCS = new Set(['duo_get', 'duo_create', 'duo_update', 'duo_find', 'case_link_create', 'case_link_activity',
-  'sharing_get', 'sharing_set', 'duo_sharing_status', 'duo_share_confirm', 'arn_find_other_side', 'arn_invites', 'arn_invite_respond'])
+  'sharing_get', 'sharing_set', 'duo_sharing_status', 'duo_share_confirm', 'arn_find_other_side', 'arn_invites', 'arn_invite_respond',
+  'arn_link_state', 'arn_publish_stage', 'arn_settle'])
 async function supaRpc(fn, args, fallback) {
   if (!isSignedIn() && DEMO_RPCS.has(fn)) return demoRpc(fn, args)
   if (!_rpcMissing.has(fn)) {
@@ -91,6 +92,10 @@ export const duoShareConfirm = (id, purpose) => plain(supaRpc('duo_share_confirm
 export const arnFindOtherSide = caseId => plain(supaRpc('arn_find_other_side', { p_case_id: caseId }))
 export const arnInvites = () => plain(supaRpc('arn_invites', {})).then(r => Array.isArray(r) ? r : [])
 export const arnInviteRespond = (id, accept) => plain(supaRpc('arn_invite_respond', { p_id: id, p_accept: !!accept }))
+// Linked cases: shared stages and settling early (supabase_arn_sync.sql)
+export const arnLinkState = id => plain(supaRpc('arn_link_state', { p_id: id }))
+export const arnPublishStage = (id, stage, sync) => plain(supaRpc('arn_publish_stage', { p_id: id, p_stage: stage || '', p_sync: !!sync }))
+export const arnSettle = (id, action, { amount = null, ref = '', note = '' } = {}) => plain(supaRpc('arn_settle', { p_id: id, p_action: action, p_amount: amount, p_ref: ref, p_note: note }))
 
 export async function caseLinkCreate(body) {
   return firstRow(await supaRpc('case_link_create', { p: body }, async () => {
