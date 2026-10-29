@@ -42,14 +42,36 @@ function openTrioIncident(a) {
 
 export function AlarmButton({ covUser }) {
   const open = useAlarms(signedInOrDemo(covUser)).find(a => a.status === 'open')
+  const [tip, setTip] = useState(null)   // where to show the tip; the header clips anything absolute, so it's fixed to the window
+  const show = e => { const r = (e.currentTarget.closest('.cov-alarm-wrap') || e.currentTarget).getBoundingClientRect(); setTip({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }) }
+  const hideTip = () => setTip(null)
   if (!signedInOrDemo(covUser)) return null
   const L = open ? LEVELS[open.level] : null
+  // Idle it stands out without alarming anyone: a warm outline. Open, it takes the level's colour.
+  const look = L ? { background: L.bg, color: L.color, border: `1px solid ${L.border}` } : { background:'#2D2922', color:'#F5F1EA', border:'1px solid #C9A86C' }
   return (
-    <button onClick={openDialog} title={open ? `Level ${open.level} alarm open — ${open.title}` : 'Sound the alarm'} aria-label={open ? `Level ${open.level} alarm open` : 'Sound the alarm'}
-      className="mono-font cov-nav-icon" style={{ display:'inline-flex', alignItems:'center', gap:'6px', background: L ? L.bg : '#232019', color: L ? L.color : '#D6CFC4',
-        border:`1px solid ${L ? L.border : '#3D3A35'}`, padding:'5px 9px', cursor:'pointer', fontSize:'10px', letterSpacing:'0.12em', whiteSpace:'nowrap' }}>
-      <span aria-hidden="true">⚑</span><span className="desktop-only">{open ? `LEVEL ${open.level}` : 'ALARM'}</span>
-    </button>
+    <span className="cov-alarm-wrap" style={{ position:'relative', display:'inline-flex' }} onMouseEnter={show} onMouseLeave={hideTip}>
+      <button onClick={() => { hideTip(); openDialog() }} onFocus={show} onBlur={hideTip} aria-describedby="cov-alarm-tip"
+        aria-label={open ? `Level ${open.level} alarm open: ${open.title}` : 'Sound the alarm'}
+        className="mono-font cov-alarm-btn" style={{ ...look, display:'inline-flex', alignItems:'center', gap:'7px', padding:'6px 11px', cursor:'pointer',
+          fontSize:'10px', fontWeight:700, letterSpacing:'0.14em', whiteSpace:'nowrap', transition:'filter 0.15s' }}>
+        <span aria-hidden="true" style={{ fontSize:'12px', lineHeight:1 }}>⚑</span>
+        <span className="cov-alarm-long">{open ? `LEVEL ${open.level} · ${L.name.toUpperCase()}` : 'SOUND THE ALARM'}</span>
+        <span className="cov-alarm-short">{open ? `LEVEL ${open.level}` : 'ALARM'}</span>
+      </button>
+      {tip && (
+        <span id="cov-alarm-tip" role="tooltip" style={{ position:'fixed', top: tip.top, right: tip.right, zIndex:9600, width:'max-content', maxWidth:'min(300px, 80vw)',
+          background:'#FAF7F1', color:'#1A1814', border:'1px solid #1A1814', boxShadow:'0 6px 18px rgba(0,0,0,0.25)', padding:'10px 12px', textAlign:'left', whiteSpace:'normal' }}>
+          {open ? (<>
+            <span className="mono-font" style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', fontWeight:700, marginBottom:'3px' }}>LEVEL {open.level} · {L.name.toUpperCase()} ALARM OPEN</span>
+            <span className="display-font" style={{ display:'block', fontSize:'13px', lineHeight:1.45 }}>{open.title}. Owner: {open.owner_name || '—'}. Click for details, to add your report, change the level or stand it down.</span>
+          </>) : (<>
+            <span className="mono-font" style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', fontWeight:700, marginBottom:'3px' }}>SOUND THE ALARM</span>
+            <span className="display-font" style={{ display:'block', fontSize:'13px', lineHeight:1.45 }}>Tell the whole team about a fraud wave or an attack. You’ll pick how serious it is — Watch, Alert or Critical — and everyone sees what to do.</span>
+          </>)}
+        </span>
+      )}
+    </span>
   )
 }
 
