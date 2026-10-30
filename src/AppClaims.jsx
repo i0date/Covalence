@@ -11,10 +11,11 @@
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, claimTotal } from './claims.mjs'
+import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
-import { Badge, Button, Select } from './ui.jsx'
+import { Badge, Button, NewDot, Select } from './ui.jsx'
+import { previousVisit } from './brief.js'
 
 const money = (n, cur = 'USD') => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: cur.length === 3 ? cur : 'USD' })
 const ago = ts => { const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : Math.round(m / 1440) === 1 ? 'yesterday' : `${Math.round(m / 1440)} days ago` }
@@ -45,9 +46,24 @@ export function AppClaims({ segment, activeId, onTriage }) {
     window.addEventListener('cov:claims-changed', on)
     return () => { clearInterval(t); window.removeEventListener('cov:claims-changed', on) }
   }, [])
+  // Home's brief and Your day open a claim here ('cov:open-claim' with { id }); it may arrive before the list has loaded
+  const [focus, setFocus] = useState(null)
+  useEffect(() => {
+    const h = e => { if (e.detail?.id) { setFocus(e.detail.id); setOpen(e.detail.id) } }
+    window.addEventListener('cov:open-claim', h); return () => window.removeEventListener('cov:open-claim', h)
+  }, [])
+  useEffect(() => {
+    if (!focus || !claims) return
+    const t = setTimeout(() => { document.getElementById(`claim-${focus}`)?.scrollIntoView({ block:'center', behavior:'smooth' }); setFocus(null) }, 120)
+    return () => clearTimeout(t)
+  }, [focus, claims])
   if (claims === null) return null
   const open_ = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
-  const waiting = open_.filter(c => c.status !== 'with_desk'), mine = [...waiting, ...open_.filter(c => c.status === 'with_desk')]
+  const prevVisit = previousVisit()
+  // Customers who haven't heard from you in UPDATE_DAYS days come first, longest silence first
+  const silent = waitingClaims(open_), quiet = new Set(silent.map(c => c.id))
+  const waiting = open_.filter(c => c.status !== 'with_desk')
+  const mine = [...silent, ...waiting.filter(c => !quiet.has(c.id)), ...open_.filter(c => c.status === 'with_desk' && !quiet.has(c.id))]
   if (!mine.length && !err) return (
     <p className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#6B6259', margin:'0 0 28px' }}>
       FROM YOUR APP · NOTHING WAITING — claims your customers report in your app arrive here (Settings → Connections).
@@ -73,8 +89,8 @@ export function AppClaims({ segment, activeId, onTriage }) {
   return (
     <section aria-label="Claims from your app" style={{ marginBottom:'36px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {waiting.length} WAITING{mine.length > waiting.length ? ` · ${mine.length - waiting.length} WITH THE DESK` : ''}</h2>
-        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259' }}>OLDEST FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</span>
+        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {waiting.length} WAITING{open_.length > waiting.length ? ` · ${open_.length - waiting.length} WITH THE DESK` : ''}{silent.length ? <span style={{ color:'#92400E' }}> · {silent.length} WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span> : ''}</h2>
+        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259' }}>LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</span>
       </div>
       {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'0 0 8px' }}>{err}</p>}
       <ul style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
@@ -83,11 +99,13 @@ export function AppClaims({ segment, activeId, onTriage }) {
           const steps = (c.history || []).filter(h => h.step)
           const merchants = [...new Set(tx.map(t => t.merchant).filter(Boolean))]
           return (
-            <li key={c.id} style={{ borderBottom:'1px solid #D4CCBC', background: active ? '#F3EEE4' : 'transparent' }}>
+            <li key={c.id} id={`claim-${c.id}`} style={{ borderBottom:'1px solid #D4CCBC', background: active ? '#F3EEE4' : 'transparent' }}>
               <div style={{ display:'flex', gap:'12px', alignItems:'flex-start', padding:'12px 4px', flexWrap:'wrap' }}>
                 <button type="button" onClick={() => setOpen(expanded ? null : c.id)} aria-expanded={expanded}
                   style={{ flex:'1 1 320px', minWidth:0, textAlign:'left', background:'none', border:0, padding:0, cursor:'pointer' }}>
                   <span style={{ display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center', marginBottom:'4px' }}>
+                    {prevVisit && new Date(c.updated_at || 0) > prevVisit && <NewDot />}
+                    {quiet.has(c.id) && <Badge tone="warn" title="The customer hasn’t been told anything new in this time">NO UPDATE {silentDays(c)}d</Badge>}
                     <Badge tone="info">{(CHANNELS[c.channel] || c.channel).toUpperCase()}</Badge>
                     {onDesk ? <Badge tone="dark">WITH THE DESK{c.case_id ? ` · ${c.case_id}` : ''}</Badge> : c.ready ? <Badge tone="ok">READY FOR DESK</Badge> : <Badge>NEEDS A LOOK</Badge>}
                     {c.status === 'in_review' && <Badge tone="dark">IN REVIEW</Badge>}

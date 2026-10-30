@@ -40,6 +40,11 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake,
   // Where Triage starts is an institution default (Settings → Default views)
   const [intakeTab, setIntakeTab] = useState(() => settings?.triageDefaultTab === 'claims' ? 'claims' : 'alerts')
   const pickIntake = setIntakeTab
+  // Other screens can send people to a tab here: 'cov:go' with { section: 'triage', tab: 'claims' | 'alerts' }
+  useEffect(() => {
+    const h = e => { if (e.detail?.section === 'triage' && ['claims', 'alerts'].includes(e.detail.tab)) setIntakeTab(e.detail.tab) }
+    window.addEventListener('cov:go', h); return () => window.removeEventListener('cov:go', h)
+  }, [])
 
   // ── 01 Transaction details ──────────────────────────────────────────────────
   const [accountType, setAccountType]         = useState('')

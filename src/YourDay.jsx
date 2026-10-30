@@ -9,11 +9,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { allThreadCases, stageOf, openCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
-import { Badge, Button } from './ui.jsx'
-import { insights, greeting, daySummary, money, WEEKDAYS } from './insights.js'
+import { Badge, Button, NewDot } from './ui.jsx'
+import { insights, daySummary, money, WEEKDAYS } from './insights.js'
 import { isMerchantCase } from './sides.mjs'
-import { brief, briefPeriod, noteVisit } from './brief.js'
-import { listClaims } from './claimsData.js'
+import { briefPeriod, noteVisit, changedSince } from './brief.js'
+import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
+import { listClaims, openClaim } from './claimsData.js'
 import { alarmList } from './alarmData.js'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
@@ -106,52 +107,15 @@ export function useMedia(query) {
 // Everything Your day shows, worked out once: Home passes it to the panel and, on wide screens, to the side column
 export function useDay({ outcomes, covUser, settings, platformMode }) {
   const me = covUser?.email?.toLowerCase()
-  const work = useMemo(() => {
-    const all = allThreadCases(outcomes)
-      .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)))
-    const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
-    const isMine = c => !!me && ((c.assignedTo || '').toLowerCase() === me || (c.escalatedTo || '').toLowerCase() === me)
-    const mine = open.filter(x => isMine(x.c))
-    const list = (mine.length ? mine : open).sort((a, b) => a.r.rank - b.r.rank || (a.c.nextRespDate || '9').localeCompare(b.c.nextRespDate || '9'))
-    const counts = { urgent: list.filter(x => x.r.rank <= 2).length, todo: list.filter(x => x.r.rank === 3).length, batch: list.filter(x => x.r.rank === 4).length }
-    // The whole team's deadlines in the next 7 days that aren't already listed above.
-    // Cases with no owner are summed up in one line rather than listed one by one.
-    const listed = new Set(list.map(x => x.c.id))
-    const comingUp = all.filter(c => !listed.has(c.id)).map(c => {
-      const k = sortClocks(caseClocks(c, settings)).find(k => k.key !== 'assign' && (k.state === 'breached' || k.state === 'soon' || (k.state === 'ok' && k.left <= 7 * DAY)))
-      return k ? { c, k } : null
-    }).filter(Boolean).sort((a, b) => a.k.left - b.k.left)
-    const unowned = all.filter(c => caseClocks(c, settings).some(k => k.key === 'assign' && k.state === 'breached')).length
-    return { all, items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
-  }, [outcomes, me, settings, platformMode])
-  const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
-  return { ...work, ins, me, platformMode }
-}
-
-// A run of more than three cases reads as "A, B, C and 2 more"
-function BriefText({ parts }) {
-  const out = []
-  for (let i = 0; i < parts.length; i++) {
-    if (typeof parts[i] === 'string') { out.push(parts[i]); continue }
-    const run = []
-    while (i < parts.length && typeof parts[i] === 'object') run.push(parts[i++].id)
-    i--
-    run.slice(0, 3).forEach((id, j) => out.push(j ? (j === run.length - 1 ? ' and ' : ', ') : '',
-      <button key={id + i} onClick={() => openCase(id)} className="mono-font cov-brief-link">{id}</button>))
-    if (run.length > 3) out.push(` and ${run.length - 3} more`)
-  }
-  return out.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)
-}
-
-// The brief: what changed since the last working day (or your last visit), every case a link
-function Brief({ day, covUser, settings }) {
+  // The brief looks back to the last working day, or to the last visit when that was earlier
   const [prev] = useState(() => noteVisit())
   const period = useMemo(() => briefPeriod(new Date(), prev), [prev])
+  // Claims from the bank's app (issuers only) and alarms, for the brief and for customers waiting on an update
   const [claims, setClaims] = useState([])
   const [alarms, setAlarms] = useState([])
-  const fi = day.platformMode !== 'merchant', canAlarm = !!(covUser?.authed || covUser?.demo)
+  const fi = platformMode !== 'merchant', canAlarm = !!(covUser?.authed || covUser?.demo)
   useEffect(() => {
-    if (!fi) return
+    if (!fi) { setClaims([]); return }
     let live = true
     const load = () => listClaims().then(r => { if (live) setClaims(r) }).catch(() => {})
     load(); window.addEventListener('cov:claims-changed', load)
@@ -164,28 +128,34 @@ function Brief({ day, covUser, settings }) {
     load(); window.addEventListener('cov:alarm-changed', load)
     return () => { live = false; window.removeEventListener('cov:alarm-changed', load) }
   }, [canAlarm])
-  const lines = useMemo(() => brief(day.all, { claims, alarms, me: day.me, settings, from: period.from }), [day.all, claims, alarms, day.me, settings, period])
-  return (
-    <div className="cov-brief" style={{ padding:'14px 20px 16px', borderBottom:'1px solid #D4CCBC' }}>
-      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'8px' }}>THE BRIEF · {period.label.toUpperCase()}</div>
-      {lines.length === 0 ? (
-        <p className="display-font" style={{ margin:0, fontSize:'15px', color:'#57534E', fontStyle:'italic', lineHeight:1.5 }}>
-          Quiet {period.label.charAt(0).toLowerCase() + period.label.slice(1)}: nothing new came in, nothing was decided, and nothing is due in the next 24 hours.
-        </p>
-      ) : (
-        <ul style={{ listStyle:'none', margin:0, padding:0, display:'grid', gap:'6px' }}>
-          {lines.map(l => (
-            <li key={l.key} className="display-font" style={{ display:'grid', gridTemplateColumns:'14px minmax(0,1fr)', fontSize:'15px', lineHeight:1.5, color: l.tone === 'danger' ? '#7F1D1D' : '#1A1814' }}>
-              <span aria-hidden="true" style={{ color: l.tone === 'danger' ? '#B91C1C' : '#A8A29E' }}>—</span>
-              <span><BriefText parts={l.text} />{typeof l.text[l.text.length - 1] === 'string' && /[.!?]$/.test(l.text[l.text.length - 1]) ? '' : '.'}
-                {l.alarm && <> <button onClick={() => window.dispatchEvent(new Event('cov:alarm-open'))} className="mono-font cov-brief-link">Open the alarm →</button></>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+  const work = useMemo(() => {
+    const all = allThreadCases(outcomes)
+      .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)))
+    const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
+    const isMine = c => !!me && ((c.assignedTo || '').toLowerCase() === me || (c.escalatedTo || '').toLowerCase() === me)
+    const mine = open.filter(x => isMine(x.c))
+    // Customers who haven't heard from the bank in a while are everyone's job, whoever is signed in
+    const waiting = waitingClaims(claims).map(cl => {
+      const d = cl.data || {}, n = silentDays(cl)
+      return { claim: true, c: { _claimRow: cl, id: cl.id, merchant: d.customer?.name || d.customer?.id || 'Customer', amount: claimTotal(d) ? `${claimTotal(d).toFixed(2)} ${d.transactions?.[0]?.currency || 'USD'}` : '' },
+        r: { rank: 1, tone: 'warn', label: `NO UPDATE ${n}d`, why: `Claim from your app — the customer hasn’t heard from you in ${n} days` } }
+    })
+    const list = [...(mine.length ? mine : open), ...waiting].sort((a, b) => a.r.rank - b.r.rank || (a.c.nextRespDate || '9').localeCompare(b.c.nextRespDate || '9'))
+    const counts = { urgent: list.filter(x => x.r.rank <= 2).length, todo: list.filter(x => x.r.rank === 3).length, batch: list.filter(x => x.r.rank === 4).length }
+    // The whole team's deadlines in the next 7 days that aren't already listed above.
+    // Cases with no owner are summed up in one line rather than listed one by one.
+    const listed = new Set(list.map(x => x.c.id))
+    const comingUp = all.filter(c => !listed.has(c.id)).map(c => {
+      const k = sortClocks(caseClocks(c, settings)).find(k => k.key !== 'assign' && (k.state === 'breached' || k.state === 'soon' || (k.state === 'ok' && k.left <= 7 * DAY)))
+      return k ? { c, k } : null
+    }).filter(Boolean).sort((a, b) => a.k.left - b.k.left)
+    const unowned = all.filter(c => caseClocks(c, settings).some(k => k.key === 'assign' && k.state === 'breached')).length
+    return { all, items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
+  }, [outcomes, me, settings, platformMode, claims])
+  const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
+  const myName = covUser?.name || ''
+  const changed = c => c?._claimRow ? !!prev && new Date(c._claimRow.updated_at || 0) > prev : changedSince(c, prev, myName)
+  return { ...work, ins, me, platformMode, claims, alarms, period, prev, changed }
 }
 
 // The four numbers (caseload, pace, deadlines, money at risk) and the 14-day chart.
@@ -239,14 +209,9 @@ export function YourDay({ day, covUser, settings, tiles = true }) {
   const [showAll, setShowAll] = useState(false)
   const { items, scope, counts, comingUp, unowned } = day
 
-  const now = new Date()
-  const today = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
-  const todayShort = `${now.toLocaleDateString('en-US', { weekday:'short' })} ${now.getDate()} ${now.toLocaleDateString('en-US', { month:'short' })}`   // phones: THU 29 OCT
   const shown = showAll ? items : items.slice(0, 6)
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
-  const first = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
-  const firstName = first && first[0].toUpperCase() + first.slice(1)
   const summary = daySummary({ total: items.length, urgent: counts.urgent, overdue: items.filter(x => x.r.rank === 0).length,
     todo: counts.todo, batch: counts.batch, batchTime: settings?.batchFileTime || '15:00', team: scope === 'team' })
   return (
@@ -255,15 +220,8 @@ export function YourDay({ day, covUser, settings, tiles = true }) {
       <div onClick={e => { if (!e.target.closest('button')) toggle() }} className="cov-yourday-head"
         style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
         <div style={{ minWidth:0, flex:'1 1 320px' }}>
-          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>
-            YOUR DAY · <span className="cov-yd-date-long">{today.toUpperCase()}</span><span className="cov-yd-date-short">{todayShort.toUpperCase()}</span>
-          </div>
-          <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(22px, 3.2vw, 28px)', fontWeight:600, color:'#1A1814', margin:0, letterSpacing:'-0.015em', lineHeight:1.15 }}>
-            {greeting()}{firstName ? <>, <span style={{ fontStyle:'italic', fontWeight:500 }}>{firstName}</span></> : null}.
-          </h2>
-          <p className="display-font" style={{ fontSize:'16px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.45 }}>
-            {summary}
-          </p>
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>YOUR DAY</div>
+          <h2 id="your-day" className="display-font" style={{ fontSize:'18px', fontWeight:500, color:'#1A1814', margin:0, lineHeight:1.4 }}>{summary}</h2>
         </div>
         <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
           {/* Folded, the badges stand in for the summary sentence; open, the sentence says it */}
@@ -278,20 +236,19 @@ export function YourDay({ day, covUser, settings, tiles = true }) {
       </div>
 
       {open && (<div id="your-day-body">
-      <Brief day={day} covUser={covUser} settings={settings} />
       {tiles && <DayTiles day={day} />}
 
       {items.length === 0 ? (
         <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing needs you today. Clear desk.</div>
       ) : (
         <ol style={{ listStyle:'none', margin:0, padding:0 }}>
-          {shown.map(({ c, r }, i) => (
+          {shown.map(({ c, r, claim }, i) => (
             <li key={c.id}>
-              <button onClick={() => openCase(c.id)} data-yourday-row={i}
+              <button onClick={() => claim ? openClaim(c.id) : openCase(c.id)} data-yourday-row={i}
                 style={{ display:'grid', gridTemplateColumns:'110px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
                   padding:'10px 18px', background:'none', border:'none', borderTop: i ? '1px solid #EDE7DC' : 'none', cursor:'pointer' }}
                 className="cov-search-row cov-yourday-row">
-                <span><Badge tone={r.tone}>{r.label}</Badge></span>
+                <span style={{ display:'inline-flex', alignItems:'center' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone}>{r.label}</Badge></span>
                 <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
                 <span style={{ minWidth:0 }}>
                   <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
@@ -325,7 +282,7 @@ export function YourDay({ day, covUser, settings, tiles = true }) {
           <button key={c.id} onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
             style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
               background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
-            <span style={{ color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
+            <span style={{ display:'inline-flex', alignItems:'center', color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{day.changed(c) && <NewDot />}{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
             <span style={{ color:'#57534E' }}>{c.id}</span>
             <span className="cov-comingup-what" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
             <span className="desktop-only" style={{ color:'#6B6259' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'unassigned'}</span>

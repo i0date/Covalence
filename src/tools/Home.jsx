@@ -2,6 +2,8 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
 import { YourDay, DayTiles, useDay, useMedia, foldLook } from '../YourDay.jsx'
+import { FrontPage } from '../FrontPage.jsx'
+import { NewDot } from '../ui.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { GetSetUp } from '../GetSetUp.jsx'
@@ -123,7 +125,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } })) } }}
                     className="flex items-center gap-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
                     style={{ borderTop:'1px solid #E7E2D9', padding:'12px 18px' }}>
-                    <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
+                    <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0, display:'inline-flex', alignItems:'center' }}>{day.changed(o) && <NewDot />}{o.id}</span>
                     <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px', minWidth:0 }}>{o.merchant}</span>
                     <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
                     <PipelineDots c={o} />
@@ -222,6 +224,9 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
           </span>
         </div>
       ) : <GetSetUp outcomes={outcomes} settings={settings} covUser={covUser} onTour={openTour} />}
+
+      {/* ── The front page: the date, the greeting, the lead and the brief ── */}
+      <FrontPage day={day} covUser={covUser} settings={settings} />
 
       {/* ── Your day: what needs attention, most urgent first ── */}
       {wide ? (

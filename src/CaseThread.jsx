@@ -22,6 +22,7 @@ import { readCases, writeCases } from './caseStore.js'
 import { FincrimePanel } from './FincrimePanel.jsx'
 import { screeningStatus } from './fincrime.js'
 import { ArnLink } from './ArnLink.jsx'
+import { previousVisit } from './brief.js'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -287,6 +288,22 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           <div className="display-font" style={{ padding:'40px 22px', color:'#78716C', fontStyle:'italic' }}>This case isn’t in this workspace.</div>
         ) : (
         <div style={{ padding:'20px 22px 40px', display:'flex', flexDirection:'column', gap:'22px' }}>
+          {/* What changed since the previous day's visit, other than by you */}
+          {(() => {
+            const prev = previousVisit(), mine = covUser?.name || ''
+            const seen = new Set(), fresh = prev ? timeline.filter(t => t.ts && new Date(t.ts) > prev && (!mine || (t.by || '') !== mine) && !seen.has(t.kind + t.text) && seen.add(t.kind + t.text)) : []   // the same event twice reads once
+            return fresh.length > 0 && (
+              <div style={{ borderLeft:'2px solid #1E3A5F', paddingLeft:'12px' }}>
+                <Label>SINCE YOUR LAST VISIT · {prev.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }).toUpperCase()}</Label>
+                {fresh.slice(0, 4).map((t, i) => (
+                  <div key={i} className="display-font" style={{ fontSize:'13px', color:'#1A1814', lineHeight:1.5 }}>
+                    <span className="mono-font" style={{ fontSize:'10px', color:'#1E3A5F', marginRight:'6px' }}>{t.kind}</span>{t.text}{t.by ? <span style={{ color:'#78716C' }}> — {t.by}</span> : ''}
+                  </div>
+                ))}
+                {fresh.length > 4 && <div className="mono-font" style={{ fontSize:'10px', color:'#6B6259', marginTop:'2px' }}>+{fresh.length - 4} more in the timeline below</div>}
+              </div>
+            )
+          })()}
           {/* Pipeline strip */}
           <div>
             <Label>PIPELINE</Label>

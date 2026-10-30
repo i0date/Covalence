@@ -9,11 +9,14 @@
 //   answered  merchants who answered a chargeback (the rebuttal clock restarts)
 //   escalated cases escalated, and how many to you
 //   ahead     deadlines in the next 24 hours, and anything already overdue
+//   waiting   customers who haven't heard from the bank in UPDATE_DAYS or more
 //   alarm     an open alarm
+// One of them becomes the lead: a sentence, in words, about the two things that matter most.
 // The period runs from the start of the last working day, or from your last
 // visit when that was earlier (up to two weeks back).
 import { CLOSED_STATUSES, caseClocks, parseAmount } from './clocks.mjs'
 import { closedAt } from './qa.js'
+import { waitingClaims, UPDATE_DAYS } from './claims.mjs'
 import { money, WEEKDAYS } from './insights.js'
 
 const DAY = 86400000
@@ -31,6 +34,18 @@ export function noteVisit(now = new Date()) {
   const next = v?.day === today ? { ...v, lastAt: now.toISOString() } : { day: today, lastAt: now.toISOString(), prevAt: v?.lastAt || null }
   try { localStorage.setItem(VISIT_KEY, JSON.stringify(next)) } catch {}
   return next.prevAt ? new Date(next.prevAt) : null
+}
+
+// When the previous day's visit was, without noting a new one (null on a first visit)
+export function previousVisit() {
+  try { const v = JSON.parse(localStorage.getItem(VISIT_KEY) || 'null'); return v?.prevAt ? new Date(v.prevAt) : null } catch { return null }
+}
+
+// Has a case changed since then, other than by you? New cases count; so does anything in its history
+export function changedSince(c, prev, myName = '') {
+  if (!prev || !c) return false
+  if (c.date && new Date(c.date) > prev) return true
+  return (c.history || []).some(h => h.ts && new Date(h.ts) > prev && (!myName || (h.by || '') !== myName))
 }
 
 // The start of the last working day before today (Monday looks back to Friday)
@@ -58,52 +73,52 @@ const sum = list => {
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`
 const inWindow = (ts, from, now) => { if (!ts) return false; const t = new Date(ts); return t >= from && t <= now }
 
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const say = (n, one, many = one + 's') => `${WORDS[n] || n} ${n === 1 ? one : many}`
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1)
+
 // cases: this side's cases; claims: rows from claims_list (may be empty); alarms: alarm_list rows
-// Returns [{ key, text: [string | { id }] , ids }] — the screen turns { id } into a link
+// Returns { lead, items: [{ key, kicker, text: [string | { id } | { claim }], tone }] }.
+// The screen turns { id } into a link to the case and { claim } into a link to the claim.
 export function brief(cases, { claims = [], alarms = [], me = '', settings, from, now = new Date() } = {}) {
-  const out = []
+  const items = [], lead = {}
   const ids = list => list.map(c => ({ id: c.id }))
   const isOpen = c => !CLOSED_STATUSES.includes(c.status)
 
-  // ── In ──
-  const fresh = cases.filter(c => inWindow(c.date, from, now))
-  const newClaims = claims.filter(c => inWindow(c.created_at || c.reported_at, from, now))
-  const urgent = newClaims.filter(c => c.data?.ai?.priority === 'urgent').length
-  if (fresh.length || newClaims.length) {
-    const t = []
-    if (fresh.length) t.push(`${plural(fresh.length, 'new case')} came in (${sum(fresh)}): `, ...ids(fresh))
-    if (newClaims.length) t.push(`${fresh.length ? '. ' : ''}${plural(newClaims.length, 'claim')} arrived from the bank’s app${urgent ? `, ${urgent} marked urgent by AI triage` : ''}`)
-    out.push({ key: 'in', text: t })
+  // ── Alarm ──
+  const alarm = alarms.find(a => a.status === 'open')
+  if (alarm) {
+    items.push({ key: 'alarm', kicker: `LEVEL ${alarm.level} ALARM`, text: [`${alarm.title}.`], tone: 'danger', alarm: true })
+    lead.alarm = `a level ${alarm.level} alarm is open: ${alarm.title}`
   }
 
-  // ── Decided ──
-  const decided = cases.filter(c => ['won', 'lost'].includes(c.status) && inWindow(closedAt(c), from, now))
-  const won = decided.filter(c => c.status === 'won'), lost = decided.filter(c => c.status === 'lost')
-  if (decided.length) {
-    const t = []
-    if (won.length) t.push(`Won ${won.length} (${sum(won)} back): `, ...ids(won))
-    if (lost.length) t.push(`${won.length ? '. ' : ''}Lost ${lost.length}: `, ...ids(lost))
-    out.push({ key: 'decided', text: t })
-  }
-
-  // ── Merchants answered ──
-  const answered = cases.filter(c => isOpen(c) && (c.history || []).some(h => h.event === 'status' && ANSWERED.includes(h.status) && inWindow(h.ts, from, now)))
-  if (answered.length) out.push({ key: 'answered', text: [`${answered.length === 1 ? 'A merchant answered' : `Merchants answered on ${answered.length} cases`}, so the rebuttal clock is running: `, ...ids(answered)] })
-
-  // ── Escalated ──
-  const esc = cases.filter(c => (c.history || []).some(h => h.event === 'escalated' && inWindow(h.ts, from, now)))
-  if (esc.length) {
-    const toMe = me ? esc.filter(c => (c.escalatedTo || '').toLowerCase() === me) : []
-    out.push({ key: 'escalated', text: [`${plural(esc.length, 'case')} ${esc.length === 1 ? 'was' : 'were'} escalated${toMe.length ? `, ${toMe.length} to you` : ''}: `, ...ids(toMe.length ? toMe : esc)] })
-  }
-
-  // ── Ahead: the next 24 hours, and what's already late ──
+  // ── Overdue, and the next 24 hours ──
   const soon = [], late = []
   cases.forEach(c => {
     const ks = caseClocks(c, settings, now).filter(k => k.key !== 'assign' && k.state !== 'met')
     if (ks.some(k => k.state === 'breached')) late.push(c)
     else { const k = ks.filter(k => k.left >= 0 && k.left <= DAY).sort((a, b) => a.left - b.left)[0]; if (k) soon.push({ c, k }) }
   })
+  if (late.length) {
+    items.push({ key: 'late', kicker: 'OVERDUE', text: [late.length > 3 ? `${plural(late.length, 'case')}, starting with ` : `${plural(late.length, 'case')}: `, ...ids(late)], tone: 'danger' })
+    lead.late = `${say(late.length, 'case')} ${late.length === 1 ? 'is' : 'are'} overdue`
+  }
+
+  // ── Customers waiting for an update ──
+  const waiting = waitingClaims(claims, now)
+  if (waiting.length) {
+    items.push({ key: 'waiting', kicker: 'CUSTOMERS WAITING', tone: 'warn',
+      text: [`${plural(waiting.length, 'customer')} ${waiting.length === 1 ? 'hasn’t' : 'haven’t'} heard from you in ${UPDATE_DAYS}+ days: `, ...waiting.map(c => ({ claim: c.id }))] })
+    lead.waiting = `${say(waiting.length, 'customer')} ${waiting.length === 1 ? 'has' : 'have'} waited ${UPDATE_DAYS}+ days for an update`
+  }
+
+  // ── Merchants answered ──
+  const answered = cases.filter(c => isOpen(c) && (c.history || []).some(h => h.event === 'status' && ANSWERED.includes(h.status) && inWindow(h.ts, from, now)))
+  if (answered.length) {
+    items.push({ key: 'answered', kicker: 'MERCHANT ANSWERED', text: [`The rebuttal clock is running on `, ...ids(answered)] })
+    lead.answered = answered.length === 1 ? `a merchant answered on a ${sum(answered)} chargeback` : `merchants answered on ${say(answered.length, 'case')}`
+  }
+
   if (soon.length) {
     // Grouped by what's due, so it reads "filing on A and B; a sanctions review on C"
     const groups = []
@@ -111,15 +126,45 @@ export function brief(cases, { claims = [], alarms = [], me = '', settings, from
       const g = groups.find(g => g.key === k.key) || (groups.push({ key: k.key, ids: [] }), groups[groups.length - 1])
       g.ids.push({ id: c.id })
     })
-    const t = ['Due in the next 24 hours: ']
-    groups.forEach((g, i) => t.push(i ? '; ' : '', `${DUE[g.key] || 'a deadline'} on `, ...g.ids))
-    out.push({ key: 'ahead', text: t })
+    const t = []
+    groups.forEach((g, i) => { const what = DUE[g.key] || 'a deadline'; t.push(i ? `; ${what} on ` : `${cap(what)} on `, ...g.ids) })
+    items.push({ key: 'ahead', kicker: 'DUE IN 24 HOURS', text: t })
+    lead.ahead = `${say(soon.length, 'deadline')} ${soon.length === 1 ? 'lands' : 'land'} in the next 24 hours`
   }
-  if (late.length) out.push({ key: 'late', text: [late.length > 3 ? `Already overdue: ${late.length} cases, starting with ` : 'Already overdue: ', ...ids(late)], tone: 'danger' })
 
-  // ── Alarm ──
-  const alarm = alarms.find(a => a.status === 'open')
-  if (alarm) out.push({ key: 'alarm', text: [`A level ${alarm.level} alarm is open: ${alarm.title}.`], tone: 'danger', alarm: true })
+  // ── Decided ──
+  const decided = cases.filter(c => ['won', 'lost'].includes(c.status) && inWindow(closedAt(c), from, now))
+  const won = decided.filter(c => c.status === 'won'), lost = decided.filter(c => c.status === 'lost')
+  if (decided.length) {
+    const t = []
+    if (won.length) t.push(`Won ${won.length}, ${sum(won)} back: `, ...ids(won))
+    if (lost.length) t.push(`${won.length ? '. ' : ''}Lost ${lost.length}: `, ...ids(lost))
+    items.push({ key: 'decided', kicker: 'DECIDED', text: t, tone: won.length ? 'good' : undefined })
+    lead.decided = won.length ? `you won ${say(won.length, 'case')} (${sum(won)} back)` : `${say(lost.length, 'case')} went against you`
+  }
 
-  return out
+  // ── In ──
+  const fresh = cases.filter(c => inWindow(c.date, from, now))
+  const newClaims = claims.filter(c => inWindow(c.created_at || c.reported_at, from, now))
+  const urgent = newClaims.filter(c => c.data?.ai?.priority === 'urgent').length
+  if (fresh.length || newClaims.length) {
+    const t = []
+    if (fresh.length) t.push(`${plural(fresh.length, 'case')}, ${sum(fresh)}: `, ...ids(fresh))
+    if (newClaims.length) t.push(`${fresh.length ? '. ' : ''}${plural(newClaims.length, 'claim')} from the bank’s app${urgent ? `, ${urgent} marked urgent by AI triage` : ''}`)
+    items.push({ key: 'in', kicker: 'NEW', text: t })
+    lead.in = `${say(fresh.length + newClaims.length, 'new case')} came in`
+  }
+
+  // ── Escalated ──
+  const esc = cases.filter(c => (c.history || []).some(h => h.event === 'escalated' && inWindow(h.ts, from, now)))
+  if (esc.length) {
+    const toMe = me ? esc.filter(c => (c.escalatedTo || '').toLowerCase() === me) : []
+    items.push({ key: 'escalated', kicker: 'ESCALATED', text: [`${plural(esc.length, 'case')}${toMe.length ? `, ${toMe.length} to you` : ''}: `, ...ids(toMe.length ? toMe : esc)] })
+    lead.escalated = toMe.length ? `${say(toMe.length, 'case')} ${toMe.length === 1 ? 'was' : 'were'} escalated to you` : `${say(esc.length, 'case')} ${esc.length === 1 ? 'was' : 'were'} escalated`
+  }
+
+  // The lead: the two most important things, in that order
+  const order = ['alarm', 'late', 'waiting', 'answered', 'ahead', 'decided', 'escalated', 'in']
+  const top = order.filter(k => lead[k]).slice(0, 2).map(k => lead[k])
+  return { lead: top.length ? cap(top.join(', and ')) + '.' : null, items }
 }

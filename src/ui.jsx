@@ -45,3 +45,6 @@ export function Badge({ tone = 'neutral', style, ...rest }) {
 }
 
 export function Kbd({ children }) { return <kbd className="cov-kbd">{children}</kbd> }
+
+// A small dot on anything that changed since the previous day's visit (brief.js changedSince)
+export const NewDot = () => <span className="cov-new-dot" role="img" title="Changed since your last visit" aria-label="Changed since your last visit" />

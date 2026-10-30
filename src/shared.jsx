@@ -623,9 +623,29 @@ export const GLOBAL_CSS = `
   .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
   @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
   .cov-home-cases-bar:hover { background:#F3EEE5 !important; }
-  /* The brief: case links read as references, not buttons */
-  .cov-brief-link { background:none; border:none; padding:0; font-size:12px; letter-spacing:0.02em; color:#1E3A5F; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-  .cov-brief-link:hover, .cov-brief-link:focus-visible { color:#1A1814; }
+  /* Front page: a dateline between rules, the greeting, a lead sentence, then the brief in columns */
+  .cov-front { margin:0 0 28px; }
+  .cov-front-dateline { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:10px; letter-spacing:0.16em; color:#57534E;
+    border-top:3px double #1A1814; border-bottom:1px solid #1A1814; padding:7px 0 6px; }
+  .cov-front-greeting { margin:18px 0 4px; font-size:17px; font-style:italic; color:#57534E; }
+  .cov-front-lead { margin:0 0 20px; font-size:clamp(26px, 3.4vw, 40px); font-weight:600; line-height:1.12; letter-spacing:-0.02em; color:#1A1814; max-width:24em; text-wrap:balance; }
+  .cov-front-items { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); border-top:1px solid #1A1814; }
+  .cov-front-item { padding:12px 20px 14px; min-width:0; }
+  .cov-front-item:nth-child(4n+1) { padding-left:0; }
+  .cov-front-item:not(:nth-child(4n+1)) { border-left:1px solid #D4CCBC; }
+  .cov-front-item:nth-child(n+5) { border-top:1px solid #D4CCBC; }
+  .cov-front-kicker { font-size:10px; letter-spacing:0.16em; font-weight:600; margin-bottom:6px; }
+  .cov-front-text { margin:0; font-size:15px; line-height:1.55; color:#1A1814; }
+  .cov-new-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#1E3A5F; margin-right:7px; vertical-align:1px; flex-shrink:0; }
+  /* A case or claim named in the brief: a small reference tag you can open */
+  .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
+  .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }
+  @media (max-width:1023px) { .cov-front-items { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .cov-front-item:nth-child(4n+1) { padding-left:20px; } .cov-front-item:nth-child(2n+1) { padding-left:0; border-left:none !important; }
+    .cov-front-item:not(:nth-child(2n+1)) { border-left:1px solid #D4CCBC; } .cov-front-item:nth-child(n+3) { border-top:1px solid #D4CCBC; } }
+  @media (max-width:599px) { .cov-front-items { grid-template-columns:minmax(0,1fr); }
+    .cov-front-item { padding:12px 0 12px !important; border-left:none !important; } .cov-front-item + .cov-front-item { border-top:1px solid #D4CCBC; }
+    .cov-front-greeting { margin-top:14px; font-size:16px; } .cov-front-lead { margin-bottom:14px; } }
   /* Compact tiles: a 2×2 grid with the chart full width below (Home's side column; phones below) */
   .cov-yd-compact { grid-template-columns:repeat(2, minmax(0,1fr)) !important; gap:8px !important; padding:12px 14px 14px !important; }
   .cov-yd-compact > div { padding:10px 12px !important; }
@@ -640,13 +660,12 @@ export const GLOBAL_CSS = `
   .cov-home-rail .home-stats-grid { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
   @media (min-width:1400px) { .cov-home-cols { grid-template-columns:minmax(0,1fr) 420px; } }
   /* Your day: the 14-day chart sits in the caseload tile, except on phones (below) */
-  .cov-yd-chart-out, .cov-yd-date-short { display:none; }
+  .cov-yd-chart-out { display:none; }
   /* phones: four compact numbers in a 2×2 grid, the chart full width beneath, nothing scrolls sideways */
   @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px !important; padding:12px 14px !important; }
     .cov-yourday-insights > div { padding:10px 12px !important; }
-    .cov-yd-chart-in, .cov-yd-more, .cov-yd-date-long { display:none !important; }
+    .cov-yd-chart-in, .cov-yd-more { display:none !important; }
     .cov-yd-chart-out { display:block; grid-column:1 / -1; }
-    .cov-yd-date-short { display:inline; }
     .cov-yd-value { font-size:22px !important; }
     .cov-yd-sub { font-size:12px !important; line-height:1.35 !important; } }
   @media(max-width:767px) {
