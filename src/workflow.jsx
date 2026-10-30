@@ -141,9 +141,9 @@ export function RemindersBell({ cases, covUser, settings }) {
   return (
     <div ref={ref} style={{ position:'relative', flexShrink:0 }}>
       <button onClick={() => setOpen(o => !o)} aria-expanded={open} aria-haspopup="dialog"
-        aria-label={unseen ? `Reminders: ${unseen} new` : 'Reminders'} title="Reminders" className="mono-font"
-        style={{ background:'none', border:'1px solid #3D3A35', color: unseen ? '#F5F1EA' : '#A8A29E', padding:'4px 8px', cursor:'pointer',
-          fontSize:'11px', display:'flex', alignItems:'center', gap:'5px', lineHeight:1.2 }}>
+        aria-label={unseen ? `Reminders: ${unseen} new` : 'Reminders'} title="Reminders" className="mono-font cov-nav-ctl"
+        style={{ background:'none', border:'1px solid #3D3A35', color: unseen ? '#F5F1EA' : '#A8A29E', padding:'0 8px', cursor:'pointer',
+          fontSize:'11px', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', lineHeight:1 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
         {unseen > 0 && <span style={{ background:'#B91C1C', color:'#FEF2F2', padding:'0 5px', fontSize:'10px', fontWeight:600 }}>{unseen}</span>}
       </button>

@@ -14,6 +14,8 @@ import { insights, greeting, daySummary, money, WEEKDAYS } from './insights.js'
 import { isMerchantCase } from './sides.mjs'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
+// Show/hide on Home: one look for every panel that folds
+export const foldLook = { background:'#FFFFFF', border:'1px solid #1A1814', padding:'6px 10px', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814', whiteSpace:'nowrap' }
 
 // New cases per day for the last 14 days; today's bar is solid for cases so far, with a dashed outline
 // up to how many usually arrive by the end of the day (the forecast)
@@ -58,8 +60,8 @@ function Tile({ label, value, sub, children, dim }) {
   return (
     <div style={{ background:'#FFFFFF', border:'1px solid #E7E2D9', padding:'12px 14px', minWidth:0, display:'flex', flexDirection:'column', gap:'2px' }}>
       <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E' }}>{label}</div>
-      {value != null && <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color: dim ? '#8A7F72' : '#1A1814', lineHeight:1.1, letterSpacing:'-0.01em' }}>{value}</div>}
-      {sub && <div className="display-font" style={{ fontSize:'13px', color:'#57534E', lineHeight:1.4 }}>{sub}</div>}
+      {value != null && <div className="display-font cov-yd-value" style={{ fontSize:'28px', fontWeight:600, color: dim ? '#8A7F72' : '#1A1814', lineHeight:1.1, letterSpacing:'-0.01em' }}>{value}</div>}
+      {sub && <div className="display-font cov-yd-sub" style={{ fontSize:'13px', color:'#57534E', lineHeight:1.4 }}>{sub}</div>}
       {children}
     </div>
   )
@@ -109,15 +111,18 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
     return { items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
   }, [outcomes, me, settings, platformMode])
 
-  const today = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+  const now = new Date()
+  const today = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+  const todayShort = `${now.toLocaleDateString('en-US', { weekday:'short' })} ${now.getDate()} ${now.toLocaleDateString('en-US', { month:'short' })}`   // phones: THU 29 OCT
   const shown = showAll ? items : items.slice(0, 6)
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
   const ins = useMemo(() => insights(allThreadCases(outcomes).filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c))),
     { me, settings }), [outcomes, me, settings, platformMode])
-  const firstName = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
+  const first = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
+  const firstName = first && first[0].toUpperCase() + first.slice(1)
   const summary = daySummary({ total: items.length, urgent: counts.urgent, overdue: items.filter(x => x.r.rank === 0).length,
-    todo: counts.todo, batch: counts.batch, batchTime: settings?.batchFileTime || '15:00' })
+    todo: counts.todo, batch: counts.batch, batchTime: settings?.batchFileTime || '15:00', team: scope === 'team' })
   const ex = ins.expected, pc = ins.pace
   const trend = pc.last7 - pc.prev7
 
@@ -128,21 +133,22 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
         style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
         <div style={{ minWidth:0, flex:'1 1 320px' }}>
           <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>
-            YOUR DAY · {today.toUpperCase()}{scope === 'team' ? ' · TEAM QUEUE' : ''}
+            YOUR DAY · <span className="cov-yd-date-long">{today.toUpperCase()}</span><span className="cov-yd-date-short">{todayShort.toUpperCase()}</span>
           </div>
           <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(22px, 3.2vw, 28px)', fontWeight:600, color:'#1A1814', margin:0, letterSpacing:'-0.015em', lineHeight:1.15 }}>
             {greeting()}{firstName ? <>, <span style={{ fontStyle:'italic', fontWeight:500 }}>{firstName}</span></> : null}.
           </h2>
           <p className="display-font" style={{ fontSize:'16px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.45 }}>
-            {summary}{scope === 'team' && items.length ? ' Nothing is assigned to you yet, so this is the team’s queue.' : ''}
+            {summary}
           </p>
         </div>
         <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-          {counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
-          {counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
-          {counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
+          {/* Folded, the badges stand in for the summary sentence; open, the sentence says it */}
+          {!open && counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
+          {!open && counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
+          {!open && counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
           <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font cov-yourday-toggle"
-            style={{ background:'#FFFFFF', border:'1px solid #1A1814', padding:'6px 10px', cursor:'pointer', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814' }}>
+            style={{ ...foldLook, cursor:'pointer' }}>
             {open ? '▴ HIDE' : '▾ SHOW'}
           </button>
         </div>
@@ -154,19 +160,19 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
         <Tile label="TODAY’S CASELOAD" value={items.length}
           sub={!ex ? 'Forecasts start after two weeks of cases.' : (() => {
             const v = ex.mine ?? ex.team, who = ex.mine != null ? 'for you' : 'for the team'
-            return v < 0.5 ? <>{WEEKDAYS[new Date().getDay()]}s are usually quiet {who} — based on {ex.basis}</>
-              : <>+ about <strong>{v < 1.5 ? 'one' : Math.round(v)}</strong> new {who}, based on {ex.basis}</>
+            return v < 0.5 ? <>{WEEKDAYS[new Date().getDay()]}s are usually quiet {who}<span className="cov-yd-more"> — based on {ex.basis}</span></>
+              : <>+ about <strong>{v < 1.5 ? 'one' : Math.round(v)}</strong> new {who}<span className="cov-yd-more">, based on {ex.basis}</span></>
           })()}>
-          <div style={{ marginTop:'8px' }}><IntakeBars days={ins.days} expected={ex ? ex.team : null} /></div>
+          <div className="cov-yd-chart-in" style={{ marginTop:'8px' }}><IntakeBars days={ins.days} expected={ex ? ex.team : null} /></div>
         </Tile>
         <Tile label={pc.who === 'mine' ? 'YOUR PACE' : 'TEAM PACE'} value={pc.last7 || !pc.enough ? `${pc.last7} closed` : `${pc.last28} closed`} dim={!pc.enough}
           sub={!pc.enough ? 'No cases closed in the last four weeks yet.' : <>
             {!pc.last7 ? 'in the last four weeks, none this week.' : trend === 0 ? 'this week, the same as the week before.'
               : <>this week, <span aria-hidden="true" style={{ color: trend > 0 ? '#065F46' : '#991B1B' }}>{trend > 0 ? '▲' : '▼'}</span> {Math.abs(trend)} {trend > 0 ? 'more' : 'fewer'} than the week before.</>}
-            {pc.clearDays != null && pc.openNow > 0 && <> At this rate, the {pc.openNow} open clear in about {pc.clearDays} day{pc.clearDays === 1 ? '' : 's'}.</>}
-            {pc.who === 'team' && ins.scope === 'mine' && <span style={{ display:'block', fontSize:'12px', color:'#6B6259', marginTop:'4px' }}>The team’s pace — you haven’t closed a case in four weeks.</span>}
+            {pc.clearDays != null && pc.openNow > 0 && <span className="cov-yd-more"> At this rate, the {pc.openNow} open clear in about {pc.clearDays} day{pc.clearDays === 1 ? '' : 's'}.</span>}
+            {pc.who === 'team' && ins.scope === 'mine' && <span className="cov-yd-more" style={{ display:'block', fontSize:'12px', color:'#6B6259', marginTop:'4px' }}>The team’s pace — you haven’t closed a case in four weeks.</span>}
           </>} />
-        <Tile label="THIS WEEK" value={`${ins.week.total} deadline${ins.week.total === 1 ? '' : 's'}`} dim={!ins.week.total}
+        <Tile label={`DEADLINE${ins.week.total === 1 ? '' : 'S'} THIS WEEK`} value={ins.week.total} dim={!ins.week.total}
           sub={ins.week.total ? <>Busiest {ins.week.busiestLabel} ({ins.week.byDay[ins.week.busiest]})</> : 'No response, filing or Reg E deadlines in the next 7 days.'}>
           {ins.week.total > 0 && (
             <div aria-hidden="true" style={{ display:'flex', gap:'3px', alignItems:'flex-end', height:'22px', marginTop:'8px' }}>
@@ -180,7 +186,11 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
           )}
         </Tile>
         <Tile label="AT RISK" value={ins.atRisk.cases ? money(ins.atRisk.amount, ins.atRisk.currency) : 'Nothing'} dim={!ins.atRisk.cases}
-          sub={ins.atRisk.cases ? <>on {ins.atRisk.cases} case{ins.atRisk.cases === 1 ? '' : 's'} with a deadline missed or close</> : 'No missed or nearly-due deadlines.'} />
+          sub={ins.atRisk.cases ? <>on {ins.atRisk.cases} case{ins.atRisk.cases === 1 ? '' : 's'}<span className="cov-yd-more"> with a deadline missed or close</span></> : 'No missed or nearly-due deadlines.'} />
+        {/* Phones: the four numbers sit in a 2×2 grid and the 14-day chart gets the full width below them */}
+        <div className="cov-yd-chart-out" style={{ background:'#FFFFFF', border:'1px solid #E7E2D9', padding:'12px 14px' }}>
+          <IntakeBars days={ins.days} expected={ex ? ex.team : null} />
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -197,7 +207,7 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
                 <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
                 <span style={{ minWidth:0 }}>
                   <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
-                  <span className="mono-font" style={{ display:'block', fontSize:'11px', color:'#6B6259', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
+                  <span className="mono-font cov-yourday-why" style={{ display:'block', fontSize:'11px', color:'#6B6259', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
                 </span>
                 <span className="mono-font desktop-only" style={{ fontSize:'11px', color:'#1A1814' }}>Open →</span>
               </button>
@@ -229,7 +239,7 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
               background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
             <span style={{ color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
             <span style={{ color:'#57534E' }}>{c.id}</span>
-            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span style={{ color:'#6B6259' }}>· {k.label}</span></span>
+            <span className="cov-comingup-what" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
             <span className="desktop-only" style={{ color:'#6B6259' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'unassigned'}</span>
           </button>
         ))}

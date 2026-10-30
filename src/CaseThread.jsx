@@ -598,7 +598,7 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
   return (
     <div className="cov-nav-menu">
       <button onClick={() => setOpen(o => !o)} aria-label="Menu" aria-expanded={open}
-        className="mono-font cov-nav-icon" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', cursor:'pointer' }}>
+        className="mono-font cov-nav-icon cov-nav-ctl" style={{ background:'transparent', border:'1px solid #3D3A35', color:'#D6CFC4', cursor:'pointer' }}>
         {open ? '✕' : '☰'}
       </button>
       {open && createPortal(
@@ -606,14 +606,6 @@ export function MobileMenu({ nav, active, onSelect, user, onSignIn, onSignOut, r
           <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:'48px 0 0 0', background:'rgba(26,24,20,0.45)', zIndex:59 }} />
           {/* Height in CSS (.cov-mobile-menu): 100vh runs under Safari's address bar and hid Sign out */}
           <div className="cov-mobile-menu" style={{ position:'fixed', top:'48px', left:0, right:0, overflowY:'auto', overscrollBehavior:'contain', background:'#1A1814', borderTop:'1px solid #2D2922', zIndex:60, boxShadow:'0 12px 24px rgba(0,0,0,0.35)' }}>
-            {/* Sound the alarm — always reachable on phones, whatever fits in the top bar */}
-            {(user?.authed || user?.demo) && (
-              <button onClick={() => { setOpen(false); window.dispatchEvent(new Event('cov:alarm-open')) }} className="mono-font"
-                style={{ display:'flex', alignItems:'center', gap:'10px', width:'100%', textAlign:'left', padding:'14px 20px', background:'#2D2922', color:'#F5F1EA', border:'none', borderBottom:'1px solid #C9A86C', fontSize:'11px', letterSpacing:'0.14em', fontWeight:700, cursor:'pointer' }}>
-                <span aria-hidden="true" style={{ color:'#C9A86C' }}>⚑</span> SOUND THE ALARM
-                <span className="display-font" style={{ marginLeft:'auto', fontWeight:400, letterSpacing:0, fontSize:'12px', color:'#A8A29E' }}>Fraud wave or attack</span>
-              </button>
-            )}
             {nav.map(({ id, label, group }, i) => (
               <React.Fragment key={id}>
                 {/* Area headings are labels, not links: small, with a rule running out to the edge */}

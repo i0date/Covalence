@@ -359,12 +359,12 @@ export default function Covalence() {
 
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflowY:'hidden', overflowX:'auto' }}>
-          <div className="cov-nav-inner" style={{ maxWidth:'1320px', margin:'0 auto', display:'flex', alignItems:'center', gap:'20px', padding:'0 24px' }}>
-            <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'28px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
+          <div className="cov-nav-inner" style={{ maxWidth:'1320px', margin:'0 auto', display:'flex', alignItems:'center', gap:'14px', padding:'0 24px' }}>
+            <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'20px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1, display:'flex', alignItems:'center', gap:'10px' }}>
                 COVALENCE
                 {/* Not signed in → everything here is local demo data; say so */}
-                {!covUser?.authed && <span title="You're exploring with demo data. Sign in to use your institution's workspace."
+                {!covUser?.authed && <span className="cov-nav-demo" title="You're exploring with demo data. Sign in to use your institution's workspace."
                   style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#D6CFC4', border:'1px dashed #78716C', padding:'2px 6px' }}>DEMO</span>}
               </div>
             </div>
@@ -385,11 +385,11 @@ export default function Covalence() {
                 </button>
               </React.Fragment>))}
             </div>
-            <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,paddingLeft:'8px'}}>
+            <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
               <AlarmButton covUser={covUser} />
               {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
-              <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search"
-                style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'5px 8px 5px 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
+              <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search cov-nav-ctl"
+                style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'0 8px 0 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
                 <Search size={13} strokeWidth={1.75} style={{flexShrink:0}} />
                 <span className="desktop-only cov-nav-search-label" style={{flex:1,textAlign:'left'}}>Search cases</span>
                 <kbd className="desktop-only" style={{fontFamily:'inherit',fontSize:'10px',color:'#78716C',border:'1px solid #3D3A35',padding:'1px 5px',lineHeight:1.4}}>
@@ -428,8 +428,8 @@ export default function Covalence() {
                   style={{background:'transparent',border:'1px solid #3D3A35',color:'#57534E',padding:'3px 8px',cursor:'pointer',fontFamily:'monospace',fontSize:'10px',letterSpacing:'0.1em',flexShrink:0}}>OUT</button>
               </div>}
               <RemindersBell cases={outcomes} covUser={covUser} settings={settings} />
-              <button onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="mono-font desktop-only cov-nav-collapse"
-                style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',width:'28px',height:'28px',cursor:'pointer',fontSize:'12px'}}>?</button>
+              <button onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" className="mono-font desktop-only cov-nav-collapse cov-nav-ctl"
+                style={{background:'transparent',border:'1px solid #3D3A35',color:'#A8A29E',width:'30px',cursor:'pointer',fontSize:'12px'}}>?</button>
               <MobileMenu nav={NAV} active={activeSection} onSelect={setActiveSection} user={covUser} roles={ROLES} onRole={setDemoRole} syncStatus={globalSyncStatus}
                 onSignIn={!covUser?.authed && authAvailable ? () => setShowSignIn(true) : null}
                 onSignOut={() => { if (covUser?.authed) handleSignOut(); else { localStorage.removeItem('cov_user'); setDemoUser(null) } }} />

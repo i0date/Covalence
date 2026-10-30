@@ -86,9 +86,11 @@ export function greeting(now = new Date()) {
 }
 
 // One sentence that sums up the day, e.g. "3 things need you today; 1 is overdue."
-export function daySummary({ urgent, overdue, todo, batch, batchTime, total }) {
+// team: nothing is assigned to this person, so the list is the team's
+export function daySummary({ urgent, overdue, todo, batch, batchTime, total, team }) {
   if (!total) return 'Nothing needs you today. A clear desk.'
-  const parts = [`${total} thing${total === 1 ? ' needs' : 's need'} you today`]
+  const parts = [team ? `Nothing’s assigned to you, so here’s the team’s day: ${total} thing${total === 1 ? ' needs' : 's need'} attention`
+    : `${total} thing${total === 1 ? ' needs' : 's need'} you today`]
   if (overdue) parts.push(`${overdue} ${overdue === 1 ? 'is' : 'are'} overdue`)
   else if (urgent) parts.push(`${urgent} ${urgent === 1 ? 'is' : 'are'} due soon`)
   if (batch) parts.push(`${batch} go${batch === 1 ? 'es' : ''} out in the ${batchTime} batch`)
