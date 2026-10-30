@@ -665,6 +665,8 @@ export const GLOBAL_CSS = `
   .cov-front-group .cov-front-items { border-top:none; }
   /* A case or claim named in the brief: a small reference tag you can open */
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
+  .cov-ref-more { display:inline-block; background:none; border:none; border-bottom:1px dotted #8A7F72; color:#57534E; font-size:10.5px; letter-spacing:0.04em; padding:0 1px; margin:1px 0; line-height:1.5; cursor:pointer; vertical-align:1px; }
+  .cov-ref-more:hover { color:#1A1814; border-bottom-color:#1A1814; }
   .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }
   @media (max-width:1023px) { .cov-front-items { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .cov-front-item:nth-child(4n+1) { padding-left:20px; } .cov-front-item:nth-child(2n+1) { padding-left:0; border-left:none !important; }
@@ -687,6 +689,8 @@ export const GLOBAL_CSS = `
   .cov-fc-block { padding:12px 0 14px; }
   .cov-fc-block + .cov-fc-block { border-top:1px solid #D4CCBC; }
   .cov-fc-who { font-size:17px; font-weight:600; font-style:italic; color:#1A1814; margin-bottom:6px; }
+  .cov-fc-pick { margin-top:10px; padding:10px 12px; background:#FFFFFF; border:1px solid #D4CCBC; }
+  .cov-yd-forecast svg g[role=button]:focus-visible > rect:first-child { stroke:#1A1814; stroke-width:1; }
   .cov-fc-line { display:grid; grid-template-columns:78px minmax(0,1fr); gap:10px; padding:4px 0; align-items:baseline; }
   .cov-fc-label { font-size:9.5px; letter-spacing:0.12em; color:#6B6259; }
   .cov-fc-text { font-size:14px; line-height:1.45; color:#3F3A35; }
