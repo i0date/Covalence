@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // FRONT PAGE — the top of Home, set like the front of a paper
 // ═══════════════════════════════════════════════════════════════════════════════
-// The date and the period the brief covers, the greeting, one lead sentence about
-// the two things that matter most today, then the brief's items in columns, each
-// under a small label. Every case and claim it names is a reference you can open.
-// It stays in view whether Your day below is open or folded.
+// The date and the period the brief covers, the greeting, and one calm sentence
+// on what happened since you were last in. What needs care (cases past a deadline,
+// customers waiting, a possible pattern) is counted on one line beneath it and
+// opens on a tap, so the morning starts with a recap, not a list of problems.
+// What to do today is Your day's job, just below.
 import React, { useMemo, useState } from 'react'
 import { openCase } from './CaseThread.jsx'
 import { openClaim } from './claimsData.js'
@@ -12,8 +13,7 @@ import { brief } from './brief.js'
 import { greeting } from './insights.js'
 // Opens the alarm form filled in from a pattern (the same event Alarms.jsx raiseFromPattern sends)
 const raiseFromPattern = p => window.dispatchEvent(new CustomEvent('cov:alarm-open', { detail: { prefill: { level: p.level, title: p.title, doNow: p.doNow } } }))
-
-const TONE = { danger: '#991B1B', warn: '#92400E', good: '#065F46' }
+const OPEN_KEY = 'cov_brief_open'   // per browser: whether the brief's details are open
 
 // Case and claim references; a run of more than three reads "A, B, C and 2 more"
 export function Refs({ parts }) {
@@ -35,45 +35,64 @@ export function Refs({ parts }) {
 }
 
 export function FrontPage({ day, covUser, settings }) {
-  const { lead, items } = useMemo(() => brief(day.all, { claims: day.claims, alarms: day.alarms, patterns: day.patterns, me: day.me, settings, from: day.period.from }),
+  const { lead, alarm, happened, attention } = useMemo(() => brief(day.all, { claims: day.claims, alarms: day.alarms, patterns: day.patterns, me: day.me, settings, period: day.period }),
     [day.all, day.claims, day.alarms, day.patterns, day.me, settings, day.period])
   const now = new Date()
   const first = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
   const name = first && first[0].toUpperCase() + first.slice(1)
-  const since = day.period.label.replace(/^Since /, '').toUpperCase()
-  // Phones show the four most important items first; the rest are a tap away
-  const [all, setAll] = useState(false)
-  const phone = typeof window !== 'undefined' && window.matchMedia?.('(max-width:599px)').matches
-  const shown = phone && !all ? items.slice(0, 4) : items
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) === '1' } catch { return false } })
+  const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
+  const count = it => `${it.count} ${it.kicker}`
+  const any = happened.length + attention.length > 0
+
+  const Group = ({ title, items }) => items.length > 0 && (
+    <div className="cov-front-group">
+      <div className="mono-font cov-front-group-title">{title}</div>
+      <div className="cov-front-items">
+        {items.map(it => (
+          <article key={it.key} className="cov-front-item">
+            <div className="mono-font cov-front-kicker">{it.kicker}</div>
+            <p className="display-font cov-front-text">
+              <Refs parts={it.text} />
+              {it.pattern && <> <button type="button" className="mono-font cov-ref" onClick={() => raiseFromPattern(it.pattern)}>LOOK AT IT →</button></>}
+            </p>
+          </article>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
     <header className="cov-front" aria-labelledby="cov-front-lead">
       <div className="mono-font cov-front-dateline">
         <span>{now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }).toUpperCase()}</span>
-        <span>THE BRIEF · SINCE {since}</span>
+        <span>THE BRIEF · {day.period.label.toUpperCase()}</span>
       </div>
       <p className="display-font cov-front-greeting">{greeting(now)}{name ? <>, {name}</> : null}.</p>
-      <h1 id="cov-front-lead" className="display-font cov-front-lead">
-        {lead || 'A quiet start: nothing new came in, nothing was decided, and nothing is due in the next 24 hours.'}
-      </h1>
-      {items.length > 0 && (
-        <div className="cov-front-items">
-          {shown.map(it => (
-            <article key={it.key} className="cov-front-item">
-              <div className="mono-font cov-front-kicker" style={{ color: TONE[it.tone] || '#57534E' }}>{it.kicker}</div>
-              <p className="display-font cov-front-text">
-                <Refs parts={it.text} />
-                {it.pattern && <> <button type="button" className="mono-font cov-ref" onClick={() => raiseFromPattern(it.pattern)}>LOOK AT IT →</button></>}
-                {it.alarm && <> <button type="button" className="mono-font cov-ref" onClick={() => window.dispatchEvent(new Event('cov:alarm-open'))}>OPEN THE ALARM →</button></>}
-              </p>
-            </article>
-          ))}
-          {shown.length < items.length && (
-            <button type="button" onClick={() => setAll(true)} className="mono-font cov-front-more">
-              {items.length - shown.length} MORE IN THE BRIEF ↓
-            </button>
-          )}
+      <h1 id="cov-front-lead" className="display-font cov-front-lead">{lead}</h1>
+      {alarm && (
+        <div className="cov-front-alarm">
+          <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#991B1B', fontWeight:600 }}>LEVEL {alarm.level} ALARM OPEN</span>
+          <span className="display-font" style={{ fontSize:'15px', color:'#1A1814', minWidth:0 }}>{alarm.title}</span>
+          <button type="button" className="mono-font cov-ref" onClick={() => window.dispatchEvent(new Event('cov:alarm-open'))}>OPEN IT →</button>
         </div>
+      )}
+      {any && (
+        <>
+          <button type="button" className="mono-font cov-front-fold" onClick={toggle} aria-expanded={open} aria-controls="cov-front-details">
+            <span className="cov-front-fold-label">THE DETAILS</span>
+            <span className="cov-front-fold-counts">
+              {[...happened, ...attention].map((it, i) => <span key={it.key}>{i ? <span aria-hidden="true" className="cov-front-sep">·</span> : null}{count(it)}</span>)}
+            </span>
+            <span className="cov-front-fold-btn">{open ? '▴ HIDE' : '▾ SHOW'}</span>
+          </button>
+          {open && (
+            <div id="cov-front-details">
+              <Group title="WHAT HAPPENED" items={happened} />
+              <Group title="WORTH A LOOK" items={attention} />
+            </div>
+          )}
+        </>
       )}
     </header>
   )

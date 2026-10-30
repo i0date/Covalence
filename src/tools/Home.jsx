@@ -1,7 +1,7 @@
-// 000 HOME — The Brief: stats, deadlines, case list
+// 000 HOME — the brief, Your day (the plan and the forecast), cases and numbers
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
-import { YourDay, DayTiles, useDay, useMedia, foldLook } from '../YourDay.jsx'
+import { YourDay, useDay, foldLook } from '../YourDay.jsx'
 import { FrontPage } from '../FrontPage.jsx'
 import { NewDot } from '../ui.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
@@ -51,9 +51,8 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
   const day = useDay({ outcomes, covUser, settings, platformMode })
-  const wide = useMedia('(min-width:1100px)')
 
-  // The pieces of Home, placed in one column (phones, tablets) or two (wide screens)
+  // The pieces of Home, below the brief and Your day
   const rangeEl = (<>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', margin:'4px 0 10px' }}>
         <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>CASES AND NUMBERS · {rangeText.toUpperCase()}</span>
@@ -228,32 +227,11 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       {/* ── The front page: the date, the greeting, the lead and the brief ── */}
       <FrontPage day={day} covUser={covUser} settings={settings} />
 
-      {/* ── Your day: what needs attention, most urgent first ── */}
-      {wide ? (
-        // Wide screens: the work on the left; the day's numbers and the period's figures in a column on the right
-        <div className="cov-home-cols">
-          <div style={{ minWidth:0 }}>
-            <YourDay day={day} covUser={covUser} settings={settings} tiles={false} />
-            {rangeEl}
-            {casesEl}
-          </div>
-          <aside className="cov-home-rail" aria-label="At a glance">
-            <section style={{ border:'1px solid #D4CCBC', background:'#F3EEE6' }}>
-              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', padding:'12px 14px 0' }}>AT A GLANCE · TODAY</div>
-              <DayTiles day={day} compact />
-            </section>
-            <section>
-              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'8px' }}>THE NUMBERS · {rangeText.toUpperCase()}</div>
-              {numbersEl}
-            </section>
-          </aside>
-        </div>
-      ) : (<>
-        <YourDay day={day} covUser={covUser} settings={settings} />
-        {rangeEl}
-        {casesEl}
-        {numbersEl}
-      </>)}
+      {/* ── Your day: the plan for today and the forecast, the centre of Home ── */}
+      <YourDay day={day} covUser={covUser} settings={settings} />
+      {rangeEl}
+      {casesEl}
+      {numbersEl}
 
       {/* ── Tour: one slide per tool ── */}
       {tourOpen && (() => {
