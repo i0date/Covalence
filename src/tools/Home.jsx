@@ -1,7 +1,7 @@
 // 000 HOME — The Brief: stats, deadlines, case list
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
-import { YourDay, foldLook } from '../YourDay.jsx'
+import { YourDay, DayTiles, useDay, useMedia, foldLook } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { GetSetUp } from '../GetSetUp.jsx'
@@ -48,6 +48,167 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
+  const day = useDay({ outcomes, covUser, settings, platformMode })
+  const wide = useMedia('(min-width:1100px)')
+
+  // The pieces of Home, placed in one column (phones, tablets) or two (wide screens)
+  const rangeEl = (<>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', margin:'4px 0 10px' }}>
+        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>CASES AND NUMBERS · {rangeText.toUpperCase()}</span>
+        <div role="group" aria-label="Date range" style={{ display:'flex', border:'1px solid #D4CCBC' }}>
+          {RANGES.map(([v, l], i) => (
+            <button key={v} onClick={() => setRange(v)} aria-pressed={range === v} className="mono-font"
+              style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 10px', border:'none', borderLeft: i ? '1px solid #D4CCBC' : 'none', cursor:'pointer',
+                background: range === v ? '#1A1814' : '#FAF7F1', color: range === v ? '#F5F1EA' : '#57534E' }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+  </>)
+  const casesEl = (<>
+      {(() => {
+        const thread = active
+        const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
+        const FILTERS = [
+          { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
+          { id:'action', label:'NEEDS ACTION',  test: o => ['triage','desk'].includes(stageOf(o)) || (dueIn(o) !== null && dueIn(o) <= 7) },
+          { id:'mine',   label:'MINE',          test: o => { try { const me = JSON.parse(localStorage.getItem('cov_user')||'null')?.email; return !!me && o.assignedTo === me } catch { return false } } },
+          { id:'closed', label:'CLOSED',        test: o => stageOf(o) === 'closed' },
+          { id:'all',    label:'ALL',           test: () => true },
+        ]
+        const f = FILTERS.find(x => x.id === caseFilter) || FILTERS[0]
+        const rows = thread.filter(f.test)
+        if (everything.length === 0) return (
+          <div className="border border-stone-200 px-6 py-8 mb-5" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
+            <div>
+              <div className="display-font text-stone-500 italic" style={{ fontSize:'17px' }}>No cases yet.</div>
+              <div className="mono-font text-stone-400" style={{ fontSize:'10px', marginTop:'4px' }}>Start with a triage, or load a demo institution to see every tool with data in it.</div>
+            </div>
+            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+              <button onClick={onLoadDemo} className="cov-btn" style={{ padding:'10px 16px', fontSize:'10px' }}>LOAD DEMO INSTITUTION</button>
+              <button onClick={() => setActiveSection('triage')} className="upload-btn">START A TRIAGE →</button>
+            </div>
+          </div>
+        )
+        const open = thread.filter(FILTERS[0].test).length, action = thread.filter(FILTERS[1].test).length
+        const overdue = thread.filter(o => dueIn(o) !== null && dueIn(o) < 0).length
+        return (
+          <section className="mb-5" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1' }}>
+            <button onClick={toggleCases} aria-expanded={casesOpen} aria-controls="home-cases" className="cov-home-cases-bar"
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:'18px', flexWrap:'wrap', background:'none', border:'none', padding:'14px 18px', cursor:'pointer', textAlign:'left' }}>
+              <span className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', letterSpacing:'-0.01em' }}>Cases</span>
+              <span className="mono-font cov-home-cases-sum" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E', display:'flex', gap:'14px', flexWrap:'wrap', flex:1 }}>
+                <span><strong style={{ color:'#1A1814' }}>{open}</strong> OPEN</span>
+                <span><strong style={{ color:'#1A1814' }}>{action}</strong> NEED ACTION</span>
+                {overdue > 0 && <span style={{ color:'#B91C1C' }}><strong>{overdue}</strong> OVERDUE</span>}
+                <span>{thread.length} {windowDays ? `IN THE LAST ${windowDays} DAYS` : 'IN ALL'}</span>
+              </span>
+              <span className="mono-font" style={foldLook}>{casesOpen ? '▴ HIDE' : '▾ SHOW'}</span>
+            </button>
+            {casesOpen && (<div id="home-cases" style={{ borderTop:'1px solid #E7E2D9' }}>
+              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', padding:'10px 18px' }}>
+                {FILTERS.map(x => (
+                  <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'10px' }}>
+                    {x.label} {thread.filter(x.test).length}
+                  </button>
+                ))}
+              </div>
+              {rows.length === 0 ? (
+                <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 18px', borderTop:'1px solid #E7E2D9' }}>Nothing here.</div>
+              ) : rows.slice(0, 25).map(o => {
+                const due = dueIn(o)
+                return (
+                  <div key={o.id} onClick={() => window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } }))}
+                    data-case-row tabIndex={0} role="button" aria-label={`Open ${o.id} ${o.merchant || ''}`}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } })) } }}
+                    className="flex items-center gap-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
+                    style={{ borderTop:'1px solid #E7E2D9', padding:'12px 18px' }}>
+                    <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
+                    <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px', minWidth:0 }}>{o.merchant}</span>
+                    <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
+                    <PipelineDots c={o} />
+                    {due !== null && (
+                      <span className="mono-font desktop-only" style={{ fontSize:'10px', color: due < 0 ? '#B91C1C' : due <= 3 ? '#92400E' : '#78716C', whiteSpace:'nowrap' }}>
+                        {due < 0 ? `OVERDUE ${-due}d` : due === 0 ? 'DUE TODAY' : `DUE ${due}d`}
+                      </span>
+                    )}
+                    <StatusChip status={o.status} />
+                  </div>
+                )
+              })}
+              <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'10px 18px', borderTop:'1px solid #E7E2D9', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+                <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record{rows.length > 25 ? ` · showing 25 of ${rows.length}` : ''}</span>
+                {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
+              </div>
+            </div>)}
+          </section>
+        )
+      })()}
+  </>)
+  const numbersEl = (<>
+      {platformMode === 'merchant' ? (() => {
+        // Merchant side: chargebacks to answer, wins and money back, and the ratio the networks watch
+        const queue = merchantQueue(outcomes, settings)
+        const overdue = queue.filter(r => r.left != null && r.left < 0).length
+        const thisWeek = queue.filter(r => r.left != null && r.left >= 0 && r.left <= 7).length
+        const f = merchantFile(active)
+        const money = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
+        // Demo visitors haven't entered sales figures, so the ratio uses sample ones
+        const { ratios, demoSales } = ratiosFor(outcomes, settings, covUser)
+        const worst = worstRatio(ratios)
+        const cells = [
+          { label:'TO ANSWER', value: queue.length, sub: overdue ? `${overdue} overdue` : `${thisWeek} due this week`, alert: overdue > 0 },
+          { label:'WITH THE BANK', value: f.waiting.length + f.escalated.length, sub: f.escalated.length ? `${f.escalated.length} escalated` : 'responses waiting on a decision' },
+          { label:'WIN RATE', value: winRate !== null ? winRate + '%' : '—', sub: `${resolved.length} decided · ${rangeText}` },
+          { label:'RECOVERED', value: money(f.recovered), sub: 'money back from the acquirer' },
+          { label:'NOT BACK YET', value: money(f.outstanding), sub: f.notFinal ? `${f.notFinal} win${f.notFinal === 1 ? '' : 's'} not final` : 'from wins', alert: f.outstanding > 0 },
+          { label:'CHARGEBACK RATIO', value: ratioPct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
+        ]
+        return (<>
+          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
+            {cells.map(c => (
+              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color: c.alert ? '#92400E' : '#78716C' }}>{c.label}</div>
+                <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} attached />
+        </>)
+      })() : (() => {
+        const cells = [
+          { label:'NEW',         value: active.length,                  sub: windowDays ? `opened in ${windowDays} days` : 'opened, all time' },
+          { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },
+          { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—', sub:`${resolved.length} resolved` },
+        ]
+        if (settings.snapshotEnabled !== false) {
+          const recent = active
+          const days = recent.filter(o => ['won','lost','withdrawn'].includes(o.status) && o.date && o.resolvedDate)
+            .map(o => Math.max(0, Math.round((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)))
+          const isFraud = o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD'
+          const fraud = recent.filter(isFraud).length
+          // Counted the same way as the fraud tile, so the two never disagree
+          const cats = {}
+          recent.forEach(o => { const c = isFraud(o) ? 'fraud' : (o.category || '').replace('mc_', ''); if (c) cats[c] = (cats[c] || 0) + 1 })
+          const top = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]
+          if (days.length) cells.push({ label:'AVG RESOLUTION', value: Math.round(days.reduce((a, b) => a + b, 0) / days.length) + 'd', sub:'opened to closed' })
+          if (recent.length) cells.push({ label:'FRAUD / OTHER', value:`${fraud} / ${recent.length - fraud}`, sub:`of ${recent.length} cases` })
+          if (top) cells.push({ label:'LARGEST CATEGORY', value: categoryName(top[0]), sub:`${top[1]} of ${recent.length} cases` })
+        }
+        return (
+          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
+            {cells.map(c => (
+              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
+                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>{c.label}</div>
+                <div className="display-font" title={String(c.value)} style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+  </>)
 
   return (
     <div className="triage-root cov-home" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -63,7 +224,31 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
       ) : <GetSetUp outcomes={outcomes} settings={settings} covUser={covUser} onTour={openTour} />}
 
       {/* ── Your day: what needs attention, most urgent first ── */}
-      <YourDay outcomes={outcomes} covUser={covUser} settings={settings} platformMode={platformMode} />
+      {wide ? (
+        // Wide screens: the work on the left; the day's numbers and the period's figures in a column on the right
+        <div className="cov-home-cols">
+          <div style={{ minWidth:0 }}>
+            <YourDay day={day} covUser={covUser} settings={settings} tiles={false} />
+            {rangeEl}
+            {casesEl}
+          </div>
+          <aside className="cov-home-rail" aria-label="At a glance">
+            <section style={{ border:'1px solid #D4CCBC', background:'#F3EEE6' }}>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', padding:'12px 14px 0' }}>AT A GLANCE · TODAY</div>
+              <DayTiles day={day} compact />
+            </section>
+            <section>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#57534E', marginBottom:'8px' }}>THE NUMBERS · {rangeText.toUpperCase()}</div>
+              {numbersEl}
+            </section>
+          </aside>
+        </div>
+      ) : (<>
+        <YourDay day={day} covUser={covUser} settings={settings} />
+        {rangeEl}
+        {casesEl}
+        {numbersEl}
+      </>)}
 
       {/* ── Tour: one slide per tool ── */}
       {tourOpen && (() => {
@@ -148,162 +333,6 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 }
               </div>
             </div>
-          </div>
-        )
-      })()}
-
-      {/* ── Date range for the cases and numbers below ── */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', margin:'4px 0 10px' }}>
-        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>CASES AND NUMBERS · {rangeText.toUpperCase()}</span>
-        <div role="group" aria-label="Date range" style={{ display:'flex', border:'1px solid #D4CCBC' }}>
-          {RANGES.map(([v, l], i) => (
-            <button key={v} onClick={() => setRange(v)} aria-pressed={range === v} className="mono-font"
-              style={{ fontSize:'10px', letterSpacing:'0.12em', padding:'5px 10px', border:'none', borderLeft: i ? '1px solid #D4CCBC' : 'none', cursor:'pointer',
-                background: range === v ? '#1A1814' : '#FAF7F1', color: range === v ? '#F5F1EA' : '#57534E' }}>{l}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
-      {(() => {
-        const thread = active
-        const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
-        const FILTERS = [
-          { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
-          { id:'action', label:'NEEDS ACTION',  test: o => ['triage','desk'].includes(stageOf(o)) || (dueIn(o) !== null && dueIn(o) <= 7) },
-          { id:'mine',   label:'MINE',          test: o => { try { const me = JSON.parse(localStorage.getItem('cov_user')||'null')?.email; return !!me && o.assignedTo === me } catch { return false } } },
-          { id:'closed', label:'CLOSED',        test: o => stageOf(o) === 'closed' },
-          { id:'all',    label:'ALL',           test: () => true },
-        ]
-        const f = FILTERS.find(x => x.id === caseFilter) || FILTERS[0]
-        const rows = thread.filter(f.test)
-        if (everything.length === 0) return (
-          <div className="border border-stone-200 px-6 py-8 mb-5" style={{ background:'#FAF7F1', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
-            <div>
-              <div className="display-font text-stone-500 italic" style={{ fontSize:'17px' }}>No cases yet.</div>
-              <div className="mono-font text-stone-400" style={{ fontSize:'10px', marginTop:'4px' }}>Start with a triage, or load a demo institution to see every tool with data in it.</div>
-            </div>
-            <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-              <button onClick={onLoadDemo} className="cov-btn" style={{ padding:'10px 16px', fontSize:'10px' }}>LOAD DEMO INSTITUTION</button>
-              <button onClick={() => setActiveSection('triage')} className="upload-btn">START A TRIAGE →</button>
-            </div>
-          </div>
-        )
-        const open = thread.filter(FILTERS[0].test).length, action = thread.filter(FILTERS[1].test).length
-        const overdue = thread.filter(o => dueIn(o) !== null && dueIn(o) < 0).length
-        return (
-          <section className="mb-5" style={{ border:'1px solid #D4CCBC', background:'#FAF7F1' }}>
-            <button onClick={toggleCases} aria-expanded={casesOpen} aria-controls="home-cases" className="cov-home-cases-bar"
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:'18px', flexWrap:'wrap', background:'none', border:'none', padding:'14px 18px', cursor:'pointer', textAlign:'left' }}>
-              <span className="display-font" style={{ fontSize:'20px', fontWeight:600, color:'#1A1814', letterSpacing:'-0.01em' }}>Cases</span>
-              <span className="mono-font cov-home-cases-sum" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E', display:'flex', gap:'14px', flexWrap:'wrap', flex:1 }}>
-                <span><strong style={{ color:'#1A1814' }}>{open}</strong> OPEN</span>
-                <span><strong style={{ color:'#1A1814' }}>{action}</strong> NEED ACTION</span>
-                {overdue > 0 && <span style={{ color:'#B91C1C' }}><strong>{overdue}</strong> OVERDUE</span>}
-                <span>{thread.length} {windowDays ? `IN THE LAST ${windowDays} DAYS` : 'IN ALL'}</span>
-              </span>
-              <span className="mono-font" style={foldLook}>{casesOpen ? '▴ HIDE' : '▾ SHOW'}</span>
-            </button>
-            {casesOpen && (<div id="home-cases" style={{ borderTop:'1px solid #E7E2D9' }}>
-              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', padding:'10px 18px' }}>
-                {FILTERS.map(x => (
-                  <button key={x.id} onClick={() => setCaseFilter(x.id)} className={`grade-tab ${caseFilter === x.id ? 'active' : ''}`} style={{ fontSize:'10px' }}>
-                    {x.label} {thread.filter(x.test).length}
-                  </button>
-                ))}
-              </div>
-              {rows.length === 0 ? (
-                <div className="mono-font text-stone-400" style={{ fontSize:'10px', padding:'14px 18px', borderTop:'1px solid #E7E2D9' }}>Nothing here.</div>
-              ) : rows.slice(0, 25).map(o => {
-                const due = dueIn(o)
-                return (
-                  <div key={o.id} onClick={() => window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } }))}
-                    data-case-row tabIndex={0} role="button" aria-label={`Open ${o.id} ${o.merchant || ''}`}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.dispatchEvent(new CustomEvent('cov:open-case', { detail:{ id:o.id } })) } }}
-                    className="flex items-center gap-4 py-3 cursor-pointer hover:bg-stone-100 transition-colors"
-                    style={{ borderTop:'1px solid #E7E2D9', padding:'12px 18px' }}>
-                    <span className="mono-font text-stone-400" style={{ fontSize:'10px', width:'92px', flexShrink:0 }}>{o.id}</span>
-                    <span className="display-font text-stone-700 flex-1 truncate" style={{ fontSize:'14px', minWidth:0 }}>{o.merchant}</span>
-                    <span className="mono-font text-stone-500 desktop-only" style={{ fontSize:'11px' }}>{o.amount}</span>
-                    <PipelineDots c={o} />
-                    {due !== null && (
-                      <span className="mono-font desktop-only" style={{ fontSize:'10px', color: due < 0 ? '#B91C1C' : due <= 3 ? '#92400E' : '#78716C', whiteSpace:'nowrap' }}>
-                        {due < 0 ? `OVERDUE ${-due}d` : due === 0 ? 'DUE TODAY' : `DUE ${due}d`}
-                      </span>
-                    )}
-                    <StatusChip status={o.status} />
-                  </div>
-                )
-              })}
-              <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'10px 18px', borderTop:'1px solid #E7E2D9', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-                <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record{rows.length > 25 ? ` · showing 25 of ${rows.length}` : ''}</span>
-                {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
-              </div>
-            </div>)}
-          </section>
-        )
-      })()}
-
-      {/* ── The numbers: one strip (snapshot figures can be turned off in Settings) ── */}
-      {platformMode === 'merchant' ? (() => {
-        // Merchant side: chargebacks to answer, wins and money back, and the ratio the networks watch
-        const queue = merchantQueue(outcomes, settings)
-        const overdue = queue.filter(r => r.left != null && r.left < 0).length
-        const thisWeek = queue.filter(r => r.left != null && r.left >= 0 && r.left <= 7).length
-        const f = merchantFile(active)
-        const money = n => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
-        // Demo visitors haven't entered sales figures, so the ratio uses sample ones
-        const { ratios, demoSales } = ratiosFor(outcomes, settings, covUser)
-        const worst = worstRatio(ratios)
-        const cells = [
-          { label:'TO ANSWER', value: queue.length, sub: overdue ? `${overdue} overdue` : `${thisWeek} due this week`, alert: overdue > 0 },
-          { label:'WITH THE BANK', value: f.waiting.length + f.escalated.length, sub: f.escalated.length ? `${f.escalated.length} escalated` : 'responses waiting on a decision' },
-          { label:'WIN RATE', value: winRate !== null ? winRate + '%' : '—', sub: `${resolved.length} decided · ${rangeText}` },
-          { label:'RECOVERED', value: money(f.recovered), sub: 'money back from the acquirer' },
-          { label:'NOT BACK YET', value: money(f.outstanding), sub: f.notFinal ? `${f.notFinal} win${f.notFinal === 1 ? '' : 's'} not final` : 'from wins', alert: f.outstanding > 0 },
-          { label:'CHARGEBACK RATIO', value: ratioPct(worst), sub: worst.ratio == null ? 'add monthly sales in Settings' : `${worst.label} · last 30 days`, alert: ['over', 'over_ratio', 'approaching'].includes(worst.state) },
-        ]
-        return (<>
-          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
-            {cells.map(c => (
-              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
-                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color: c.alert ? '#92400E' : '#78716C' }}>{c.label}</div>
-                <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
-                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
-              </div>
-            ))}
-          </div>
-          <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} attached />
-        </>)
-      })() : (() => {
-        const cells = [
-          { label:'NEW',         value: active.length,                  sub: windowDays ? `opened in ${windowDays} days` : 'opened, all time' },
-          { label:'IN PROGRESS', value: inProg.length,                  sub: platformMode === 'merchant' ? 'rebuttal / submitted' : 'filed / representment' },
-          { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—', sub:`${resolved.length} resolved` },
-        ]
-        if (settings.snapshotEnabled !== false) {
-          const recent = active
-          const days = recent.filter(o => ['won','lost','withdrawn'].includes(o.status) && o.date && o.resolvedDate)
-            .map(o => Math.max(0, Math.round((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)))
-          const isFraud = o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD'
-          const fraud = recent.filter(isFraud).length
-          // Counted the same way as the fraud tile, so the two never disagree
-          const cats = {}
-          recent.forEach(o => { const c = isFraud(o) ? 'fraud' : (o.category || '').replace('mc_', ''); if (c) cats[c] = (cats[c] || 0) + 1 })
-          const top = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]
-          if (days.length) cells.push({ label:'AVG RESOLUTION', value: Math.round(days.reduce((a, b) => a + b, 0) / days.length) + 'd', sub:'opened to closed' })
-          if (recent.length) cells.push({ label:'FRAUD / OTHER', value:`${fraud} / ${recent.length - fraud}`, sub:`of ${recent.length} cases` })
-          if (top) cells.push({ label:'LARGEST CATEGORY', value: categoryName(top[0]), sub:`${top[1]} of ${recent.length} cases` })
-        }
-        return (
-          <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
-            {cells.map(c => (
-              <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
-                <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>{c.label}</div>
-                <div className="display-font" title={String(c.value)} style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
-                <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
-              </div>
-            ))}
           </div>
         )
       })()}

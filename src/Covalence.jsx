@@ -381,7 +381,7 @@ export default function Covalence() {
                     color: activeSection === id ? '#F5F1EA' : '#7A7068',
                     cursor:'pointer', textTransform:'uppercase', transition:'all 0.15s', whiteSpace:'nowrap',
                   }}>
-                  {label.includes('  ') ? <><span className="cov-nav-num">{label.split('  ')[0]}&nbsp;&nbsp;</span>{label.split('  ')[1]}</> : label}
+                  {label.includes('  ') ? <><span className="cov-nav-num">{label.split('  ')[0]}</span>{label.split('  ')[1]}</> : label}
                 </button>
               </React.Fragment>))}
             </div>

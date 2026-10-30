@@ -6,12 +6,15 @@
 // due soon, new cases waiting for analysis, and what goes out in today's batch.
 // Shows the user's own cases (assigned or escalated to them) when there are
 // any, otherwise the team's. Below that, the team's other deadlines this week.
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { allThreadCases, stageOf, openCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
 import { Badge, Button } from './ui.jsx'
 import { insights, greeting, daySummary, money, WEEKDAYS } from './insights.js'
 import { isMerchantCase } from './sides.mjs'
+import { brief, briefPeriod, noteVisit } from './brief.js'
+import { listClaims } from './claimsData.js'
+import { alarmList } from './alarmData.js'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
 // Show/hide on Home: one look for every panel that folds
@@ -89,10 +92,21 @@ function reasonFor(c, settings, me) {
   return null
 }
 
-export function YourDay({ outcomes, covUser, settings, platformMode }) {
-  const [showAll, setShowAll] = useState(false)
+// True while a media query matches (Home switches to two columns on wide screens)
+export function useMedia(query) {
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia?.(query); if (!mq) return
+    const f = () => setOn(mq.matches); f()
+    mq.addEventListener('change', f); return () => mq.removeEventListener('change', f)
+  }, [query])
+  return on
+}
+
+// Everything Your day shows, worked out once: Home passes it to the panel and, on wide screens, to the side column
+export function useDay({ outcomes, covUser, settings, platformMode }) {
   const me = covUser?.email?.toLowerCase()
-  const { items, scope, counts, comingUp, unowned } = useMemo(() => {
+  const work = useMemo(() => {
     const all = allThreadCases(outcomes)
       .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)))
     const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
@@ -108,55 +122,81 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
       return k ? { c, k } : null
     }).filter(Boolean).sort((a, b) => a.k.left - b.k.left)
     const unowned = all.filter(c => caseClocks(c, settings).some(k => k.key === 'assign' && k.state === 'breached')).length
-    return { items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
+    return { all, items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
   }, [outcomes, me, settings, platformMode])
+  const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
+  return { ...work, ins, me, platformMode }
+}
 
-  const now = new Date()
-  const today = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
-  const todayShort = `${now.toLocaleDateString('en-US', { weekday:'short' })} ${now.getDate()} ${now.toLocaleDateString('en-US', { month:'short' })}`   // phones: THU 29 OCT
-  const shown = showAll ? items : items.slice(0, 6)
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
-  const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
-  const ins = useMemo(() => insights(allThreadCases(outcomes).filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c))),
-    { me, settings }), [outcomes, me, settings, platformMode])
-  const first = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
-  const firstName = first && first[0].toUpperCase() + first.slice(1)
-  const summary = daySummary({ total: items.length, urgent: counts.urgent, overdue: items.filter(x => x.r.rank === 0).length,
-    todo: counts.todo, batch: counts.batch, batchTime: settings?.batchFileTime || '15:00', team: scope === 'team' })
+// A run of more than three cases reads as "A, B, C and 2 more"
+function BriefText({ parts }) {
+  const out = []
+  for (let i = 0; i < parts.length; i++) {
+    if (typeof parts[i] === 'string') { out.push(parts[i]); continue }
+    const run = []
+    while (i < parts.length && typeof parts[i] === 'object') run.push(parts[i++].id)
+    i--
+    run.slice(0, 3).forEach((id, j) => out.push(j ? (j === run.length - 1 ? ' and ' : ', ') : '',
+      <button key={id + i} onClick={() => openCase(id)} className="mono-font cov-brief-link">{id}</button>))
+    if (run.length > 3) out.push(` and ${run.length - 3} more`)
+  }
+  return out.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)
+}
+
+// The brief: what changed since the last working day (or your last visit), every case a link
+function Brief({ day, covUser, settings }) {
+  const [prev] = useState(() => noteVisit())
+  const period = useMemo(() => briefPeriod(new Date(), prev), [prev])
+  const [claims, setClaims] = useState([])
+  const [alarms, setAlarms] = useState([])
+  const fi = day.platformMode !== 'merchant', canAlarm = !!(covUser?.authed || covUser?.demo)
+  useEffect(() => {
+    if (!fi) return
+    let live = true
+    const load = () => listClaims().then(r => { if (live) setClaims(r) }).catch(() => {})
+    load(); window.addEventListener('cov:claims-changed', load)
+    return () => { live = false; window.removeEventListener('cov:claims-changed', load) }
+  }, [fi])
+  useEffect(() => {
+    if (!canAlarm) return
+    let live = true
+    const load = () => alarmList().then(r => { if (live) setAlarms(r) }).catch(() => {})
+    load(); window.addEventListener('cov:alarm-changed', load)
+    return () => { live = false; window.removeEventListener('cov:alarm-changed', load) }
+  }, [canAlarm])
+  const lines = useMemo(() => brief(day.all, { claims, alarms, me: day.me, settings, from: period.from }), [day.all, claims, alarms, day.me, settings, period])
+  return (
+    <div className="cov-brief" style={{ padding:'14px 20px 16px', borderBottom:'1px solid #D4CCBC' }}>
+      <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'8px' }}>THE BRIEF · {period.label.toUpperCase()}</div>
+      {lines.length === 0 ? (
+        <p className="display-font" style={{ margin:0, fontSize:'15px', color:'#57534E', fontStyle:'italic', lineHeight:1.5 }}>
+          Quiet {period.label.charAt(0).toLowerCase() + period.label.slice(1)}: nothing new came in, nothing was decided, and nothing is due in the next 24 hours.
+        </p>
+      ) : (
+        <ul style={{ listStyle:'none', margin:0, padding:0, display:'grid', gap:'6px' }}>
+          {lines.map(l => (
+            <li key={l.key} className="display-font" style={{ display:'grid', gridTemplateColumns:'14px minmax(0,1fr)', fontSize:'15px', lineHeight:1.5, color: l.tone === 'danger' ? '#7F1D1D' : '#1A1814' }}>
+              <span aria-hidden="true" style={{ color: l.tone === 'danger' ? '#B91C1C' : '#A8A29E' }}>—</span>
+              <span><BriefText parts={l.text} />{typeof l.text[l.text.length - 1] === 'string' && /[.!?]$/.test(l.text[l.text.length - 1]) ? '' : '.'}
+                {l.alarm && <> <button onClick={() => window.dispatchEvent(new Event('cov:alarm-open'))} className="mono-font cov-brief-link">Open the alarm →</button></>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// The four numbers (caseload, pace, deadlines, money at risk) and the 14-day chart.
+// compact: a 2×2 grid with the chart full width below (phones, and the side column on wide screens)
+export function DayTiles({ day, compact = false }) {
+  const { items, ins } = day
   const ex = ins.expected, pc = ins.pace
   const trend = pc.last7 - pc.prev7
-
-  return (
-    <section aria-labelledby="your-day" className="mb-8" style={{ border:'1px solid #1A1814', background:'#FAF7F1' }}>
-      {/* The whole header folds and unfolds the panel (easier to hit on a phone than the small button) */}
-      <div onClick={e => { if (!e.target.closest('button')) toggle() }} className="cov-yourday-head"
-        style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
-        <div style={{ minWidth:0, flex:'1 1 320px' }}>
-          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>
-            YOUR DAY · <span className="cov-yd-date-long">{today.toUpperCase()}</span><span className="cov-yd-date-short">{todayShort.toUpperCase()}</span>
-          </div>
-          <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(22px, 3.2vw, 28px)', fontWeight:600, color:'#1A1814', margin:0, letterSpacing:'-0.015em', lineHeight:1.15 }}>
-            {greeting()}{firstName ? <>, <span style={{ fontStyle:'italic', fontWeight:500 }}>{firstName}</span></> : null}.
-          </h2>
-          <p className="display-font" style={{ fontSize:'16px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.45 }}>
-            {summary}
-          </p>
-        </div>
-        <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-          {/* Folded, the badges stand in for the summary sentence; open, the sentence says it */}
-          {!open && counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
-          {!open && counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
-          {!open && counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
-          <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font cov-yourday-toggle"
-            style={{ ...foldLook, cursor:'pointer' }}>
-            {open ? '▴ HIDE' : '▾ SHOW'}
-          </button>
-        </div>
-      </div>
-
-      {open && (<div id="your-day-body">
+  return (<>
       {/* Insights — each one says what it's based on, and steps aside without enough history */}
-      <div className="cov-yourday-insights" style={{ display:'grid', gap:'10px', padding:'14px 20px', background:'#F3EEE6', borderBottom:'1px solid #D4CCBC' }}>
+      <div className={`cov-yourday-insights${compact ? ' cov-yd-compact' : ''}`} style={{ display:'grid', gap:'10px', padding:'14px 20px', background:'#F3EEE6', borderBottom: compact ? 'none' : '1px solid #D4CCBC' }}>
         <Tile label="TODAY’S CASELOAD" value={items.length}
           sub={!ex ? 'Forecasts start after two weeks of cases.' : (() => {
             const v = ex.mine ?? ex.team, who = ex.mine != null ? 'for you' : 'for the team'
@@ -192,6 +232,54 @@ export function YourDay({ outcomes, covUser, settings, platformMode }) {
           <IntakeBars days={ins.days} expected={ex ? ex.team : null} />
         </div>
       </div>
+  </>)
+}
+
+export function YourDay({ day, covUser, settings, tiles = true }) {
+  const [showAll, setShowAll] = useState(false)
+  const { items, scope, counts, comingUp, unowned } = day
+
+  const now = new Date()
+  const today = now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })
+  const todayShort = `${now.toLocaleDateString('en-US', { weekday:'short' })} ${now.getDate()} ${now.toLocaleDateString('en-US', { month:'short' })}`   // phones: THU 29 OCT
+  const shown = showAll ? items : items.slice(0, 6)
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
+  const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
+  const first = (covUser?.name || '').replace(/\s*\(.*\)$/, '').split(/[\s@]/)[0]
+  const firstName = first && first[0].toUpperCase() + first.slice(1)
+  const summary = daySummary({ total: items.length, urgent: counts.urgent, overdue: items.filter(x => x.r.rank === 0).length,
+    todo: counts.todo, batch: counts.batch, batchTime: settings?.batchFileTime || '15:00', team: scope === 'team' })
+  return (
+    <section aria-labelledby="your-day" className="mb-8" style={{ border:'1px solid #1A1814', background:'#FAF7F1' }}>
+      {/* The whole header folds and unfolds the panel (easier to hit on a phone than the small button) */}
+      <div onClick={e => { if (!e.target.closest('button')) toggle() }} className="cov-yourday-head"
+        style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #D4CCBC' : 'none' }}>
+        <div style={{ minWidth:0, flex:'1 1 320px' }}>
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>
+            YOUR DAY · <span className="cov-yd-date-long">{today.toUpperCase()}</span><span className="cov-yd-date-short">{todayShort.toUpperCase()}</span>
+          </div>
+          <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(22px, 3.2vw, 28px)', fontWeight:600, color:'#1A1814', margin:0, letterSpacing:'-0.015em', lineHeight:1.15 }}>
+            {greeting()}{firstName ? <>, <span style={{ fontStyle:'italic', fontWeight:500 }}>{firstName}</span></> : null}.
+          </h2>
+          <p className="display-font" style={{ fontSize:'16px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.45 }}>
+            {summary}
+          </p>
+        </div>
+        <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+          {/* Folded, the badges stand in for the summary sentence; open, the sentence says it */}
+          {!open && counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
+          {!open && counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
+          {!open && counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
+          <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font cov-yourday-toggle"
+            style={{ ...foldLook, cursor:'pointer' }}>
+            {open ? '▴ HIDE' : '▾ SHOW'}
+          </button>
+        </div>
+      </div>
+
+      {open && (<div id="your-day-body">
+      <Brief day={day} covUser={covUser} settings={settings} />
+      {tiles && <DayTiles day={day} />}
 
       {items.length === 0 ? (
         <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing needs you today. Clear desk.</div>
