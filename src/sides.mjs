@@ -48,7 +48,7 @@ const MERCHANT_NAV = [['multi', 'Chargebacks'], ['desk', 'Chargebacks'], ['file'
 
 export function navFor(sides) {
   const rows = doesIssuing(sides) ? ISSUER_NAV : MERCHANT_NAV
-  return [{ id: 'home', label: 'HOME' }, ...rows.map(([id, group]) => ({ id, label: TOOLS[id], group })), { id: 'settings', label: 'SETTINGS' }]
+  return [{ id: 'home', label: 'HOME' }, ...rows.map(([id, group]) => ({ id, label: TOOLS[id], group })), { id: 'insights', label: 'INSIGHTS' }, { id: 'settings', label: 'SETTINGS' }]
 }
 
 // Triage's Alerts tab: who found it

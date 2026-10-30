@@ -61,3 +61,9 @@ export async function triageClaim(id) {
   if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`)
   return j.ai
 }
+
+// Take someone to a claim: 001 Triage → Claims, with that claim open
+export function openClaim(id) {
+  window.dispatchEvent(new CustomEvent('cov:go', { detail: { section: 'triage', tab: 'claims' } }))
+  window.dispatchEvent(new CustomEvent('cov:open-claim', { detail: { id } }))
+}

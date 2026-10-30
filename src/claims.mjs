@@ -113,6 +113,17 @@ export const publicStatus = row => ({
   history: (row.history || []).map(h => ({ status: h.status, ...(h.step ? { step: h.step } : {}), at: h.at, ...(h.public ? { note: h.public } : {}) })),
 })
 
+// ── Customers waiting ──
+// An open claim whose customer hasn't been told anything (a status they can see, or a
+// note for them) in UPDATE_DAYS days or more. Oldest silence first.
+export const UPDATE_DAYS = 5
+export const lastToldAt = row => [row.created_at ?? row.createdAt, ...(row.history || []).filter(h => h.public || h.status).map(h => h.at)]
+  .filter(Boolean).map(t => new Date(t).getTime()).reduce((a, b) => Math.max(a, b), 0)
+export const silentDays = (row, now = new Date()) => Math.floor((now - lastToldAt(row)) / 86400000)
+export const waitingClaims = (rows, now = new Date()) => (rows || [])
+  .filter(r => r.status !== 'closed' && lastToldAt(r) && silentDays(r, now) >= UPDATE_DAYS)
+  .sort((a, b) => lastToldAt(a) - lastToldAt(b))
+
 // ── Steps on the Desk ──
 // Once a claim is with the Desk, three moves on its case are sent to the bank's
 // app as their own events (claim.provisional_credit, claim.filed, claim.resolved),

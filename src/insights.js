@@ -10,6 +10,8 @@
 //               the open queue would take to clear at the recent rate
 //   week        clock deadlines in the next 7 days and the busiest day
 //   atRisk      money on cases with a missed or nearly-due clock
+//   you, team   the same figures for your own cases and for the whole team
+//   ahead       the next five working days: deadlines, and the usual intake
 import { CLOSED_STATUSES, caseClocks, parseAmount } from './clocks.mjs'
 import { closedAt } from './qa.js'
 
@@ -76,26 +78,45 @@ export function insights(cases, { me, settings, now = new Date() } = {}) {
     const cur = String(c.amount || '').match(/[A-Z]{3}/)?.[0]; if (cur) currencies.add(cur)
   })
 
+  // ── The forecast, for you and for the team, side by side ──
+  const weekOf = list => {
+    const by = Array(7).fill(0)
+    list.forEach(c => caseClocks(c, settings, now).forEach(k => {
+      if (k.state === 'met' || k.key === 'assign') return
+      const o = Math.floor((startOfDay(k.due) - today) / DAY); if (o >= 0 && o < 7) by[o]++
+    }))
+    const total = by.reduce((a, b) => a + b, 0), b = total ? by.indexOf(Math.max(...by)) : null
+    return { total, byDay: by, busiest: b, busiestLabel: b == null ? '' : b === 0 ? 'today' : b === 1 ? 'tomorrow' : WEEKDAYS[(now.getDay() + b) % 7] }
+  }
+  const riskOf = list => {
+    const hit = list.filter(c => caseClocks(c, settings, now).some(k => k.state === 'breached' || k.state === 'soon'))
+    const cur = new Set(hit.map(c => String(c.amount || '').match(/[A-Z]{3}/)?.[0]).filter(Boolean))
+    return { amount: hit.reduce((s, c) => s + parseAmount(c.amount), 0), cases: hit.length, currency: cur.size === 1 ? [...cur][0] : cur.size ? 'mixed' : 'USD' }
+  }
+  const statsFor = list => ({ open: list.filter(isOpen).length, pace: paceOf(list), week: weekOf(list), atRisk: riskOf(list),
+    dueToday: list.filter(c => caseClocks(c, settings, now).some(k => k.state !== 'met' && k.key !== 'assign' && k.left >= 0 && dayKey(k.due) === dayKey(today))).length })
+
+  // ── The working week ahead: deadlines on each day, and how many new cases a day like it usually brings ──
+  // (days are stepped by the calendar, not by 24 hours, so a clock change doesn't shift them)
+  const weeks = Math.min(8, weeksOfHistory)
+  const addDays = (d, k) => { const x = new Date(d); x.setDate(x.getDate() + k); return x }
+  const usual = d => weeksOfHistory >= 2 ? Array.from({ length: weeks }, (_, i) => opened[dayKey(addDays(d, -7 * (i + 1)))] || 0).reduce((a, b) => a + b, 0) / weeks : null
+  const deadlinesOn = (list, d) => list.reduce((s, c) => s + caseClocks(c, settings, now).filter(k => k.state !== 'met' && k.key !== 'assign' && dayKey(k.due) === dayKey(d)).length, 0)
+  const ahead = []
+  for (let i = 0; ahead.length < 5; i++) {
+    const d = addDays(today, i)
+    if (d.getDay() === 0 || d.getDay() === 6) continue
+    ahead.push({ date: d, today: i === 0, deadlines: deadlinesOn(all, d), mine: mine.length ? deadlinesOn(mine, d) : null, expected: usual(d) })
+  }
+
   return { scope: mine.length ? 'mine' : 'team', days, expected, pace, week,
-    atRisk: { amount: atRisk, cases: atRiskCases, currency: currencies.size === 1 ? [...currencies][0] : currencies.size ? 'mixed' : 'USD' } }
+    atRisk: { amount: atRisk, cases: atRiskCases, currency: currencies.size === 1 ? [...currencies][0] : currencies.size ? 'mixed' : 'USD' },
+    you: mine.length ? statsFor(mine) : null, team: { ...statsFor(all), openedToday: days[days.length - 1].count }, ahead, weeks }
 }
 
 export function greeting(now = new Date()) {
   const h = now.getHours()
   return h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
-}
-
-// One sentence that sums up the day, e.g. "3 things need you today; 1 is overdue."
-// team: nothing is assigned to this person, so the list is the team's
-export function daySummary({ urgent, overdue, todo, batch, batchTime, total, team }) {
-  if (!total) return 'Nothing needs you today. A clear desk.'
-  const parts = [team ? `Nothing’s assigned to you, so here’s the team’s day: ${total} thing${total === 1 ? ' needs' : 's need'} attention`
-    : `${total} thing${total === 1 ? ' needs' : 's need'} you today`]
-  if (overdue) parts.push(`${overdue} ${overdue === 1 ? 'is' : 'are'} overdue`)
-  else if (urgent) parts.push(`${urgent} ${urgent === 1 ? 'is' : 'are'} due soon`)
-  if (batch) parts.push(`${batch} go${batch === 1 ? 'es' : ''} out in the ${batchTime} batch`)
-  else if (todo) parts.push(`${todo} to analyse`)
-  return parts.join('; ') + '.'
 }
 
 export const money = (n, cur) => {

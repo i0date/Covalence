@@ -583,9 +583,9 @@ export const GLOBAL_CSS = `
     .cov-nav-logo div { letter-spacing:0.08em !important; } .cov-nav-demo { letter-spacing:0.06em !important; padding:2px 4px !important; } }
   @media (max-width:359px) { .cov-nav-demo { display:none !important; } }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
-  /* Top bar: the compact layout (page name + menu) is used below 1320px, the width the full tab row needs — tablets and laptops too */
+  /* Top bar: the compact layout (page name + menu) is used below 1400px, the width the full tab row needs — tablets and laptops too */
   .cov-nav-menu, .cov-nav-current { display:none; }
-  @media (max-width:1319px) {
+  @media (max-width:1399px) {
     .cov-nav-buttons { display:none !important; }
     .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-menu { display:block !important; }
@@ -594,11 +594,14 @@ export const GLOBAL_CSS = `
     .cov-nav-search-label { display:none !important; }
   }
   /* Sound the alarm: the full label on wide screens, "ALARM" down to phones, the flag alone on the smallest */
-  @media (max-width:1319px) { .cov-alarm-long { display:none !important; } }
-  @media (min-width:1320px) { .cov-alarm-short { display:none !important; } }
+  @media (max-width:1399px) { .cov-alarm-long { display:none !important; } }
+  @media (min-width:1400px) { .cov-alarm-short { display:none !important; } }
   @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
   @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
   .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
+  /* A possible fraud wave to look at: a small amber dot on the alarm button */
+  .cov-alarm-btn { position:relative; }
+  .cov-alarm-hint { position:absolute; top:-4px; right:-4px; width:9px; height:9px; border-radius:50%; background:#D97706; border:2px solid #1A1814; }
   /* Phone menu: fit the visible screen (100dvh excludes Safari's address bar) and clear the home indicator */
   .cov-mobile-menu { max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); padding-bottom:env(safe-area-inset-bottom); }
   /* Phones: the sync status moves into the menu so the top bar keeps room for the alarm */
@@ -607,7 +610,7 @@ export const GLOBAL_CSS = `
   @media (max-width:480px) { .cov-nav-current { visibility:hidden; } }
   /* Eight tools: the number sits small above each name, as on the mastheads and in the menu; labels line up along the bottom */
   .cov-nav-num { display:none; }
-  @media (min-width:1320px) {
+  @media (min-width:1400px) {
     .cov-nav-buttons button { display:inline-flex !important; flex-direction:column; justify-content:flex-end; align-items:flex-start; height:48px; padding:0 8px 13px !important; line-height:1; }
     .cov-nav-buttons .cov-nav-num { display:block; font-size:8px; letter-spacing:0.1em; color:#78716C; margin-bottom:4px; }
   }
@@ -620,35 +623,76 @@ export const GLOBAL_CSS = `
   }
 
   /* ── Responsive helpers ───────────────────────────────────────────────── */
-  .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
-  @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
+  @media(max-width:1023px) { .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
   .cov-home-cases-bar:hover { background:#F3EEE5 !important; }
-  /* The brief: case links read as references, not buttons */
-  .cov-brief-link { background:none; border:none; padding:0; font-size:12px; letter-spacing:0.02em; color:#1E3A5F; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-  .cov-brief-link:hover, .cov-brief-link:focus-visible { color:#1A1814; }
-  /* Compact tiles: a 2×2 grid with the chart full width below (Home's side column; phones below) */
-  .cov-yd-compact { grid-template-columns:repeat(2, minmax(0,1fr)) !important; gap:8px !important; padding:12px 14px 14px !important; }
-  .cov-yd-compact > div { padding:10px 12px !important; }
-  .cov-yd-compact .cov-yd-chart-in, .cov-yd-compact .cov-yd-more { display:none !important; }
-  .cov-yd-compact .cov-yd-chart-out { display:block !important; grid-column:1 / -1; }
-  .cov-yd-compact .cov-yd-value { font-size:24px !important; }
-  .cov-yd-compact .cov-yd-sub { font-size:12.5px !important; line-height:1.35 !important; }
-  /* Home on wide screens: the work on the left, a column of figures on the right that stays in view */
-  .cov-home-cols { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:24px; align-items:start; }
-  .cov-home-rail { display:grid; gap:20px; }
-  @media (min-height:820px) { .cov-home-rail { position:sticky; top:72px; } }   /* only where the whole column fits on screen */
-  .cov-home-rail .home-stats-grid { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
-  @media (min-width:1400px) { .cov-home-cols { grid-template-columns:minmax(0,1fr) 420px; } }
-  /* Your day: the 14-day chart sits in the caseload tile, except on phones (below) */
-  .cov-yd-chart-out, .cov-yd-date-short { display:none; }
-  /* phones: four compact numbers in a 2×2 grid, the chart full width beneath, nothing scrolls sideways */
-  @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px !important; padding:12px 14px !important; }
-    .cov-yourday-insights > div { padding:10px 12px !important; }
-    .cov-yd-chart-in, .cov-yd-more, .cov-yd-date-long { display:none !important; }
-    .cov-yd-chart-out { display:block; grid-column:1 / -1; }
-    .cov-yd-date-short { display:inline; }
-    .cov-yd-value { font-size:22px !important; }
-    .cov-yd-sub { font-size:12px !important; line-height:1.35 !important; } }
+  /* Front page: a dateline between rules, the greeting, a lead sentence, then the brief in columns */
+  .cov-front { margin:0 0 28px; }
+  .cov-front-dateline { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:10px; letter-spacing:0.16em; color:#57534E;
+    border-top:3px double #1A1814; border-bottom:1px solid #1A1814; padding:7px 0 6px; }
+  .cov-front-greeting { margin:18px 0 4px; font-size:17px; font-style:italic; color:#57534E; }
+  .cov-front-lead { margin:0 0 18px; font-size:clamp(24px, 3vw, 36px); font-weight:500; line-height:1.12; letter-spacing:-0.02em; color:#1A1814; max-width:24em; text-wrap:balance; }
+  .cov-front-items { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); }
+  .cov-front-item { padding:8px 20px 12px; min-width:0; }
+  .cov-front-item:nth-child(4n+1) { padding-left:0; }
+  .cov-front-item:not(:nth-child(4n+1)) { border-left:1px solid #D4CCBC; }
+  .cov-front-item:nth-child(n+5) { border-top:1px solid #D4CCBC; }
+  .cov-front-kicker { font-size:10px; letter-spacing:0.16em; font-weight:600; margin-bottom:6px; color:#1A1814; }
+  .cov-front-text { margin:0; font-size:15px; line-height:1.55; color:#1A1814; }
+  .cov-new-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#1E3A5F; margin-right:7px; vertical-align:1px; flex-shrink:0; }
+  /* Insights: numbered sections between rules, figures in a row, a plain table */
+  .cov-ins-section { border-top:1px solid #1A1814; padding:22px 0 34px; }
+  .cov-ins-kicker { font-size:10px; letter-spacing:0.18em; color:#57534E; font-weight:600; }
+  .cov-ins-title { font-size:clamp(24px, 2.6vw, 32px); font-weight:600; letter-spacing:-0.015em; margin:6px 0 6px; color:#1A1814; }
+  .cov-ins-intro { font-size:15px; color:#57534E; line-height:1.5; max-width:640px; margin:0 0 18px; }
+  .cov-ins-figures { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); border-top:1px solid #D4CCBC; }
+  .cov-ins-figure { padding:14px 18px 6px 0; min-width:0; }
+  .cov-ins-figure + .cov-ins-figure { border-left:1px solid #D4CCBC; padding-left:18px; }
+  .cov-ins-finding { border-left:3px solid #92400E; background:#FAF7F1; padding:12px 16px; }
+  .cov-ins-table { width:100%; border-collapse:collapse; font-family:Georgia,serif; font-size:14px; }
+  .cov-ins-table th { text-align:left; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; font-weight:500; color:#57534E; text-transform:uppercase; padding:8px 12px 8px 0; border-bottom:1px solid #1A1814; }
+  .cov-ins-table td { padding:9px 12px 9px 0; border-bottom:1px solid #E7E2D9; vertical-align:top; }
+  .cov-ins-check { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #E7E2D9; }
+  @media (max-width:599px) { .cov-ins-figure + .cov-ins-figure { border-left:none; padding-left:0; border-top:1px solid #E7E2D9; } .cov-ins-hide { display:none; } }
+  .cov-front-alarm { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; border-left:3px solid #991B1B; background:#FFFFFF; padding:8px 12px; margin:0 0 14px; }
+  .cov-front-fold { width:100%; display:flex; align-items:center; gap:14px; background:none; border:none; border-top:1px solid #1A1814; border-bottom:1px solid #D4CCBC; padding:10px 0; text-align:left; cursor:pointer; font-size:10px; letter-spacing:0.12em; color:#57534E; }
+  .cov-front-fold:hover .cov-front-fold-btn, .cov-front-fold:focus-visible .cov-front-fold-btn { background:#1A1814; color:#F5F1EA; }
+  .cov-front-fold-label { font-weight:600; color:#1A1814; letter-spacing:0.16em; white-space:nowrap; }
+  .cov-front-fold-counts { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:4px 0; }
+  .cov-front-sep { margin:0 8px; color:#A8A29E; }
+  .cov-front-fold-btn { background:#FFFFFF; border:1px solid #1A1814; padding:6px 10px; color:#1A1814; white-space:nowrap; }
+  .cov-front-group { padding-top:12px; }
+  .cov-front-group-title { font-size:10px; letter-spacing:0.16em; color:#6B6259; margin-bottom:2px; }
+  .cov-front-group .cov-front-items { border-top:none; }
+  /* A case or claim named in the brief: a small reference tag you can open */
+  .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
+  .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }
+  @media (max-width:1023px) { .cov-front-items { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .cov-front-item:nth-child(4n+1) { padding-left:20px; } .cov-front-item:nth-child(2n+1) { padding-left:0; border-left:none !important; }
+    .cov-front-item:not(:nth-child(2n+1)) { border-left:1px solid #D4CCBC; } .cov-front-item:nth-child(n+3) { border-top:1px solid #D4CCBC; } }
+  @media (max-width:599px) { .cov-front-items { grid-template-columns:minmax(0,1fr); } .cov-front-fold { flex-wrap:wrap; } .cov-front-fold-btn { margin-left:auto; } .cov-front-fold-counts { order:3; flex-basis:100%; }
+    .cov-front-item { padding:12px 0 12px !important; border-left:none !important; } .cov-front-item + .cov-front-item { border-top:1px solid #D4CCBC; }
+    .cov-front-greeting { margin-top:14px; font-size:16px; } .cov-front-lead { margin-bottom:14px; } }
+  /* Your day: the plan, and the forecast beside it on wide screens (below it on narrow ones) */
+  .cov-yd-grid { display:grid; grid-template-columns:minmax(0,1fr); }
+  .cov-yd-plan { min-width:0; }
+  .cov-yd-forecast { min-width:0; background:#F3EEE6; border-top:1px solid #1A1814; padding:16px 20px 18px; }
+  @media (min-width:1100px) { .cov-yd-grid { grid-template-columns:minmax(0,1fr) 380px; } .cov-yd-forecast { border-top:none; border-left:1px solid #D4CCBC; } }
+  @media (min-width:1400px) { .cov-yd-grid { grid-template-columns:minmax(0,1fr) 420px; } }
+  .cov-plan-group + .cov-plan-group { border-top:1px solid #D4CCBC; }
+  .cov-plan-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding:12px 18px 8px; }
+  .cov-plan-title { font-size:10px; letter-spacing:0.16em; font-weight:600; color:#1A1814; }
+  .cov-plan-note { font-size:13px; font-style:italic; color:#6B6259; }
+  .cov-plan-batch { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 18px; border-top:1px solid #EDE7DC; }
+  .cov-fc-head { font-size:10px; letter-spacing:0.16em; font-weight:600; color:#1A1814; padding-bottom:8px; border-bottom:1px solid #1A1814; }
+  .cov-fc-block { padding:12px 0 14px; }
+  .cov-fc-block + .cov-fc-block { border-top:1px solid #D4CCBC; }
+  .cov-fc-who { font-size:17px; font-weight:600; font-style:italic; color:#1A1814; margin-bottom:6px; }
+  .cov-fc-line { display:grid; grid-template-columns:78px minmax(0,1fr); gap:10px; padding:4px 0; align-items:baseline; }
+  .cov-fc-label { font-size:9.5px; letter-spacing:0.12em; color:#6B6259; }
+  .cov-fc-text { font-size:14px; line-height:1.45; color:#3F3A35; }
+  .cov-fc-text strong { color:#1A1814; font-weight:600; }
+  .cov-fc-note { margin:4px 0 0; font-size:12.5px; font-style:italic; color:#6B6259; line-height:1.45; border-top:1px solid #D4CCBC; padding-top:10px; }
+  @media (max-width:599px) { .cov-yd-forecast { padding:14px 14px 16px; } .cov-plan-head { padding:12px 14px 8px; } .cov-plan-batch { padding:9px 14px; } }
   @media(max-width:767px) {
     .cov-search-status { width:auto !important; }
     .cov-yourday-row { grid-template-columns:minmax(0,1fr) !important; gap:6px !important; justify-items:start; padding:12px 14px !important; }

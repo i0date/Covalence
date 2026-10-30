@@ -1,6 +1,7 @@
 // 008 TRIO — incident command (operational + strategy)
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
+import { usePatterns, PatternList, raiseFromPattern } from '../Alarms.jsx'
 import { CaseLink } from '../CaseThread.jsx'
 import { mergeTrioIncidents, pullTrioFromSupa, pushTrioToSupa } from '../data.js'
 import { readCases } from '../caseStore.js'
@@ -10,7 +11,8 @@ import { doesIssuing } from '../sides.mjs'
 // ═══════════════════════════════════════════════════════════════════════════════
 // TRIO VIEW — fraud incident command
 // ═══════════════════════════════════════════════════════════════════════════════
-export function TrioView({ outcomes: _parentOutcomes, sides = ['issuer'] }) {
+export function TrioView({ outcomes: _parentOutcomes, sides = ['issuer'], platformMode }) {
+  const patterns = usePatterns(_parentOutcomes, platformMode)
   const STORAGE_KEY = 'cov_trio_incidents'
   const loadIncidents = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { return [] } }
   const saveIncidents = (arr) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) } catch {} }
@@ -335,6 +337,17 @@ COVALENCE · TRIO RISK INTELLIGENCE · CONFIDENTIAL
         <span className="mono-font text-[10px] tracking-widest px-2 py-0.5" style={{ background:'#7F1D1D', color:'#FEF2F2' }}>EARLY ACCESS</span>
         <span className="display-font text-[12px] text-stone-700">Trio is live and growing — new incident command capabilities are rolling out in phases, with cross-institutional coordination next.</span>
       </div>
+
+      {/* ── Patterns: possible fraud waves in the cases, before anyone sounds the alarm ── */}
+      {!strategyMode && patterns.length > 0 && (
+        <section aria-label="Possible fraud waves" className="mb-6" style={{ border:'1px solid #D97706', background:'#FFFBEB', padding:'14px 16px' }}>
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#92400E', fontWeight:700 }}>PATTERNS · POSSIBLE FRAUD WAVES IN YOUR CASES</div>
+          <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'4px 0 10px', lineHeight:1.5 }}>
+            Anyone paid in far more of your cases this week than usual: at least three cases, and three times the usual weekly number. If it’s real, sound the alarm; a level 2 alarm opens an incident here with its playbook.
+          </p>
+          <PatternList patterns={patterns} onUse={raiseFromPattern} />
+        </section>
+      )}
 
       {/* ══════════════════════════════════════════════════════════
            STRATEGY MODE
