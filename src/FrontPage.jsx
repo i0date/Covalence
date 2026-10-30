@@ -14,7 +14,7 @@ import { greeting } from './insights.js'
 const TONE = { danger: '#991B1B', warn: '#92400E', good: '#065F46' }
 
 // Case and claim references; a run of more than three reads "A, B, C and 2 more"
-function Refs({ parts }) {
+export function Refs({ parts }) {
   const out = []
   for (let i = 0; i < parts.length; i++) {
     if (typeof parts[i] === 'string') { out.push(parts[i]); continue }

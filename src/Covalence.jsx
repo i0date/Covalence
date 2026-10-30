@@ -19,6 +19,7 @@ import { FileView } from './tools/File.jsx'
 import { HomeView } from './tools/Home.jsx'
 import { MultiView } from './tools/Multi.jsx'
 import { SettingsView } from './tools/Settings.jsx'
+import { InsightsView } from './tools/Insights.jsx'
 import { TriageView } from './tools/Triage.jsx'
 import { TrioView } from './tools/Trio.jsx'
 import { readCases, writeCases } from './caseStore.js'
@@ -359,7 +360,7 @@ export default function Covalence() {
 
         {/* ── Top nav ── */}
         <div className="sticky top-0 z-50" style={{ background:'#1A1814', borderBottom:'1px solid #2D2922', overflowY:'hidden', overflowX:'auto' }}>
-          <div className="cov-nav-inner" style={{ maxWidth:'1320px', margin:'0 auto', display:'flex', alignItems:'center', gap:'14px', padding:'0 24px' }}>
+          <div className="cov-nav-inner" style={{ maxWidth:'1400px', margin:'0 auto', display:'flex', alignItems:'center', gap:'14px', padding:'0 24px' }}>
             <div className="cov-nav-logo" onClick={() => setActiveSection('home')} title="Home" style={{ paddingRight:'20px', borderRight:'1px solid #2D2922', marginRight:'4px', flexShrink:0, cursor:'pointer' }}>
               <div className="mono-font" style={{ fontSize:'14px', letterSpacing:'0.3em', color:'#F5F1EA', fontWeight:500, lineHeight:1, display:'flex', alignItems:'center', gap:'10px' }}>
                 COVALENCE
@@ -507,6 +508,9 @@ export default function Covalence() {
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
           <TrioView outcomes={outcomes} sides={sides} />
+        </div>
+        <div style={{ display: activeSection === 'insights' ? 'block' : 'none' }}>
+          {activeSection === 'insights' && <InsightsView outcomes={outcomes} settings={settings} platformMode={platformMode} />}
         </div>
         <div style={{ display: activeSection === 'settings' ? 'block' : 'none' }}>
           <SettingsView settings={settings} setSettings={setSettings} covUser={covUser} outcomes={outcomes} setOutcomes={setOutcomes} team={team} />

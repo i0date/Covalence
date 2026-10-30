@@ -583,9 +583,9 @@ export const GLOBAL_CSS = `
     .cov-nav-logo div { letter-spacing:0.08em !important; } .cov-nav-demo { letter-spacing:0.06em !important; padding:2px 4px !important; } }
   @media (max-width:359px) { .cov-nav-demo { display:none !important; } }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
-  /* Top bar: the compact layout (page name + menu) is used below 1320px, the width the full tab row needs — tablets and laptops too */
+  /* Top bar: the compact layout (page name + menu) is used below 1400px, the width the full tab row needs — tablets and laptops too */
   .cov-nav-menu, .cov-nav-current { display:none; }
-  @media (max-width:1319px) {
+  @media (max-width:1399px) {
     .cov-nav-buttons { display:none !important; }
     .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-menu { display:block !important; }
@@ -594,8 +594,8 @@ export const GLOBAL_CSS = `
     .cov-nav-search-label { display:none !important; }
   }
   /* Sound the alarm: the full label on wide screens, "ALARM" down to phones, the flag alone on the smallest */
-  @media (max-width:1319px) { .cov-alarm-long { display:none !important; } }
-  @media (min-width:1320px) { .cov-alarm-short { display:none !important; } }
+  @media (max-width:1399px) { .cov-alarm-long { display:none !important; } }
+  @media (min-width:1400px) { .cov-alarm-short { display:none !important; } }
   @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
   @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
   .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
@@ -607,7 +607,7 @@ export const GLOBAL_CSS = `
   @media (max-width:480px) { .cov-nav-current { visibility:hidden; } }
   /* Eight tools: the number sits small above each name, as on the mastheads and in the menu; labels line up along the bottom */
   .cov-nav-num { display:none; }
-  @media (min-width:1320px) {
+  @media (min-width:1400px) {
     .cov-nav-buttons button { display:inline-flex !important; flex-direction:column; justify-content:flex-end; align-items:flex-start; height:48px; padding:0 8px 13px !important; line-height:1; }
     .cov-nav-buttons .cov-nav-num { display:block; font-size:8px; letter-spacing:0.1em; color:#78716C; margin-bottom:4px; }
   }
@@ -637,6 +637,20 @@ export const GLOBAL_CSS = `
   .cov-front-kicker { font-size:10px; letter-spacing:0.16em; font-weight:600; margin-bottom:6px; }
   .cov-front-text { margin:0; font-size:15px; line-height:1.55; color:#1A1814; }
   .cov-new-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#1E3A5F; margin-right:7px; vertical-align:1px; flex-shrink:0; }
+  /* Insights: numbered sections between rules, figures in a row, a plain table */
+  .cov-ins-section { border-top:1px solid #1A1814; padding:22px 0 34px; }
+  .cov-ins-kicker { font-size:10px; letter-spacing:0.18em; color:#57534E; font-weight:600; }
+  .cov-ins-title { font-size:clamp(24px, 2.6vw, 32px); font-weight:600; letter-spacing:-0.015em; margin:6px 0 6px; color:#1A1814; }
+  .cov-ins-intro { font-size:15px; color:#57534E; line-height:1.5; max-width:640px; margin:0 0 18px; }
+  .cov-ins-figures { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); border-top:1px solid #D4CCBC; }
+  .cov-ins-figure { padding:14px 18px 6px 0; min-width:0; }
+  .cov-ins-figure + .cov-ins-figure { border-left:1px solid #D4CCBC; padding-left:18px; }
+  .cov-ins-finding { border-left:3px solid #92400E; background:#FAF7F1; padding:12px 16px; }
+  .cov-ins-table { width:100%; border-collapse:collapse; font-family:Georgia,serif; font-size:14px; }
+  .cov-ins-table th { text-align:left; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.12em; font-weight:500; color:#57534E; text-transform:uppercase; padding:8px 12px 8px 0; border-bottom:1px solid #1A1814; }
+  .cov-ins-table td { padding:9px 12px 9px 0; border-bottom:1px solid #E7E2D9; vertical-align:top; }
+  .cov-ins-check { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #E7E2D9; }
+  @media (max-width:599px) { .cov-ins-figure + .cov-ins-figure { border-left:none; padding-left:0; border-top:1px solid #E7E2D9; } .cov-ins-hide { display:none; } }
   /* A case or claim named in the brief: a small reference tag you can open */
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
   .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }
