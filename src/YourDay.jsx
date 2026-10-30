@@ -299,10 +299,10 @@ function Row({ x, i, day }) {
   return (
     <li>
       <button onClick={() => claim ? openClaim(c.id) : openCase(c.id)} data-yourday-row={i}
-        style={{ display:'grid', gridTemplateColumns:'118px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
+        style={{ display:'grid', gridTemplateColumns:'150px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
           padding:'9px 18px', background:'none', border:'none', borderTop:'1px solid #EDE7DC', cursor:'pointer' }}
         className="cov-search-row cov-yourday-row">
-        <span style={{ display:'inline-flex', alignItems:'center' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone}>{r.label}</Badge></span>
+        <span style={{ display:'inline-flex', alignItems:'center', minWidth:0, maxWidth:'100%', overflow:'hidden' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone}>{r.label}</Badge></span>
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
         <span style={{ minWidth:0 }}>
           <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
