@@ -10,7 +10,7 @@
 //   escalated cases escalated, and how many to you
 //   ahead     deadlines in the next 24 hours, and anything already overdue
 //   waiting   customers who haven't heard from the bank in UPDATE_DAYS or more
-//   alarm     an open alarm
+//   alarm     an open alarm, or else a possible fraud wave (patterns.mjs)
 // One of them becomes the lead: a sentence, in words, about the two things that matter most.
 // The period runs from the start of the last working day, or from your last
 // visit when that was earlier (up to two weeks back).
@@ -80,7 +80,7 @@ const cap = t => t.charAt(0).toUpperCase() + t.slice(1)
 // cases: this side's cases; claims: rows from claims_list (may be empty); alarms: alarm_list rows
 // Returns { lead, items: [{ key, kicker, text: [string | { id } | { claim }], tone }] }.
 // The screen turns { id } into a link to the case and { claim } into a link to the claim.
-export function brief(cases, { claims = [], alarms = [], me = '', settings, from, now = new Date() } = {}) {
+export function brief(cases, { claims = [], alarms = [], patterns = [], me = '', settings, from, now = new Date() } = {}) {
   const items = [], lead = {}
   const ids = list => list.map(c => ({ id: c.id }))
   const isOpen = c => !CLOSED_STATUSES.includes(c.status)
@@ -90,6 +90,14 @@ export function brief(cases, { claims = [], alarms = [], me = '', settings, from
   if (alarm) {
     items.push({ key: 'alarm', kicker: `LEVEL ${alarm.level} ALARM`, text: [`${alarm.title}.`], tone: 'danger', alarm: true })
     lead.alarm = `a level ${alarm.level} alarm is open: ${alarm.title}`
+  }
+
+  // ── A possible fraud wave (patterns.mjs), when no alarm is open ──
+  if (!alarm && patterns.length) {
+    const p = patterns[0]
+    items.push({ key: 'pattern', kicker: 'POSSIBLE FRAUD WAVE', tone: 'warn', pattern: p,
+      text: [`${p.recent.length} cases at ${p.name} in 7 days, ${p.basis}${patterns.length > 1 ? ` (and ${patterns.length - 1} more pattern${patterns.length > 2 ? 's' : ''})` : ''}: `, ...ids(p.recent)] })
+    lead.pattern = `${say(p.recent.length, 'case')} hit ${p.name} this week (${p.basis})`
   }
 
   // ── Overdue, and the next 24 hours ──
@@ -164,7 +172,7 @@ export function brief(cases, { claims = [], alarms = [], me = '', settings, from
   }
 
   // The lead: the two most important things, in that order
-  const order = ['alarm', 'late', 'waiting', 'answered', 'ahead', 'decided', 'escalated', 'in']
+  const order = ['alarm', 'pattern', 'late', 'waiting', 'answered', 'ahead', 'decided', 'escalated', 'in']
   const top = order.filter(k => lead[k]).slice(0, 2).map(k => lead[k])
   return { lead: top.length ? cap(top.join(', and ')) + '.' : null, items }
 }

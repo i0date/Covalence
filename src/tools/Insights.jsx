@@ -46,7 +46,7 @@ export function InsightsView({ outcomes, settings, platformMode }) {
 
   return (
     <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
-      <div style={{ borderBottom:'1px solid #D4CCBC', marginBottom:'8px', paddingBottom:'24px' }}>
+      <div style={{ marginBottom:'8px', paddingBottom:'24px' }}>
         <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.25em', color:'#A8A29E', marginBottom:'12px' }}>COVALENCE · READ ONCE A WEEK</div>
         <h1 className="display-font text-stone-900" style={{ fontSize:'clamp(40px,6vw,72px)', letterSpacing:'-0.03em', lineHeight:1, margin:0 }}>
           <span style={{ fontWeight:700 }}>In</span><span style={{ fontStyle:'italic', fontWeight:500 }}>sights</span>

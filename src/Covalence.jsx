@@ -387,7 +387,7 @@ export default function Covalence() {
               </React.Fragment>))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
-              <AlarmButton covUser={covUser} />
+              <AlarmButton covUser={covUser} outcomes={outcomes} platformMode={platformMode} />
               {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
               <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search cov-nav-ctl"
                 style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'0 8px 0 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
@@ -447,7 +447,7 @@ export default function Covalence() {
 
         {/* ── Sound the alarm: the open alarm, for everyone, on every screen ── */}
         <AlarmBanner covUser={covUser} />
-        <AlarmDialog covUser={covUser} sides={sides} />
+        <AlarmDialog covUser={covUser} sides={sides} outcomes={outcomes} platformMode={platformMode} />
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (
@@ -507,7 +507,7 @@ export default function Covalence() {
           <DuoView duoHandoff={duoHandoff} setDuoHandoff={setDuoHandoff} authInstitution={covUser?.authed || covUser?.demo ? covUser.institution : null} onSignIn={() => setShowSignIn(true)} covUser={covUser} />
         </div>
         <div style={{ display: activeSection === 'trio' ? 'block' : 'none' }}>
-          <TrioView outcomes={outcomes} sides={sides} />
+          <TrioView outcomes={outcomes} sides={sides} platformMode={platformMode} />
         </div>
         <div style={{ display: activeSection === 'insights' ? 'block' : 'none' }}>
           {activeSection === 'insights' && <InsightsView outcomes={outcomes} settings={settings} platformMode={platformMode} />}

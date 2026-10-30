@@ -5,15 +5,46 @@
 // names the level, the owner, what to do now and when the next update is due, so
 // nobody has to guess how worried to be. Level 2 and 3 open a Trio incident with
 // the matching playbook; only level 3 is red.
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { LEVELS, alarmList, alarmRaise, alarmUpdate } from './alarmData.js'
 import { listTeam } from './auth.js'
 import { demoRpc } from './demoBackend.js'
 import { Button, Input } from './ui.jsx'
 import { typesFor } from './trioPlaybooks.mjs'
-import { doesIssuing } from './sides.mjs'
+import { doesIssuing, isMerchantCase } from './sides.mjs'
+import { allThreadCases } from './CaseThread.jsx'
+import { livePatterns, dismissPattern } from './patterns.mjs'
+import { Refs } from './FrontPage.jsx'
 
 const openDialog = () => window.dispatchEvent(new Event('cov:alarm-open'))
+
+// Possible fraud waves in the cases (patterns.mjs), refreshed when one is dismissed
+// platformMode: 'merchant' looks at chargebacks against you, anything else at your customers' disputes
+export function usePatterns(outcomes, platformMode) {
+  const [tick, setTick] = useState(0)
+  useEffect(() => { const h = () => setTick(t => t + 1); window.addEventListener('cov:patterns-changed', h); return () => window.removeEventListener('cov:patterns-changed', h) }, [])
+  return useMemo(() => livePatterns(allThreadCases(outcomes || []).filter(c => platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c))), [outcomes, platformMode, tick])
+}
+
+// Each pattern: what's happening, what it's based on, the cases, and what to do with it
+export function PatternList({ patterns, onUse, useLabel = 'Sound the alarm with this' }) {
+  return (
+    <div style={{ display:'grid', gap:'8px' }}>
+      {patterns.map(p => (
+        <div key={p.key} style={{ borderLeft:`3px solid ${p.level >= 2 ? '#D97706' : '#B8B0A4'}`, background:'#FFFFFF', padding:'10px 12px' }}>
+          <div className="display-font" style={{ fontSize:'15px', color:'#1A1814' }}><strong>{p.title}</strong> <span style={{ color:'#57534E' }}>— {p.basis}{p.amount ? `, $${Math.round(p.amount).toLocaleString('en-US')} in all` : ''}.</span></div>
+          <div style={{ margin:'4px 0 8px' }}><Refs parts={p.recent.map(c => ({ id: c.id }))} /></div>
+          <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+            <Button small onClick={() => onUse(p)}>{useLabel}</Button>
+            <Button small variant="quiet" onClick={() => dismissPattern(p)}>Not a wave</Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+// Open the alarm dialog with the form filled in from a pattern
+export const raiseFromPattern = p => window.dispatchEvent(new CustomEvent('cov:alarm-open', { detail: { prefill: { level: p.level, title: p.title, doNow: p.doNow } } }))
 const time = ts => ts ? new Date(ts).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : ''
 const mins = ts => ts ? Math.round((new Date(ts) - Date.now()) / 60000) : null
 const dueText = ts => { const m = mins(ts); if (m == null) return ''; return m < 0 ? `next update ${-m} min overdue` : `next update ${time(ts)} (in ${m} min)` }
@@ -40,8 +71,9 @@ function openTrioIncident(a) {
   })
 }
 
-export function AlarmButton({ covUser }) {
+export function AlarmButton({ covUser, outcomes, platformMode }) {
   const open = useAlarms(signedInOrDemo(covUser)).find(a => a.status === 'open')
+  const patterns = usePatterns(outcomes, platformMode), hint = !open && patterns.length > 0
   const [tip, setTip] = useState(null)   // where to show the tip; the header clips anything absolute, so it's fixed to the window
   const show = e => { const r = (e.currentTarget.closest('.cov-alarm-wrap') || e.currentTarget).getBoundingClientRect(); setTip({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }) }
   const hideTip = () => setTip(null)
@@ -52,12 +84,13 @@ export function AlarmButton({ covUser }) {
   return (
     <span className="cov-alarm-wrap" style={{ position:'relative', display:'inline-flex' }} onMouseEnter={show} onMouseLeave={hideTip}>
       <button onClick={() => { hideTip(); openDialog() }} onFocus={show} onBlur={hideTip} aria-describedby="cov-alarm-tip"
-        aria-label={open ? `Level ${open.level} alarm open: ${open.title}` : 'Sound the alarm'}
+        aria-label={open ? `Level ${open.level} alarm open: ${open.title}` : hint ? `Sound the alarm — ${patterns.length} possible fraud wave${patterns.length === 1 ? '' : 's'} to look at` : 'Sound the alarm'}
         className="mono-font cov-alarm-btn cov-nav-ctl" style={{ ...look, display:'inline-flex', alignItems:'center', gap:'7px', padding:'0 11px', cursor:'pointer',
           fontSize:'10px', fontWeight:700, letterSpacing:'0.14em', whiteSpace:'nowrap', transition:'filter 0.15s' }}>
         <span aria-hidden="true" style={{ fontSize:'12px', lineHeight:1 }}>⚑</span>
         <span className="cov-alarm-long">{open ? `LEVEL ${open.level} · ${L.name.toUpperCase()}` : 'SOUND THE ALARM'}</span>
         <span className="cov-alarm-short">{open ? `LEVEL ${open.level}` : 'ALARM'}</span>
+        {hint && <span aria-hidden="true" className="cov-alarm-hint" />}
       </button>
       {tip && (
         <span id="cov-alarm-tip" role="tooltip" style={{ position:'fixed', top: tip.top, right: tip.right, zIndex:9600, width:'max-content', maxWidth:'min(300px, 80vw)',
@@ -66,8 +99,8 @@ export function AlarmButton({ covUser }) {
             <span className="mono-font" style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', fontWeight:700, marginBottom:'3px' }}>LEVEL {open.level} · {L.name.toUpperCase()} ALARM OPEN</span>
             <span className="display-font" style={{ display:'block', fontSize:'13px', lineHeight:1.45 }}>{open.title}. Owner: {open.owner_name || '—'}. Click for details, to add your report, change the level or stand it down.</span>
           </>) : (<>
-            <span className="mono-font" style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', fontWeight:700, marginBottom:'3px' }}>SOUND THE ALARM</span>
-            <span className="display-font" style={{ display:'block', fontSize:'13px', lineHeight:1.45 }}>Tell the whole team about a fraud wave or an attack. You’ll pick how serious it is — Watch, Alert or Critical — and everyone sees what to do.</span>
+            <span className="mono-font" style={{ display:'block', fontSize:'10px', letterSpacing:'0.12em', fontWeight:700, marginBottom:'3px' }}>{hint ? `${patterns.length} POSSIBLE FRAUD WAVE${patterns.length === 1 ? '' : 'S'} TO LOOK AT` : 'SOUND THE ALARM'}</span>
+            <span className="display-font" style={{ display:'block', fontSize:'13px', lineHeight:1.45 }}>{hint ? `${patterns[0].title} — ${patterns[0].basis}. Click to look, and sound the alarm if it’s real.` : 'Tell the whole team about a fraud wave or an attack. You’ll pick how serious it is — Watch, Alert or Critical — and everyone sees what to do.'}</span>
           </>)}
         </span>
       )}
@@ -92,14 +125,16 @@ export function AlarmBanner({ covUser }) {
   )
 }
 
-export function AlarmDialog({ covUser, sides = ['issuer'] }) {
+export function AlarmDialog({ covUser, sides = ['issuer'], outcomes, platformMode }) {
   const [shown, setShown] = useState(false)
   const list = useAlarms(signedInOrDemo(covUser))
   const open = list.find(a => a.status === 'open')
   const [f, setF] = useState({ level: 1, title: '', doNow: '', next: 30, confirmed: false, note: '', owner: '', kind: 'other' })
   const [team, setTeam] = useState([]), [err, setErr] = useState(''), [busy, setBusy] = useState(false), [mode, setMode] = useState('view')
   const canConfigure = ['admin', 'reviewer'].includes(covUser?.role), readOnly = covUser?.role === 'auditor'
-  useEffect(() => { const h = () => { setShown(true); setErr(''); setMode('view') }; window.addEventListener('cov:alarm-open', h); return () => window.removeEventListener('cov:alarm-open', h) }, [])
+  const patterns = usePatterns(outcomes, platformMode)
+  // Opened from a pattern (raiseFromPattern): the form arrives filled in
+  useEffect(() => { const h = e => { setShown(true); setErr(''); setMode('view'); const p = e.detail?.prefill; if (p) setF(o => ({ ...o, level: p.level || 1, title: p.title || '', doNow: p.doNow || '' })) }; window.addEventListener('cov:alarm-open', h); return () => window.removeEventListener('cov:alarm-open', h) }, [])
   useEffect(() => { if (shown && signedInOrDemo(covUser)) (covUser?.authed ? listTeam() : demoRpc('list_team')).then(t => setTeam(t || [])).catch(() => setTeam([])) }, [shown])
   useEffect(() => { if (!shown) return; const k = e => { if (e.key === 'Escape') setShown(false) }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [shown])
   if (!shown) return null
@@ -133,6 +168,12 @@ export function AlarmDialog({ covUser, sides = ['issuer'] }) {
         </div>
 
         {!open ? (<>
+          {patterns.length > 0 && !f.title && (
+            <div style={{ background:'#F3EEE6', border:'1px solid #D4CCBC', padding:'12px', margin:'0 0 14px' }}>
+              <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#92400E', marginBottom:'8px' }}>POSSIBLE FRAUD WAVES · FROM YOUR CASES, LAST 7 DAYS</div>
+              <PatternList patterns={patterns} useLabel="Use this" onUse={p => setF(o => ({ ...o, level: p.level, title: p.title, doNow: p.doNow }))} />
+            </div>
+          )}
           <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.5, margin:'0 0 12px' }}>For a fraud wave or an attack that the whole team should know about. Pick the level that matches what you know now; it can go up or down later.</p>
           <LevelPicker value={f.level} onPick={n => up('level', n)} />
           <label className="display-font" style={{ fontSize:'13px', display:'grid', gap:'4px', marginTop:'12px' }}>What’s happening?

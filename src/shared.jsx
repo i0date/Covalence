@@ -599,6 +599,9 @@ export const GLOBAL_CSS = `
   @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
   @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
   .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
+  /* A possible fraud wave to look at: a small amber dot on the alarm button */
+  .cov-alarm-btn { position:relative; }
+  .cov-alarm-hint { position:absolute; top:-4px; right:-4px; width:9px; height:9px; border-radius:50%; background:#D97706; border:2px solid #1A1814; }
   /* Phone menu: fit the visible screen (100dvh excludes Safari's address bar) and clear the home indicator */
   .cov-mobile-menu { max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); padding-bottom:env(safe-area-inset-bottom); }
   /* Phones: the sync status moves into the menu so the top bar keeps room for the alarm */
@@ -651,6 +654,7 @@ export const GLOBAL_CSS = `
   .cov-ins-table td { padding:9px 12px 9px 0; border-bottom:1px solid #E7E2D9; vertical-align:top; }
   .cov-ins-check { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #E7E2D9; }
   @media (max-width:599px) { .cov-ins-figure + .cov-ins-figure { border-left:none; padding-left:0; border-top:1px solid #E7E2D9; } .cov-ins-hide { display:none; } }
+  .cov-front-more { background:none; border:none; border-top:1px solid #D4CCBC; text-align:left; padding:12px 0; font-size:10px; letter-spacing:0.14em; color:#1A1814; cursor:pointer; }
   /* A case or claim named in the brief: a small reference tag you can open */
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
   .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }

@@ -16,6 +16,7 @@ import { briefPeriod, noteVisit, changedSince } from './brief.js'
 import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
 import { listClaims, openClaim } from './claimsData.js'
 import { alarmList } from './alarmData.js'
+import { usePatterns } from './Alarms.jsx'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
 // Show/hide on Home: one look for every panel that folds
@@ -153,9 +154,10 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
     return { all, items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
   }, [outcomes, me, settings, platformMode, claims])
   const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
+  const patterns = usePatterns(outcomes, platformMode)
   const myName = covUser?.name || ''
   const changed = c => c?._claimRow ? !!prev && new Date(c._claimRow.updated_at || 0) > prev : changedSince(c, prev, myName)
-  return { ...work, ins, me, platformMode, claims, alarms, period, prev, changed }
+  return { ...work, ins, me, platformMode, claims, alarms, patterns, period, prev, changed }
 }
 
 // The four numbers (caseload, pace, deadlines, money at risk) and the 14-day chart.
