@@ -15,21 +15,25 @@ import { greeting } from './insights.js'
 const raiseFromPattern = p => window.dispatchEvent(new CustomEvent('cov:alarm-open', { detail: { prefill: { level: p.level, title: p.title, doNow: p.doNow } } }))
 const OPEN_KEY = 'cov_brief_open'   // per browser: whether the brief's details are open
 
-// Case and claim references; a run of more than three reads "A, B, C and 2 more"
+// Case and claim references; a run of more than three reads "A B C +2 more", and the
+// "+2 more" opens the rest in place
 export function Refs({ parts }) {
+  const [all, setAll] = useState(false)
   const out = []
   for (let i = 0; i < parts.length; i++) {
     if (typeof parts[i] === 'string') { out.push(parts[i]); continue }
     const run = []
     while (i < parts.length && typeof parts[i] === 'object') run.push(parts[i++])
     i--
-    run.slice(0, 3).forEach((p, j) => {
+    const shown = all ? run : run.slice(0, 3)
+    shown.forEach((p, j) => {
       const id = p.id || p.claim
       out.push(<button key={id + i} type="button" className="mono-font cov-ref" onClick={() => p.claim ? openClaim(id) : openCase(id)}
         aria-label={`Open ${id}`}>{id}</button>)
-      if (j < Math.min(run.length, 3) - 1) out.push(' ')
+      if (j < shown.length - 1) out.push(' ')
     })
-    if (run.length > 3) out.push(<span key={'more' + i} className="mono-font" style={{ fontSize:'11px', color:'#6B6259' }}> +{run.length - 3} more</span>)
+    if (run.length > 3) out.push(<React.Fragment key={'more' + i}> <button type="button" className="mono-font cov-ref-more" aria-expanded={all}
+      onClick={e => { e.stopPropagation(); setAll(a => !a) }}>{all ? 'show fewer' : `+${run.length - 3} more`}</button></React.Fragment>)
   }
   return out.map((x, i) => <React.Fragment key={i}>{x}</React.Fragment>)
 }
