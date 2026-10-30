@@ -605,8 +605,12 @@ export const GLOBAL_CSS = `
   @media (max-width:480px) { .cov-sync-pill { display:none !important; } }
   /* Phones: no room for the page name beside the logo and four controls; the page's own masthead names it */
   @media (max-width:480px) { .cov-nav-current { visibility:hidden; } }
-  /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
+  /* Eight tools: the number sits small above each name, as on the mastheads and in the menu; labels line up along the bottom */
   .cov-nav-num { display:none; }
+  @media (min-width:1320px) {
+    .cov-nav-buttons button { display:inline-flex !important; flex-direction:column; justify-content:flex-end; align-items:flex-start; height:48px; padding:0 8px 13px !important; line-height:1; }
+    .cov-nav-buttons .cov-nav-num { display:block; font-size:8px; letter-spacing:0.1em; color:#78716C; margin-bottom:4px; }
+  }
   /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */
   @media (min-width:768px) {
     .cov-nav-buttons button { padding:14px 8px !important; letter-spacing:0.06em !important; }
@@ -619,6 +623,22 @@ export const GLOBAL_CSS = `
   .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
   @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
   .cov-home-cases-bar:hover { background:#F3EEE5 !important; }
+  /* The brief: case links read as references, not buttons */
+  .cov-brief-link { background:none; border:none; padding:0; font-size:12px; letter-spacing:0.02em; color:#1E3A5F; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  .cov-brief-link:hover, .cov-brief-link:focus-visible { color:#1A1814; }
+  /* Compact tiles: a 2×2 grid with the chart full width below (Home's side column; phones below) */
+  .cov-yd-compact { grid-template-columns:repeat(2, minmax(0,1fr)) !important; gap:8px !important; padding:12px 14px 14px !important; }
+  .cov-yd-compact > div { padding:10px 12px !important; }
+  .cov-yd-compact .cov-yd-chart-in, .cov-yd-compact .cov-yd-more { display:none !important; }
+  .cov-yd-compact .cov-yd-chart-out { display:block !important; grid-column:1 / -1; }
+  .cov-yd-compact .cov-yd-value { font-size:24px !important; }
+  .cov-yd-compact .cov-yd-sub { font-size:12.5px !important; line-height:1.35 !important; }
+  /* Home on wide screens: the work on the left, a column of figures on the right that stays in view */
+  .cov-home-cols { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:24px; align-items:start; }
+  .cov-home-rail { display:grid; gap:20px; }
+  @media (min-height:820px) { .cov-home-rail { position:sticky; top:72px; } }   /* only where the whole column fits on screen */
+  .cov-home-rail .home-stats-grid { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
+  @media (min-width:1400px) { .cov-home-cols { grid-template-columns:minmax(0,1fr) 420px; } }
   /* Your day: the 14-day chart sits in the caseload tile, except on phones (below) */
   .cov-yd-chart-out, .cov-yd-date-short { display:none; }
   /* phones: four compact numbers in a 2×2 grid, the chart full width beneath, nothing scrolls sideways */
