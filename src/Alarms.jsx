@@ -53,7 +53,7 @@ export function AlarmButton({ covUser }) {
     <span className="cov-alarm-wrap" style={{ position:'relative', display:'inline-flex' }} onMouseEnter={show} onMouseLeave={hideTip}>
       <button onClick={() => { hideTip(); openDialog() }} onFocus={show} onBlur={hideTip} aria-describedby="cov-alarm-tip"
         aria-label={open ? `Level ${open.level} alarm open: ${open.title}` : 'Sound the alarm'}
-        className="mono-font cov-alarm-btn" style={{ ...look, display:'inline-flex', alignItems:'center', gap:'7px', padding:'6px 11px', cursor:'pointer',
+        className="mono-font cov-alarm-btn cov-nav-ctl" style={{ ...look, display:'inline-flex', alignItems:'center', gap:'7px', padding:'0 11px', cursor:'pointer',
           fontSize:'10px', fontWeight:700, letterSpacing:'0.14em', whiteSpace:'nowrap', transition:'filter 0.15s' }}>
         <span aria-hidden="true" style={{ fontSize:'12px', lineHeight:1 }}>⚑</span>
         <span className="cov-alarm-long">{open ? `LEVEL ${open.level} · ${L.name.toUpperCase()}` : 'SOUND THE ALARM'}</span>

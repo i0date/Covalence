@@ -574,10 +574,18 @@ export const GLOBAL_CSS = `
 
   /* ── Case search rows ─────────────────────────────────────────────────── */
   .cov-search-row:hover { background:#EEE9E0 !important; }
+  /* Top bar controls (alarm, search, reminders, shortcuts, menu): one height, so the row reads as a set */
+  .cov-nav-ctl { height:30px; box-sizing:border-box; flex-shrink:0; }
+  @media (max-width:767px) { .cov-nav-ctl { height:36px; min-width:36px; } }
+  /* Narrow phones: slightly smaller controls; the smallest drop the DEMO tag (the banner below says it) */
+  @media (max-width:400px) { .cov-nav-ctl, .cov-nav-inner .cov-nav-icon { height:34px !important; min-width:34px; } .cov-nav-inner .cov-nav-icon { width:34px !important; }
+    .cov-nav-inner, .cov-nav-right { gap:6px !important; }
+    .cov-nav-logo div { letter-spacing:0.08em !important; } .cov-nav-demo { letter-spacing:0.06em !important; padding:2px 4px !important; } }
+  @media (max-width:359px) { .cov-nav-demo { display:none !important; } }
   .cov-nav-search:hover { border-color:#78716C !important; color:#E7E4DF !important; }
-  /* Top bar: the compact layout (page name + menu) is used up to 1199px — tablets and small laptops too */
+  /* Top bar: the compact layout (page name + menu) is used below 1320px, the width the full tab row needs — tablets and laptops too */
   .cov-nav-menu, .cov-nav-current { display:none; }
-  @media (max-width:1199px) {
+  @media (max-width:1319px) {
     .cov-nav-buttons { display:none !important; }
     .cov-nav-current { display:block !important; font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
     .cov-nav-menu { display:block !important; }
@@ -586,8 +594,8 @@ export const GLOBAL_CSS = `
     .cov-nav-search-label { display:none !important; }
   }
   /* Sound the alarm: the full label on wide screens, "ALARM" down to phones, the flag alone on the smallest */
-  @media (max-width:1199px) { .cov-alarm-long { display:none !important; } }
-  @media (min-width:1200px) { .cov-alarm-short { display:none !important; } }
+  @media (max-width:1319px) { .cov-alarm-long { display:none !important; } }
+  @media (min-width:1320px) { .cov-alarm-short { display:none !important; } }
   @media (max-width:359px)  { .cov-alarm-short { display:none !important; } }
   @media (max-width:480px)  { .cov-alarm-btn { padding:6px 6px !important; gap:4px !important; letter-spacing:0.04em !important; } }
   .cov-alarm-btn:hover, .cov-alarm-btn:focus-visible { filter:brightness(1.15); }
@@ -595,6 +603,8 @@ export const GLOBAL_CSS = `
   .cov-mobile-menu { max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px); padding-bottom:env(safe-area-inset-bottom); }
   /* Phones: the sync status moves into the menu so the top bar keeps room for the alarm */
   @media (max-width:480px) { .cov-sync-pill { display:none !important; } }
+  /* Phones: no room for the page name beside the logo and four controls; the page's own masthead names it */
+  @media (max-width:480px) { .cov-nav-current { visibility:hidden; } }
   /* Eight tools: the top bar shows names only; the numbers stay on Home, the mastheads and the menu */
   .cov-nav-num { display:none; }
   /* Desktop widths: icon + shortcut only, so the tab bar stays on one line (the bar is capped at 1320px) */
@@ -609,15 +619,27 @@ export const GLOBAL_CSS = `
   .cov-yourday-insights { grid-template-columns:repeat(4, minmax(0,1fr)); }
   @media(max-width:1023px) { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); } .home-stats-grid { grid-template-columns:repeat(3, minmax(0,1fr)) !important; } }
   .cov-home-cases-bar:hover { background:#F3EEE5 !important; }
-  /* phones: a swipeable row, so the cases stay near the top */
-  @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:80%; overflow-x:auto; scroll-snap-type:x mandatory; padding:12px 14px !important; }
-    .cov-yourday-insights > div { scroll-snap-align:start; } }
+  /* Your day: the 14-day chart sits in the caseload tile, except on phones (below) */
+  .cov-yd-chart-out, .cov-yd-date-short { display:none; }
+  /* phones: four compact numbers in a 2×2 grid, the chart full width beneath, nothing scrolls sideways */
+  @media(max-width:599px)  { .cov-yourday-insights { grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px !important; padding:12px 14px !important; }
+    .cov-yourday-insights > div { padding:10px 12px !important; }
+    .cov-yd-chart-in, .cov-yd-more, .cov-yd-date-long { display:none !important; }
+    .cov-yd-chart-out { display:block; grid-column:1 / -1; }
+    .cov-yd-date-short { display:inline; }
+    .cov-yd-value { font-size:22px !important; }
+    .cov-yd-sub { font-size:12px !important; line-height:1.35 !important; } }
   @media(max-width:767px) {
     .cov-search-status { width:auto !important; }
-    .cov-yourday-row { grid-template-columns:96px minmax(0,1fr) !important; padding:10px 14px !important; }
+    .cov-yourday-row { grid-template-columns:minmax(0,1fr) !important; gap:6px !important; justify-items:start; padding:12px 14px !important; }
+    .cov-yourday-why { white-space:normal !important; }
     .cov-yourday-row > span:nth-child(2) { display:none; }
     .cov-comingup-row { grid-template-columns:70px minmax(0,1fr) !important; }
     .cov-comingup-row > span:nth-child(2) { display:none; }
+    .cov-comingup-row { align-items:start !important; padding:6px 0 !important; }
+    .cov-comingup-what { white-space:normal !important; }
+    .cov-comingup-why { display:block; }
+    .cov-comingup-dot { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
     /* Your day: the hide/show control sits top-right, always in reach */
     .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
@@ -641,9 +663,12 @@ export const GLOBAL_CSS = `
     .platform-toggle-btn { white-space:nowrap !important; padding:10px 14px !important; }
     /* phone top bar: logo · current page · search · sync dot · menu (tabs live in the menu) */
     .cov-nav-buttons  { display:none !important; }
-    .cov-nav-inner    { min-height:48px; gap:10px !important; padding:0 12px !important; }
+    .cov-nav-inner    { min-height:48px; gap:8px !important; padding:0 12px !important; }
+    .cov-nav-inner .cov-nav-logo { padding-right:0 !important; }
+    .cov-nav-right    { padding-left:0 !important; gap:8px !important; }
+    .triage-root.cov-home { padding-top:20px !important; }
     .cov-nav-current  { font-size:10px; letter-spacing:0.14em; color:#D6CFC4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1; }
-    .cov-nav-inner .cov-nav-icon { padding:0 !important; width:34px; height:34px; min-width:0 !important; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
+    .cov-nav-inner .cov-nav-icon { padding:0 !important; width:36px; height:36px; min-width:0 !important; font-size:14px !important; display:inline-flex; align-items:center; justify-content:center; }
     .cov-nav-inner .cov-nav-search svg { width:15px; height:15px; }
     /* mobile menu sits inside the nav but needs full-size tap targets */
     .cov-mobile-menu .cov-mobile-item { font-size:11px !important; padding:15px 20px !important; }

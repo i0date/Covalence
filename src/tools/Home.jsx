@@ -1,7 +1,7 @@
 // 000 HOME — The Brief: stats, deadlines, case list
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import React from 'react'
-import { YourDay } from '../YourDay.jsx'
+import { YourDay, foldLook } from '../YourDay.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { GetSetUp } from '../GetSetUp.jsx'
@@ -15,6 +15,9 @@ import { ChargebackRatioPanel, ratioPct, ratiosFor } from '../ChargebackRatioPan
 // HOME VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 const RANGES = [['7', '7D'], ['30', '30D'], ['60', '60D'], ['90', '90D'], ['all', 'ALL']]
+// Short names, so the largest category fits its tile at full size
+const CATEGORY = { fraud:'Fraud', consumer_dispute:'Consumer', processing_error:'Processing', authorization:'Authorisation' }
+const categoryName = c => CATEGORY[c] || c.replace(/_/g, ' ').replace(/^./, x => x.toUpperCase())
 
 export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMode, onLoadDemo, onClearDemo, covUser }) {
   // outcomes comes from the root, which stays in sync with every tool via the outcome subscribers
@@ -38,15 +41,16 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const since = windowDays ? new Date(Date.now() - windowDays * 86400000) : null
   const inRange = o => { if (!since) return true; const d = new Date(o.date || o.createdAt || o.ts || 0); return isNaN(d) || d > since }
   const rangeText = windowDays ? `last ${windowDays} days` : 'all time'
-  const recent   = outcomes.filter(inRange)
-  const active   = platformMode === 'merchant' ? recent.filter(o => isMerchantCase(o)) : recent.filter(o => !isMerchantCase(o))
+  // Every count on Home comes from the same cases: this side's, in the chosen period
+  const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : !isMerchantCase(o))
+  const active   = everything.filter(inRange)
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
   const inProg   = active.filter(o => ['filed','representment','pre_arb','rebuttal_prep','submitted'].includes(o.status))
   const winRate  = resolved.length > 0 ? Math.round(won.length / resolved.length * 100) : null
 
   return (
-    <div className="triage-root" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
+    <div className="triage-root cov-home" style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
       {/* Show, don't tell: Home opens on what needs attention. A demo gets one line; a new workspace, its setup steps. */}
       {hasDemo ? (
         <div className="mb-5 mono-font" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px', flexWrap:'wrap', fontSize:'10px', letterSpacing:'0.1em', color:'#57534E' }}>
@@ -162,8 +166,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
 
       {/* ── Cases: every case across all eight tools, with where it sits in the pipeline ── */}
       {(() => {
-        const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : !isMerchantCase(o))
-        const thread = everything.filter(inRange)
+        const thread = active
         const dueIn = o => o.nextRespDate && stageOf(o) !== 'closed' ? Math.round((new Date(o.nextRespDate + 'T12:00:00') - new Date()) / 86400000) : null
         const FILTERS = [
           { id:'open',   label:'OPEN',          test: o => stageOf(o) !== 'closed' },
@@ -199,7 +202,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 {overdue > 0 && <span style={{ color:'#B91C1C' }}><strong>{overdue}</strong> OVERDUE</span>}
                 <span>{thread.length} {windowDays ? `IN THE LAST ${windowDays} DAYS` : 'IN ALL'}</span>
               </span>
-              <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#1A1814', whiteSpace:'nowrap' }}>{casesOpen ? 'HIDE ↑' : 'SHOW ↓'}</span>
+              <span className="mono-font" style={foldLook}>{casesOpen ? '▴ HIDE' : '▾ SHOW'}</span>
             </button>
             {casesOpen && (<div id="home-cases" style={{ borderTop:'1px solid #E7E2D9' }}>
               <div style={{ display:'flex', gap:'4px', flexWrap:'wrap', padding:'10px 18px' }}>
@@ -279,23 +282,25 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
           { label:'WIN RATE',    value: winRate !== null ? winRate + '%' : '—', sub:`${resolved.length} resolved` },
         ]
         if (settings.snapshotEnabled !== false) {
-          const recent = outcomes.filter(o => o.date && inRange(o))
+          const recent = active
           const days = recent.filter(o => ['won','lost','withdrawn'].includes(o.status) && o.date && o.resolvedDate)
             .map(o => Math.max(0, Math.round((new Date(o.resolvedDate) - new Date(o.date)) / 86400000)))
-          const fraud = recent.filter(o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD').length
+          const isFraud = o => o.category === 'fraud' || o.category === 'mc_fraud' || o.verdict === 'TRUE_FRAUD'
+          const fraud = recent.filter(isFraud).length
+          // Counted the same way as the fraud tile, so the two never disagree
           const cats = {}
-          recent.forEach(o => { if (o.category) { const c = o.category.replace('mc_', ''); cats[c] = (cats[c] || 0) + 1 } })
+          recent.forEach(o => { const c = isFraud(o) ? 'fraud' : (o.category || '').replace('mc_', ''); if (c) cats[c] = (cats[c] || 0) + 1 })
           const top = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]
           if (days.length) cells.push({ label:'AVG RESOLUTION', value: Math.round(days.reduce((a, b) => a + b, 0) / days.length) + 'd', sub:'opened to closed' })
-          if (recent.length) cells.push({ label:'FRAUD / SERVICE', value:`${fraud} / ${recent.length - fraud}`, sub:`of ${recent.length} cases` })
-          if (top) cells.push({ label:'TOP CATEGORY', value: top[0].replace(/_/g, ' '), sub:`${top[1]} cases`, small:true })
+          if (recent.length) cells.push({ label:'FRAUD / OTHER', value:`${fraud} / ${recent.length - fraud}`, sub:`of ${recent.length} cases` })
+          if (top) cells.push({ label:'LARGEST CATEGORY', value: categoryName(top[0]), sub:`${top[1]} of ${recent.length} cases` })
         }
         return (
           <div className="home-stats-grid" style={{ display:'grid', gridTemplateColumns:`repeat(${cells.length}, minmax(0,1fr))`, gap:'1px', background:'#D4CCBC', border:'1px solid #D4CCBC' }}>
             {cells.map(c => (
               <div key={c.label} style={{ background:'#FAF7F1', padding:'14px 18px', minWidth:0 }}>
                 <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.15em', color:'#78716C' }}>{c.label}</div>
-                <div className="display-font" style={{ fontSize: c.small ? '20px' : '28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', textTransform: c.small ? 'capitalize' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
+                <div className="display-font" title={String(c.value)} style={{ fontSize:'28px', fontWeight:600, color:'#1A1814', lineHeight:1.1, marginTop:'6px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.value}</div>
                 <div className="mono-font" style={{ fontSize:'10px', color:'#A8A29E', marginTop:'4px' }}>{c.sub}</div>
               </div>
             ))}
