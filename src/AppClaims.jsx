@@ -70,9 +70,12 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const mine = [...silent, ...waiting.filter(c => !quiet.has(c.id)), ...open_.filter(c => c.status === 'with_desk' && !quiet.has(c.id))]
   const urgent = waiting.filter(c => c.data?.ai?.priority === 'urgent').length
   if (!mine.length && !err) return (
-    <p className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#6B6259', margin:'0 0 28px' }}>
-      FROM YOUR APP · NOTHING WAITING — claims your customers report in your app arrive here (Settings → Connections).
-    </p>
+    <section aria-label="Claims from your app" className="cov-app-claims">
+      <div className="cov-app-claims-bar" style={{ cursor:'default' }}>
+        <span className="display-font cov-app-claims-title">From your app</span>
+        <span className="display-font" style={{ fontSize:'13px', color:'#6B6259', flex:1, minWidth:0 }}>Nothing waiting. Claims your customers report in your app or on your website arrive here (Settings → Connections).</span>
+      </div>
+    </section>
   )
 
   const triage = async c => {
@@ -92,27 +95,27 @@ export function AppClaims({ segment, activeId, onTriage }) {
   }
 
   return (
-    <section aria-label="Claims from your app" style={{ marginBottom: shown ? '36px' : '24px' }}>
-      <button type="button" className="cov-app-claims-fold" onClick={() => show(!shown)} aria-expanded={shown} aria-controls="cov-app-claims-list">
+    <section aria-label="Claims from your app" className="cov-app-claims">
+      <button type="button" className="cov-app-claims-bar" onClick={() => show(!shown)} aria-expanded={shown} aria-controls="cov-app-claims-list">
+        <span className="display-font cov-app-claims-title">From your app</span>
         <span className="mono-font cov-app-claims-counts">
-          <span style={{ fontWeight:600, color:'#1A1814' }}>FROM YOUR APP AND WEBSITE</span>
-          <span>{waiting.length} WAITING</span>
-          {open_.length > waiting.length && <span>{open_.length - waiting.length} WITH THE DESK</span>}
-          {urgent > 0 && <span style={{ color:'#991B1B' }}>{urgent} URGENT</span>}
-          {silent.length > 0 && <span style={{ color:'#92400E' }}>{silent.length} WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
+          <span><strong style={{ color:'#1A1814' }}>{waiting.length}</strong> WAITING</span>
+          {open_.length > waiting.length && <span><strong style={{ color:'#1A1814' }}>{open_.length - waiting.length}</strong> WITH THE DESK</span>}
+          {urgent > 0 && <span style={{ color:'#991B1B' }}><strong>{urgent}</strong> URGENT</span>}
+          {silent.length > 0 && <span style={{ color:'#92400E' }}><strong>{silent.length}</strong> WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
         </span>
         <span className="mono-font cov-app-claims-btn">{shown ? '▴ HIDE' : '▾ SHOW'}</span>
       </button>
-      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'8px 0 0' }}>{err}</p>}
-      {shown && <>
-      <p className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259', margin:'10px 0 8px' }}>LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</p>
-      <ul id="cov-app-claims-list" style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
+      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:0, padding:'0 18px 12px' }}>{err}</p>}
+      {shown && <div style={{ borderTop:'1px solid #E7E2D9' }}>
+      <p className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259', margin:0, padding:'10px 18px' }}>APP, WEBSITE, AGENT AND PHONE · LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</p>
+      <ul id="cov-app-claims-list" style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #E7E2D9' }}>
         {mine.map(c => {
           const d = c.data || {}, k = clockOf(c), tx = d.transactions || [], expanded = open === c.id, active = activeId === c.id, ai = d.ai, onDesk = c.status === 'with_desk'
           const steps = (c.history || []).filter(h => h.step)
           const merchants = [...new Set(tx.map(t => t.merchant).filter(Boolean))]
           return (
-            <li key={c.id} id={`claim-${c.id}`} style={{ borderBottom:'1px solid #D4CCBC', background: active ? '#F3EEE4' : 'transparent' }}>
+            <li key={c.id} id={`claim-${c.id}`} className="cov-app-claim" style={{ background: active ? '#F3EEE4' : 'transparent' }}>
               <div style={{ display:'flex', gap:'12px', alignItems:'flex-start', padding:'12px 4px', flexWrap:'wrap' }}>
                 <button type="button" onClick={() => setOpen(expanded ? null : c.id)} aria-expanded={expanded}
                   style={{ flex:'1 1 320px', minWidth:0, textAlign:'left', background:'none', border:0, padding:0, cursor:'pointer' }}>
@@ -204,7 +207,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           )
         })}
       </ul>
-      </>}
+      </div>}
     </section>
   )
 }
