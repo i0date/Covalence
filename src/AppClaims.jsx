@@ -7,7 +7,8 @@
 // AI triage reads each claim as it arrives and suggests the kind of problem, the
 // route and what to ask the customer. "Triage this" fills the claim form below;
 // handing it to the Desk or closing it moves the claim on, and the bank's app is
-// told (claim.updated). Once it's with the Desk, the case's provisional credit,
+// told (claim.updated). The list folds to one line of counts so it doesn't crowd the
+// form below; it opens when Home sends you to a claim. Once it's with the Desk, the case's provisional credit,
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
@@ -23,6 +24,7 @@ const day = d => new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocal
 const words = k => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
 const answerText = v => v === true ? 'Yes' : v === false ? 'No' : String(v)
 const ROUTES = { dispute: 'Dispute', fraud: 'Fraud', scam: 'Scam', not_a_dispute: 'Not a dispute' }
+const SHOWN_KEY = 'cov_app_claims_open'   // per browser: whether the list of claims is open (folded by default)
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
 // Due in → a tone: overdue red, two business days or less amber
@@ -37,6 +39,8 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const [claims, setClaims] = useState(null), [err, setErr] = useState(''), [open, setOpen] = useState(null), [closing, setClosing] = useState(null)
   const [reason, setReason] = useState(CLOSE_REASONS[0]), [busy, setBusy] = useState(false)
   const writer = canWrite()
+  const [shown, setShown] = useState(() => { try { return localStorage.getItem(SHOWN_KEY) === '1' } catch { return false } })
+  const show = v => { setShown(v); try { localStorage.setItem(SHOWN_KEY, v ? '1' : '0') } catch {} }
   const load = () => listClaims().then(r => { setClaims(r); setErr('') }).catch(e => { setClaims([]); setErr(e.message) })
   useEffect(() => { load() }, [])
   // New claims arrive at any time: check every 30 seconds while the page is in view, and after a claim moves on
@@ -49,7 +53,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
   // Home's brief and Your day open a claim here ('cov:open-claim' with { id }); it may arrive before the list has loaded
   const [focus, setFocus] = useState(null)
   useEffect(() => {
-    const h = e => { if (e.detail?.id) { setFocus(e.detail.id); setOpen(e.detail.id) } }
+    const h = e => { if (e.detail?.id) { setFocus(e.detail.id); setOpen(e.detail.id); show(true) } }
     window.addEventListener('cov:open-claim', h); return () => window.removeEventListener('cov:open-claim', h)
   }, [])
   useEffect(() => {
@@ -64,6 +68,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const silent = waitingClaims(open_), quiet = new Set(silent.map(c => c.id))
   const waiting = open_.filter(c => c.status !== 'with_desk')
   const mine = [...silent, ...waiting.filter(c => !quiet.has(c.id)), ...open_.filter(c => c.status === 'with_desk' && !quiet.has(c.id))]
+  const urgent = waiting.filter(c => c.data?.ai?.priority === 'urgent').length
   if (!mine.length && !err) return (
     <p className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#6B6259', margin:'0 0 28px' }}>
       FROM YOUR APP · NOTHING WAITING — claims your customers report in your app arrive here (Settings → Connections).
@@ -72,7 +77,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
 
   const triage = async c => {
     setBusy(true)
-    try { if (c.status === 'received' && writer) await setClaim(c.id, 'in_review', { publicNote: 'An analyst is reviewing your claim.' }); onTriage(c); load() }
+    try { if (c.status === 'received' && writer) await setClaim(c.id, 'in_review', { publicNote: 'An analyst is reviewing your claim.' }); onTriage(c); show(false); load() }
     catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   const close = async c => {
@@ -87,13 +92,21 @@ export function AppClaims({ segment, activeId, onTriage }) {
   }
 
   return (
-    <section aria-label="Claims from your app" style={{ marginBottom:'36px' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {waiting.length} WAITING{open_.length > waiting.length ? ` · ${open_.length - waiting.length} WITH THE DESK` : ''}{silent.length ? <span style={{ color:'#92400E' }}> · {silent.length} WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span> : ''}</h2>
-        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259' }}>LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</span>
-      </div>
-      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'0 0 8px' }}>{err}</p>}
-      <ul style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
+    <section aria-label="Claims from your app" style={{ marginBottom: shown ? '36px' : '24px' }}>
+      <button type="button" className="cov-app-claims-fold" onClick={() => show(!shown)} aria-expanded={shown} aria-controls="cov-app-claims-list">
+        <span className="mono-font cov-app-claims-counts">
+          <span style={{ fontWeight:600, color:'#1A1814' }}>FROM YOUR APP AND WEBSITE</span>
+          <span>{waiting.length} WAITING</span>
+          {open_.length > waiting.length && <span>{open_.length - waiting.length} WITH THE DESK</span>}
+          {urgent > 0 && <span style={{ color:'#991B1B' }}>{urgent} URGENT</span>}
+          {silent.length > 0 && <span style={{ color:'#92400E' }}>{silent.length} WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
+        </span>
+        <span className="mono-font cov-app-claims-btn">{shown ? '▴ HIDE' : '▾ SHOW'}</span>
+      </button>
+      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'8px 0 0' }}>{err}</p>}
+      {shown && <>
+      <p className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259', margin:'10px 0 8px' }}>LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</p>
+      <ul id="cov-app-claims-list" style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
         {mine.map(c => {
           const d = c.data || {}, k = clockOf(c), tx = d.transactions || [], expanded = open === c.id, active = activeId === c.id, ai = d.ai, onDesk = c.status === 'with_desk'
           const steps = (c.history || []).filter(h => h.step)
@@ -191,6 +204,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           )
         })}
       </ul>
+      </>}
     </section>
   )
 }
