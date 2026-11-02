@@ -7,7 +7,8 @@
 // AI triage reads each claim as it arrives and suggests the kind of problem, the
 // route and what to ask the customer. "Triage this" fills the claim form below;
 // handing it to the Desk or closing it moves the claim on, and the bank's app is
-// told (claim.updated). Once it's with the Desk, the case's provisional credit,
+// told (claim.updated). The list folds to one line of counts so it doesn't crowd the
+// form below; it opens when Home sends you to a claim. Once it's with the Desk, the case's provisional credit,
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
@@ -17,12 +18,27 @@ import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
 import { Badge, Button, NewDot, Select } from './ui.jsx'
 import { previousVisit } from './brief.js'
+import { lastToldAt } from './claims.mjs'
 
 const money = (n, cur = 'USD') => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: cur.length === 3 ? cur : 'USD' })
 const ago = ts => { const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : Math.round(m / 1440) === 1 ? 'yesterday' : `${Math.round(m / 1440)} days ago` }
 const day = d => new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const words = k => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
 const ROUTES = { dispute: 'Dispute', fraud: 'Fraud', scam: 'Scam', not_a_dispute: 'Not a dispute' }
+const SHOWN_KEY = 'cov_app_claims_open'   // per browser: whether the list of claims is open (folded by default)
+// The box is for what customers report themselves, in the app or on the website; a call or an
+// agent is taken down in the intake form below. A claim the bank's own agent or phone systems
+// post to /api/claims is still listed, under "Agent and phone too", so nothing goes missing.
+const SELF_SERVE = ['app', 'web']
+const SORTS = [
+  ['silence', 'Longest without an update'], ['newest', 'Newest first'], ['oldest', 'Oldest first'],
+  ['due', 'Deadline soonest'], ['amount', 'Largest amount'],
+]
+const FILTERS = [
+  ['all', 'All', () => true], ['urgent', 'Urgent', c => c.status !== 'with_desk' && c.data?.ai?.priority === 'urgent'],
+  ['ready', 'Ready for Desk', c => c.status !== 'with_desk' && c.ready], ['look', 'Needs a look', c => c.status !== 'with_desk' && !c.ready],
+  ['desk', 'With the Desk', c => c.status === 'with_desk'],
+]
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
 // Due in → a tone: overdue red, two business days or less amber
@@ -37,6 +53,9 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const [claims, setClaims] = useState(null), [err, setErr] = useState(''), [open, setOpen] = useState(null), [closing, setClosing] = useState(null)
   const [reason, setReason] = useState(CLOSE_REASONS[0]), [busy, setBusy] = useState(false)
   const writer = canWrite()
+  const [sort, setSort] = useState('silence'), [filter, setFilter] = useState('all'), [allChannels, setAllChannels] = useState(false)
+  const [shown, setShown] = useState(() => { try { return localStorage.getItem(SHOWN_KEY) === '1' } catch { return false } })
+  const show = v => { setShown(v); try { localStorage.setItem(SHOWN_KEY, v ? '1' : '0') } catch {} }
   const load = () => listClaims().then(r => { setClaims(r); setErr('') }).catch(e => { setClaims([]); setErr(e.message) })
   useEffect(() => { load() }, [])
   // New claims arrive at any time: check every 30 seconds while the page is in view, and after a claim moves on
@@ -49,30 +68,51 @@ export function AppClaims({ segment, activeId, onTriage }) {
   // Home's brief and Your day open a claim here ('cov:open-claim' with { id }); it may arrive before the list has loaded
   const [focus, setFocus] = useState(null)
   useEffect(() => {
-    const h = e => { if (e.detail?.id) { setFocus(e.detail.id); setOpen(e.detail.id) } }
+    const h = e => { if (e.detail?.id) { setFocus(e.detail.id); setOpen(e.detail.id); show(true) } }
     window.addEventListener('cov:open-claim', h); return () => window.removeEventListener('cov:open-claim', h)
   }, [])
   useEffect(() => {
     if (!focus || !claims) return
+    // Make sure the claim is in the list: every status, and every channel if it came from an agent or phone system
+    setFilter('all')
+    const f = claims.find(c => c.id === focus)
+    if (f && !SELF_SERVE.includes(f.channel)) setAllChannels(true)
     const t = setTimeout(() => { document.getElementById(`claim-${focus}`)?.scrollIntoView({ block:'center', behavior:'smooth' }); setFocus(null) }, 120)
     return () => clearTimeout(t)
   }, [focus, claims])
   if (claims === null) return null
-  const open_ = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
+  const inSeg = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
+  const others = inSeg.filter(c => !SELF_SERVE.includes(c.channel)).length
+  const open_ = allChannels ? inSeg : inSeg.filter(c => SELF_SERVE.includes(c.channel))
   const prevVisit = previousVisit()
-  // Customers who haven't heard from you in UPDATE_DAYS days come first, longest silence first
   const silent = waitingClaims(open_), quiet = new Set(silent.map(c => c.id))
   const waiting = open_.filter(c => c.status !== 'with_desk')
-  const mine = [...silent, ...waiting.filter(c => !quiet.has(c.id)), ...open_.filter(c => c.status === 'with_desk' && !quiet.has(c.id))]
-  if (!mine.length && !err) return (
-    <p className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#6B6259', margin:'0 0 28px' }}>
-      FROM YOUR APP · NOTHING WAITING — claims your customers report in your app arrive here (Settings → Connections).
-    </p>
+  const urgent = waiting.filter(c => c.data?.ai?.priority === 'urgent').length
+  // The order you pick; by default, customers who've waited longest for an update first,
+  // and claims already with the Desk last
+  const due = c => c.data?.clock?.due ? new Date(c.data.clock.due + 'T23:59:59').getTime() : Infinity
+  const order = {
+    silence: (a, b) => ((a.status === 'with_desk') - (b.status === 'with_desk')) || lastToldAt(a) - lastToldAt(b),
+    newest: (a, b) => new Date(b.reported_at) - new Date(a.reported_at),
+    oldest: (a, b) => new Date(a.reported_at) - new Date(b.reported_at),
+    due: (a, b) => due(a) - due(b),
+    amount: (a, b) => claimTotal(b.data) - claimTotal(a.data),
+  }[sort]
+  const test = FILTERS.find(f => f[0] === filter)[2]
+  const mine = open_.filter(test).sort(order)
+  const countOf = f => open_.filter(FILTERS.find(x => x[0] === f)[2]).length
+  if (!open_.length && !others && !err) return (
+    <section aria-label="Claims from your app" className="cov-app-claims">
+      <div className="cov-app-claims-bar" style={{ cursor:'default' }}>
+        <span className="display-font cov-app-claims-title">From your app and website</span>
+        <span className="display-font" style={{ fontSize:'13px', color:'#6B6259', flex:1, minWidth:0 }}>Nothing waiting. Claims your customers report in your app or on your website arrive here (Settings → Connections).</span>
+      </div>
+    </section>
   )
 
   const triage = async c => {
     setBusy(true)
-    try { if (c.status === 'received' && writer) await setClaim(c.id, 'in_review', { publicNote: 'An analyst is reviewing your claim.' }); onTriage(c); load() }
+    try { if (c.status === 'received' && writer) await setClaim(c.id, 'in_review', { publicNote: 'An analyst is reviewing your claim.' }); onTriage(c); show(false); load() }
     catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   const close = async c => {
@@ -87,19 +127,47 @@ export function AppClaims({ segment, activeId, onTriage }) {
   }
 
   return (
-    <section aria-label="Claims from your app" style={{ marginBottom:'36px' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-        <h2 className="mono-font" style={{ fontSize:'11px', letterSpacing:'0.16em', color:'#1A1814', margin:0, fontWeight:600 }}>FROM YOUR APP · {waiting.length} WAITING{open_.length > waiting.length ? ` · ${open_.length - waiting.length} WITH THE DESK` : ''}{silent.length ? <span style={{ color:'#92400E' }}> · {silent.length} WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span> : ''}</h2>
-        <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#6B6259' }}>LONGEST WITHOUT AN UPDATE FIRST · CLOCKS RUN FROM THE CUSTOMER’S REPORT</span>
+    <section aria-label="Claims from your app" className="cov-app-claims">
+      <button type="button" className="cov-app-claims-bar" onClick={() => show(!shown)} aria-expanded={shown} aria-controls="cov-app-claims-list">
+        <span className="display-font cov-app-claims-title">From your app and website</span>
+        <span className="mono-font cov-app-claims-counts">
+          <span><strong style={{ color:'#1A1814' }}>{waiting.length}</strong> WAITING</span>
+          {open_.length > waiting.length && <span><strong style={{ color:'#1A1814' }}>{open_.length - waiting.length}</strong> WITH THE DESK</span>}
+          {urgent > 0 && <span style={{ color:'#991B1B' }}><strong>{urgent}</strong> URGENT</span>}
+          {silent.length > 0 && <span style={{ color:'#92400E' }}><strong>{silent.length}</strong> WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
+        </span>
+        <span className="mono-font cov-app-claims-btn">{shown ? '▴ HIDE' : '▾ SHOW'}</span>
+      </button>
+      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:0, padding:'0 18px 12px' }}>{err}</p>}
+      {shown && <div style={{ borderTop:'1px solid #E7E2D9' }}>
+      <div className="cov-app-claims-tools">
+        <div role="group" aria-label="Show" style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+          {FILTERS.map(([k, l]) => {
+            const n = countOf(k)
+            if (k !== 'all' && !n && filter !== k) return null
+            return <button key={k} type="button" onClick={() => setFilter(k)} aria-pressed={filter === k} className={`grade-tab ${filter === k ? 'active' : ''}`} style={{ fontSize:'10px' }}>{l.toUpperCase()} · {n}</button>
+          })}
+        </div>
+        <label className="mono-font" style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'10px', letterSpacing:'0.12em', color:'#6B6259' }}>SORT
+          <Select value={sort} onChange={e => setSort(e.target.value)} style={{ fontSize:'13px', padding:'6px 8px' }} aria-label="Sort claims">
+            {SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </Select>
+        </label>
       </div>
-      {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:'0 0 8px' }}>{err}</p>}
-      <ul style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #1A1814' }}>
+      {others > 0 && (
+        <label className="display-font" style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'13px', color:'#57534E', padding:'0 18px 10px' }}>
+          <input type="checkbox" checked={allChannels} onChange={e => setAllChannels(e.target.checked)} />
+          Agent and phone too: {others} claim{others === 1 ? '' : 's'} your agent or phone systems sent in
+        </label>
+      )}
+      {mine.length === 0 && <p className="display-font" style={{ margin:0, padding:'12px 18px', borderTop:'1px solid #E7E2D9', fontSize:'14px', color:'#6B6259', fontStyle:'italic' }}>None here. <button type="button" className="mono-font cov-ref-more" onClick={() => setFilter('all')}>show all</button></p>}
+      <ul id="cov-app-claims-list" style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #E7E2D9' }}>
         {mine.map(c => {
           const d = c.data || {}, k = clockOf(c), tx = d.transactions || [], expanded = open === c.id, active = activeId === c.id, ai = d.ai, onDesk = c.status === 'with_desk'
           const steps = (c.history || []).filter(h => h.step)
           const merchants = [...new Set(tx.map(t => t.merchant).filter(Boolean))]
           return (
-            <li key={c.id} id={`claim-${c.id}`} style={{ borderBottom:'1px solid #D4CCBC', background: active ? '#F3EEE4' : 'transparent' }}>
+            <li key={c.id} id={`claim-${c.id}`} className="cov-app-claim" style={{ background: active ? '#F3EEE4' : 'transparent' }}>
               <div style={{ display:'flex', gap:'12px', alignItems:'flex-start', padding:'12px 4px', flexWrap:'wrap' }}>
                 <button type="button" onClick={() => setOpen(expanded ? null : c.id)} aria-expanded={expanded}
                   style={{ flex:'1 1 320px', minWidth:0, textAlign:'left', background:'none', border:0, padding:0, cursor:'pointer' }}>
@@ -194,6 +262,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           )
         })}
       </ul>
+      </div>}
     </section>
   )
 }

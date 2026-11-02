@@ -667,6 +667,15 @@ export const GLOBAL_CSS = `
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
   .cov-ref-more { display:inline-block; background:none; border:none; border-bottom:1px dotted #8A7F72; color:#57534E; font-size:10.5px; letter-spacing:0.04em; padding:0 1px; margin:1px 0; line-height:1.5; cursor:pointer; vertical-align:1px; }
   .cov-ref-more:hover { color:#1A1814; border-bottom-color:#1A1814; }
+  .cov-app-claims { border:1px solid #D4CCBC; background:#FAF7F1; margin-bottom:24px; }
+  .cov-app-claims-bar { width:100%; display:flex; align-items:center; gap:18px; flex-wrap:wrap; background:none; border:none; padding:14px 18px; cursor:pointer; text-align:left; }
+  button.cov-app-claims-bar:hover { background:#F3EEE5; }
+  .cov-app-claims-title { font-size:20px; font-weight:600; color:#1A1814; letter-spacing:-0.01em; }
+  .cov-app-claims-counts { display:flex; flex-wrap:wrap; gap:4px 14px; flex:1; min-width:0; font-size:10px; letter-spacing:0.12em; color:#57534E; }
+  .cov-app-claims-btn { flex-shrink:0; background:#FFFFFF; border:1px solid #1A1814; padding:6px 10px; font-size:10px; letter-spacing:0.12em; color:#1A1814; white-space:nowrap; }
+  .cov-app-claim { border-bottom:1px solid #E7E2D9; padding:0 14px; }
+  .cov-app-claims-tools { display:flex; justify-content:space-between; align-items:center; gap:10px 16px; flex-wrap:wrap; padding:10px 18px; }
+  .cov-app-claim:last-child { border-bottom:none; }
   .cov-ref:hover, .cov-ref:focus-visible { border-color:#1A1814; }
   @media (max-width:1023px) { .cov-front-items { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .cov-front-item:nth-child(4n+1) { padding-left:20px; } .cov-front-item:nth-child(2n+1) { padding-left:0; border-left:none !important; }
@@ -728,6 +737,10 @@ export const GLOBAL_CSS = `
     .home-stats-grid  { grid-template-columns:repeat(2,1fr) !important; }
     .cov-home-cases-bar  { justify-content:space-between; row-gap:8px !important; }
     .cov-home-cases-sum  { order:3; flex:1 1 100% !important; gap:12px !important; }
+    .cov-app-claims-bar { justify-content:space-between; row-gap:8px; }
+    .cov-app-claims-counts { order:3; flex:1 1 100%; gap:4px 12px; }
+    .cov-app-claims-title { flex:1 1 0; min-width:0; font-size:18px; line-height:1.2; }
+    .cov-app-claim { padding:0 6px; }
     /* single-col fallback for fixed grids */
     .mob-1col         { grid-template-columns:1fr !important; }
     /* platform toggles: no wrap */
