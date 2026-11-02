@@ -12,11 +12,12 @@
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, lastToldAt, silentDays, waitingClaims } from './claims.mjs'
+import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
 import { Badge, Button, NewDot, Select } from './ui.jsx'
 import { previousVisit } from './brief.js'
+import { lastToldAt } from './claims.mjs'
 
 const money = (n, cur = 'USD') => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: cur.length === 3 ? cur : 'USD' })
 const ago = ts => { const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : Math.round(m / 1440) === 1 ? 'yesterday' : `${Math.round(m / 1440)} days ago` }
