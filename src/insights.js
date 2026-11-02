@@ -11,7 +11,9 @@
 //   week        clock deadlines in the next 7 days and the busiest day
 //   atRisk      money on cases with a missed or nearly-due clock
 //   you, team   the same figures for your own cases and for the whole team
-//   ahead       the next five working days: deadlines, and the usual intake
+//   ahead       the next five working days: the deadlines on each (weekend ones on the
+//               working day before), and the usual intake; late: deadlines already missed
+//   backlog     open cases at the end of each of the last 14 days, with opened and closed
 import { CLOSED_STATUSES, caseClocks, parseAmount } from './clocks.mjs'
 import { closedAt } from './qa.js'
 
@@ -19,6 +21,7 @@ const DAY = 86400000
 const dayKey = d => { const x = new Date(d); return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}` }
 const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
 const isOpen = c => !CLOSED_STATUSES.includes(c.status)
+const addDays = (d, k) => { const x = new Date(d); x.setDate(x.getDate() + k); return x }
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export function insights(cases, { me, settings, now = new Date() } = {}) {
@@ -31,7 +34,7 @@ export function insights(cases, { me, settings, now = new Date() } = {}) {
   const opened = {}
   all.forEach(c => { const k = dayKey(c.date); opened[k] = (opened[k] || 0) + 1 })
   const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today.getTime() - (13 - i) * DAY)
+    const d = addDays(today, i - 13)
     return { date: d, count: opened[dayKey(d)] || 0 }
   })
   const earliest = all.reduce((m, c) => Math.min(m, new Date(c.date).getTime()), Infinity)
@@ -99,19 +102,42 @@ export function insights(cases, { me, settings, now = new Date() } = {}) {
   // ── The working week ahead: deadlines on each day, and how many new cases a day like it usually brings ──
   // (days are stepped by the calendar, not by 24 hours, so a clock change doesn't shift them)
   const weeks = Math.min(8, weeksOfHistory)
-  const addDays = (d, k) => { const x = new Date(d); x.setDate(x.getDate() + k); return x }
   const usual = d => weeksOfHistory >= 2 ? Array.from({ length: weeks }, (_, i) => opened[dayKey(addDays(d, -7 * (i + 1)))] || 0).reduce((a, b) => a + b, 0) / weeks : null
-  const deadlinesOn = (list, d) => list.reduce((s, c) => s + caseClocks(c, settings, now).filter(k => k.state !== 'met' && k.key !== 'assign' && dayKey(k.due) === dayKey(d)).length, 0)
   const ahead = []
   for (let i = 0; ahead.length < 5; i++) {
     const d = addDays(today, i)
     if (d.getDay() === 0 || d.getDay() === 6) continue
-    ahead.push({ date: d, today: i === 0, deadlines: deadlinesOn(all, d), mine: mine.length ? deadlinesOn(mine, d) : null, expected: usual(d) })
+    ahead.push({ date: d, today: i === 0, weekend: false, due: [], expected: usual(d) })
   }
+  // Each open clock goes on its day; a weekend deadline goes on the working day before it,
+  // and anything already missed goes in `late`. Each entry is { id, merchant, key, label, mine }.
+  const late = []
+  const isMine = c => !!me && (c.assignedTo || '').toLowerCase() === me
+  all.forEach(c => caseClocks(c, settings, now).forEach(k => {
+    if (k.state === 'met' || k.key === 'assign') return
+    const e = { id: c.id, merchant: c.merchant, key: k.key, label: k.label, mine: isMine(c) }
+    if (k.state === 'breached') { late.push(e); return }
+    const due = startOfDay(k.due)
+    let wd = due
+    while (wd.getDay() === 0 || wd.getDay() === 6) wd = addDays(wd, -1)
+    const b = wd < ahead[0].date ? ahead[0] : ahead.find(d => dayKey(d.date) === dayKey(wd))
+    if (!b) return   // past the window
+    if (due.getDay() === 0 || due.getDay() === 6) b.weekend = true
+    b.due.push(e)
+  }))
+  ahead.forEach(d => { d.deadlines = d.due.length; d.mine = mine.length ? d.due.filter(e => e.mine).length : null })
+
+  // ── Keeping up: open cases at the end of each of the last 14 days, and what came in and went out ──
+  const closedT = c => { const t = closedAt(c); return t ? new Date(t).getTime() : isOpen(c) ? Infinity : -Infinity }
+  const backlog = days.map(({ date: d, count }, i) => {
+    const from = d.getTime(), end = i === days.length - 1 ? now.getTime() : addDays(d, 1).getTime()
+    return { date: d, open: all.filter(c => new Date(c.date).getTime() < end && closedT(c) >= end).length,
+      opened: count, closed: all.filter(c => { const t = closedT(c); return t >= from && t < end }).length }
+  })
 
   return { scope: mine.length ? 'mine' : 'team', days, expected, pace, week,
     atRisk: { amount: atRisk, cases: atRiskCases, currency: currencies.size === 1 ? [...currencies][0] : currencies.size ? 'mixed' : 'USD' },
-    you: mine.length ? statsFor(mine) : null, team: { ...statsFor(all), openedToday: days[days.length - 1].count }, ahead, weeks }
+    you: mine.length ? statsFor(mine) : null, team: { ...statsFor(all), openedToday: days[days.length - 1].count }, ahead, late, backlog, weeks }
 }
 
 export function greeting(now = new Date()) {
