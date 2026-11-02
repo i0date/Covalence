@@ -2,6 +2,8 @@
 // From the bank's systems, with an API key from Settings → Connections:
 //   POST /api/claims                 Authorization: Bearer cvl_…   { one claim }  → stored, lands in 001 Triage → Claims
 //   GET  /api/claims?reference=…     Authorization: Bearer cvl_…                   → where the claim is now
+//   GET  /api/claims?questions=<claimType>[&accountType=debit]                     → what to ask the customer
+//                                    (src/claimQuestions.mjs); without a type, the claim types to choose from
 // From Covalence itself, after an analyst moves a claim on (claim_set / claim_step in supabase_claims.sql):
 //   POST /api/claims                 Authorization: Bearer <Supabase session>   { "notify": "CLM-…" }
 //                                    → a signed event to the bank's endpoint: claim.updated, or
@@ -162,6 +164,13 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const q = req.query || {}
+      if (q.questions !== undefined) {
+        const cq = await import('../src/claimQuestions.mjs')
+        const type = String(q.questions || ''), acct = m.ACCOUNT_TYPES.includes(q.accountType) ? q.accountType : ''
+        if (!type) return res.status(200).json({ claimTypes: Object.entries(m.CLAIM_TYPES).map(([value, label]) => ({ value, label })) })
+        if (!m.CLAIM_TYPES[type]) return res.status(400).json({ error: 'Unknown claim type', claimTypes: Object.keys(m.CLAIM_TYPES) })
+        return res.status(200).json({ claimType: type, label: m.CLAIM_TYPES[type], accountType: acct || null, questions: cq.publicQuestions(type, acct) })
+      }
       const filter = q.id ? `id=eq.${encodeURIComponent(String(q.id).slice(0, 20))}` : q.reference ? `external_id=eq.${encodeURIComponent(String(q.reference).slice(0, 120))}` : null
       if (!filter) return res.status(400).json({ error: 'Ask for ?reference=<your claim id> or ?id=CLM-…' })
       const row = (await rest(`app_claims?institution_id=eq.${inst}&${filter}&select=id,external_id,status,history,created_at,updated_at`))?.[0]
@@ -176,6 +185,7 @@ module.exports = async function handler(req, res) {
     if (errors.length) return res.status(400).json({ error: 'The claim has problems', problems: errors })
     const id = m.claimIdFrom(crypto.createHash('sha256').update(inst + '|' + claim.externalId).digest('hex'))
     const clock = m.claimClock(claim), missing = m.missingForDesk(claim)
+    const answerProblems = (await import('../src/claimQuestions.mjs')).checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).problems
     const row = { institution_id: inst, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment, status: 'received', ready: !missing.length,
       data: { ...claim, clock, missing, source: keyRow.prefix }, reported_at: claim.reportedAt,
       history: [{ status: 'received', at: now.toISOString(), by: keyRow.prefix, note: `Received from the ${m.CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }] }
@@ -194,7 +204,7 @@ module.exports = async function handler(req, res) {
       .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))
       .catch(e => console.error('claims triage:', e.message)))
     if (triaged) await triaged
-    return res.status(201).json({ ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, missing, clock })
+    return res.status(201).json({ ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) })
   } catch (e) {
     console.error('claims:', e.message)
     return res.status(500).json({ error: 'Couldn’t store the claim — try again' })

@@ -117,16 +117,21 @@ Content-Type: application/json
   "customer": { "id": "A-2231", "name": "Dana Whitfield", "accountType": "debit" },
   "transactions": [{ "id": "TX-90311", "ts": "2026-10-28T02:10:00Z", "amount": -84.50,
                      "currency": "USD", "merchant": "SHOPZ*GADGETHUB", "network": "Visa" }],
-  "answers": { "recognisesTransaction": false, "cardInPossession": true },
+  "answers": { "recognisesTransaction": false, "cardInPossession": true,
+               "sharedCardDetails": false },       // ids from the questions below
   "statement": "Two charges from a shop I’ve never heard of…",
   "attachments": [{ "name": "receipt.pdf", "url": "https://files.yourbank.com/…" }],
   "consent": { "given": true, "at": "2026-10-29T09:14:00Z" }
 }
 
-GET ${origin}/api/claims?reference=APP-55102     → where the claim is now`}</Code>
+GET ${origin}/api/claims?reference=APP-55102     → where the claim is now
+GET ${origin}/api/claims?questions=unauth_cnp&accountType=debit
+                                                  → what to ask the customer
+GET ${origin}/api/claims?questions=              → the claim types to choose from`}</Code>
       <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
         <li><strong>Required:</strong> id, customer.id, and at least one transaction with id, ts and amount. Everything else makes the claim faster to work.</li>
-        <li><strong>Ready for Desk:</strong> a claim with its type, the account type, every merchant, the customer’s own account, their consent and (for unauthorised claims) “Is this yours?” answered no is marked ready. The answer says what’s missing.</li>
+        <li><strong>Questions:</strong> ask for the questions once the customer picks what happened, and show them in your app. Each has an <code>id</code> (send the answer under it), the words to show, a <code>kind</code> (yesno, choice, date, amount, text), whether it’s required, an optional <code>showIf</code> (ask it only when an earlier answer matches), and <code>why</code>, for your product team. They follow network and Reg E rules, so a claim answered in full can go straight to an analyst.</li>
+        <li><strong>Ready for Desk:</strong> a claim with its type, the account type, every merchant, the customer’s own account, their consent and the required questions answered is marked ready (for unauthorised claims, “Do you recognise this transaction?” answered no). The answer says what’s missing, and <code>answerProblems</code> lists any answer of the wrong kind.</li>
         <li><strong>Account types:</strong> debit, credit, p2p, ach_eft, bnpl, crypto. Claim types are the ones in Triage’s list, such as unauth_card_present, unauth_cnp, ato, non_receipt, not_as_described, duplicate_charge, impersonation.</li>
         <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
         <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint above as a signed <code>claim.updated</code> event, so your app can tell the customer. Once the claim is with the Desk, its case sends <code>claim.provisional_credit</code>, <code>claim.filed</code> and <code>claim.resolved</code> (with <code>outcome</code>), each once, with a note you can show the customer.</li>
