@@ -12,6 +12,7 @@
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
 import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
+import { questionById, answerWords } from './claimQuestions.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
 import { Badge, Button, NewDot, Select } from './ui.jsx'
@@ -21,7 +22,6 @@ const money = (n, cur = 'USD') => (Number(n) || 0).toLocaleString('en-US', { sty
 const ago = ts => { const m = Math.round((Date.now() - new Date(ts)) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : Math.round(m / 1440) === 1 ? 'yesterday' : `${Math.round(m / 1440)} days ago` }
 const day = d => new Date(String(d).length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const words = k => k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())
-const answerText = v => v === true ? 'Yes' : v === false ? 'No' : String(v)
 const ROUTES = { dispute: 'Dispute', fraud: 'Fraud', scam: 'Scam', not_a_dispute: 'Not a dispute' }
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
@@ -172,8 +172,11 @@ export function AppClaims({ segment, activeId, onTriage }) {
                     ))}</tbody>
                   </table>
                   {Object.keys(d.answers || {}).length > 0 && (
-                    <dl style={{ margin:0, display:'grid', gridTemplateColumns:'minmax(140px, max-content) 1fr', gap:'2px 12px' }}>
-                      {Object.entries(d.answers).map(([q, a]) => <React.Fragment key={q}><dt style={{ color:'#6B6259' }}>{words(q)}</dt><dd style={{ margin:0 }}>{answerText(a)}</dd></React.Fragment>)}
+                    <dl className="cov-claim-answers" aria-label="What the customer answered in the app">
+                      {Object.entries(d.answers).map(([q, a]) => {
+                        const qq = questionById(q)
+                        return <React.Fragment key={q}><dt style={{ color:'#6B6259' }} title={qq?.why || undefined}>{qq?.ask || words(q)}</dt><dd style={{ margin:0, fontWeight:500 }}>{answerWords(q, a)}</dd></React.Fragment>
+                      })}
                     </dl>
                   )}
                   {d.attachments?.length > 0 && <p style={{ margin:0 }}>Attachments: {d.attachments.map(a => a.name || 'file').join(', ')} (held in your systems)</p>}

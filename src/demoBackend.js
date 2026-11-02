@@ -214,6 +214,7 @@ function openArnSession({ a, b, sides, cases, i, opening, lines }) {
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
 // Three claims as Demo Bank's app would send them: two complete, one missing the claim type and consent
+const DEMO_QV = 1   // answers given to the questions in claimQuestions.mjs; older demo claims are brought up to date
 function demoClaims() {
   const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
   const raw = [
@@ -221,19 +222,19 @@ function demoClaims() {
       customer: { id: 'A-2231', name: 'Dana Whitfield', email: 'dana.w@example.com', accountType: 'debit', accountOpened: '2019-04-02' },
       transactions: [{ id: 'TX-90311', ts: ago(30), amount: -84.5, currency: 'USD', merchant: 'SHOPZ*GADGETHUB', merchantCategory: 'Electronics', merchantLocation: 'Online', network: 'Visa', channel: 'card_not_present' },
                      { id: 'TX-90318', ts: ago(29), amount: -212, currency: 'USD', merchant: 'SHOPZ*GADGETHUB', merchantCategory: 'Electronics', merchantLocation: 'Online', network: 'Visa', channel: 'card_not_present' }],
-      answers: { recognisesTransaction: false, cardInPossession: true, sharedCardDetails: false, otherPeopleUseCard: false },
+      answers: { recognisesTransaction: false, cardInPossession: true, sharedCardDetails: false, otherUnrecognised: false },
       statement: 'Two charges from a shop I’ve never heard of. My card has been in my wallet the whole time and I haven’t shared the number with anyone.',
       attachments: [], consent: { given: true, at: ago(3), text: 'I confirm this is accurate and authorise Demo Bank to investigate.' } },
     { id: 'APP-55107', channel: 'app', reportedAt: ago(24 * 6 + 2), claimType: 'non_receipt',   // six days without an update: shows as a customer waiting
       customer: { id: 'A-1180', name: 'Marcus Lee', accountType: 'credit' },
       transactions: [{ id: 'TX-88720', ts: ago(24 * 19), amount: -349.99, currency: 'USD', merchant: 'NORTHWIND FURNITURE', merchantCategory: 'Furniture', network: 'Mastercard', channel: 'card_not_present' }],
-      answers: { recognisesTransaction: true, contactedMerchant: true, expectedDelivery: '2026-10-15' },
+      answers: { whatPurchased: 'A standing desk', expectedDelivery: ago(24 * 12).slice(0, 10), goodsOrService: 'goods', contactedMerchant: true, merchantResponse: 'They promised a tracking number, then stopped replying.' },
       statement: 'Ordered a desk, paid, never arrived. The merchant stopped answering emails.',
       attachments: [{ name: 'order-confirmation.pdf', type: 'application/pdf', url: 'https://files.demo.bank/claims/55107/order.pdf' }], consent: { given: true, at: ago(24 * 6 + 2) } },
     { id: 'WEB-30014', channel: 'web', reportedAt: ago(50), claimType: '',
       customer: { id: 'A-3307', name: 'Priya Nair', accountType: 'p2p' },
       transactions: [{ id: 'TX-87502', ts: ago(54), amount: -1500, currency: 'USD', merchant: 'Zelle to J. Carter', channel: 'zelle' }],
-      answers: { recognisesTransaction: true, contactedByCaller: 'Someone saying they were from the bank’s fraud team' },
+      answers: { madePaymentYourself: true, howContacted: 'phone', claimedToBe: 'our_bank' },
       statement: 'Got a call from the bank, they said my account was hacked and to move money to a safe account.',
       attachments: [], consent: { given: false } },
   ]
@@ -244,7 +245,7 @@ function demoClaims() {
       reasons: ['The customer doesn’t recognise either charge', 'Card in hand and details not shared, so card-not-present use', 'Same merchant twice within a day, a common testing pattern'], askCustomer: [] },
     { summary: 'A desk ordered online and paid for, not delivered by the expected date, and the merchant has stopped replying. A not-received dispute with an order confirmation attached.',
       claimType: 'non_receipt', route: 'dispute', priority: 'normal', confidence: 'high',
-      reasons: ['The customer recognises the charge, so it isn’t fraud', 'Expected delivery date has passed', 'They tried the merchant first, as the networks expect'], askCustomer: ['Has anything been delivered since 15 October, even partly?'] },
+      reasons: ['The customer recognises the charge, so it isn’t fraud', 'Expected delivery date has passed', 'They tried the merchant first, as the networks expect'], askCustomer: ['Has anything been delivered since the expected date, even partly?'] },
     { summary: 'The customer moved $1,500 by Zelle after a caller claiming to be the bank’s fraud team told them to. The customer made the payment themselves, so this is an impersonation scam, not unauthorised use.',
       claimType: 'impersonation', route: 'scam', priority: 'urgent', confidence: 'high',
       reasons: ['A caller posing as the bank asked for a transfer to a “safe account”', 'The customer sent the payment themselves', 'The scammer may call again, and consent to investigate is missing'],
@@ -253,7 +254,7 @@ function demoClaims() {
   return raw.map((b, i) => {
     const { claim } = normaliseClaim(b, new Date(now)), missing = missingForDesk(claim)
     return { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84'][i], external_id: b.id, channel: claim.channel, segment: 'fi', status: 'received', ready: !missing.length,
-      data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app', ai: { ...ai[i], at: claim.reportedAt } }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
+      data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app', qv: DEMO_QV, ai: { ...ai[i], at: claim.reportedAt } }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
       case_id: '', reported_at: claim.reportedAt, created_at: claim.reportedAt, updated_at: claim.reportedAt }
   })
 }
@@ -614,6 +615,11 @@ const HANDLERS = {
     else if (all.some(c => !c.data.ai)) {   // seeded before AI triage: add its reading of the demo claims
       const fresh = demoClaims()
       all.forEach(c => { const f = fresh.find(x => x.id === c.id); if (f && !c.data.ai) c.data = { ...c.data, ai: f.data.ai } })
+      write(K.claims, all)
+    }
+    if (all.some(c => c.data.qv !== DEMO_QV)) {   // seeded before questions by claim type: the answers to them
+      const fresh = demoClaims()
+      all.forEach(c => { const f = fresh.find(x => x.id === c.id); if (f) { c.data = { ...c.data, answers: f.data.answers, missing: f.data.missing, qv: DEMO_QV }; c.ready = f.ready } })
       write(K.claims, all)
     }
     return [...all.filter(c => c.status !== 'closed').sort((a, b) => a.reported_at.localeCompare(b.reported_at)), ...all.filter(c => c.status === 'closed')]

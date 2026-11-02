@@ -689,6 +689,9 @@ export const GLOBAL_CSS = `
   .cov-fc-block { padding:12px 0 14px; }
   .cov-fc-block + .cov-fc-block { border-top:1px solid #D4CCBC; }
   .cov-fc-who { font-size:17px; font-weight:600; font-style:italic; color:#1A1814; margin-bottom:6px; }
+  .cov-claim-answers { margin:0; display:grid; grid-template-columns:minmax(180px, 44%) minmax(0,1fr); gap:4px 16px; }
+  .cov-claim-answers dt { line-height:1.4; }
+  @media (max-width: 560px) { .cov-claim-answers { grid-template-columns:1fr; gap:0; } .cov-claim-answers dd { margin-bottom:6px !important; } }
   .cov-fc-pick { margin-top:10px; padding:10px 12px; background:#FFFFFF; border:1px solid #D4CCBC; }
   .cov-yd-forecast svg g[role=button]:focus-visible > rect:first-child { stroke:#1A1814; stroke-width:1; }
   .cov-fc-line { display:grid; grid-template-columns:78px minmax(0,1fr); gap:10px; padding:4px 0; align-items:baseline; }

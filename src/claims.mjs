@@ -5,9 +5,10 @@
 // or on the phone) and the bank's systems post it to /api/claims. These rules
 // check the claim, start the right clock from the moment the customer reported
 // it, and say whether it's complete enough to go straight to the Dispute Desk.
-// Plain functions, no imports beyond clocks.mjs, so the server and the browser
-// judge a claim the same way.
+// Plain functions, no imports beyond clocks.mjs and claimQuestions.mjs, so the
+// server and the browser judge a claim the same way.
 import { addBusinessDays } from './clocks.mjs'
+import { checkAnswers } from './claimQuestions.mjs'
 
 export const CHANNELS = { app: 'From app', web: 'Web', agent: 'Agent', phone: 'Phone' }
 export const ACCOUNT_TYPES = ['debit', 'credit', 'p2p', 'ach_eft', 'bnpl', 'crypto']
@@ -97,6 +98,9 @@ export function missingForDesk(claim) {
   if (claim.statement.length < 20) m.push('the customer’s own account of what happened')
   if (!claim.consent.given) m.push('the customer’s consent')
   if (/^unauth|^ato|^counterfeit/.test(claim.claimType) && claim.answers.recognisesTransaction !== false) m.push('the customer’s answer to “Is this yours?”')
+  // The other required questions for this claim type (claimQuestions.mjs)
+  checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).unanswered
+    .filter(q => q.id !== 'recognisesTransaction').forEach(q => m.push(`the customer’s answer to “${q.ask}”`))
   return m
 }
 

@@ -13,6 +13,7 @@ import { alertsSource } from '../sides.mjs'
 import { AppClaims } from '../AppClaims.jsx'
 import { setClaim } from '../claimsData.js'
 import { CLAIM_TYPES, claimTotal } from '../claims.mjs'
+import { questionById, answerWords } from '../claimQuestions.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 001 TRIAGE VIEW — stub (full build next)
@@ -650,7 +651,7 @@ Return ONLY valid JSON:
   const [activeClaim, setActiveClaim] = useState(null)
   const fillFromClaim = (c) => {
     const d = c.data || {}, tx = d.transactions || [], first = tx[0] || {}
-    const answers = Object.entries(d.answers || {}).map(([q, a]) => `${q.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}: ${a === true ? 'yes' : a === false ? 'no' : a}`)
+    const answers = Object.entries(d.answers || {}).map(([q, a]) => `${questionById(q)?.ask || q.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()} ${answerWords(q, a)}`)
     const story = [d.statement, answers.length ? `Answers in the app — ${answers.join('; ')}.` : '', tx.length > 1 ? `${tx.length} transactions: ${tx.map(t => `${t.merchant || t.id} ${t.amount}`).join(', ')}.` : ''].filter(Boolean).join('\n')
     const total = claimTotal(d).toFixed(2), date = first.ts ? first.ts.slice(0, 10) : ''
     setResult(null); setError(null); setHandedOff(false)
