@@ -5,10 +5,11 @@
 // or on the phone) and the bank's systems post it to /api/claims. These rules
 // check the claim, start the right clock from the moment the customer reported
 // it, and say whether it's complete enough to go straight to the Dispute Desk.
-// Plain functions, no imports beyond clocks.mjs and claimQuestions.mjs, so the
+// Plain functions, no imports beyond clocks.mjs, claimQuestions.mjs and isThisYours.mjs, so the
 // server and the browser judge a claim the same way.
 import { addBusinessDays } from './clocks.mjs'
 import { checkAnswers } from './claimQuestions.mjs'
+import { asksIsThisYours, RECOGNISED_NOTE } from './isThisYours.mjs'
 
 export const CHANNELS = { app: 'From app', web: 'Web', agent: 'Agent', phone: 'Phone' }
 export const ACCOUNT_TYPES = ['debit', 'credit', 'p2p', 'ach_eft', 'bnpl', 'crypto']
@@ -102,6 +103,21 @@ export function missingForDesk(claim) {
   checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).unanswered
     .filter(q => q.id !== 'recognisesTransaction').forEach(q => m.push(`the customer’s answer to “${q.ask}”`))
   return m
+}
+
+// The stored row for a checked claim (api/claims.js, and the demo). by: who sent it (a key's
+// prefix, or "claim form"); extra goes on its data. "That was me" — the customer recognises
+// the transaction — keeps it, closed at intake, since there's nothing to dispute.
+export function claimRow(claim, { id, institution, by, now = new Date(), extra = {} }) {
+  const at = now.toISOString(), clock = claimClock(claim), missing = missingForDesk(claim)
+  const recognised = asksIsThisYours(claim.claimType) && claim.answers.recognisesTransaction === true
+  const received = { status: 'received', at, by, note: `Received from the ${CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }
+  const row = { institution_id: institution, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment,
+    status: recognised ? 'closed' : 'received', ready: !recognised && !missing.length,
+    data: { ...claim, ...extra, clock: recognised ? null : clock, missing: recognised ? [] : missing, source: by,
+      ...(recognised ? { closedAtIntake: { reason: 'recognised', at } } : {}) }, reported_at: claim.reportedAt,
+    history: recognised ? [received, { status: 'closed', at, by, note: 'The customer recognised the transaction (“That was me”)', public: RECOGNISED_NOTE }] : [received] }
+  return { row, recognised, missing: recognised ? [] : missing, clock }
 }
 
 export const claimTotal = claim => (claim?.transactions || []).reduce((s, t) => s + (Number(t.amount) || 0), 0)

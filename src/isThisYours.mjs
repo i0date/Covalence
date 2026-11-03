@@ -88,7 +88,7 @@ export function cardFor(tx, history = [], now = new Date()) {
   if (seen) hints.push(seen.count === 1 ? `You paid ${name} once before, in ${monthYear(seen.first)}.` : `You’ve paid ${name} ${seen.count} times since ${monthYear(seen.first)}.`)
   if (via) hints.push(`Paid through ${via}, so the shop’s own name may look different.`)
   if (String(tx.merchant || '').trim() && name.toLowerCase() !== String(tx.merchant).trim().toLowerCase()) hints.push(`Shows on your statement as “${String(tx.merchant).trim()}”.`)
-  if (tx.merchantCategory) hints.push(`A ${String(tx.merchantCategory).toLowerCase()} purchase.`)
+  if (tx.merchantCategory) { const cat = String(tx.merchantCategory).toLowerCase(); hints.push(`${/^[aeiou]/.test(cat) ? 'An' : 'A'} ${cat} purchase.`) }
   return {
     transactionId: tx.id, name, via, statementName: String(tx.merchant || '').trim(),
     amount: Math.abs(Number(tx.amount) || 0), currency: tx.currency || 'USD', amountText: money(Math.abs(Number(tx.amount) || 0), tx.currency || 'USD'),

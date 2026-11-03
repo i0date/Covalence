@@ -23,7 +23,7 @@ function Code({ children }) {
     </div>
   )
 }
-const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['events', 'What your endpoint receives']]
+const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['events', 'What your endpoint receives']]
 
 export default function DevelopersPage() {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
@@ -136,6 +136,27 @@ Authorization: Bearer cvl_…
           <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
           <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint as a signed <code>claim.updated</code> event, so your app can tell the customer. Once the claim is with the Desk, its case sends <code>claim.provisional_credit</code>, <code>claim.filed</code> and <code>claim.resolved</code> (with <code>outcome</code>), each once, with a note you can show the customer.</li>
           <li><strong>AI triage:</strong> each claim is read as it arrives, without the customer’s name or contact details, and your analysts see a suggested route and questions in Triage → Claims. It suggests; they decide.</li>
+        </ul>
+      </section>
+
+      <section style={box} id="form">
+        <H2>THE HOSTED CLAIM FORM</H2>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px', lineHeight:1.6 }}>No app to build: Covalence hosts the form, in your colours (Settings → Claim form). Ask for a link for one customer and the payments from your records, then send it by your usual email or text. The customer says whether they recognise each payment, picks what went wrong, answers the questions for it, and sends the claim. It arrives like any other, tagged Web.</p>
+        <Code>{`POST ${origin}/api/claims
+Authorization: Bearer cvl_…
+
+{ "link": { "reference": "CASE-7781",
+    "customer": { "id": "A-7781", "name": "Sam Ortiz", "accountType": "debit" },
+    "transactions": [{ "id": "TX-77120", "ts": "2026-11-02T14:20:00Z", "amount": -129.99,
+                       "merchant": "AMZN MKTP US*2K4", "merchantLocation": "Online" }],
+    "expiresInHours": 72 } }
+
+→ 201 { "id": "LNK-3F09A1C2", "url": "${origin}/claim/cvf_…", "expiresAt": "2026-11-06T14:20:00Z" }`}</Code>
+        <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+          <li><strong>Required:</strong> customer.id and at least one transaction with id, ts and amount, as for a claim. Up to 25 transactions.</li>
+          <li><strong>The link works once,</strong> for 72 hours unless you say otherwise (at most 7 days). Covalence stores only a hash of it, so keep the <code>url</code> until you’ve sent it; if it’s lost, ask for another.</li>
+          <li><strong>The customer sees</strong> their first name, your name and colours, and the payments on the link, nothing else from their account.</li>
+          <li><strong>The claim</strong> has the link’s <code>id</code> as its reference, and your <code>reference</code> kept with it. Its status events go to your endpoint as usual. An agent can make the same link in Triage → Claims, and cancel one that hasn’t been used.</li>
         </ul>
       </section>
 

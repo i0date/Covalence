@@ -7,14 +7,17 @@
 // counterparty, case links that get viewed and answered. Nothing here ever
 // reaches Supabase; signing in switches to the real backend.
 import { readCases, writeCases } from './caseStore.js'
-import { normaliseClaim, claimClock, missingForDesk } from './claims.mjs'
-import { RECOGNISED_NOTE } from './isThisYours.mjs'
+import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom, CLAIM_TYPES } from './claims.mjs'
+import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
+import { publicQuestions } from './claimQuestions.mjs'
+import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, FORM_TYPES, CONSENT_TEXT } from './claimLinks.mjs'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
   sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms', claims: 'cov_demo_claims',
+  claimLinks: 'cov_demo_claim_links', claimForm: 'cov_demo_claim_form',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -273,6 +276,35 @@ function demoClaims() {
     case_id: '', reported_at: claim.reportedAt, created_at: ago(20), updated_at: ago(20) })
   return out
 }
+
+// ── The hosted claim form (supabase_claim_links.sql, api/claims.js) ──
+// Demo links live in this browser and start with demo_, so /claim/demo_… opens them here.
+const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(x => x.toString(16).padStart(2, '0')).join('')
+function demoLinkCreate(b, by) {
+  const { link, errors } = normaliseLink(b)
+  need(!errors.length, errors.join('; '))
+  const token = 'demo_' + hex(24), id = linkIdFrom(hex(4)), at = new Date().toISOString()
+  const all = read(K.claimLinks, [])
+  all.unshift({ id, token, institution_id: 'demo', reference: link.reference, customer: link.customer, transactions: link.transactions,
+    created_by: by, created_at: at, expires_at: link.expiresAt, opened_at: null, used_at: null, claim_id: '', revoked_at: null })
+  write(K.claimLinks, all.slice(0, 50))
+  audit('claim.link_created', 'claim', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
+  return { id, url: linkUrl(location.origin, token), token, expiresAt: link.expiresAt }
+}
+// A sample customer for /claim/demo: a coffee they buy every week, an online charge they don't know, and a subscription
+function demoSampleLink() {
+  const ago = d => new Date(Date.now() - d * DAY).toISOString()
+  return demoLinkCreate({ reference: 'SAMPLE', customer: { id: 'A-5520', name: 'Jordan Ellis', email: 'jordan.e@example.com', accountType: 'debit', accountOpened: '2021-08-14' },
+    transactions: [
+      { id: 'TX-93011', ts: ago(2), amount: -6.75, merchant: 'SQ *BLUE BOTTLE COFFEE #1234', merchantLocation: 'San Francisco, CA', merchantCategory: 'Coffee shop', channel: 'card_present', network: 'Visa' },
+      { id: 'TX-93018', ts: ago(1), amount: -389, merchant: 'SHOPZ*GADGETHUB 8885551234', merchantLocation: 'Online', merchantCategory: 'Electronics', channel: 'card_not_present', network: 'Visa' },
+      { id: 'TX-93020', ts: ago(1), amount: -15.49, merchant: 'NFLX DIGITAL NTFLX.COM', merchantLocation: 'Online', merchantCategory: 'Streaming', channel: 'card_not_present', network: 'Visa' },
+    ] }, 'Sample')
+}
+// Jordan's earlier payments, so "Is this yours?" can say they've paid a merchant before
+const sampleHistory = customerId => customerId !== 'A-5520' ? [] : [7, 14, 21, 28, 35, 42].map(d => ({ id: 'H' + d, ts: new Date(Date.now() - d * DAY).toISOString(), amount: -6.25, currency: 'USD', counterparty: 'SQ *BLUE BOTTLE COFFEE' }))
+  .concat([33, 63, 93].map(d => ({ id: 'N' + d, ts: new Date(Date.now() - d * DAY).toISOString(), amount: -15.49, currency: 'USD', counterparty: 'NETFLIX.COM' })))
+const demoBrand = () => normaliseBrand(read(K.claimForm, {}), DEMO_INSTITUTION)
 
 const HANDLERS = {
   // Transaction monitoring (supabase_monitoring.sql) — kept to the last 20,000 transactions
@@ -667,6 +699,58 @@ const HANDLERS = {
     write(K.claims, all)
     audit('claim.step', 'claim', c.id, { step: p_step, outcome: p_outcome || '', case: c.case_id })
     return { id: c.id, status: c.status, changed: true }
+  },
+
+  // The hosted claim form: links an agent makes, the bank's look, and the customer's side
+  claim_link_create: ({ p_link }) => { need(canWrite(), 'Your role can’t make claim links'); return demoLinkCreate(p_link, visitor().name || 'You') },
+  claim_link_sample: () => demoSampleLink(),
+  claim_links_list: () => read(K.claimLinks, []).map(l => ({ id: l.id, reference: l.reference, customer_name: l.customer?.name || '', transactions: l.transactions.length,
+    amount: l.transactions.reduce((a, t) => a + (Number(t.amount) || 0), 0), created_by: l.created_by, created_at: l.created_at, expires_at: l.expires_at,
+    opened_at: l.opened_at, used_at: l.used_at, claim_id: l.claim_id, revoked_at: l.revoked_at, url: linkUrl(location.origin, l.token) })),
+  claim_link_revoke: ({ p_id }) => {
+    need(canWrite(), 'Your role can’t change claim links')
+    const all = read(K.claimLinks, []), l = all.find(x => x.id === p_id && !x.used_at && !x.revoked_at)
+    need(l, 'That link was already used, revoked, or isn’t yours')
+    l.revoked_at = new Date().toISOString(); write(K.claimLinks, all); audit('claim.link_revoked', 'claim', p_id, {})
+    return { id: p_id, revoked: true }
+  },
+  claim_form_get: () => ({ ...read(K.claimForm, {}), institution: DEMO_INSTITUTION }),
+  claim_form_set: ({ p_display_name, p_accent, p_logo_url, p_support_phone, p_help_url }) => {
+    need(canConfigure(), 'Only admins and reviewers can change the claim form')
+    need(!p_accent || /^#[0-9a-f]{6}$/i.test(p_accent), 'The colour should look like #1E3A5F')
+    need(!p_logo_url || /^https:\/\//i.test(p_logo_url), 'The logo needs an https:// link')
+    need(!p_help_url || /^https:\/\//i.test(p_help_url), 'The help page needs an https:// link')
+    const f = { display_name: String(p_display_name || '').trim().slice(0, 120), accent: String(p_accent || '').trim(), logo_url: String(p_logo_url || '').trim(),
+      support_phone: String(p_support_phone || '').trim().slice(0, 40), help_url: String(p_help_url || '').trim(), updated_at: new Date().toISOString(), updated_by: visitor().name || 'You' }
+    write(K.claimForm, f); audit('claim.form_changed', 'claim', 'form', { name: f.display_name })
+    return { ...f, institution: DEMO_INSTITUTION }
+  },
+  claim_form_open: ({ p_token }) => {
+    const all = read(K.claimLinks, []), l = all.find(x => x.token === p_token), problem = linkProblem(l)
+    if (problem) return { error: problem, brand: l ? demoBrand() : null, gone: !!l }
+    if (!l.opened_at) { l.opened_at = new Date().toISOString(); write(K.claimLinks, all) }
+    const acct = l.customer.accountType || '', history = sampleHistory(l.customer.id)
+    return { brand: demoBrand(), firstName: String(l.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: l.expires_at,
+      cards: l.transactions.map(t => cardFor(t, history)), types: FORM_TYPES,
+      questions: Object.fromEntries(Object.keys(CLAIM_TYPES).map(k => [k, publicQuestions(k, acct)])), consentText: CONSENT_TEXT }
+  },
+  claim_form_send: ({ p_token, p_claim }) => {
+    const all = read(K.claimLinks, []), l = all.find(x => x.token === p_token), problem = linkProblem(l)
+    need(!problem, problem)
+    const body = claimFromForm(l, p_claim)
+    need(p_claim?.consent === true || body.answers.recognisesTransaction === true, 'Tick the box to agree before you send your claim')
+    const { claim, errors } = normaliseClaim(body)
+    need(!errors.length, 'Some answers are missing — check the form and try again')
+    const id = claimIdFrom(hex(5)), { row, recognised, missing } = claimRow(claim, { id, institution: 'demo', by: 'claim form', extra: { link: l.id, qv: DEMO_QV, ...(l.reference ? { bankReference: l.reference } : {}) } })
+    const at = row.history[0].at
+    const claims = read(K.claims, null) || demoClaims()
+    claims.push({ ...row, case_id: '', created_at: at, updated_at: at })
+    write(K.claims, claims)
+    Object.assign(l, { used_at: at, claim_id: id }); write(K.claimLinks, all)
+    audit('claim.received', 'claim', id, { reference: claim.externalId, channel: 'web', transactions: claim.transactions.length, ready: !recognised && !missing.length })
+    if (recognised) audit('claim.closed_at_intake', 'claim', id, { reason: 'recognised', reference: claim.externalId })
+    audit('claim.link_used', 'claim', l.id, { claim: id })
+    return { id, status: row.status, statusText: recognised ? 'Closed' : 'Received', closedAtIntake: recognised, brand: demoBrand() }
   },
 
   // Sound the alarm (supabase_alarms.sql): one open alarm at a time; another report joins it

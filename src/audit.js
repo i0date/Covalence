@@ -32,6 +32,7 @@ export const auditVerify = () => rpc('audit_verify').then(d => (d && d[0]) || nu
 export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
   'claim.received': 'Claim received from the app', 'claim.closed_at_intake': 'Claim closed at intake', 'claim.ai_triaged': 'Claim read by AI triage', 'claim.status_sent': 'Claim update sent to the app',
+  'claim.link_created': 'Claim form link made', 'claim.link_used': 'Claim sent through a claim form link', 'claim.link_revoked': 'Claim form link cancelled', 'claim.form_changed': 'Claim form look changed',
   'pool.opened': 'Pool opened', 'pool.joined': 'Joined the pool', 'pool.left': 'Left the pool', 'pool.invited': 'Invited to the pool',
   'pool.task_added': 'Pool task added', 'pool.task_taken': 'Pool task taken', 'pool.task_done': 'Pool task done', 'pool.task_reopened': 'Pool task reopened', 'pool.closed': 'Pool closed',
   'case.auto_assigned': 'Case auto-assigned', 'case.taken_over': 'Case taken over', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
