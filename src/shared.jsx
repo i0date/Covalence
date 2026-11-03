@@ -233,7 +233,15 @@ export function saveOutcomes(o) {
     if (SUPA_URL && SUPA_KEY && isSignedIn()) {
       if (window._covSyncStatus) window._covSyncStatus('syncing')
       pushCasesToSupa(merged)
-        .then(() => { if (window._covSyncStatus) window._covSyncStatus('synced') })
+        .then(touched => {
+          if (window._covSyncStatus) window._covSyncStatus('synced')
+          // Someone else changed some of these cases meanwhile: their changes, merged with ours, come back in
+          if (touched?.length) {
+            const now = mergeCases(readCases(), touched)
+            writeCases(now)
+            if (window._covSubscribers) window._covSubscribers.forEach(fn => { try { fn(now) } catch {} })
+          }
+        })
         .catch(() => { if (window._covSyncStatus) window._covSyncStatus('error') })
     }
   } catch {}
