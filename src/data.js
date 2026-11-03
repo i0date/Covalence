@@ -123,25 +123,93 @@ export async function caseLinkActivity(token) {
 // time, then ask only for cases changed since the last pull.
 const PUSH_CHUNK = 500, PULL_PAGE = 1000
 const _synced = new Map()
+// ── Two people, one case ──
+// Each case's last copy from the server (its base) is kept, so when someone else
+// changed the same case, the two sets of changes merge piece by piece instead of the
+// later save replacing the whole case: both people's notes, timeline entries, pool
+// members and tasks survive. Only when both changed the same single value does the
+// later one win.
+const _base = new Map()
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v)
+// How a list item is told apart: its id, email or path, or for timeline entries, when and what
+const itemKey = x => isObj(x) ? (x.id ?? x.email ?? x.path ?? (x.ts ? `${x.ts}|${x.event || ''}|${x.status || ''}|${x.text || x.to || x.name || ''}` : JSON.stringify(x))) : JSON.stringify(x)
+function mergeList(base, a, b) {
+  const kb = new Set((base || []).map(itemKey)), ka = new Map(a.map(x => [itemKey(x), x])), kbb = new Map(b.map(x => [itemKey(x), x]))
+  const baseBy = new Map((base || []).map(x => [itemKey(x), x]))
+  const out = [], seen = new Set()
+  for (const x of [...a, ...b]) {
+    const k = itemKey(x)
+    if (seen.has(k)) continue
+    seen.add(k)
+    if (kb.has(k) && (!ka.has(k) || !kbb.has(k))) continue   // removed on one side
+    out.push(ka.has(k) && kbb.has(k) ? merge3(baseBy.get(k), ka.get(k), kbb.get(k)) : x)
+  }
+  return out.some(x => x?.ts) ? out.sort((x, y) => String(x?.ts || '').localeCompare(String(y?.ts || ''))) : out
+}
+// a: this browser's version, b: the server's; base: what both started from
+export function merge3(base, a, b) {
+  if (same(a, b)) return a
+  if (base !== undefined && same(base, a)) return b
+  if (base !== undefined && same(base, b)) return a
+  if (isObj(a) && isObj(b)) {
+    const out = {}
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const v = merge3(isObj(base) ? base[k] : undefined, a[k], b[k])
+      if (v !== undefined) out[k] = v
+    }
+    return out
+  }
+  if (Array.isArray(a) && Array.isArray(b)) return mergeList(Array.isArray(base) ? base : [], a, b)
+  return a === undefined ? b : a
+}
+// Cases from the server into this browser's list: taken as they are unless this browser changed
+// the case too since its base, in which case the two are merged (and pushed on the next save)
+export function applyRemote(local, remote) {
+  const byId = new Map(local.map(c => [c.id, c])), now = new Date().toISOString()
+  for (const r of remote) {
+    const ex = byId.get(r.id), base = _base.get(r.id)
+    if (!ex || !base || same(ex, base)) byId.set(r.id, r)
+    else if (!same(ex, r)) byId.set(r.id, { ...merge3(base, ex, r), updatedAt: now })
+    _base.set(r.id, r)
+  }
+  return [...byId.values()]
+}
 let _lastPull = null       // server timestamp of the newest case pulled
 let _syncScope = ''
 function syncScope() {     // a different person or institution starts over
   const scope = covWorkspace() + '|' + (accessToken() ? 'in' : 'out')
-  if (scope !== _syncScope) { _syncScope = scope; _synced.clear(); _lastPull = null }
+  if (scope !== _syncScope) { _syncScope = scope; _synced.clear(); _base.clear(); _lastPull = null }
 }
-export async function pushCasesToSupa(cases) {
+// One push at a time, each after a pull, so a save merges in what others changed first.
+// Resolves to the cases that others' changes touched (to put back into this browser), or null.
+let _pushing = Promise.resolve()
+export function pushCasesToSupa(cases) {
+  const run = _pushing.then(() => pushNow(cases))
+  _pushing = run.catch(() => {})
+  return run
+}
+async function pushNow(cases) {
   // Demo cases stay in this browser — they never reach the shared pool
-  const real = (cases || []).filter(c => !isDemoCase(c))
-  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !canWrite() || !real.length) return  // auditors are read-only
+  let real = (cases || []).filter(c => !isDemoCase(c))
+  if (!SUPA_URL || !SUPA_KEY || !isSignedIn() || !canWrite() || !real.length) return null  // auditors are read-only
   syncScope()
+  let touched = null
+  const fresh = await pullCasesFromSupa().catch(() => [])
+  if (fresh.length) {
+    const before = new Map(real.map(c => [c.id, c]))
+    real = applyRemote(real, fresh)
+    touched = real.filter(c => before.get(c.id) !== c)
+  }
   const changed = real.filter(c => _synced.get(c.id) !== (c.updatedAt || ''))
   for (let i = 0; i < changed.length; i += PUSH_CHUNK) {
     const chunk = changed.slice(i, i + PUSH_CHUNK)
     const rows = chunk.map(c => ({ id:c.id, data:c, assigned_to:c.assignedTo||null, updated_at:new Date().toISOString() }))
     await supaRpc('cov_push_cases', { p_workspace: covWorkspace(), p_rows: rows }, () =>
       fetch(`${SUPA_URL}/rest/v1/cov_cases`, { method:'POST', headers:{...supaH(), Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows) }))
-    chunk.forEach(c => _synced.set(c.id, c.updatedAt || ''))
+    chunk.forEach(c => { _synced.set(c.id, c.updatedAt || ''); _base.set(c.id, c) })
   }
+  return touched?.length ? touched : null
 }
 export async function pullCasesFromSupa() {
   if (!SUPA_URL || !SUPA_KEY || !isSignedIn()) return []

@@ -10,7 +10,7 @@ import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
 import { auditWrite } from './audit.js'
 import { amlCaseFrom } from './AlertsPanel.jsx'
 import { useTeam, useWorkflow, useFincrime, RemindersBell } from './workflow.jsx'
-import { SUPA_KEY, SUPA_URL, mergeCases, pullCasesFromSupa, pushCasesToSupa } from './data.js'
+import { SUPA_KEY, SUPA_URL, applyRemote, pullCasesFromSupa } from './data.js'
 import { ErrorBoundary, GLOBAL_CSS, loadOutcomes, loadSettings, registerOutcomeSubscriber, saveOutcomes, saveSettings, toDfaClaim } from './shared.jsx'
 import { DeskView } from './tools/Desk.jsx'
 import { DfaView } from './tools/Dfa.jsx'
@@ -282,8 +282,7 @@ export default function Covalence() {
   const _skipSaveRef = useRef(false)
   useEffect(() => {
     if (_skipSaveRef.current) { _skipSaveRef.current = false; return }
-    saveOutcomes(outcomes)
-    if (SUPA_URL && SUPA_KEY && outcomes.length > 0) pushCasesToSupa(outcomes).catch(()=>{})
+    saveOutcomes(outcomes)   // and pushes to the shared workspace when signed in
   }, [outcomes])
   // Register global sync status hook so saveOutcomes can update nav indicator
   useEffect(() => {
@@ -325,11 +324,16 @@ export default function Covalence() {
       } catch {}
       try {
         const r = await pullCasesFromSupa()
-        // Pulls after the first bring only changed cases, so everyone (auditors too) merges
-        if (r.length) setOutcomes(l => mergeCases(l, r))
+        // Pulls after the first bring only changed cases, so everyone (auditors too) merges them in
+        if (r.length) setOutcomes(l => applyRemote(l, r))
       } catch {}
     }
-    pull(); const id=setInterval(pull,60000); return ()=>clearInterval(id)
+    // Every 10 seconds while the page is in view, and as soon as you come back to it
+    const tick = () => { if (document.visibilityState === 'visible') pull() }
+    pull(); const id = setInterval(tick, 10000)
+    const back = () => { if (document.visibilityState === 'visible') pull() }
+    document.addEventListener('visibilitychange', back); window.addEventListener('focus', back)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', back); window.removeEventListener('focus', back) }
   }, [membership?.institution_id])
 
   // The menu follows what the workspace does (sides.mjs): issuers get the dispute
