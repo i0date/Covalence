@@ -170,10 +170,20 @@ export function workflowChanges(cases, settings, team, now = new Date(), opts = 
   }
   return out
 }
+// A rule that already took effect on a case (the rules can run again before the first change
+// is saved) is skipped, so its patch and history entry land once
 export function applyChanges(cases, changes) {
   if (!changes.length) return cases
   const byId = new Map(changes.map(x => [x.id, x]))
-  return cases.map(c => { const x = byId.get(c.id); return x ? { ...c, ...x.patch, history: [...(c.history || []), ...x.events] } : c })
+  return cases.map(c => {
+    const x = byId.get(c.id)
+    if (!x) return c
+    const patch = { ...x.patch }
+    let events = x.events
+    if (patch.assignedTo && c.assignedTo) { ['assignedTo', 'assignedName', 'assignedAt', 'assignedBy'].forEach(k => delete patch[k]); events = events.filter(e => e.event !== 'assigned') }
+    if (patch.escalatedTo && c.escalatedTo) { ['escalatedTo', 'escalatedAt', 'escalationReason'].forEach(k => delete patch[k]); events = events.filter(e => e.event !== 'escalated') }
+    return events.length ? { ...c, ...patch, history: [...(c.history || []), ...events] } : c
+  })
 }
 
 // ─── Reminders ────────────────────────────────────────────────────────────────

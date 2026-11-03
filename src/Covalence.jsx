@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
-import { seedDemoIfFirstVisit, useOpenCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch, isDemoCase } from './CaseThread.jsx'
+import { seedDemoIfFirstVisit, useOpenCaseListener, useTakeCaseListener, loadDemoInstitution, clearDemoInstitution, MobileMenu, CasePanel, CaseSearch, isDemoCase } from './CaseThread.jsx'
 import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, onSessionChange, getMembership, setCurrentRole, purgedCaseIds, ROLES } from './auth.js'
 import { DEMO_INSTITUTION, demoRole, setDemoRole, ensureDemoSeeded, demoAudit } from './demoBackend.js'
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
@@ -161,6 +161,7 @@ export default function Covalence() {
   const [deskOpenRequest, setDeskOpenRequest] = useState(null)
   const [dataVersion,     setDataVersion]     = useState(0) // bump to remount tools after demo load/clear
   useOpenCaseListener(setOpenCaseId)
+  useTakeCaseListener(setOutcomes, covUser)
   const openSearch = React.useCallback(() => setSearchOpen(true), [])
   // Triage closed a claim that isn't a dispute: keep it on the shared record, closed — and in Licit if referred
   const closeAtIntake = (c, d) => {

@@ -35,12 +35,20 @@ export function useWorkflow({ outcomes, setOutcomes, settings, covUser, team }) 
   useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 60000); return () => clearInterval(iv) }, [])
 
   const me = covUser?.email   // covUser is rebuilt every render; depend on the email only
+  // The rules can run again before their last change is saved: each change is logged once
+  const logged = useRef(new Map())
   const run = useCallback((opts = {}) => {
     if (!me || !canWrite()) return 0
     const changes = workflowChanges(outcomes, settings, team, new Date(), opts)
     if (!changes.length) return 0
     setOutcomes(prev => applyChanges(prev, changes))
-    changes.forEach(ch => ch.audit.forEach(([action, detail]) => auditWrite(action, 'case', ch.id, detail)))
+    const now = Date.now()
+    changes.forEach(ch => ch.audit.forEach(([action, detail]) => {
+      const key = `${ch.id}|${action}|${JSON.stringify(detail)}`
+      if (now - (logged.current.get(key) || 0) < 10 * 60000) return
+      logged.current.set(key, now)
+      auditWrite(action, 'case', ch.id, detail)
+    }))
     return changes.length
   }, [outcomes, settings, team, me])
 

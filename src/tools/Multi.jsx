@@ -3,6 +3,7 @@
 import React from 'react'
 import { evidencePath, CaseLink } from '../CaseThread.jsx'
 import { fetchAgents } from '../data.js'
+import { canWrite } from '../auth.js'
 import { notesList, registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 import { readCases } from '../caseStore.js'
 import { MerchantQueue } from '../MerchantQueue.jsx'
@@ -515,9 +516,12 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                       <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:false}))} className="mono-font text-[10px] px-1 text-stone-400">✕</button>
                     </div>
                   ):(
+                    <>
+                    {!o.assignedTo && myEmail && canWrite() && <button onClick={()=>assignCase(o.id,myEmail,covUser?.name||myEmail)} className="mono-font cov-take-it" aria-label={`Take ${o.id}`}>TAKE IT</button>}
                     <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:true}))} className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                       {o.assignedTo?(o.assignedName||o.assignedTo.split('@')[0]).toUpperCase():'ASSIGN'}
                     </button>
+                    </>
                   )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
@@ -612,9 +616,12 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
                       <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:false}))} className="mono-font text-[10px] px-1 text-stone-400">✕</button>
                     </div>
                   ):(
+                    <>
+                    {!o.assignedTo && myEmail && canWrite() && <button onClick={()=>assignCase(o.id,myEmail,covUser?.name||myEmail)} className="mono-font cov-take-it" aria-label={`Take ${o.id}`}>TAKE IT</button>}
                     <button onClick={()=>setAssignOpen(p=>({...p,[o.id]:true}))} className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">
                       {o.assignedTo?(o.assignedName||o.assignedTo.split('@')[0]).toUpperCase():'ASSIGN'}
                     </button>
+                    </>
                   )}
                   <button onClick={() => setNoteOpen(p => ({...p, [o.id]: !p[o.id]}))}
                     className="mono-font text-[10px] px-2 py-0.5 border border-stone-300 text-stone-400 hover:border-stone-500 hover:text-stone-600 transition-colors whitespace-nowrap">

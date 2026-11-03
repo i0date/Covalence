@@ -9,11 +9,12 @@
 // the team's other deadlines this week below. Beside it on wide screens (below
 // on narrow ones), the forecast for you and the team, and the week ahead.
 import React, { useEffect, useMemo, useState } from 'react'
-import { allThreadCases, stageOf, openCase } from './CaseThread.jsx'
+import { allThreadCases, stageOf, openCase, takeCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
 import { Badge, Button, NewDot } from './ui.jsx'
 import { insights, money, WEEKDAYS } from './insights.js'
 import { Refs } from './FrontPage.jsx'
+import { canWrite } from './auth.js'
 import { isMerchantCase } from './sides.mjs'
 import { briefPeriod, noteVisit, changedSince } from './brief.js'
 import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
@@ -110,7 +111,8 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
   const patterns = usePatterns(outcomes, platformMode)
   const myName = covUser?.name || ''
   const changed = c => c?._claimRow ? !!prev && new Date(c._claimRow.updated_at || 0) > prev : changedSince(c, prev, myName)
-  return { ...work, ins, me, platformMode, claims, alarms, patterns, period, prev, changed }
+  const canTake = !!covUser?.email && canWrite()
+  return { ...work, ins, me, platformMode, claims, alarms, patterns, period, prev, changed, canTake }
 }
 
 // ── The forecast: for you, for the team, and the working week ahead ──
@@ -334,13 +336,19 @@ function startWith(x) {
   return `Start with ${who}: ${what}.`
 }
 
+// Take it: on a case no one owns, for anyone who can work cases
+const TakeIt = ({ c, day, style }) => !c.assignedTo && day.canTake ? (
+  <button type="button" className="mono-font cov-take-it" style={style} onClick={() => takeCase(c.id)} aria-label={`Take ${c.id}`}>TAKE IT</button>
+) : null
+
 function Row({ x, i, day }) {
   const { c, r, claim } = x
+  const take = !claim && !c.assignedTo && day.canTake
   return (
-    <li>
+    <li style={take ? { display:'flex', alignItems:'center', borderTop:'1px solid #EDE7DC' } : undefined}>
       <button onClick={() => claim ? openClaim(c.id) : openCase(c.id)} data-yourday-row={i}
-        style={{ display:'grid', gridTemplateColumns:'150px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
-          padding:'9px 18px', background:'none', border:'none', borderTop:'1px solid #EDE7DC', cursor:'pointer' }}
+        style={{ display:'grid', gridTemplateColumns:'150px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left', flex:1, minWidth:0,
+          padding:'9px 18px', background:'none', border:'none', borderTop: take ? 'none' : '1px solid #EDE7DC', cursor:'pointer' }}
         className="cov-search-row cov-yourday-row">
         <span style={{ display:'inline-flex', alignItems:'center', minWidth:0, maxWidth:'100%', overflow:'hidden' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone}>{r.label}</Badge></span>
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
@@ -350,6 +358,7 @@ function Row({ x, i, day }) {
         </span>
         <span className="mono-font desktop-only" style={{ fontSize:'11px', color:'#1A1814' }}>Open →</span>
       </button>
+      {take && <TakeIt c={c} day={day} style={{ marginRight:'18px' }} />}
     </li>
   )
 }
@@ -450,18 +459,21 @@ export function YourDay({ day, covUser, settings }) {
             {unowned > 0 && (
               <div className="mono-font" style={{ fontSize:'11px', color:'#92400E', padding:'5px 0' }}>
                 {unowned} open case{unowned === 1 ? ' has' : 's have'} had no owner for longer than the {settings?.slaAssignHours ?? 24}h target
-                {settings?.autoAssign ? '.' : ' — assign them in Multi, or turn on auto-assignment in Settings → Workflow.'}
+                {settings?.autoAssign ? '.' : <> — take one with <strong>Take it</strong> below, assign them in Multi, or turn on auto-assignment in Settings → Workflow.</>}
               </div>
             )}
             {comingUp.map(({ c, k }) => (
-              <button key={c.id} onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
-                style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left',
+              <div key={c.id} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+              <button onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
+                style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', flex:1, minWidth:0, textAlign:'left',
                   background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
                 <span style={{ display:'inline-flex', alignItems:'center', color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{day.changed(c) && <NewDot />}{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
                 <span style={{ color:'#57534E' }}>{c.id}</span>
                 <span className="cov-comingup-what" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
-                <span className="desktop-only" style={{ color:'#6B6259' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'unassigned'}</span>
+                <span className="desktop-only" style={{ color: c.assignedTo ? '#6B6259' : '#92400E' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'no owner'}</span>
               </button>
+              <TakeIt c={c} day={day} />
+              </div>
             ))}
           </div>
         </div>
