@@ -689,6 +689,15 @@ export const GLOBAL_CSS = `
   .cov-ref-more:hover { color:#1A1814; border-bottom-color:#1A1814; }
   .cov-take-it { flex-shrink:0; background:#1A1814; color:#F5F1EA; border:1px solid #1A1814; padding:4px 9px; font-size:10px; letter-spacing:0.12em; cursor:pointer; white-space:nowrap; }
   .cov-take-it:hover { background:#3F3A35; }
+  .cov-pool { border:1px solid #1E3A5F; background:#F4F6F9; padding:12px 14px; display:grid; gap:10px; }
+  .cov-pool-urgent { border-color:#991B1B; }
+  .cov-pool-quiet { border-color:#D4CCBC; background:#FAF7F1; }
+  .cov-pool-row { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+  .cov-pool-kicker { font-size:10px; letter-spacing:0.16em; color:#1E3A5F; }
+  .cov-pool-chip { font-size:9.5px; letter-spacing:0.08em; padding:2px 6px; background:#E3E8F0; color:#1E3A5F; }
+  .cov-pool-task { display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px solid #E3E8F0; }
+  .cov-pool-task:first-child { border-top:none; }
+  .cov-pool-add { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
   .cov-owner { border:1px solid #D4CCBC; background:#FAF7F1; padding:12px 14px; display:grid; gap:12px; }
   .cov-owner-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
   .cov-owner-btn { background:#FFFFFF; border:1px solid #1A1814; color:#1A1814; padding:7px 11px; font-size:10px; letter-spacing:0.12em; cursor:pointer; }
