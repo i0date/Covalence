@@ -751,7 +751,10 @@ export const GLOBAL_CSS = `
     .cov-front-item { padding:12px 0 12px !important; border-left:none !important; } .cov-front-item + .cov-front-item { border-top:1px solid #D4CCBC; }
     .cov-front-greeting { margin-top:14px; font-size:16px; } .cov-front-lead { margin-bottom:14px; } }
   /* Your day: the plan, and the forecast beside it on wide screens (below it on narrow ones) */
-  .cov-yd-tabs { display:flex; gap:0; border-bottom:1px solid #D4CCBC; padding:0 12px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  /* One left edge for the header, the tabs' text and the rows: 18px in from the border (14px on a phone) */
+  .cov-yourday-head { padding:18px 18px 4px; }
+  .cov-yd-tabs { display:flex; gap:0; border-bottom:1px solid #D4CCBC; padding:6px 8px 0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .cov-yd-tabs::-webkit-scrollbar { display:none; }
   .cov-yd-tab { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:11px 10px 9px; font-size:10px; letter-spacing:0.14em; color:#6B6259; cursor:pointer; white-space:nowrap; display:inline-flex; gap:7px; align-items:baseline; }
   .cov-yd-tab:hover { color:#1A1814; }
   .cov-yd-tab[aria-selected="true"] { color:#1A1814; border-bottom-color:#1A1814; font-weight:600; }
@@ -839,8 +842,8 @@ export const GLOBAL_CSS = `
     .cov-comingup-dot { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
     /* Your day: the hide/show control sits top-right, always in reach */
-    .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
-    .cov-yourday-head { padding-right:96px !important; }
+    .cov-yourday-head { padding:14px 14px 2px; }
+    .cov-yd-tabs { padding:4px 4px 0; }
     .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */
