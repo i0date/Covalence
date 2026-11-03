@@ -34,6 +34,34 @@ export function useOpenCaseListener(fn) {
   }, [fn])
 }
 
+// Take an unowned case from a list (Your day, Home): Covalence.jsx holds the cases and makes it yours.
+// The change is logged like any other owner change (shared.jsx stampCaseChanges).
+const TAKE_EVENT = 'cov:take-case'
+export function takeCase(id) { if (id) window.dispatchEvent(new CustomEvent(TAKE_EVENT, { detail: { id } })) }
+// Make a case yours. A case only classified in Triage so far isn't a case record yet:
+// taking it opens one at the Desk stage (the Desk keeps the owner when it analyses it).
+export function withOwner(prev, c, covUser, reason) {
+  const me = covUser?.email || '', ts = new Date().toISOString()
+  const own = { assignedTo: me, assignedName: covUser?.name || me, assignedAt: ts, ...(reason ? { _assignReason: reason } : {}) }
+  if (prev.some(o => o.id === c.id)) return prev.map(o => o.id === c.id ? { ...o, ...own } : o)
+  if (!c._triageOnly) return prev
+  const t = c._triageRecord || {}
+  return [{ id: c.id, date: c.date || t.date || ts, merchant: c.merchant, amount: c.amount, network: c.network, verdict: c.verdict, confidence: c.confidence,
+    ...(t.claimType ? { category: t.claimType } : {}), ...(c.isDemo ? { isDemo: true } : {}), status: 'received', ...own, _newOwner: true }, ...prev]
+}
+export function useTakeCaseListener(setOutcomes, covUser) {
+  useEffect(() => {
+    const h = e => {
+      if (!covUser?.email || !canWrite()) return
+      setOutcomes(prev => {
+        const c = allThreadCases(prev).find(x => x.id === e.detail?.id)
+        return c && !c.assignedTo ? withOwner(prev, c, covUser) : prev
+      })
+    }
+    window.addEventListener(TAKE_EVENT, h); return () => window.removeEventListener(TAKE_EVENT, h)
+  }, [setOutcomes, covUser])
+}
+
 const readLS = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch { return fallback } }
 
 // ── Evidence links ────────────────────────────────────────────────────────────
@@ -165,11 +193,10 @@ function OwnerLine({ c, covUser, setOutcomes, settings }) {
   useEffect(() => { setMode(null); setMore('') }, [c.id])
   const me = (covUser?.email || '').toLowerCase(), owner = (c.assignedTo || '').toLowerCase()
   const mine = !!me && owner === me
-  const can = canWrite() && !!me && !c._triageOnly && stageOf(c) !== 'closed'
+  const can = canWrite() && !!me && stageOf(c) !== 'closed'
   const assign = (to, reason) => {
-    const ts = new Date().toISOString()
-    setOutcomes(prev => prev.map(o => o.id === c.id ? { ...o, assignedTo: to, assignedName: to ? (covUser?.name || to) : '', assignedAt: to ? ts : null,
-      ...(reason ? { _assignReason: reason } : {}) } : o))
+    if (to) setOutcomes(prev => withOwner(prev, c, covUser, reason))
+    else setOutcomes(prev => prev.map(o => o.id === c.id ? { ...o, assignedTo: '', assignedName: '', assignedAt: null } : o))
     setMode(null); setMore('')
   }
   const other = why === 'Another reason'
@@ -186,7 +213,7 @@ function OwnerLine({ c, covUser, setOutcomes, settings }) {
         </div>
         {can && mode !== 'over' && (
           <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-            {!owner && <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" onClick={() => assign(me)}>TAKE IT</button>}
+            {!owner && <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" onClick={() => assign(covUser.email)}>TAKE IT</button>}
             {owner && !mine && <button type="button" className="mono-font cov-owner-btn" onClick={() => setMode('over')}>TAKE OVER</button>}
             {mine && <button type="button" className="mono-font cov-owner-btn" onClick={() => assign('')}
               title={settings?.autoAssign ? 'Auto-assign is on, so the next owner is picked straight away' : 'It goes back to the unassigned queue'}>
@@ -209,7 +236,7 @@ function OwnerLine({ c, covUser, setOutcomes, settings }) {
               placeholder={other ? 'Required' : 'e.g. Priya is on leave until Monday'} />
           </label>
           <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
-            <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" disabled={!reason} onClick={() => assign(me, reason)}>TAKE OVER FROM {personOf(c.assignedTo, c.assignedName).split(/[\s@]/)[0].toUpperCase()}</button>
+            <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" disabled={!reason} onClick={() => assign(covUser.email, reason)}>TAKE OVER FROM {personOf(c.assignedTo, c.assignedName).split(/[\s@]/)[0].toUpperCase()}</button>
             <button type="button" className="mono-font cov-owner-btn" onClick={() => setMode(null)}>CANCEL</button>
           </div>
         </div>

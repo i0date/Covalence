@@ -206,7 +206,12 @@ function stampCaseChanges(current, next) {
     const history = [...(c.history || ex?.history || [])], had = history.length
     if (!ex) history.push({ ts: c.date || now, event: 'created', status: c.status, by: who })
     else if (ex.status !== c.status) history.push({ ts: now, event: 'status', from: ex.status, status: c.status, by: who })
-    const { _assignReason: reason, ...rest } = c
+    const { _assignReason: reason, _newOwner: newOwner, ...rest } = c
+    // A case opened by taking it (CaseThread withOwner): the database logs it as created, not assigned
+    if (!ex && newOwner && c.assignedTo) {
+      history.push({ ts: now, event: 'assigned', from: '', to: c.assignedTo, by: who })
+      if (isSignedIn()) auditWrite('case.assigned', 'case', c.id, { from: null, to: c.assignedTo })
+    }
     if (owner) {
       history.push({ ts: now, event: 'assigned', from: ex.assignedTo || '', to: c.assignedTo || '', by: who, ...(reason ? { reason } : {}) })
       // The database logs case.assigned (from, to) itself; a take-over's reason it can't see
@@ -682,6 +687,8 @@ export const GLOBAL_CSS = `
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
   .cov-ref-more { display:inline-block; background:none; border:none; border-bottom:1px dotted #8A7F72; color:#57534E; font-size:10.5px; letter-spacing:0.04em; padding:0 1px; margin:1px 0; line-height:1.5; cursor:pointer; vertical-align:1px; }
   .cov-ref-more:hover { color:#1A1814; border-bottom-color:#1A1814; }
+  .cov-take-it { flex-shrink:0; background:#1A1814; color:#F5F1EA; border:1px solid #1A1814; padding:4px 9px; font-size:10px; letter-spacing:0.12em; cursor:pointer; white-space:nowrap; }
+  .cov-take-it:hover { background:#3F3A35; }
   .cov-owner { border:1px solid #D4CCBC; background:#FAF7F1; padding:12px 14px; display:grid; gap:12px; }
   .cov-owner-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
   .cov-owner-btn { background:#FFFFFF; border:1px solid #1A1814; color:#1A1814; padding:7px 11px; font-size:10px; letter-spacing:0.12em; cursor:pointer; }
