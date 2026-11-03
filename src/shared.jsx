@@ -751,12 +751,53 @@ export const GLOBAL_CSS = `
     .cov-front-item { padding:12px 0 12px !important; border-left:none !important; } .cov-front-item + .cov-front-item { border-top:1px solid #D4CCBC; }
     .cov-front-greeting { margin-top:14px; font-size:16px; } .cov-front-lead { margin-bottom:14px; } }
   /* Your day: the plan, and the forecast beside it on wide screens (below it on narrow ones) */
-  .cov-yd-tabs { display:flex; gap:0; border-bottom:1px solid #D4CCBC; padding:0 12px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  /* One left edge for the header, the tabs' text and the rows: 18px in from the border (14px on a phone) */
+  .cov-yourday-head { padding:18px 18px 4px; }
+  .cov-yd-tabs { display:flex; gap:0; border-bottom:1px solid #D4CCBC; padding:6px 8px 0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .cov-yd-tabs::-webkit-scrollbar { display:none; }
   .cov-yd-tab { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:11px 10px 9px; font-size:10px; letter-spacing:0.14em; color:#6B6259; cursor:pointer; white-space:nowrap; display:inline-flex; gap:7px; align-items:baseline; }
   .cov-yd-tab:hover { color:#1A1814; }
   .cov-yd-tab[aria-selected="true"] { color:#1A1814; border-bottom-color:#1A1814; font-weight:600; }
   .cov-yd-tab-n { font-size:9.5px; color:#8A7F72; font-weight:500; }
   .cov-yd-pane { padding:14px 20px 16px; }
+  /* Your day's panel: the same height on every tab, so it never takes over Home */
+  .cov-yd-panel { height:460px; overflow:hidden; position:relative; }
+  .cov-yd-panel > [role=tabpanel] { height:100%; }
+  .cov-yd-scroll { height:100%; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+  .cov-yd-scroll .cov-plan-head { position:sticky; top:0; z-index:1; background:#FAF7F1; box-shadow:0 1px 0 #EDE7DC; }
+  .cov-yd-scroll:focus-visible { outline:2px solid #1A1814; outline-offset:-2px; }
+  .cov-yd-panel::after { content:''; position:absolute; left:0; right:0; bottom:0; height:22px; pointer-events:none; background:linear-gradient(rgba(250,247,241,0), #FAF7F1); }
+  @media (max-width:767px) { .cov-yd-panel { height:auto; max-height:none; overflow:visible; } .cov-yd-panel::after { display:none; } .cov-yd-scroll { height:auto; max-height:520px; } }
+  .cov-ydv-read { margin:0 0 12px; font-size:16px; line-height:1.4; color:#1A1814; }
+  .cov-ydv-forecast { padding:18px 20px; height:100%; display:flex; flex-direction:column; }
+  .cov-ydv-tiles { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); border:1px solid #D4CCBC; background:#FFFFFF; flex:1; min-height:0; }
+  .cov-ydv-tile { padding:14px 16px 14px; display:flex; flex-direction:column; gap:4px; min-width:0; cursor:help; }
+  .cov-ydv-tile + .cov-ydv-tile { border-left:1px solid #E2DACC; }
+  .cov-ydv-tile-label { font-size:9.5px; letter-spacing:0.16em; color:#6B6259; }
+  .cov-ydv-tile-value { font-size:40px; line-height:1.05; font-weight:600; color:#1A1814; letter-spacing:-0.02em; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .cov-ydv-tile-caption { font-size:13px; line-height:1.4; color:#57534E; }
+  .cov-ydv-tile-spark { flex:1; min-height:48px; max-height:150px; padding-top:12px; display:flex; flex-direction:column; justify-content:flex-end; }
+  .cov-ydv-tile-spark > svg { flex:1; min-height:36px; }
+  .cov-ydv-tile-you { font-size:10px; letter-spacing:0.1em; color:#1A1814; border-top:1px solid #EDE7DC; padding-top:7px; margin-top:6px; }
+  .cov-ydv-foot { margin:10px 0 0; font-size:12px; font-style:italic; color:#8A7F72; }
+  .cov-ydv-split { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr); height:100%; }
+  .cov-ydv-chart { padding:18px 22px 14px; min-width:0; }
+  .cov-ydv-chart svg g[role=button]:focus-visible > rect:first-child { stroke:#1A1814; stroke-width:1; }
+  .cov-ydv-side { border-left:1px solid #D4CCBC; background:#F7F3EC; padding:16px 18px; min-width:0; overflow-y:auto; }
+  .cov-ydv-side-head { font-size:10px; letter-spacing:0.14em; font-weight:600; padding-bottom:8px; border-bottom:1px solid #D4CCBC; }
+  .cov-ydv-side-list { list-style:none; margin:0; padding:0; }
+  .cov-ydv-case { display:grid; grid-template-columns:96px minmax(0,1fr) auto; gap:10px; align-items:baseline; width:100%; text-align:left; background:none; border:0; border-bottom:1px solid #EDE7DC; padding:9px 2px; cursor:pointer; }
+  .cov-ydv-case:hover { background:#FFFFFF; }
+  .cov-ydv-legend { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:10px; color:#57534E; margin-top:8px; min-height:15px; }
+  .cov-ydv-legend i { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+  .cov-ydv-stats { display:flex; flex-direction:column; gap:18px; padding:20px 22px; }
+  .cov-ydv-stat-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; border-top:1px solid #D4CCBC; border-bottom:1px solid #D4CCBC; padding:12px 0; }
+  .cov-ydv-stat { font-size:28px; font-weight:600; line-height:1.1; color:#1A1814; font-variant-numeric:tabular-nums; }
+  @media (max-width:1100px) { .cov-ydv-tiles { grid-template-columns:repeat(3, minmax(0,1fr)); } .cov-ydv-tile:nth-child(4) { border-left:none; } .cov-ydv-tile:nth-child(n+4) { border-top:1px solid #E2DACC; } .cov-ydv-tile-value { font-size:32px; }
+    .cov-yd-panel:has(.cov-ydv-forecast) { height:auto; } .cov-yd-panel:has(.cov-ydv-forecast)::after { display:none; } }
+  @media (max-width:767px) { .cov-ydv-split { grid-template-columns:minmax(0,1fr); } .cov-ydv-side { border-left:none; border-top:1px solid #D4CCBC; max-height:340px; }
+    .cov-ydv-tiles { grid-template-columns:repeat(2, minmax(0,1fr)); } .cov-ydv-tile { border-left:none !important; border-top:1px solid #E2DACC; } .cov-ydv-tile:nth-child(-n+2) { border-top:none; } .cov-ydv-tile:nth-child(even) { border-left:1px solid #E2DACC !important; }
+    .cov-ydv-forecast, .cov-ydv-chart { padding:14px; } .cov-ydv-tile { padding:12px; } .cov-ydv-tile-value { font-size:28px; } .cov-ydv-case { grid-template-columns:minmax(0,1fr) auto; } .cov-ydv-case > span:first-child { display:none; } }
   .cov-yd-fc-cols { display:grid; grid-template-columns:minmax(0,1fr); }
   .cov-yd-fc-cols > .cov-fc-block { padding:4px 0 12px; }
   .cov-yd-fc-cols > .cov-fc-block + .cov-fc-block { border-top:1px solid #D4CCBC; padding-top:12px; }
@@ -801,8 +842,8 @@ export const GLOBAL_CSS = `
     .cov-comingup-dot { display:none; }
     .cov-import-row   { grid-template-columns:1fr !important; gap:6px !important; }
     /* Your day: the hide/show control sits top-right, always in reach */
-    .cov-yourday-toggle { position:absolute; top:14px; right:14px; }
-    .cov-yourday-head { padding-right:96px !important; }
+    .cov-yourday-head { padding:14px 14px 2px; }
+    .cov-yd-tabs { padding:4px 4px 0; }
     .cov-import-row select { max-width:none !important; }
     .desktop-only     { display:none !important; }
     /* nav: shrink logo, scroll nav buttons */
