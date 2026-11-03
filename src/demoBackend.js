@@ -8,6 +8,7 @@
 // reaches Supabase; signing in switches to the real backend.
 import { readCases, writeCases } from './caseStore.js'
 import { normaliseClaim, claimClock, missingForDesk } from './claims.mjs'
+import { RECOGNISED_NOTE } from './isThisYours.mjs'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
@@ -218,7 +219,7 @@ function openArnSession({ a, b, sides, cases, i, opening, lines }) {
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
 // Three claims as Demo Bank's app would send them: two complete, one missing the claim type and consent
-const DEMO_QV = 1   // answers given to the questions in claimQuestions.mjs; older demo claims are brought up to date
+const DEMO_QV = 2   // 1: answers to the questions in claimQuestions.mjs; 2: a claim closed at intake ("That was me"). Older demo claims are brought up to date
 function demoClaims() {
   const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
   const raw = [
@@ -255,12 +256,22 @@ function demoClaims() {
       reasons: ['A caller posing as the bank asked for a transfer to a “safe account”', 'The customer sent the payment themselves', 'The scammer may call again, and consent to investigate is missing'],
       askCustomer: ['Did you share any codes, passwords or card details with the caller?', 'Are they still in touch with you, or asking for more money?', 'Do you agree to us investigating and contacting the receiving bank?'] },
   ]
-  return raw.map((b, i) => {
+  const out = raw.map((b, i) => {
     const { claim } = normaliseClaim(b, new Date(now)), missing = missingForDesk(claim)
     return { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84'][i], external_id: b.id, channel: claim.channel, segment: 'fi', status: 'received', ready: !missing.length,
       data: { ...claim, clock: claimClock(claim), missing, source: 'demo-app', qv: DEMO_QV, ai: { ...ai[i], at: claim.reportedAt } }, history: [{ status: 'received', at: claim.reportedAt, by: 'cvl_demo', note: 'Received' }],
       case_id: '', reported_at: claim.reportedAt, created_at: claim.reportedAt, updated_at: claim.reportedAt }
   })
+  // "That was me": the app showed the customer the merchant as they know it, and they recognised it (api/claims.js)
+  const { claim } = normaliseClaim({ id: 'APP-55109', channel: 'app', reportedAt: ago(20), claimType: 'unauth_cnp',
+    customer: { id: 'A-4410', name: 'Owen Brandt', accountType: 'debit' },
+    transactions: [{ id: 'TX-91204', ts: ago(44), amount: -23.4, currency: 'USD', merchant: 'SQ *BLUE BOTTLE COFFEE #1234', merchantLocation: 'San Francisco, CA', channel: 'card_present' }],
+    answers: { recognisesTransaction: true }, consent: { given: true, at: ago(20) } }, new Date(now))
+  out.push({ id: 'CLM-5D0E21A7C3', external_id: 'APP-55109', channel: 'app', segment: 'fi', status: 'closed', ready: false,
+    data: { ...claim, clock: null, missing: [], source: 'demo-app', qv: DEMO_QV, closedAtIntake: { reason: 'recognised', at: ago(20) } },
+    history: [{ status: 'received', at: ago(20), by: 'cvl_demo', note: 'Received' }, { status: 'closed', at: ago(20), by: 'cvl_demo', note: 'The customer recognised the transaction (“That was me”)', public: RECOGNISED_NOTE }],
+    case_id: '', reported_at: claim.reportedAt, created_at: ago(20), updated_at: ago(20) })
+  return out
 }
 
 const HANDLERS = {
@@ -623,7 +634,8 @@ const HANDLERS = {
     }
     if (all.some(c => c.data.qv !== DEMO_QV)) {   // seeded before questions by claim type: the answers to them
       const fresh = demoClaims()
-      all.forEach(c => { const f = fresh.find(x => x.id === c.id); if (f) { c.data = { ...c.data, answers: f.data.answers, missing: f.data.missing, qv: DEMO_QV }; c.ready = f.ready } })
+      all.forEach(c => { const f = fresh.find(x => x.id === c.id); if (f && f.status !== 'closed') { c.data = { ...c.data, answers: f.data.answers, missing: f.data.missing, qv: DEMO_QV }; c.ready = f.ready } })
+      fresh.filter(f => !all.some(c => c.id === f.id)).forEach(f => all.push(f))
       write(K.claims, all)
     }
     return [...all.filter(c => c.status !== 'closed').sort((a, b) => a.reported_at.localeCompare(b.reported_at)), ...all.filter(c => c.status === 'closed')]

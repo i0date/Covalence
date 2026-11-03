@@ -2,6 +2,11 @@
 // From the bank's systems, with an API key from Settings → Connections:
 //   POST /api/claims                 Authorization: Bearer cvl_…   { one claim }  → stored, lands in 001 Triage → Claims
 //   GET  /api/claims?reference=…     Authorization: Bearer cvl_…                   → where the claim is now
+//   POST /api/claims                 Authorization: Bearer cvl_…   { "isThisYours": { "customerId", "transactions": [ … ] } }
+//                                    → a card per transaction to show before an unauthorised claim: the merchant
+//                                      as people know it, where and when, and whether they've paid them before
+//                                      (src/isThisYours.mjs). A claim sent with recognisesTransaction: true is
+//                                      closed at intake ("That was me")
 //   GET  /api/claims?questions=<claimType>[&accountType=debit]                     → what to ask the customer
 //                                    (src/claimQuestions.mjs); without a type, the claim types to choose from
 // From Covalence itself, after an analyst moves a claim on (claim_set / claim_step in supabase_claims.sql):
@@ -180,15 +185,42 @@ module.exports = async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST a claim, or GET ?reference=…' })
     if (parseInt(req.headers['content-length'] || '0', 10) > MAX_BYTES) return res.status(413).json({ error: 'Request larger than 256 KB — send attachments as links' })
 
+    // ── "Is this yours?": cards for the transactions the customer is about to dispute ──
+    if (req.body?.isThisYours) {
+      const iy = await import('../src/isThisYours.mjs')
+      const b = req.body.isThisYours, customerId = String(b.customerId || '').trim().slice(0, 120)
+      const txIn = Array.isArray(b.transactions) ? b.transactions.slice(0, m.MAX_TX) : []
+      const problems = []
+      if (!customerId) problems.push('customerId is required')
+      if (!txIn.length) problems.push('transactions needs at least one transaction')
+      const isTs = v => v && !isNaN(new Date(v).getTime())
+      txIn.forEach((t, i) => { if (!t?.id || !isFinite(Number(t?.amount)) || !isTs(t?.ts)) problems.push(`transactions[${i}]: id, ts (ISO 8601) and amount are required`) })
+      if (problems.length) return res.status(400).json({ error: 'The request has problems', problems })
+      const str = (v, n) => String(v ?? '').trim().slice(0, n)
+      const txs = txIn.map(t => ({ id: str(t.id, 120), ts: new Date(t.ts).toISOString(), amount: Number(t.amount), currency: str(t.currency || 'USD', 3).toUpperCase(),
+        merchant: str(t.merchant, 160), merchantCategory: str(t.merchantCategory, 80), merchantLocation: str(t.merchantLocation, 120), channel: str(t.channel, 40), merchantLogo: str(t.merchantLogo, 500) }))
+      // The customer's payments over the last 13 months, from your transaction feed (/api/intake)
+      const since = new Date(Date.now() - 400 * 86400000).toISOString()
+      const history = await rest(`tm_transactions?institution_id=eq.${inst}&customer_id=eq.${encodeURIComponent(customerId)}&ts=gte.${encodeURIComponent(since)}&order=ts.desc&limit=2000&select=id,ts,amount,currency,counterparty`).catch(() => []) || []
+      await touchKey()
+      return res.status(200).json({ customerId, historyChecked: history.length > 0, cards: txs.map(t => iy.cardFor(t, history)) })
+    }
+
     const now = new Date()
     const { claim, errors } = m.normaliseClaim(req.body, now)
     if (errors.length) return res.status(400).json({ error: 'The claim has problems', problems: errors })
     const id = m.claimIdFrom(crypto.createHash('sha256').update(inst + '|' + claim.externalId).digest('hex'))
     const clock = m.claimClock(claim), missing = m.missingForDesk(claim)
+    // "That was me": the customer recognises it, so there's nothing to dispute; it's kept, closed
+    const iy = await import('../src/isThisYours.mjs')
+    const recognised = iy.asksIsThisYours(claim.claimType) && claim.answers.recognisesTransaction === true
     const answerProblems = (await import('../src/claimQuestions.mjs')).checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).problems
-    const row = { institution_id: inst, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment, status: 'received', ready: !missing.length,
-      data: { ...claim, clock, missing, source: keyRow.prefix }, reported_at: claim.reportedAt,
-      history: [{ status: 'received', at: now.toISOString(), by: keyRow.prefix, note: `Received from the ${m.CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }] }
+    const received = { status: 'received', at: now.toISOString(), by: keyRow.prefix, note: `Received from the ${m.CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }
+    const row = { institution_id: inst, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment,
+      status: recognised ? 'closed' : 'received', ready: !recognised && !missing.length,
+      data: { ...claim, clock: recognised ? null : clock, missing: recognised ? [] : missing, source: keyRow.prefix,
+        ...(recognised ? { closedAtIntake: { reason: 'recognised', at: now.toISOString() } } : {}) }, reported_at: claim.reportedAt,
+      history: recognised ? [received, { status: 'closed', at: now.toISOString(), by: keyRow.prefix, note: 'The customer recognised the transaction (“That was me”)', public: iy.RECOGNISED_NOTE }] : [received] }
     const stored = await rest('app_claims?select=id,external_id,status,history,created_at,updated_at', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify([row]) })
     await touchKey()
 
@@ -196,9 +228,13 @@ module.exports = async function handler(req, res) {
       const cur = (await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}&select=id,external_id,status,history,created_at,updated_at`))?.[0]
       return res.status(200).json({ ...m.publicStatus(cur), duplicate: true })
     }
-    await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !missing.length })
+    await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !recognised && !missing.length })
     const ep = await endpointFor(inst)
     if (ep?.url) await wh.sendEvent(ep, 'claim.received', m.publicStatus(stored[0])).catch(() => {})
+    if (recognised) {   // no AI triage: there's nothing to work
+      await audit(inst, 'claim.closed_at_intake', id, { reason: 'recognised', reference: claim.externalId })
+      return res.status(201).json({ ...m.publicStatus(stored[0]), duplicate: false, closedAtIntake: true, readyForDesk: false, missing: [] })
+    }
     // AI triage runs after the bank has its answer; if it fails, the analyst can run it from Triage → Claims
     const triaged = afterResponse(aiTriage(m, row.data)
       .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))

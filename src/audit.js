@@ -31,6 +31,7 @@ export const auditVerify = () => rpc('audit_verify').then(d => (d && d[0]) || nu
 // Plain-English labels for the log
 export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
+  'claim.received': 'Claim received from the app', 'claim.closed_at_intake': 'Claim closed at intake', 'claim.ai_triaged': 'Claim read by AI triage', 'claim.status_sent': 'Claim update sent to the app',
   'case.auto_assigned': 'Case auto-assigned', 'case.taken_over': 'Case taken over', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
   'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported', 'transactions.imported': 'Transactions imported', 'alerts.raised': 'Monitoring alerts raised', 'alert.closed': 'Alert closed', 'alert.escalated': 'Alert escalated to a case', 'alert.contacted': 'Customer contact logged', 'alert.action': 'Protective action recorded',
   'intake.received': 'Data received via API', 'intake_key.created': 'API key created', 'intake_key.revoked': 'API key revoked', 'case.closed_at_intake': 'Closed at intake',
