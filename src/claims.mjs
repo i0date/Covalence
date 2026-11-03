@@ -12,14 +12,29 @@ import { checkAnswers } from './claimQuestions.mjs'
 import { asksIsThisYours, RECOGNISED_NOTE } from './isThisYours.mjs'
 
 export const CHANNELS = { app: 'From app', web: 'Web', agent: 'Agent', phone: 'Phone' }
-export const ACCOUNT_TYPES = ['debit', 'credit', 'p2p', 'ach_eft', 'bnpl', 'crypto']
-// The same values as Triage's claim type list
+// Who the customer is reporting to: a bank or credit union (fi), a crypto exchange (ce),
+// or a merchant, about their own order (mx). Each lands on its own side of Triage → Claims.
+export const SEGMENTS = { fi: 'Financial institution', ce: 'Crypto exchange', mx: 'Merchant' }
+export const ACCOUNT_TYPES = ['debit', 'credit', 'p2p', 'ach_eft', 'bnpl', 'crypto', 'exchange']
+// Triage's claim type list, plus partial_delivery (and, for merchants, wrong_item and
+// refund_not_received; for exchanges, the four crypto problems)
 export const CLAIM_TYPES = {
   unauth_card_present: 'Unauthorized — card lost or stolen', unauth_cnp: 'Unauthorized — online', ato: 'Account takeover', counterfeit: 'Counterfeit / skimming',
-  non_receipt: 'Didn’t receive it', not_as_described: 'Not as described', cancelled_sub: 'Cancelled, still charged', billing_error: 'Billing error', duplicate_charge: 'Charged twice',
+  non_receipt: 'Didn’t receive it', partial_delivery: 'Only part of the order arrived', not_as_described: 'Not as described', cancelled_sub: 'Cancelled, still charged', billing_error: 'Billing error', duplicate_charge: 'Charged twice',
+  wrong_item: 'Wrong item sent', refund_not_received: 'Refund not received',
+  unauth_withdrawal: 'Withdrawal the customer didn’t make', deposit_missing: 'Deposit not credited', withdrawal_missing: 'Withdrawal not received', wrong_address: 'Sent to the wrong address or network',
   romance_scam: 'Romance scam', investment_scam: 'Investment scam', impersonation: 'Impersonation scam', fake_invoice: 'Fake invoice', grandparent_scam: 'Emergency scam', other_app: 'Other scam',
   other: 'Something else',
 }
+// The kinds each side offers (the questions endpoint and the hosted form)
+export const TYPES_FOR = {
+  fi: ['unauth_card_present', 'unauth_cnp', 'ato', 'counterfeit', 'non_receipt', 'partial_delivery', 'not_as_described', 'cancelled_sub', 'billing_error', 'duplicate_charge',
+    'romance_scam', 'investment_scam', 'impersonation', 'fake_invoice', 'grandparent_scam', 'other_app', 'other'],
+  ce: ['unauth_withdrawal', 'ato', 'deposit_missing', 'withdrawal_missing', 'wrong_address', 'investment_scam', 'romance_scam', 'impersonation', 'other_app', 'other'],
+  mx: ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described', 'refund_not_received', 'cancelled_sub', 'duplicate_charge', 'billing_error', 'unauth_cnp', 'other'],
+}
+// Triage's own form knows the original list: the nearest one for the newer kinds
+export const TRIAGE_EQUIV = { partial_delivery: 'non_receipt', wrong_item: 'not_as_described', refund_not_received: 'billing_error' }
 // Where a claim is, in words the bank can show its customer
 export const STATUSES = {
   received: 'Received', in_review: 'Being reviewed', with_desk: 'Investigating', closed: 'Closed',
@@ -29,18 +44,40 @@ export const MAX_TX = 25, MAX_ANSWERS = 40, MAX_ATTACHMENTS = 20
 // What the customer asks the bank to do now, to keep their account safe. The bank's
 // systems are told as soon as the claim arrives (claim.instructions), and Triage shows it.
 export const INSTRUCTIONS = {
-  lock_card: 'Lock my card', replace_card: 'Send me a new card', stop_merchant: 'Stop payments to this merchant', call_me: 'Call me',
+  // a bank or credit union
+  lock_card: 'Lock my card', replace_card: 'Send me a new card', stop_merchant: 'Stop payments to this merchant',
+  // an exchange
+  freeze_account: 'Freeze my account', lock_withdrawals: 'Stop all withdrawals', reset_security: 'Help me reset my password and 2FA',
+  // a merchant
+  refund: 'Refund me', replacement: 'Send a replacement', cancel_subscription: 'Cancel my subscription',
+  call_me: 'Call me',
 }
-// Which ones to offer for a kind of problem (the bank's app asks; the hosted form shows them)
-export const instructionsFor = type => /^unauth|^counterfeit/.test(type || '') ? ['lock_card', 'replace_card', 'call_me']
-  : /^ato/.test(type || '') ? ['lock_card', 'call_me']
-  : SCAMS.includes(type) ? ['lock_card', 'call_me']
-  : type === 'cancelled_sub' ? ['stop_merchant'] : []
-// A dispute about a purchase the customer made: nothing for Triage to decide, so it goes
-// straight to the Dispute Desk when it arrives. Fraud and scams stay with Triage.
-export const DESK_TYPES = ['non_receipt', 'not_as_described', 'cancelled_sub', 'billing_error', 'duplicate_charge']
+// Which ones to offer for a kind of problem on a side (the bank's app asks; the hosted form shows them)
+export function instructionsFor(type, segment = 'fi') {
+  const t = type || ''
+  if (segment === 'ce') return ['unauth_withdrawal', 'ato'].includes(t) ? ['freeze_account', 'lock_withdrawals', 'reset_security', 'call_me']
+    : SCAMS.includes(t) ? ['lock_withdrawals', 'call_me'] : ['deposit_missing', 'withdrawal_missing', 'wrong_address'].includes(t) ? ['call_me'] : []
+  if (segment === 'mx') return ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described'].includes(t) ? ['refund', 'replacement', 'call_me']
+    : t === 'cancelled_sub' ? ['cancel_subscription', 'refund'] : ['refund_not_received', 'duplicate_charge', 'billing_error'].includes(t) ? ['refund', 'call_me'] : t === 'unauth_cnp' ? ['call_me'] : []
+  return /^unauth|^counterfeit/.test(t) ? ['lock_card', 'replace_card', 'call_me']
+    : /^ato/.test(t) ? ['lock_card', 'call_me']
+    : SCAMS.includes(t) ? ['lock_card', 'call_me']
+    : t === 'cancelled_sub' ? ['stop_merchant'] : []
+}
+// A dispute about a purchase the customer made, reported to their bank: nothing for Triage
+// to decide, so it goes straight to the Dispute Desk when it arrives. Fraud and scams stay
+// with Triage, and so does anything for an exchange or a merchant (they have no Desk to file
+// with). In Triage, "Send to the Desk" moves a claim the customer reported as fraud that's
+// really a purchase dispute ("they sent four of the seven things I paid for").
+export const DESK_TYPES = ['non_receipt', 'partial_delivery', 'not_as_described', 'cancelled_sub', 'billing_error', 'duplicate_charge']
 export const SCAMS = ['romance_scam', 'investment_scam', 'impersonation', 'fake_invoice', 'grandparent_scam', 'other_app']
-export const goesStraightToDesk = claim => DESK_TYPES.includes(claim?.claimType) && claim?.answers?.recognisesTransaction !== false
+export const goesStraightToDesk = claim => (claim?.segment || 'fi') === 'fi' && DESK_TYPES.includes(claim?.claimType) && claim?.answers?.recognisesTransaction !== false
+// The note on a claim sent to the Desk from Triage, and the kind it names (DeskClaims reads it back)
+export const deskNote = (type, note = '') => `Sent to the Desk from Triage as “${CLAIM_TYPES[type]}”${String(note).trim() ? `: ${String(note).trim()}` : ''}`
+export const deskTypeOf = row => {
+  const n = [...(row?.history || [])].reverse().find(h => h.status === 'with_desk')?.note || ''
+  return DESK_TYPES.find(k => n.includes(`“${CLAIM_TYPES[k]}”`)) || (DESK_TYPES.includes(row?.data?.claimType) ? row.data.claimType : '')
+}
 
 const str = (v, n) => String(v ?? '').trim().slice(0, n)
 const isTs = v => v != null && v !== '' && !isNaN(new Date(v).getTime())
@@ -83,7 +120,7 @@ export function normaliseClaim(b, now = new Date()) {
   const claim = {
     externalId: id,
     channel: Object.keys(CHANNELS).includes(b.channel) ? b.channel : 'app',
-    segment: b.segment === 'ce' ? 'ce' : 'fi',
+    segment: SEGMENTS[b.segment] ? b.segment : 'fi',
     reportedAt: reportedAt.toISOString(),
     claimType: Object.keys(CLAIM_TYPES).includes(b.claimType) ? b.claimType : '',
     customer: { id: str(c.id, 120), name: str(c.name, 120), email: str(c.email, 160), phone: str(c.phone, 40),
@@ -111,13 +148,13 @@ const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')
 export function missingForDesk(claim) {
   const m = []
   if (!claim.claimType) m.push('what kind of problem it is (claimType)')
-  if (!claim.customer.accountType) m.push('the account type')
+  if (!claim.customer.accountType && claim.segment === 'fi') m.push('the account type')
   if (claim.transactions.some(t => !t.merchant)) m.push('the merchant on every transaction')
   if (claim.statement.length < 20) m.push('the customer’s own account of what happened')
   if (!claim.consent.given) m.push('the customer’s consent')
   if (/^unauth|^ato|^counterfeit/.test(claim.claimType) && claim.answers.recognisesTransaction !== false) m.push('the customer’s answer to “Is this yours?”')
   // The other required questions for this claim type (claimQuestions.mjs)
-  checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).unanswered
+  checkAnswers(claim.claimType, claim.customer.accountType, claim.answers, claim.segment).unanswered
     .filter(q => q.id !== 'recognisesTransaction').forEach(q => m.push(`the customer’s answer to “${q.ask}”`))
   return m
 }

@@ -13,8 +13,10 @@
 //      (claims.mjs instructionsFor), sent to the bank's systems as soon as the claim arrives
 //   4. answers the questions for that kind of problem (claimQuestions.mjs)
 //   5. tells it in their own words and agrees to the investigation, then sends it
-// Fraud and scams land in Triage → Claims; a dispute about a purchase goes straight to
-// the Dispute Desk. In Covalence's style, with the bank's name and logo at the top.
+// For a bank, an exchange (segment ce) or a merchant's own customers (mx), with words to
+// match. A bank's fraud and scams land in Triage → Claims and a dispute about a purchase
+// goes straight to the Dispute Desk; an exchange's and a merchant's go to their side of
+// Triage → Claims. In Covalence's style, with the name and logo at the top.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { openForm, sendForm } from './claimLinksData.js'
 
@@ -24,7 +26,21 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 const asked = (q, a) => !q.showIf || Object.entries(q.showIf).every(([k, v]) => a[k] === v)
 const answered = (q, v) => q.kind === 'yesno' ? typeof v === 'boolean' : q.kind === 'amount' ? v !== '' && v != null && isFinite(Number(v)) && Number(v) >= 0 : String(v ?? '').trim() !== ''
 // What we tell the customer we've done with each request
-const DONE_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you' }
+const DONE_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you',
+  freeze_account: 'freeze your account', lock_withdrawals: 'stop all withdrawals', reset_security: 'help you reset your password and 2FA',
+  refund: 'refund you', replacement: 'send a replacement', cancel_subscription: 'cancel your subscription' }
+// Words that change with who the customer is reporting to: a bank, an exchange or a shop
+const SIDE = {
+  fi: { who: 'Your bank', one: 'payment', many: 'payments', yours: 'Is this payment yours?', yoursMany: 'Are these payments yours?',
+    yoursSub: 'Payments often show under a different name from the shop’s. Here’s each one as you’d know it.', qSub: 'These help us handle it under the card and banking rules.',
+    protect: 'What do you need from us right now?', got: 'We’ve got your report', next: 'We’ll look into it and contact you if we need anything else.' },
+  ce: { who: 'Your exchange', one: 'transaction', many: 'transactions', yours: 'Is this withdrawal yours?', yoursMany: 'Are these withdrawals yours?',
+    yoursSub: 'Check where each one went and when.', qSub: 'These help us trace it.',
+    protect: 'Do you want us to secure your account now?', got: 'We’ve got your report', next: 'We’ll look into it and trace the funds where we can. We’ll contact you if we need anything else.' },
+  mx: { who: 'The shop', one: 'order', many: 'orders', yours: 'Is this order yours?', yoursMany: 'Are these orders yours?',
+    yoursSub: 'Check each one.', qSub: 'These help us sort it out quickly.',
+    protect: 'What would put this right?', got: 'We’ve got your request', next: 'We’ll check your order and get back to you, usually within two working days.' },
+}
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -167,6 +183,7 @@ export default function ClaimFormPage({ token: initial }) {
   }, [initial])
 
   const brand = form?.brand || done?.brand || null
+  const W = SIDE[form?.segment] || SIDE.fi
   const cards = form?.cards || []
   const unauth = UNAUTH.test(type)
   const questions = useMemo(() => (form?.questions?.[type] || []).filter(q => q.id !== 'recognisesTransaction'), [form, type])
@@ -194,7 +211,7 @@ export default function ClaimFormPage({ token: initial }) {
   const header = (
     <header className="cf-top">
       <div className="cf-top-in">
-        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" /> : <div className="cf-bank">{brand?.name || 'Your bank'}</div>}
+        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" /> : <div className="cf-bank">{brand?.name || W.who}</div>}
         <span className="mono cf-what">REPORT A PROBLEM</span>
       </div>
     </header>
@@ -203,7 +220,7 @@ export default function ClaimFormPage({ token: initial }) {
     <footer className="cf-foot">
       {brand?.phone && <div>Need to talk to someone? Call {brand.name} on <a href={`tel:${brand.phone.replace(/[^\d+]/g, '')}`}>{brand.phone}</a>.</div>}
       {brand?.help && <div><a href={brand.help} target="_blank" rel="noopener noreferrer">Help with disputes and fraud</a></div>}
-      <div className="mono" style={{ marginTop: 8, fontSize: 10, letterSpacing: '.12em' }}>{(brand?.name || 'YOUR BANK').toUpperCase()} · CLAIMS BY COVALENCE</div>
+      <div className="mono" style={{ marginTop: 8, fontSize: 10, letterSpacing: '.12em' }}>{(brand?.name || W.who).toUpperCase()} · CLAIMS BY COVALENCE</div>
     </footer>
   )
   const wrap = body => (
@@ -229,16 +246,16 @@ export default function ClaimFormPage({ token: initial }) {
 
   if (step === 'done') return wrap(done?.closedAtIntake ? (
     <><div className="cf-tick" aria-hidden>✓</div><h1>Thanks — there’s nothing to dispute</h1>
-      <p className="cf-sub">You told us you recognise {cards.length === 1 ? 'this payment' : 'these payments'}, so we’ve closed this. If you change your mind, report it again and we’ll look into it.</p></>
+      <p className="cf-sub">You told us you recognise {cards.length === 1 ? `this ${W.one}` : `these ${W.many}`}, so we’ve closed this. If you change your mind, report it again and we’ll look into it.</p></>
   ) : (
-    <><div className="cf-tick" aria-hidden>✓</div><h1>{done?.sentToDesk ? 'Your dispute is with our disputes team' : 'We’ve got your report'}</h1>
+    <><div className="cf-tick" aria-hidden>✓</div><h1>{done?.sentToDesk ? 'Your dispute is with our disputes team' : W.got}</h1>
       <p className="mono cf-step" style={{ marginBottom: 6 }}>YOUR REFERENCE</p>
       <div className="cf-ref">{done?.id}</div>
-      {asks.length > 0 && <div className="cf-note">You asked us to {asks.map(a => DONE_WORDS[a]).join(', and ')}. We’ve passed that on to {brand?.name || 'the bank'}{asks.includes('lock_card') && brand?.phone ? `; if it’s urgent, call ${brand.phone}` : ''}.</div>}
+      {asks.length > 0 && <div className="cf-note">You asked us to {asks.map(a => DONE_WORDS[a]).join(', and ')}. {form.segment === 'mx' ? 'We’ll get back to you about it' : form.segment === 'ce' ? 'Our security team has it now' : `We’ve passed that on to ${brand?.name || 'your bank'}`}{asks.some(a => ['lock_card', 'freeze_account', 'lock_withdrawals'].includes(a)) && brand?.phone ? `; if it’s urgent, call ${brand.phone}` : ''}.</div>}
       <p style={{ margin: '16px 0 8px' }}>What happens next:</p>
       <ul style={{ margin: 0, paddingLeft: 20, color: '#57534E' }}>
-        <li>{done?.sentToDesk ? 'We’ll raise the dispute with the merchant’s bank and tell you how it goes.' : 'We’ll look into it and contact you if we need anything else.'}</li>
-        <li>Keep any receipts, emails or messages about {disputed.length === 1 ? 'the payment' : 'the payments'}.</li>
+        <li>{done?.sentToDesk ? 'We’ll raise the dispute with the merchant’s bank and tell you how it goes.' : W.next}</li>
+        <li>Keep any receipts, emails or messages about {disputed.length === 1 ? `the ${W.one}` : `the ${W.many}`}.</li>
       </ul></>
   ))
 
@@ -257,8 +274,8 @@ export default function ClaimFormPage({ token: initial }) {
 
   if (step === 'yours') return wrap(<>
     {progress}
-    <h1>{cards.length === 1 ? 'Is this payment yours?' : 'Are these payments yours?'}</h1>
-    <p className="cf-sub">Payments often show under a different name from the shop’s. Here’s each one as you’d know it.</p>
+    <h1>{cards.length === 1 ? W.yours : W.yoursMany}</h1>
+    <p className="cf-sub">{W.yoursSub}</p>
     {cards.map(c => (
       <Payment key={c.transactionId} card={c}>
         {c.hints?.length > 0 && <ul className="cf-hints">{c.hints.map(h => <li key={h}>{h}</li>)}</ul>}
@@ -275,7 +292,7 @@ export default function ClaimFormPage({ token: initial }) {
 
   if (step === 'which') return wrap(<>
     {progress}
-    <h1>Which payments is it about?</h1>
+    <h1>Which {W.many} is it about?</h1>
     <p className="cf-sub">Tick each one.</p>
     {cards.map(c => (
       <Option key={c.transactionId} kind="check" on={picked.includes(c.transactionId)} onClick={() => setPicked(p => p.includes(c.transactionId) ? p.filter(x => x !== c.transactionId) : [...p, c.transactionId])}>
@@ -287,17 +304,18 @@ export default function ClaimFormPage({ token: initial }) {
 
   if (step === 'protect') return wrap(<>
     {progress}
-    <h1>{type === 'cancelled_sub' ? 'Do you want us to stop them charging you?' : 'What do you need from us right now?'}</h1>
-    <p className="cf-sub">{type === 'cancelled_sub' ? 'We can block future payments to this merchant while we look into it.' : 'We’ll pass this on as soon as you send your report. Tick everything you want.'}</p>
+    <h1>{type === 'cancelled_sub' && form.segment !== 'mx' ? 'Do you want us to stop them charging you?' : W.protect}</h1>
+    <p className="cf-sub">{type === 'cancelled_sub' && form.segment !== 'mx' ? 'We can block future payments to this merchant while we look into it.' : 'We’ll pass this on as soon as you send it. Tick everything you want.'}</p>
     {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{o.label}</Option>)}
     {wants.includes('lock_card') && <p className="cf-hint">A locked card can’t be used for new payments. You can unlock it later in your banking app.</p>}
+    {wants.includes('freeze_account') && <p className="cf-hint">A frozen account can’t trade or withdraw until you and the exchange unfreeze it together.</p>}
     {nav(true, wants.length ? 'Continue' : 'Nothing for now')}
   </>)
 
   if (step === 'questions') return wrap(<>
     {progress}
     <h1>A few questions</h1>
-    <p className="cf-sub">These help us handle it under the card and banking rules.</p>
+    <p className="cf-sub">{W.qSub}</p>
     {shown.map(q => <Question key={q.id} q={q} value={answers[q.id]} set={v => setAnswers(a => ({ ...a, [q.id]: v }))} />)}
     {missingQ.length > 0 && <p className="cf-hint">{missingQ.length === 1 ? 'One question still needs an answer.' : `${missingQ.length} questions still need an answer.`}</p>}
     {nav(!missingQ.length)}
@@ -307,7 +325,7 @@ export default function ClaimFormPage({ token: initial }) {
   return wrap(<>
     {progress}
     <h1>In your own words</h1>
-    <p className="cf-sub">Tell us what happened{disputed.length ? ` with ${disputed.length === 1 ? disputed[0].name : `these ${disputed.length} payments`}` : ''}. Include anything that might help.</p>
+    <p className="cf-sub">Tell us what happened{disputed.length ? ` with ${disputed.length === 1 ? disputed[0].name : `these ${disputed.length} ${W.many}`}` : ''}. Include anything that might help.</p>
     <div className="cf-q">
       <label htmlFor="cf-story">What happened</label>
       <textarea id="cf-story" maxLength={4000} value={statement} onChange={e => setStatement(e.target.value)} />

@@ -32,7 +32,7 @@ const notify = id => { if (isSignedIn()) api({ notify: id }).catch(() => {}) }
 // Move a claim on, then tell the bank's systems (a failed notification doesn't undo the change)
 export async function setClaim(id, status, { note = '', publicNote = '', caseId = '' } = {}) {
   const r = await rpc('claim_set', { p_id: id, p_status: status, p_note: note, p_public: publicNote, p_case_id: caseId })
-  if (r?.changed) notify(id)
+  if (r?.changed) { notify(id); window.dispatchEvent(new Event('cov:claims-changed')) }   // Triage's and the Desk's lists reload
   return r
 }
 

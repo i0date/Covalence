@@ -28,11 +28,11 @@ export const getClaimForm = () => rpc('claim_form_get')
 export const setClaimForm = f => rpc('claim_form_set', { p_display_name: f.display_name || '', p_logo_url: f.logo_url || '', p_support_phone: f.support_phone || '', p_help_url: f.help_url || '' })
 
 // ── The customer's side ──
-const isDemo = token => /^demo(_[a-f0-9]{48})?$/.test(token)
+const isDemo = token => /^demo(-ce|-mx)?$|^demo_[a-f0-9]{48}$/.test(token)
 // → { brand, firstName, cards, types, questions, consentText } or { error, brand }
 export async function openForm(token) {
   if (isDemo(token)) {
-    if (token === 'demo') { const l = await demoRpc('claim_link_sample'); return { ...(await demoRpc('claim_form_open', { p_token: l.token })), token: l.token } }
+    if (!token.startsWith('demo_')) { const l = await demoRpc('claim_link_sample', { p_segment: token.slice(5) || 'fi' }); return { ...(await demoRpc('claim_form_open', { p_token: l.token })), token: l.token } }
     return demoRpc('claim_form_open', { p_token: token })
   }
   const r = await fetch(`/api/claims?form=${encodeURIComponent(token)}`)
