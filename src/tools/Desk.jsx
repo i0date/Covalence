@@ -3961,7 +3961,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                 <span className="mono-font text-xs text-stone-500">06</span>
                 <h2 className="display-font font-semibold text-2xl text-stone-900" style={{ letterSpacing: '-0.01em' }}>Chargeback Ratio Monitor</h2>
               </div>
-              <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">The same figures as Home: chargebacks in the last 30 days against Visa VAMP and Mastercard ECM. Set your monthly card sales and the thresholds in <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('cov:go', { detail: { section: 'settings', tab: 'settings' } }))} className="underline" style={{ background:'none', border:0, padding:0, cursor:'pointer', color:'#1A1814', font:'inherit' }}>Settings → Chargebacks against you</button>.</p>
+              <p className="display-font text-stone-500 text-[15px] mb-4 ml-7">The same figures as Home: chargebacks in the last 30 days against Visa VAMP and Mastercard ECM. Set your monthly card sales and the thresholds in <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('cov:go', { detail: { section: 'settings', tab: 'merchant' } }))} className="underline" style={{ background:'none', border:0, padding:0, cursor:'pointer', color:'#1A1814', font:'inherit' }}>Settings → Chargebacks against you</button>.</p>
 
               {(() => { const { ratios, demoSales } = ratiosFor(outcomes, rootSettings || settings, covUser); return <ChargebackRatioPanel ratios={ratios} demoSales={demoSales} /> })()}
             </div>

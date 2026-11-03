@@ -64,7 +64,7 @@ export const DEFAULT_SETTINGS = {
   // Home snapshot
   snapshotEnabled:      true,
   snapshotDays:         60,
-  // Default views (Settings → Institution settings): where each screen starts
+  // Default views (Settings → Default views): where each screen starts
   homeRange:            '60',        // Home date range: 7 | 30 | 60 | 90 | all
   homeCasesOpen:        'closed',    // Home case list starts: closed | open
   triageDefaultTab:     'alerts',    // Triage opens on: alerts | claims
@@ -714,6 +714,26 @@ export const GLOBAL_CSS = `
   .cov-owner-btn-main:hover:not(:disabled) { background:#3F3A35; }
   .cov-owner-btn:disabled { opacity:0.45; cursor:not-allowed; }
   .cov-owner-form { display:grid; gap:10px; border-top:1px solid #E7E2D9; padding-top:12px; }
+  .cov-set-grid { display:grid; grid-template-columns:240px minmax(0,1fr); gap:36px; align-items:start; }
+  .cov-set-nav { position:sticky; top:16px; display:grid; gap:14px; }
+  .cov-set-search { padding:8px 10px; font-size:14px; width:100%; box-sizing:border-box; }
+  .cov-set-select { display:none; padding:8px 10px; font-size:14px; width:100%; }
+  .cov-set-group { display:grid; gap:1px; margin-bottom:12px; }
+  .cov-set-group-title { font-size:10px; letter-spacing:0.16em; color:#8A7F72; padding:0 10px 4px; }
+  .cov-set-item { display:flex; justify-content:space-between; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none; border-left:2px solid transparent; padding:6px 10px; font-family:'Fraunces',Georgia,serif; font-size:15px; color:#3F3A35; cursor:pointer; }
+  .cov-set-item:hover { background:#F3EEE5; color:#1A1814; }
+  .cov-set-item.active { background:#EEE9E0; border-left-color:#1A1814; color:#1A1814; font-weight:600; }
+  .cov-set-results { display:grid; gap:2px; }
+  .cov-set-hit { text-align:left; background:#FFFFFF; border:1px solid #E7E2D9; padding:7px 10px; cursor:pointer; }
+  .cov-set-hit:hover { border-color:#1A1814; }
+  .cov-set-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#1E3A5F; flex-shrink:0; }
+  .cov-set-flash { outline:2px solid #1E3A5F; outline-offset:4px; transition:outline-color 1.6s; }
+  @media (max-width: 860px) {
+    .cov-set-grid { grid-template-columns:minmax(0,1fr); gap:20px; }
+    .cov-set-nav { position:static; }
+    .cov-set-list { display:none; }
+    .cov-set-select { display:block; }
+  }
   .cov-app-claims { border:1px solid #D4CCBC; background:#FAF7F1; margin-bottom:24px; }
   .cov-app-claims-bar { width:100%; display:flex; align-items:center; gap:18px; flex-wrap:wrap; background:none; border:none; padding:14px 18px; cursor:pointer; text-align:left; }
   button.cov-app-claims-bar:hover { background:#F3EEE5; }
