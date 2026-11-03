@@ -31,7 +31,7 @@ export const auditVerify = () => rpc('audit_verify').then(d => (d && d[0]) || nu
 // Plain-English labels for the log
 export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
-  'case.auto_assigned': 'Case auto-assigned', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
+  'case.auto_assigned': 'Case auto-assigned', 'case.taken_over': 'Case taken over', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
   'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported', 'transactions.imported': 'Transactions imported', 'alerts.raised': 'Monitoring alerts raised', 'alert.closed': 'Alert closed', 'alert.escalated': 'Alert escalated to a case', 'alert.contacted': 'Customer contact logged', 'alert.action': 'Protective action recorded',
   'intake.received': 'Data received via API', 'intake_key.created': 'API key created', 'intake_key.revoked': 'API key revoked', 'case.closed_at_intake': 'Closed at intake',
   'sanctions.screened': 'Sanctions screening', 'sanctions.decided': 'Sanctions match decided', 'sanctions.reported': 'OFAC report recorded',
@@ -63,6 +63,8 @@ export function describeAudit(e) {
   if (e.action === 'ai.reviewed') return `${d.verdict === 'agree' ? 'Agreed with' : 'Disagreed with'} ${d.answer || 'the AI'}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'qa.reviewed') return `${(d.result || '').toUpperCase()} · ${d.period || ''}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'case.auto_assigned') return `to ${d.to} · balanced workload rule`
+  if (e.action === 'case.assigned') return `${d.from || 'Unassigned'} → ${d.to || 'unassigned'}`
+  if (e.action === 'case.taken_over') return `from ${d.from || 'nobody'} to ${d.to || 'nobody'} — ${d.reason || 'no reason given'}`
   if (e.action === 'case.escalated') return `to ${d.to} · ${d.reason || ''}`
   if (e.action === 'reminders.sent') return `${d.recipients ?? 0} people · ${d.items ?? 0} items`
   if (e.action === 'settings.changed') return Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v.from ?? '—')} → ${JSON.stringify(v.to ?? '—')}`).join(' · ')

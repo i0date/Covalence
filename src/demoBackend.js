@@ -65,6 +65,10 @@ export function recordDemoCaseEvent(caseId, ev) {
   ensureDemoSeeded().then(() => {
     if (ev.event === 'created') audit('case.created', 'case', caseId, { status: ev.status })
     else if (ev.event === 'status') audit('case.status_changed', 'case', caseId, { from: ev.from, to: ev.status })
+    else if (ev.event === 'assigned') {
+      audit('case.assigned', 'case', caseId, { from: ev.from || null, to: ev.to || null })
+      if (ev.reason) audit('case.taken_over', 'case', caseId, { from: ev.from || '', to: ev.to || '', reason: ev.reason })
+    }
   })
 }
 
