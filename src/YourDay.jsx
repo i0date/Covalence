@@ -15,6 +15,7 @@ import { Badge, Button, NewDot } from './ui.jsx'
 import { insights, money, WEEKDAYS } from './insights.js'
 import { Refs } from './FrontPage.jsx'
 import { canWrite } from './auth.js'
+import { poolRole, tasksFor, HELP } from './Pool.jsx'
 import { isMerchantCase } from './sides.mjs'
 import { briefPeriod, noteVisit, changedSince } from './brief.js'
 import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
@@ -385,6 +386,22 @@ export function YourDay({ day, covUser, settings }) {
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
   const plan = useMemo(() => planOf(items), [items])
+  // Pools: asked to help, ones you're in, your own, then open ones you could join (urgent first)
+  const pools = useMemo(() => {
+    const me = covUser?.email || '', order = { invited: 0, member: 1, owner: 2, open: 3 }
+    const firstName = s => String(s || '').split(/[\s@]/)[0]
+    const needs = p => p.ask || (p.help || []).map(h => HELP[h] || h).join(', ').toLowerCase() || 'help with this case'
+    return (day.all || []).map(c => ({ c, role: poolRole(c, me) })).filter(x => x.role)
+      .sort((a, b) => order[a.role] - order[b.role] || (b.c.pool.urgent - a.c.pool.urgent) || new Date(b.c.pool.openedAt) - new Date(a.c.pool.openedAt))
+      .map(({ c, role }) => {
+        const p = c.pool, mine = tasksFor(c, me).length, open = (p.tasks || []).filter(t => !t.done).length
+        const r = role === 'invited' ? { tone: 'info', label: 'ASKED TO HELP', why: `${firstName(p.openedBy?.name) || 'The owner'} needs: ${needs(p)}` }
+          : role === 'member' ? { tone: 'info', label: 'IN THE POOL', why: mine ? `${mine} task${mine === 1 ? '' : 's'} for you · ${open} open in all` : `${open} open task${open === 1 ? '' : 's'} · ${needs(p)}` }
+          : role === 'owner' ? { tone: 'dark', label: 'YOUR POOL', why: `${(p.members || []).length} helping · ${(p.tasks || []).length - open} of ${(p.tasks || []).length} tasks done` }
+          : { tone: p.urgent ? 'danger' : 'neutral', label: p.urgent ? 'URGENT POOL' : 'OPEN POOL', why: `${firstName(c.assignedName || c.assignedTo)} needs: ${needs(p)}` }
+        return { c, r }
+      })
+  }, [day.all, covUser?.email])
   const batchTime = settings?.batchFileTime || '15:00'
   const batch = plan.motion.filter(x => x.r.rank === 4), waitingOn = plan.motion.filter(x => x.r.rank !== 4)
   const first = plan.first[0] || plan.today[0] || plan.soon[0] || plan.build[0]
@@ -398,7 +415,7 @@ export function YourDay({ day, covUser, settings }) {
   ].filter(Boolean)
   const subText = sub.length ? (scope === 'team' ? `${sub[0]} ${sub.slice(1).join('; ')}` : sub.join('; ')).replace(/^./, c => c.toUpperCase()) + '.' : ''
   const cap = n => showAll ? Infinity : n
-  const hidden = Math.max(0, plan.first.length - 5) + Math.max(0, plan.today.length - 5) + Math.max(0, plan.soon.length - 4) + Math.max(0, plan.build.length - 4)
+  const hidden = Math.max(0, pools.length - 4) + Math.max(0, plan.first.length - 5) + Math.max(0, plan.today.length - 5) + Math.max(0, plan.soon.length - 4) + Math.max(0, plan.build.length - 4)
   const refs = list => list.map(x => ({ id: x.c.id }))
 
   return (
@@ -426,6 +443,7 @@ export function YourDay({ day, covUser, settings }) {
         <div className="cov-yd-plan">
           {items.length === 0 && <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing on the list. Use the time for the cases coming up below.</div>}
           <Group title="START WITH" note="Past a deadline, escalated to you, or a customer waiting" list={plan.first} cap={cap(5)} day={day} />
+          <Group title="POOLS" note="Cases the team is working together" list={pools} cap={cap(4)} day={day} />
           <Group title="TODAY, BY THE CLOCK" list={plan.today} cap={cap(5)} day={day}>
             {batch.length > 0 && (
               <li className="cov-plan-batch">

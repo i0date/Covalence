@@ -23,6 +23,7 @@ import { FincrimePanel } from './FincrimePanel.jsx'
 import { screeningStatus } from './fincrime.js'
 import { ArnLink } from './ArnLink.jsx'
 import { previousVisit } from './brief.js'
+import { PoolPanel } from './Pool.jsx'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -319,6 +320,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
       h.event === 'closed_at_intake' ? { ts:h.ts, kind:'CLOSED AT INTAKE', text:h.reason, by:h.by } :
       h.event === 'imported'  ? { ts:h.ts, kind:'IMPORTED',  text:`${h.update ? 'Updated from' : 'Imported from'} ${h.file || 'a file'}`, by:h.by } :
       h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
+      h.event === 'pool'      ? { ts:h.ts, kind:'POOL', text:h.text, by:h.by } :
       { ts:h.ts, kind: h.event === 'created' ? 'OPENED' : 'STATUS',
         text: h.event === 'created' ? `Case opened (${STATUS_LABEL(h.status).toLowerCase()})` : `${STATUS_LABEL(h.from).toLowerCase()} → ${STATUS_LABEL(h.status).toLowerCase()}`, by:h.by }))
     if (c.ai?.ts) timeline.push({ ts:c.ai.ts, kind:'AI', text:`Desk analysis · ${c.reasonCode || ''} ${c.reasonTitle || ''}`.trim() })
@@ -391,6 +393,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
         ) : (
         <div style={{ padding:'20px 22px 40px', display:'flex', flexDirection:'column', gap:'22px' }}>
           <OwnerLine c={c} covUser={covUser} setOutcomes={setOutcomes} settings={settings} />
+          {!c._triageOnly && <PoolPanel c={c} covUser={covUser} setOutcomes={setOutcomes} />}
           {/* What changed since the previous day's visit, other than by you */}
           {(() => {
             const prev = previousVisit(), mine = covUser?.name || ''
@@ -912,8 +915,30 @@ function addDemoAi(cases, iso) {
 
 // Storage is written before any tool reads it: tools load their own copy on
 // mount and save it back, so seeding after they mount gets overwritten.
+// A pool on a demo case, opened by a teammate, so there's one to join (Pool.jsx). Added once,
+// to new and existing demos alike, without reloading the rest of the demo.
+const DEMO_POOL_KEY = 'cov_demo_pool'
+function withDemoPool(cases, userEmail) {
+  const hrs = h => new Date(Date.now() - h * 3600000).toISOString()
+  return cases.map(c => {
+    if (c.id !== 'COV-DEMO09' || c.pool || (userEmail && (c.assignedTo || '').toLowerCase() === userEmail.toLowerCase())) return c
+    // A teammate who already owns it opens the pool; otherwise Maria takes it first
+    const maria = c.assignedTo ? { email: c.assignedTo, name: c.assignedName || c.assignedTo } : { email: 'm.okafor@demo.bank', name: 'Maria Okafor' }
+    return { ...c, assignedTo: maria.email, assignedName: maria.name, assignedAt: c.assignedAt || hrs(30),
+      pool: { status: 'open', urgent: true, openedBy: maria, openedAt: hrs(5), help: ['trace', 'sanctions'],
+        ask: 'Three customers paid Zenith this week and none of them recognise it. It looks like a gaming front: can someone trace where the money went and check its owners against the sanctions lists?',
+        members: [{ email: 'j.chen@demo.bank', name: 'James Chen', joinedAt: hrs(4) }], invited: [],
+        tasks: [{ id: 'T-demo1', text: 'Trace the outgoing transfers from Zenith’s account', assignee: 'j.chen@demo.bank', addedBy: maria.name, addedAt: hrs(4), done: false },
+                { id: 'T-demo2', text: 'Check Zenith’s owners against OFAC and the UK list', assignee: '', addedBy: maria.name, addedAt: hrs(4), done: false }] },
+      history: [...(c.history || []), { ts: hrs(5), event: 'pool', text: 'Pooled: Trace the money or wallets; Sanctions check (urgent)', by: maria.name },
+                { ts: hrs(4), event: 'pool', text: 'Joined the pool', by: 'James Chen' }] }
+  })
+}
+
 function writeDemoToStorage(userEmail) {
-  const { cases, triage } = buildDemoInstitution(userEmail)
+  const { cases: built, triage } = buildDemoInstitution(userEmail)
+  const cases = withDemoPool(built, userEmail)
+  try { localStorage.setItem(DEMO_POOL_KEY, '1') } catch {}
   try {
     localStorage.setItem('triage_outcomes', JSON.stringify([...triage, ...readLS('triage_outcomes', []).filter(t => !isDemoCase(t))]))
     writeCases([...cases, ...readCases().filter(o => !isDemoCase(o))])
@@ -930,6 +955,11 @@ const DEMO_VERSION = '9'
 // Call before the tools mount. Returns true when it seeded.
 export function seedDemoIfFirstVisit(userEmail) {
   try {
+    if (localStorage.getItem('cov_demo_loaded') === DEMO_VERSION && !localStorage.getItem(DEMO_POOL_KEY)) {
+      localStorage.setItem(DEMO_POOL_KEY, '1')
+      const all = readCases()
+      if (all.some(c => c.id === 'COV-DEMO09')) writeCases(withDemoPool(all, userEmail))
+    }
     const loaded = localStorage.getItem('cov_demo_loaded')
     if (loaded && loaded !== DEMO_VERSION) { writeDemoToStorage(userEmail); return true }
     if (localStorage.getItem('cov_demo_offered')) return false

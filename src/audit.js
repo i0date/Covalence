@@ -32,6 +32,8 @@ export const auditVerify = () => rpc('audit_verify').then(d => (d && d[0]) || nu
 export const AUDIT_LABELS = {
   'case.created': 'Case created', 'case.status_changed': 'Status changed', 'case.assigned': 'Case assigned',
   'claim.received': 'Claim received from the app', 'claim.closed_at_intake': 'Claim closed at intake', 'claim.ai_triaged': 'Claim read by AI triage', 'claim.status_sent': 'Claim update sent to the app',
+  'pool.opened': 'Pool opened', 'pool.joined': 'Joined the pool', 'pool.left': 'Left the pool', 'pool.invited': 'Invited to the pool',
+  'pool.task_added': 'Pool task added', 'pool.task_taken': 'Pool task taken', 'pool.task_done': 'Pool task done', 'pool.task_reopened': 'Pool task reopened', 'pool.closed': 'Pool closed',
   'case.auto_assigned': 'Case auto-assigned', 'case.taken_over': 'Case taken over', 'case.escalated': 'Case escalated', 'reminders.sent': 'Reminder email sent',
   'ai.reviewed': 'AI decision reviewed', 'qa.reviewed': 'QA review recorded', 'cases.imported': 'Cases imported', 'transactions.imported': 'Transactions imported', 'alerts.raised': 'Monitoring alerts raised', 'alert.closed': 'Alert closed', 'alert.escalated': 'Alert escalated to a case', 'alert.contacted': 'Customer contact logged', 'alert.action': 'Protective action recorded',
   'intake.received': 'Data received via API', 'intake_key.created': 'API key created', 'intake_key.revoked': 'API key revoked', 'case.closed_at_intake': 'Closed at intake',
@@ -64,6 +66,10 @@ export function describeAudit(e) {
   if (e.action === 'ai.reviewed') return `${d.verdict === 'agree' ? 'Agreed with' : 'Disagreed with'} ${d.answer || 'the AI'}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'qa.reviewed') return `${(d.result || '').toUpperCase()} · ${d.period || ''}${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'case.auto_assigned') return `to ${d.to} · balanced workload rule`
+  if (e.action === 'pool.opened') return [...(d.help || []), d.ask].filter(Boolean).join(' · ') + (d.urgent ? ' · urgent' : '') + (d.invited?.length ? ` · invited ${d.invited.join(', ')}` : '')
+  if (e.action === 'pool.invited') return (d.invited || []).join(', ')
+  if (['pool.task_added', 'pool.task_taken', 'pool.task_done', 'pool.task_reopened'].includes(e.action)) return `${d.task}${d.assignee ? ` → ${d.assignee}` : ''}`
+  if (e.action === 'pool.closed') return `${d.members ?? 0} members · ${d.done ?? 0} of ${d.tasks ?? 0} tasks done${d.note ? ` — ${d.note}` : ''}`
   if (e.action === 'case.assigned') return `${d.from || 'Unassigned'} → ${d.to || 'unassigned'}`
   if (e.action === 'case.taken_over') return `from ${d.from || 'nobody'} to ${d.to || 'nobody'} — ${d.reason || 'no reason given'}`
   if (e.action === 'case.escalated') return `to ${d.to} · ${d.reason || ''}`
