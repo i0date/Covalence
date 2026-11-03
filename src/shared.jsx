@@ -3,6 +3,7 @@
 import React from 'react'
 import { isSignedIn } from './auth.js'
 import { recordDemoCaseEvent } from './demoBackend.js'
+import { auditWrite } from './audit.js'
 import { SUPA_KEY, SUPA_URL, mergeCases, pushCasesToSupa } from './data.js'
 import { WORKFLOW_DEFAULTS } from './clocks.mjs'
 import { QA_DEFAULTS } from './qa.js'
@@ -182,8 +183,10 @@ export function notesText(n) { return notesList(n).map(x => x.text).join(' · ')
 // Cases live in IndexedDB behind an in-memory copy (see caseStore.js)
 export function loadOutcomes()  { return readCases() }
 // Case thread: any tool that changes a case gets an updatedAt stamp and, on a
-// status change, a history entry — so every case carries its own timeline
+// status or owner change, a history entry — so every case carries its own timeline
 // across Triage → Desk → Multi → File without each tool having to log it.
+// A take-over carries its reason in _assignReason, which moves into the history
+// entry (and the audit log) and isn't kept on the case.
 // (Without the stamp, mergeCases kept the stored copy and silently dropped edits.)
 function stampCaseChanges(current, next) {
   const byId = new Map(current.map(c => [c.id, c]))
@@ -192,14 +195,26 @@ function stampCaseChanges(current, next) {
   try { who = JSON.parse(localStorage.getItem('cov_user') || 'null')?.name || who } catch {}
   return next.map(c => {
     const ex = byId.get(c.id)
-    if (ex && new Date(c.updatedAt || 0) > new Date(ex.updatedAt || 0)) return c
-    if (ex && JSON.stringify(ex) === JSON.stringify(c)) return c
-    const history = [...(c.history || ex?.history || [])]
+    // A new owner is always recorded, whichever tool made the change, unless that tool already logged it
+    const before = ex?.history || []
+    const owner = ex && (ex.assignedTo || '') !== (c.assignedTo || '')
+      && !(c.history || []).slice(before.length).some(h => h.event === 'assigned')
+    if (!owner) {
+      if (ex && new Date(c.updatedAt || 0) > new Date(ex.updatedAt || 0)) return c
+      if (ex && JSON.stringify(ex) === JSON.stringify(c)) return c
+    }
+    const history = [...(c.history || ex?.history || [])], had = history.length
     if (!ex) history.push({ ts: c.date || now, event: 'created', status: c.status, by: who })
     else if (ex.status !== c.status) history.push({ ts: now, event: 'status', from: ex.status, status: c.status, by: who })
+    const { _assignReason: reason, ...rest } = c
+    if (owner) {
+      history.push({ ts: now, event: 'assigned', from: ex.assignedTo || '', to: c.assignedTo || '', by: who, ...(reason ? { reason } : {}) })
+      // The database logs case.assigned (from, to) itself; a take-over's reason it can't see
+      if (isSignedIn() && reason) auditWrite('case.taken_over', 'case', c.id, { from: ex.assignedTo || '', to: c.assignedTo || '', reason })
+    }
     // Demo visitors: the in-browser audit log records what the database would for a real workspace
-    if (!isSignedIn() && history.length > (c.history || ex?.history || []).length) recordDemoCaseEvent(c.id, history[history.length - 1])
-    return { ...c, history, updatedAt: now }
+    if (!isSignedIn()) history.slice(had).forEach(h => recordDemoCaseEvent(c.id, h))
+    return { ...rest, history, updatedAt: now }
   })
 }
 export function saveOutcomes(o) {
@@ -667,6 +682,14 @@ export const GLOBAL_CSS = `
   .cov-ref { display:inline-block; background:#FFFFFF; border:1px solid #D4CCBC; color:#1A1814; font-size:10.5px; letter-spacing:0.04em; padding:0 5px; margin:1px 0; line-height:1.7; cursor:pointer; vertical-align:1px; }
   .cov-ref-more { display:inline-block; background:none; border:none; border-bottom:1px dotted #8A7F72; color:#57534E; font-size:10.5px; letter-spacing:0.04em; padding:0 1px; margin:1px 0; line-height:1.5; cursor:pointer; vertical-align:1px; }
   .cov-ref-more:hover { color:#1A1814; border-bottom-color:#1A1814; }
+  .cov-owner { border:1px solid #D4CCBC; background:#FAF7F1; padding:12px 14px; display:grid; gap:12px; }
+  .cov-owner-row { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .cov-owner-btn { background:#FFFFFF; border:1px solid #1A1814; color:#1A1814; padding:7px 11px; font-size:10px; letter-spacing:0.12em; cursor:pointer; }
+  .cov-owner-btn:hover:not(:disabled) { background:#F3EEE5; }
+  .cov-owner-btn-main { background:#1A1814; color:#F5F1EA; }
+  .cov-owner-btn-main:hover:not(:disabled) { background:#3F3A35; }
+  .cov-owner-btn:disabled { opacity:0.45; cursor:not-allowed; }
+  .cov-owner-form { display:grid; gap:10px; border-top:1px solid #E7E2D9; padding-top:12px; }
   .cov-app-claims { border:1px solid #D4CCBC; background:#FAF7F1; margin-bottom:24px; }
   .cov-app-claims-bar { width:100%; display:flex; align-items:center; gap:18px; flex-wrap:wrap; background:none; border:none; padding:14px 18px; cursor:pointer; text-align:left; }
   button.cov-app-claims-bar:hover { background:#F3EEE5; }

@@ -174,7 +174,10 @@ export function mergeCases(local, remote) {
 }
 // Team list = members of the signed-in user's institution (memberships, see supabase_auth.sql)
 export async function fetchAgents() {
-  if (!SUPA_URL||!SUPA_KEY||!isSignedIn()) return []
+  // Demo visitors: Demo Bank's team (demoBackend.js list_team), so cases can be assigned there too
+  if (!isSignedIn()) return import('./demoBackend.js').then(m => m.demoRpc('list_team'))
+    .then(t => (t || []).filter(m => m.role !== 'auditor').map(m => ({ email: m.email, name: m.display_name.replace(/ \(you\)$/, '') }))).catch(() => [])
+  if (!SUPA_URL||!SUPA_KEY) return []
   return await supaRpc('cov_list_agents', { p_institution: covWorkspace() }, async () => {
     const r = await fetch(`${SUPA_URL}/rest/v1/cov_agents?select=email,name,institution&order=name.asc&limit=100`, {headers:supaH()})
     return r.ok ? r.json() : []

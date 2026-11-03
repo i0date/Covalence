@@ -155,6 +155,69 @@ export function CaseLink({ id, style, className }) {
 }
 
 // ── Next action per stage ─────────────────────────────────────────────────────
+// ── Who owns the case: take an unowned one, take one over (with a reason), or hand yours back ──
+// Each change goes on the case's timeline and into the audit log (shared.jsx stampCaseChanges).
+const TAKE_REASONS = ['The owner is away or off today', 'Rebalancing the team’s queue', 'It was escalated to me', 'The customer or merchant contacted me directly', 'It’s linked to a case I own', 'Another reason']
+const personOf = (email, name) => name || email || ''
+function OwnerLine({ c, covUser, setOutcomes, settings }) {
+  const [mode, setMode] = useState(null)   // 'over' while the take-over form is open
+  const [why, setWhy] = useState(TAKE_REASONS[0]), [more, setMore] = useState('')
+  useEffect(() => { setMode(null); setMore('') }, [c.id])
+  const me = (covUser?.email || '').toLowerCase(), owner = (c.assignedTo || '').toLowerCase()
+  const mine = !!me && owner === me
+  const can = canWrite() && !!me && !c._triageOnly && stageOf(c) !== 'closed'
+  const assign = (to, reason) => {
+    const ts = new Date().toISOString()
+    setOutcomes(prev => prev.map(o => o.id === c.id ? { ...o, assignedTo: to, assignedName: to ? (covUser?.name || to) : '', assignedAt: to ? ts : null,
+      ...(reason ? { _assignReason: reason } : {}) } : o))
+    setMode(null); setMore('')
+  }
+  const other = why === 'Another reason'
+  const reason = other ? more.trim() : more.trim() ? `${why}: ${more.trim()}` : why
+  const since = c.assignedAt ? new Date(c.assignedAt).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : ''
+  return (
+    <div className="cov-owner">
+      <div className="cov-owner-row">
+        <div style={{ minWidth:0 }}>
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#8A7F72' }}>OWNER</div>
+          <div className="display-font" style={{ fontSize:'16px', color: owner ? '#1A1814' : '#92400E', lineHeight:1.3 }}>
+            {owner ? <>{mine ? 'You' : personOf(c.assignedTo, c.assignedName)}{since && <span style={{ color:'#6B6259', fontSize:'13px' }}> · since {since}</span>}</> : 'No one yet'}
+          </div>
+        </div>
+        {can && mode !== 'over' && (
+          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+            {!owner && <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" onClick={() => assign(me)}>TAKE IT</button>}
+            {owner && !mine && <button type="button" className="mono-font cov-owner-btn" onClick={() => setMode('over')}>TAKE OVER</button>}
+            {mine && <button type="button" className="mono-font cov-owner-btn" onClick={() => assign('')}
+              title={settings?.autoAssign ? 'Auto-assign is on, so the next owner is picked straight away' : 'It goes back to the unassigned queue'}>
+              {settings?.autoAssign ? 'HAND BACK · AUTO-ASSIGN PICKS NEXT' : 'HAND BACK TO THE QUEUE'}</button>}
+          </div>
+        )}
+      </div>
+      {mode === 'over' && (
+        <div className="cov-owner-form">
+          <p className="display-font" style={{ margin:0, fontSize:'13px', color:'#3F3A35', lineHeight:1.45 }}>
+            You’ll take this case from <strong>{personOf(c.assignedTo, c.assignedName)}</strong>. The reason goes on the case’s timeline and in the audit log.
+          </p>
+          <label className="display-font" style={{ display:'grid', gap:'4px', fontSize:'12px', color:'#57534E' }}>Why are you taking it over?
+            <select className="input-field" value={why} onChange={e => setWhy(e.target.value)} style={{ padding:'8px 10px', fontSize:'14px' }}>
+              {TAKE_REASONS.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </label>
+          <label className="display-font" style={{ display:'grid', gap:'4px', fontSize:'12px', color:'#57534E' }}>{other ? 'Say why' : 'Anything to add? (optional)'}
+            <input className="input-field" value={more} onChange={e => setMore(e.target.value.slice(0, 200))} style={{ padding:'8px 10px', fontSize:'14px' }}
+              placeholder={other ? 'Required' : 'e.g. Priya is on leave until Monday'} />
+          </label>
+          <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+            <button type="button" className="mono-font cov-owner-btn cov-owner-btn-main" disabled={!reason} onClick={() => assign(me, reason)}>TAKE OVER FROM {personOf(c.assignedTo, c.assignedName).split(/[\s@]/)[0].toUpperCase()}</button>
+            <button type="button" className="mono-font cov-owner-btn" onClick={() => setMode(null)}>CANCEL</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function nextAction(c) {
   const stage = stageOf(c)
   if (stage === 'licit') {
@@ -201,6 +264,16 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     auditList(caseId, 100).then(setTrail).catch(() => setTrail([]))
     legalHoldsList().then(h => setHold(h.find(x => x.case_id === caseId) || null)).catch(() => setHold(null))
   }, [caseId, audited])
+  // A new owner while the case is open: read the trail again once the change is logged
+  const ownerNow = c?.assignedTo || ''
+  const firstOwner = useRef(true)
+  useEffect(() => { firstOwner.current = true }, [caseId])
+  useEffect(() => {
+    if (firstOwner.current) { firstOwner.current = false; return }
+    if (!audited) return
+    const t = setTimeout(() => auditList(caseId, 100).then(setTrail).catch(() => {}), 1500)
+    return () => clearTimeout(t)
+  }, [ownerNow])
   if (!caseId) return null
 
   const duo  = readLS('duo_my_sessions', []).filter(s => s.caseId === caseId)
@@ -211,7 +284,9 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
     const t = c._triageRecord
     if (t) timeline.push({ ts:t.date, kind:'TRIAGE', text:`Classified ${(t.verdict||'').replace(/_/g,' ').toLowerCase() || '—'}${t.routing ? ` · routed to ${t.routing.replace(/_/g,' ').toLowerCase()}` : ''}${t.confidence ? ` · ${t.confidence} confidence` : ''}` })
     ;(c.history || []).forEach(h => timeline.push(
-      h.event === 'assigned'  ? { ts:h.ts, kind:'ASSIGNED',  text:`Assigned to ${h.to}`, by:h.by } :
+      h.event === 'assigned'  ? { ts:h.ts, kind: h.reason ? 'TAKEN OVER' : 'ASSIGNED', by:h.by,
+        text: h.reason ? `Taken over from ${h.from || 'no one'} — ${h.reason}` : !h.to ? `Handed back to the queue${h.from ? ` (was ${h.from})` : ''}`
+          : h.from ? `Reassigned from ${h.from} to ${h.to}` : `Assigned to ${h.to}` } :
       h.event === 'created_from_alert' ? { ts:h.ts, kind:'FROM MONITORING', text:`Opened from alert: ${h.alert}`, by:h.by } :
       h.event === 'alert_added' ? { ts:h.ts, kind:'ALERT ADDED', text:h.alert, by:h.by } :
       h.event === 'closed_at_intake' ? { ts:h.ts, kind:'CLOSED AT INTAKE', text:h.reason, by:h.by } :
@@ -288,6 +363,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           <div className="display-font" style={{ padding:'40px 22px', color:'#78716C', fontStyle:'italic' }}>This case isn’t in this workspace.</div>
         ) : (
         <div style={{ padding:'20px 22px 40px', display:'flex', flexDirection:'column', gap:'22px' }}>
+          <OwnerLine c={c} covUser={covUser} setOutcomes={setOutcomes} settings={settings} />
           {/* What changed since the previous day's visit, other than by you */}
           {(() => {
             const prev = previousVisit(), mine = covUser?.name || ''
@@ -458,7 +534,6 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
             <Row k="Network" v={c.network} />
             <Row k="Category" v={c.category ? c.category.replace(/^mc_/,'').replace(/_/g,' ') : (c.verdict || '').replace(/_/g,' ').toLowerCase()} />
             <Row k="3-D Secure" v={c.threeDSStatus} />
-            <Row k="Assigned to" v={c.assignedTo} />
             <Row k="Opened" v={c.date ? new Date(c.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : null} />
             <Row k="Next response due" v={c.nextRespDate} />
             {duo.map(s => <Row key={s.id} k={`Duo ${s.id}`} v={s.myInstitution ? `${s.myInstitution} (you) + counterparty` : 'Shared session'} />)}
