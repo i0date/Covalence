@@ -52,7 +52,7 @@ export function navFor(sides) {
 }
 
 // Triage's Alerts tab: who found it
-export function alertsSource(sides, crypto) {
-  if (!doesIssuing(sides)) return 'The network warned you'
+export function alertsSource(sides, crypto, segment) {
+  if (segment === 'mx' || !doesIssuing(sides)) return 'The network warned you'
   return crypto ? 'The exchange found it' : 'The FI found it'
 }
