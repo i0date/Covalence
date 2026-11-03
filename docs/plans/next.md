@@ -28,7 +28,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 
 ## 2. Phase 4 and the alarm
 
-- **Merchant Triage:**
+- **Merchant Triage:** (done: pre-dispute alerts PR — `src/preDispute.mjs`, `supabase_predispute.sql`, `/api/intake { preDispute }`, decisions sent as `predispute.decided`)
   - Alerts: "The network warned you". Pre-dispute alerts (Ethoca, Verifi, Order Insight), so the merchant can refund before a chargeback.
   - Claims: customer complaints and refund requests.
 - **Merchant playbooks in Trio:**

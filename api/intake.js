@@ -1,6 +1,10 @@
 // Vercel serverless function — POST /api/intake → an institution's systems send data straight to Covalence
 //   Authorization: Bearer cvl_…   (an API key from Settings → Connections)
 //   { "transactions": [...], "events": [...], "alerts": [...] }   up to 1000 of each
+//   { "preDispute": [...] }   a merchant's pre-dispute alerts (Ethoca, Verifi CDRN / RDR, Visa Order
+//                             Insight, Mastercard Consumer Clarity), sent on their own, up to 1000:
+//                             stored once per provider alert, they land in 001 Triage → Alerts, Merchant
+//                             side (src/preDispute.mjs, supabase_predispute.sql)
 // Transactions and account events are stored, then the fraud rules (→ 001 Triage
 // → Alerts) and AML rules (→ 005 Licit → Alerts) run at once for the customers
 // involved, so an alert exists seconds after the payment. "alerts" are alerts
@@ -47,8 +51,36 @@ module.exports = async function handler(req, res) {
   if (!keyRow) return res.status(401).json({ error: 'Unknown or revoked API key' })
   const inst = keyRow.institution_id
 
-  const m = await import('../src/monitoring.mjs')
   const body = req.body || {}
+  const audit = (action, detail) => rest('rpc/audit_add', { method: 'POST', body: JSON.stringify({ p_inst: inst, p_action: action, p_entity: 'workspace', p_entity_id: keyRow.prefix, p_detail: detail }) }).catch(() => {})
+
+  // ── A merchant's pre-dispute alerts ──
+  if (Array.isArray(body.preDispute)) {
+    const pd = await import('../src/preDispute.mjs')
+    if (!body.preDispute.length || body.preDispute.length > MAX) return res.status(400).json({ error: `Send 1 to ${MAX} pre-dispute alerts` })
+    const problems = [], rows = [], now = new Date()
+    body.preDispute.forEach((a, i) => {
+      const { alert, errors } = pd.normaliseAlert(a, now)
+      if (errors.length) { problems.push(`preDispute[${i}]: ${errors.join('; ')}`); return }
+      const id = 'PDA-' + crypto.createHash('sha256').update(`${inst}|${alert.source}|${alert.externalId}`).digest('hex').slice(0, 10).toUpperCase()
+      rows.push({ institution_id: inst, id, external_id: alert.externalId, source: alert.source, network: alert.network, amount: alert.amount, currency: alert.currency,
+        reason: alert.reason, reason_code: alert.reasonCode, descriptor: alert.descriptor, order_id: alert.orderId, arn: alert.arn, card_last4: alert.cardLast4,
+        transaction_at: alert.transactionAt, received_at: alert.receivedAt, respond_by: alert.respondBy, status: alert.status, note: alert.note,
+        history: [{ status: alert.status, at: now.toISOString(), by: pd.SOURCES[alert.source].label, note: 'Received' }] })
+    })
+    if (!rows.length) return res.status(400).json({ error: 'No alert could be stored', problems })
+    try {
+      const stored = await rest('predispute_alerts?select=id', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify(rows) }) || []
+      await rest(`intake_keys?id=eq.${keyRow.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ last_used_at: now.toISOString() }) }).catch(() => {})
+      await audit('intake.received', { preDispute: stored.length, duplicates: rows.length - stored.length, problems: problems.length })
+      return res.status(200).json({ ok: true, stored: stored.map(r => r.id), duplicates: rows.length - stored.length, problems })
+    } catch (e) {
+      console.error('intake preDispute:', e.message)
+      return res.status(500).json({ error: 'Couldn’t store the alerts — is supabase_predispute.sql run?' })
+    }
+  }
+
+  const m = await import('../src/monitoring.mjs')
   const segment = body.segment === 'ce' ? 'ce' : 'fi'   // 'ce' when the sender is a crypto exchange
   const inTx = Array.isArray(body.transactions) ? body.transactions : [], inEv = Array.isArray(body.events) ? body.events : [], inAl = Array.isArray(body.alerts) ? body.alerts : []
   if (inTx.length > MAX || inEv.length > MAX || inAl.length > MAX) return res.status(400).json({ error: `At most ${MAX} of each per request` })
