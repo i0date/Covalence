@@ -164,9 +164,9 @@ export function DeadlinesPanel({ ahead, late, withMine }) {
             {sel.due.slice().sort((a, b) => (b.mine - a.mine) || a.id.localeCompare(b.id)).map((e, k) => (
               <li key={e.id + e.key + k}>
                 <button type="button" onClick={() => openCase(e.id)} className="cov-ydv-case">
-                  <span className="mono-font" style={{ fontSize: '11px', color: '#57534E' }}>{e.id}</span>
-                  <span className="display-font" style={{ fontSize: '14px', color: INK, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.merchant || '—'}</span>
-                  <span className="mono-font" style={{ fontSize: '10px', color: sel.late ? LATE : '#6B6259', whiteSpace: 'nowrap' }}>{e.label}{withMine && e.mine ? ' · YOURS' : ''}</span>
+                  <span className="mono-font cov-ydv-case-id">{e.id}</span>
+                  <span className="display-font cov-ydv-case-name">{e.merchant || '—'}</span>
+                  <span className="mono-font cov-ydv-case-why" style={{ color: sel.late ? LATE : '#6B6259' }}>{e.label}{withMine && e.mine ? <strong style={{ color: INK }}> · YOURS</strong> : null}</span>
                 </button>
               </li>
             ))}
@@ -236,6 +236,52 @@ export function BacklogPanel({ backlog, pace }) {
           {pace?.enough && pace.clearDays != null && pace.openNow > 0 ? <>The {pace.openNow} open clear in about <strong>{nOf(pace.clearDays, 'day')}</strong>.</> : 'Not enough closed yet to say.'}
         </div></div>
       </div>
+    </div>
+  )
+}
+
+// ── The Team tab's charts: the team's open work by what it needs, and how old it is ──
+// Team-level only: nothing here is split by person.
+//   parts  [{ key, label, count, color }] in the order of the groups below the charts
+//   ages   open cases' age in days
+const AGE_BUCKETS = [['< 1 day', 0, 1], ['1–3 days', 1, 3], ['3–7 days', 3, 7], ['1–2 weeks', 7, 14], ['2–4 weeks', 14, 28], ['4+ weeks', 28, Infinity]]
+export function TeamCharts({ parts, ages, onPick }) {
+  const total = parts.reduce((a, p) => a + p.count, 0)
+  const buckets = AGE_BUCKETS.map(([label, lo, hi]) => ({ label, n: ages.filter(a => a >= lo && a < hi).length, old: lo >= 14 }))
+  const maxB = Math.max(1, ...buckets.map(b => b.n)), old = buckets.filter(b => b.old).reduce((a, b) => a + b.n, 0)
+  const median = ages.length ? [...ages].sort((a, b) => a - b)[Math.floor(ages.length / 2)] : 0
+  return (
+    <div className="cov-ydv-team">
+      <section aria-label="The team's open work, by what it needs" className="cov-ydv-team-block">
+        <div className="mono-font cov-ydv-tile-label">WHAT THE OPEN WORK NEEDS · {total}</div>
+        <div className="cov-ydv-stack" role="img" aria-label={parts.map(p => `${p.label} ${p.count}`).join(', ')}>
+          {parts.filter(p => p.count).map(p => <span key={p.key} style={{ flexGrow: p.count, background: p.color }} title={`${p.label}: ${p.count}`} />)}
+        </div>
+        <ul className="cov-ydv-stack-key">
+          {parts.map(p => (
+            <li key={p.key}>
+              <button type="button" onClick={() => onPick?.(p.key)} disabled={!p.count}>
+                <i style={{ background: p.color }} /><span className="display-font">{p.label}</span>
+                <strong className="mono-font">{p.count}</strong>
+                <span className="mono-font cov-ydv-stack-pct">{total ? Math.round((p.count / total) * 100) : 0}%</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section aria-label="How old the open cases are" className="cov-ydv-team-block">
+        <div className="mono-font cov-ydv-tile-label">AGE OF OPEN CASES · MEDIAN {median} DAY{median === 1 ? '' : 'S'}</div>
+        <div className="cov-ydv-ages" role="img" aria-label={buckets.map(b => `${b.label}: ${b.n}`).join(', ')}>
+          {buckets.map(b => (
+            <div key={b.label} className="cov-ydv-age" title={`${b.label}: ${nOf(b.n, 'case')}`}>
+              <span className="mono-font cov-ydv-age-n" style={b.old && b.n ? { color: LATE } : undefined}>{b.n}</span>
+              <span className="cov-ydv-age-bar" style={{ height: `${Math.max(b.n ? 6 : 2, (b.n / maxB) * 100)}%`, background: b.n ? (b.old ? LATE_REST : REST) : LINE }} />
+              <span className="mono-font cov-ydv-age-label">{b.label}</span>
+            </div>
+          ))}
+        </div>
+        <p className="display-font cov-ydv-team-note">{old ? <><strong style={{ color: LATE }}>{nOf(old, 'case')}</strong> open for more than two weeks.</> : 'Nothing open for more than two weeks.'}</p>
+      </section>
     </div>
   )
 }
