@@ -2,7 +2,7 @@
 -- Covalence — The hosted claim form (api/claims.js → /claim/<token>)
 -- =============================================================================
 -- Run once in the Supabase SQL editor, after supabase_claims.sql and
--- supabase_roles_retention.sql. Safe to re-run.
+-- supabase_roles_retention.sql. Safe to re-run. It also lets claims come from merchants' customers.
 --
 -- For banks without developers: Covalence hosts the claim form. A customer who sees
 -- something wrong taps "Report a problem" in the bank's app or on its website; the
@@ -16,6 +16,11 @@
 --   • Links are made and used only through api/claims.js, with the service role
 --   • claim_form holds the bank's name, logo and phone number on the form
 -- =============================================================================
+
+-- Claims for every side: a bank or credit union (fi), a crypto exchange (ce), and now a
+-- merchant's own customers (mx), each on its own side of Triage → Claims
+alter table public.app_claims drop constraint if exists app_claims_segment_check;
+alter table public.app_claims add constraint app_claims_segment_check check (segment in ('fi', 'ce', 'mx'));
 
 create table if not exists public.claim_form (
   institution_id uuid primary key references public.institutions(id) on delete cascade,
@@ -33,6 +38,7 @@ create table if not exists public.claim_links (
   token_hash     text not null unique,                -- SHA-256 of the token in the link
   institution_id uuid not null references public.institutions(id) on delete cascade,
   reference      text not null default '',            -- the bank's own reference, if it gave one
+  segment        text not null default 'fi' check (segment in ('fi', 'ce', 'mx')),   -- a bank, an exchange, a merchant
   customer       jsonb not null,                      -- { id, name, email, phone, accountType, accountOpened }
   transactions   jsonb not null,                      -- as in a claim (src/claims.mjs normaliseClaim)
   created_by     text not null default '',

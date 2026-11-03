@@ -40,6 +40,8 @@ const title = s => s.toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase()).r
 export function cleanDescriptor(raw, location = '') {
   let s = String(raw || '').trim().replace(/\s+/g, ' ')
   if (!s) return { name: '', via: '', domain: '' }
+  // An exchange's withdrawal or deposit, or a merchant's own order, is shown as written: addresses are case-sensitive
+  if (/^(withdrawal|deposit|order)\b/i.test(s)) return { name: s, via: '', domain: '' }
   // A person-to-person payment: the payee's name as the bank wrote it
   const p2p = s.match(/^(zelle|venmo|cash app|paypal|interac|wire|ach) (to|from) (.+)$/i)
   if (p2p) return { name: p2p[3].trim(), via: p2p[1].replace(/^./, c => c.toUpperCase()).replace(/^Cash app$/i, 'Cash App'), domain: '' }

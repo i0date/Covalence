@@ -7,11 +7,12 @@
 // Claims and decides which are required before a claim is Ready for Desk.
 // Plain data and functions, no imports, so the server and the browser agree.
 //
-// A question: { id, ask, kind, options?, required?, showIf?, accounts?, why }
+// A question: { id, ask, kind, options?, required?, showIf?, accounts?, sides?, why }
 //   kind      yesno (true / false), choice (one of options' values), date (YYYY-MM-DD),
 //             amount (a number), text (up to 500 characters)
 //   showIf    asked only when an earlier answer has this value: { id: value }
 //   accounts  asked only for these account types (default: every one)
+//   sides     asked only on these sides: fi (a bank), ce (an exchange), mx (a merchant) (default: every one)
 //   why       what the answer is for, for the bank's product team (wording to review with counsel)
 
 const CARDS = ['debit', 'credit']
@@ -20,10 +21,13 @@ const yn = (id, ask, why, more = {}) => ({ id, ask, kind: 'yesno', why, ...more 
 // The first question for an unrecognised transaction, and the claim closes at intake when it's yes
 const RECOGNISES = yn('recognisesTransaction', 'Do you recognise this transaction?',
   'An unauthorised claim needs the customer to say they didn’t make it. “Yes” usually means it isn’t fraud.', { required: true })
+// Asked by a bank about the merchant; a merchant asking its own customer leaves them out
 const CONTACTED = yn('contactedMerchant', 'Have you contacted the merchant about it?',
-  'The networks expect the customer to try the merchant first for most purchase disputes.', { required: true })
-const MERCHANT_SAID = { id: 'merchantResponse', ask: 'What did the merchant say?', kind: 'text', showIf: { contactedMerchant: true },
+  'The networks expect the customer to try the merchant first for most purchase disputes.', { required: true, sides: ['fi'] })
+const MERCHANT_SAID = { id: 'merchantResponse', ask: 'What did the merchant say?', kind: 'text', showIf: { contactedMerchant: true }, sides: ['fi'],
   why: 'Shows the merchant had a chance to put it right, and what they offered.' }
+const ORDER_REF = { id: 'orderNumber', ask: 'What’s your order number, if you have it?', kind: 'text', sides: ['mx'],
+  why: 'Finds the order straight away.' }
 const WHAT_BOUGHT = { id: 'whatPurchased', ask: 'What did you buy?', kind: 'text', required: true,
   why: 'The dispute has to describe the goods or service.' }
 
@@ -98,6 +102,57 @@ export const QUESTIONS = {
     yn('refundedEither', 'Has the merchant refunded either charge?', 'If one was refunded, there’s nothing left to dispute.', { required: true }),
     CONTACTED,
   ],
+  partial_delivery: [
+    WHAT_BOUGHT,
+    { id: 'whatWasMissing', ask: 'What didn’t arrive? Say how many items you ordered and how many came.', kind: 'text', required: true,
+      why: 'Only the part that didn’t arrive can be disputed, so the amount has to match what’s missing.' },
+    { id: 'missingAmount', ask: 'Roughly how much were the missing items worth?', kind: 'amount',
+      why: 'Sets the amount to dispute or refund when it’s less than the whole payment.' },
+    { id: 'expectedDelivery', ask: 'When were you expecting it?', kind: 'date', required: true,
+      why: 'The networks don’t allow a non-receipt dispute until the expected date has passed.' },
+    ORDER_REF, CONTACTED, MERCHANT_SAID,
+  ],
+  wrong_item: [
+    WHAT_BOUGHT,
+    { id: 'whatArrived', ask: 'What arrived instead?', kind: 'text', required: true, why: 'Shows how what was sent differs from the order.' },
+    yn('returnedIt', 'Have you returned it, or tried to?', 'Most networks require the customer to return goods or try to, before a “not as described” dispute.', { required: true }),
+    ORDER_REF, CONTACTED, MERCHANT_SAID,
+  ],
+  refund_not_received: [
+    { id: 'refundPromisedOn', ask: 'When were you told you’d get the refund?', kind: 'date', required: true, why: 'Refunds usually take up to 10 days to show; after that it can be chased or disputed.' },
+    { id: 'refundAmount', ask: 'How much is the refund?', kind: 'amount', required: true, why: 'The amount still owed.' },
+    { id: 'refundReference', ask: 'Do you have a refund or return number? If so, what is it?', kind: 'text', why: 'Proof of a promised refund settles most of these.' },
+    ORDER_REF, CONTACTED, MERCHANT_SAID,
+  ],
+  // ── A crypto exchange ──
+  unauth_withdrawal: [
+    { ...RECOGNISES, ask: 'Do you recognise this withdrawal?' },
+    yn('noticedChanges', 'Did anything change on your account that you didn’t do, like your password, phone number, email, 2FA or a new device?',
+      'Changes the customer didn’t make point to account takeover.', { required: true }),
+    yn('sharedCode', 'Did anyone ask you for a code, a password, your seed phrase, or to approve a sign-in?',
+      'If the customer gave a code to a caller, it may be a scam rather than a takeover.', { required: true }),
+    yn('canStillSignIn', 'Can you still sign in to your account?', 'If not, the exchange needs to secure the account first.'),
+    yn('otherUnrecognised', 'Are there other withdrawals or trades you don’t recognise?', 'Finds the rest of it, so it can be traced together.'),
+  ],
+  deposit_missing: [
+    { id: 'txHash', ask: 'What’s the transaction hash or ID?', kind: 'text', required: true, why: 'Finds the deposit on the chain.' },
+    { id: 'networkUsed', ask: 'Which network did you send it on (for example Ethereum, Tron, Bitcoin)?', kind: 'text', required: true,
+      why: 'A deposit sent on a network the exchange doesn’t support for that coin won’t credit by itself.' },
+    yn('memoIncluded', 'If your deposit address had a memo or tag, did you include it?', 'A missing memo is the most common reason a deposit doesn’t credit.'),
+    { id: 'sentFrom', ask: 'Where did you send it from?', kind: 'text', why: 'The sending platform can confirm the transaction.' },
+  ],
+  withdrawal_missing: [
+    { id: 'receivingPlatform', ask: 'Where did you send it to?', kind: 'text', required: true, why: 'The receiving platform may need to credit it.' },
+    yn('addressChecked', 'Have you checked the address you sent it to is right?', 'A withdrawal to the wrong address usually can’t be recovered.', { required: true }),
+    { id: 'txHash', ask: 'What’s the transaction hash or ID?', kind: 'text', why: 'Finds the withdrawal on the chain.' },
+  ],
+  wrong_address: [
+    { id: 'whatWentWrong', ask: 'What went wrong?', kind: 'choice', required: true,
+      options: [['wrong_address', 'I sent it to the wrong address'], ['wrong_network', 'I picked the wrong network'], ['missing_memo', 'I left out the memo or tag'], ['other', 'Something else']],
+      why: 'Some of these can be recovered; a wrong address usually can’t.' },
+    { id: 'receivingPlatform', ask: 'Where were you trying to send it?', kind: 'text', required: true, why: 'The receiving platform may be able to help.' },
+    { id: 'txHash', ask: 'What’s the transaction hash or ID?', kind: 'text', why: 'Finds the transaction on the chain.' },
+  ],
   romance_scam: SCAM_COMMON,
   investment_scam: [...SCAM_COMMON,
     { id: 'platformName', ask: 'What was the name of the investment platform or website?', kind: 'text', why: 'Helps match the claim to known fake platforms.' }],
@@ -115,8 +170,8 @@ export const QUESTIONS = {
 }
 
 // The questions for one claim type and account type, in order. Unknown types get none.
-export function questionsFor(claimType, accountType = '') {
-  return (QUESTIONS[claimType] || []).filter(q => !q.accounts || !accountType || q.accounts.includes(accountType))
+export function questionsFor(claimType, accountType = '', segment = 'fi') {
+  return (QUESTIONS[claimType] || []).filter(q => (!q.accounts || !accountType || q.accounts.includes(accountType)) && (!q.sides || q.sides.includes(segment || 'fi')))
 }
 
 // Is a question asked, given the answers so far?
@@ -133,9 +188,9 @@ function fits(q, v) {
 
 // Check the answers for a claim: { unanswered: [question], problems: ['id: why'] }
 // unanswered lists required questions that were asked and have no answer that fits.
-export function checkAnswers(claimType, accountType, answers = {}) {
+export function checkAnswers(claimType, accountType, answers = {}, segment = 'fi') {
   const unanswered = [], problems = []
-  questionsFor(claimType, accountType).forEach(q => {
+  questionsFor(claimType, accountType, segment).forEach(q => {
     if (!asked(q, answers)) return
     const v = answers[q.id]
     if (v === undefined || v === null || v === '') { if (q.required) unanswered.push(q); return }
@@ -148,7 +203,8 @@ export function checkAnswers(claimType, accountType, answers = {}) {
 }
 
 // The question behind an answer, from any claim type (for labelling answers in Triage)
-const ALL = new Map(Object.values(QUESTIONS).flat().map(q => [q.id, q]))
+const ALL = new Map()   // the first wording of each id (a few are shared between kinds)
+Object.values(QUESTIONS).flat().forEach(q => { if (!ALL.has(q.id)) ALL.set(q.id, q) })
 export const questionById = id => ALL.get(id) || null
 // An answer in words: yes / no, a choice's label, a date, or the text itself
 export function answerWords(id, v) {
@@ -161,7 +217,7 @@ export function answerWords(id, v) {
 }
 
 // What the bank's app gets: the questions, without the account filter, in a stable shape
-export const publicQuestions = (claimType, accountType) => questionsFor(claimType, accountType).map(q => ({
+export const publicQuestions = (claimType, accountType, segment = 'fi') => questionsFor(claimType, accountType, segment).map(q => ({
   id: q.id, ask: q.ask, kind: q.kind, required: !!q.required,
   ...(q.options ? { options: q.options.map(([value, label]) => ({ value, label })) } : {}),
   ...(q.showIf ? { showIf: q.showIf } : {}), why: q.why,

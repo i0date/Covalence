@@ -9,10 +9,10 @@ import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
-import { alertsSource } from '../sides.mjs'
+import { alertsSource, doesMerchant } from '../sides.mjs'
 import { AppClaims } from '../AppClaims.jsx'
 import { setClaim } from '../claimsData.js'
-import { CLAIM_TYPES, claimTotal } from '../claims.mjs'
+import { CLAIM_TYPES, TRIAGE_EQUIV, claimTotal } from '../claims.mjs'
 import { questionById, answerWords } from '../claimQuestions.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -40,7 +40,8 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake,
   // Two ways in: alerts the bank's monitoring raised, and claims customers report
   // Where Triage starts is an institution default (Settings → Default views)
   const [intakeTab, setIntakeTab] = useState(() => settings?.triageDefaultTab === 'claims' ? 'claims' : 'alerts')
-  const pickIntake = setIntakeTab
+  // Merchant (complaints from your own customers) is a side of Claims only; Alerts go back to the FI side
+  const pickIntake = k => { setIntakeTab(k); if (k === 'alerts') setTriageChannelMode(m => m === 'mx' ? 'fi' : m) }
   // Other screens can send people to a tab here: 'cov:go' with { section: 'triage', tab: 'claims' | 'alerts' }
   useEffect(() => {
     const h = e => { if (e.detail?.section === 'triage' && ['claims', 'alerts'].includes(e.detail.tab)) setIntakeTab(e.detail.tab) }
@@ -662,7 +663,8 @@ Return ONLY valid JSON:
       setAccountType(t); setMerchant(first.merchant || ''); setAmount(total); setCurrency(first.currency || 'USD'); setTransactionDate(date)
       setFlaggedBy(['agent', 'phone'].includes(c.channel) ? 'Customer-reported (inbound call)' : 'Customer-reported (app / self-serve)')
       // The customer's choice; if they didn't make one, AI triage's reading of the claim
-      const type = CLAIM_TYPES[d.claimType] && d.claimType !== 'other' ? d.claimType : CLAIM_TYPES[d.ai?.claimType] && d.ai.claimType !== 'other' ? d.ai.claimType : ''
+      const pickType = k => TRIAGE_EQUIV[k] || k
+      const type = CLAIM_TYPES[d.claimType] && d.claimType !== 'other' ? pickType(d.claimType) : CLAIM_TYPES[d.ai?.claimType] && d.ai.claimType !== 'other' ? pickType(d.ai.claimType) : ''
       setClaimType(type)
       const ch = (first.channel || '').toLowerCase()
       if (['debit', 'credit'].includes(t) && /not_present|online|cnp|ecom/.test(ch)) setTransactionType('Card-Not-Present (Online)')
@@ -835,7 +837,9 @@ Return ONLY valid JSON:
           <span style={{ fontWeight: 700 }}>Tri</span><span style={{ fontStyle: 'italic', fontWeight: 500 }}>age</span>
         </h1>
         <p className="display-font text-stone-700 mt-3 sm:mt-4 max-w-2xl" style={{ fontSize: 'clamp(15px, 2vw, 17px)', lineHeight: '1.55' }}>
-          {isCE
+          {triageChannelMode === 'mx'
+            ? 'Complaints from your own customers, before they become chargebacks: a refund or a replacement now costs less than a dispute later.'
+            : isCE
             ? 'Crypto exchange fraud triage. Four verdicts. FinCEN + FINTRAC aware. Built for exchange fraud analysts handling ATO, pig butchering, stablecoin fraud, and consumer disputes on digital asset platforms.'
             : 'Classify incoming dispute claims before anything is filed. Four verdicts. Covers card, ACH, P2P, BNPL, and FI-held crypto — routed by payment rail and regulatory framework: Reg E, Reg Z, NACHA, or provider.'}
         </p>
@@ -851,7 +855,7 @@ Return ONLY valid JSON:
         </div>
         {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA', maxWidth: '100%', flexWrap: 'wrap' }}>
-          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }].map(m => (
+          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, ...(intakeTab === 'claims' && doesMerchant(sides) ? [{ id: 'mx', label: 'Merchant' }] : [])].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
               style={{ background: triageChannelMode === m.id ? '#1A1814' : 'transparent', color: triageChannelMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
@@ -862,7 +866,7 @@ Return ONLY valid JSON:
       </div>
 
       {intakeTab === 'alerts' && (
-        <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
+        <AlertsPanel kind="fraud" segment={triageChannelMode === 'mx' ? 'fi' : triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
           institution={settings?.duoInstitutionName || covUser?.institution || ''} />
       )}
 
@@ -870,6 +874,8 @@ Return ONLY valid JSON:
       <div style={{ display: intakeTab === 'claims' ? 'block' : 'none' }}>
       {/* Claims the customer reported in the bank's app, waiting to be triaged */}
       <AppClaims segment={triageChannelMode} activeId={activeClaim?.id} onTriage={fillFromClaim} />
+      {/* A merchant's own customers: settled in the list above (refund, replacement), not with the claim form below */}
+      <div style={{ display: triageChannelMode === 'mx' ? 'none' : 'block' }}>
       {activeClaim && (
         <div className="mono-font" role="status" style={{ fontSize:'11px', letterSpacing:'0.1em', color:'#1E3A5F', margin:'0 0 16px', display:'flex', gap:'12px', flexWrap:'wrap' }}>
           <span>TRIAGING {activeClaim.external_id} · {(activeClaim.data?.customer?.name || '').toUpperCase()} — FILLED FROM THE APP; CHECK IT, THEN RUN TRIAGE</span>
@@ -2291,6 +2297,7 @@ Return ONLY valid JSON:
       <div className="mt-12 sm:mt-16 pt-6 flex flex-col sm:flex-row sm:items-baseline justify-between text-stone-500 gap-2" style={{ borderTop: '1px solid #D4CCBC' }}>
         <div className="mono-font text-xs tracking-widest">BUILT BY ADEOTI FASHOKUN — RISK &amp; TRUST OPERATIONS</div>
         <div className="display-font italic text-sm">"Classify before you file. The routing matters."</div>
+      </div>
       </div>
       </div>
     </div>

@@ -12,7 +12,7 @@
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, INSTRUCTIONS, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
+import { CHANNELS, CLAIM_TYPES, DESK_TYPES, INSTRUCTIONS, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, deskNote, silentDays, waitingClaims } from './claims.mjs'
 import { questionById, answerWords } from './claimQuestions.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
@@ -39,7 +39,15 @@ const FILTERS = [
   ['ready', 'Ready for Desk', c => c.status !== 'with_desk' && c.ready], ['look', 'Needs a look', c => c.status !== 'with_desk' && !c.ready],
   ['desk', 'With the Desk', c => c.status === 'with_desk'],
 ]
-export const ASK_SHORT = { lock_card: 'LOCK CARD', replace_card: 'NEW CARD', stop_merchant: 'STOP MERCHANT', call_me: 'CALL THEM' }
+export const ASK_SHORT = { lock_card: 'LOCK CARD', replace_card: 'NEW CARD', stop_merchant: 'STOP MERCHANT', call_me: 'CALL THEM',
+  freeze_account: 'FREEZE ACCOUNT', lock_withdrawals: 'STOP WITHDRAWALS', reset_security: 'RESET 2FA', refund: 'REFUND', replacement: 'REPLACEMENT', cancel_subscription: 'CANCEL SUBSCRIPTION' }
+// A merchant settles its own customer's complaint here, before it becomes a chargeback.
+// What the customer is told goes back to the merchant's app as claim.updated.
+const SETTLE = [
+  ['refunded', 'Refunded', 'closed', 'We’ve refunded you. It can take up to 10 days to show on your statement.'],
+  ['replacement', 'Replacement sent', 'closed', 'We’ve sent you a replacement.'],
+  ['looking', 'Looking into it', 'in_review', 'We’re looking into your order and will be in touch.'],
+]
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
 // Due in → a tone: overdue red, two business days or less amber
@@ -69,6 +77,7 @@ export function Asked({ d }) {
 export function AppClaims({ segment, activeId, onTriage }) {
   const [claims, setClaims] = useState(null), [err, setErr] = useState(''), [open, setOpen] = useState(null), [closing, setClosing] = useState(null)
   const [reason, setReason] = useState(CLOSE_REASONS[0]), [busy, setBusy] = useState(false)
+  const [toDeskId, setToDeskId] = useState(null), [deskType, setDeskType] = useState('not_as_described'), [deskWhy, setDeskWhy] = useState('')
   const writer = canWrite()
   const [sort, setSort] = useState('silence'), [filter, setFilter] = useState('all'), [allChannels, setAllChannels] = useState(false)
   const [shown, setShown] = useState(() => { try { return localStorage.getItem(SHOWN_KEY) === '1' } catch { return false } })
@@ -126,7 +135,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
     <section aria-label="Claims from your app" className="cov-app-claims">
       <div className="cov-app-claims-bar" style={{ cursor:'default' }}>
         <span className="display-font cov-app-claims-title">From your app and website</span>
-        <span className="display-font" style={{ fontSize:'13px', color:'#6B6259', flex:1, minWidth:0 }}>Nothing waiting. Claims your customers report in your app or on your website arrive here (Settings → Connections).</span>
+        <span className="display-font" style={{ fontSize:'13px', color:'#6B6259', flex:1, minWidth:0 }}>{segment === 'mx' ? 'Nothing waiting. Complaints your customers send from your app or website arrive here (Settings → Connections), so you can put them right before they become chargebacks.' : 'Nothing waiting. Claims your customers report in your app or on your website arrive here (Settings → Connections).'}</span>
       </div>
     </section>
   )
@@ -139,6 +148,19 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const close = async c => {
     setBusy(true)
     try { await setClaim(c.id, 'closed', { note: reason, publicNote: reason === 'The customer withdrew the claim' ? 'Closed at your request.' : '' }); setClosing(null); load() }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  // The customer called it fraud, but it's a dispute about a purchase: straight to the Desk, no triage form
+  const startToDesk = c => { setToDeskId(toDeskId === c.id ? null : c.id); setClosing(null); setDeskWhy('')
+    const guess = [c.data?.claimType, c.data?.ai?.claimType].find(k => DESK_TYPES.includes(k)); setDeskType(guess || 'not_as_described') }
+  const sendToDesk = async c => {
+    setBusy(true)
+    try { await setClaim(c.id, 'with_desk', { note: deskNote(deskType, deskWhy), publicNote: 'We’re looking into your dispute.' }); setToDeskId(null); load() }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  const settle = async (c, [, label, status, publicNote]) => {
+    setBusy(true)
+    try { await setClaim(c.id, status, { note: label, publicNote }); load() }
     catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   const rerun = async c => {
@@ -168,7 +190,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           {FILTERS.map(([k, l]) => {
             const n = countOf(k)
             if (k !== 'all' && !n && filter !== k) return null
-            return <button key={k} type="button" onClick={() => setFilter(k)} aria-pressed={filter === k} className={`grade-tab ${filter === k ? 'active' : ''}`} style={{ fontSize:'10px' }}>{l.toUpperCase()} · {n}</button>
+            return <button key={k} type="button" onClick={() => setFilter(k)} aria-pressed={filter === k} className={`grade-tab ${filter === k ? 'active' : ''}`} style={{ fontSize:'10px' }}>{(k === 'ready' && segment !== 'fi' ? 'Complete' : l).toUpperCase()} · {n}</button>
           })}
         </div>
         <label className="mono-font" style={{ display:'flex', alignItems:'center', gap:'8px', fontSize:'10px', letterSpacing:'0.12em', color:'#6B6259' }}>SORT
@@ -198,7 +220,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
                     {prevVisit && new Date(c.updated_at || 0) > prevVisit && <NewDot />}
                     {quiet.has(c.id) && <Badge tone="warn" title="The customer hasn’t been told anything new in this time">NO UPDATE {silentDays(c)}d</Badge>}
                     <Badge tone="info">{(CHANNELS[c.channel] || c.channel).toUpperCase()}</Badge>
-                    {onDesk ? <Badge tone="dark">WITH THE DESK{c.case_id ? ` · ${c.case_id}` : ''}</Badge> : c.ready ? <Badge tone="ok">READY FOR DESK</Badge> : <Badge>NEEDS A LOOK</Badge>}
+                    {onDesk ? <Badge tone="dark">WITH THE DESK{c.case_id ? ` · ${c.case_id}` : ''}</Badge> : c.ready ? <Badge tone="ok">{segment === 'fi' ? 'READY FOR DESK' : 'COMPLETE'}</Badge> : <Badge>NEEDS A LOOK</Badge>}
                     {c.status === 'in_review' && <Badge tone="dark">IN REVIEW</Badge>}
                     {d.instructions?.length > 0 && <Badge tone="danger" title="What the customer asked you to do now">ASKED: {d.instructions.map(k => ASK_SHORT[k] || k).join(' · ')}</Badge>}
                     {steps.map(h => <Badge key={h.step} tone="ok">{STEPS[h.step].toUpperCase()}</Badge>)}
@@ -214,12 +236,25 @@ export function AppClaims({ segment, activeId, onTriage }) {
                 </button>
                 {writer && (
                   <span style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
-                    {!onDesk && <Button small disabled={busy} onClick={() => triage(c)}>{active ? 'In the form below' : 'Triage this'}</Button>}
-                    <Button small variant="quiet" disabled={busy} onClick={() => setClosing(closing === c.id ? null : c.id)}>Close</Button>
+                    {!onDesk && segment !== 'mx' && <Button small disabled={busy} onClick={() => triage(c)}>{active ? 'In the form below' : 'Triage this'}</Button>}
+                    {!onDesk && segment === 'fi' && <Button small variant="secondary" disabled={busy} onClick={() => startToDesk(c)} aria-expanded={toDeskId === c.id}>Send to the Desk</Button>}
+                    {segment === 'mx' && SETTLE.filter(([k]) => !(k === 'looking' && c.status === 'in_review')).map(o => <Button key={o[0]} small variant={o[0] === 'refunded' ? 'primary' : 'secondary'} disabled={busy} onClick={() => settle(c, o)}>{o[1]}</Button>)}
+                    <Button small variant="quiet" disabled={busy} onClick={() => { setClosing(closing === c.id ? null : c.id); setToDeskId(null) }}>Close</Button>
                   </span>
                 )}
               </div>
 
+              {toDeskId === c.id && (
+                <div style={{ display:'flex', gap:'8px', alignItems:'flex-end', flexWrap:'wrap', padding:'0 4px 12px' }}>
+                  <label className="display-font" style={{ fontSize:'12px', display:'grid', gap:'3px', flex:'1 1 220px' }}>What kind of dispute is it?
+                    <Select value={deskType} onChange={e => setDeskType(e.target.value)} style={{ fontSize:'13px' }}>{DESK_TYPES.map(k => <option key={k} value={k}>{CLAIM_TYPES[k]}</option>)}</Select>
+                  </label>
+                  <label className="display-font" style={{ fontSize:'12px', display:'grid', gap:'3px', flex:'2 1 260px' }}>Why (optional)
+                    <input className="cov-input" style={{ padding:'8px 10px', fontSize:'13px' }} value={deskWhy} maxLength={300} onChange={e => setDeskWhy(e.target.value)} placeholder="Ordered seven items, four arrived: a purchase dispute, not fraud" />
+                  </label>
+                  <Button small disabled={busy} onClick={() => sendToDesk(c)}>Send it</Button>
+                </div>
+              )}
               {closing === c.id && (
                 <div style={{ display:'flex', gap:'8px', alignItems:'flex-end', flexWrap:'wrap', padding:'0 4px 12px' }}>
                   <label className="display-font" style={{ fontSize:'12px', display:'grid', gap:'3px', flex:'1 1 260px' }}>Why is it closed?

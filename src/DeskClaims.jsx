@@ -3,7 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // A dispute about a purchase (not received, not as described, cancelled, billing
 // error, charged twice) needs no triage: it comes straight here when it arrives
-// (claims.mjs DESK_TYPES, api/claims.js). Fraud and scams go to 001 Triage → Claims.
+// (claims.mjs DESK_TYPES, api/claims.js). Fraud and scams go to 001 Triage → Claims,
+// where "Send to the Desk" moves one the customer called fraud that's really a purchase
+// dispute; it then shows here too, with the kind of dispute Triage picked.
 // "Start the case" fills the Desk's intake form from what the customer told the app,
 // the same way a Triage hand-off does, and the case keeps the claim (intake.claimId),
 // so its provisional credit, filing and resolution are sent back to the app. A claim
@@ -11,7 +13,7 @@
 // already running from the customer's report.
 import React, { useEffect, useState } from 'react'
 import { listClaims } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, claimTotal } from './claims.mjs'
+import { CHANNELS, CLAIM_TYPES, claimTotal, deskTypeOf } from './claims.mjs'
 import { questionById, answerWords } from './claimQuestions.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite } from './auth.js'
@@ -28,8 +30,8 @@ export function handoffFromClaim(c) {
   const d = c.data || {}, tx = d.transactions || [], first = tx[0] || {}
   const answers = Object.entries(d.answers || {}).map(([q, a]) => `${questionById(q)?.ask || q} ${answerWords(q, a)}`)
   return {
-    caseId: '', source: 'app', classification: d.claimType || 'dispute', confidence: d.ai?.confidence || '',
-    headline: d.ai?.summary || CLAIM_TYPES[d.claimType] || '', network: first.network || '', amount: claimTotal(d).toFixed(2), currency: first.currency || 'USD',
+    caseId: '', source: 'app', classification: deskTypeOf(c) || d.claimType || 'dispute', confidence: d.ai?.confidence || '',
+    headline: d.ai?.summary || CLAIM_TYPES[deskTypeOf(c) || d.claimType] || '', network: first.network || '', amount: claimTotal(d).toFixed(2), currency: first.currency || 'USD',
     merchant: first.merchant || '', transactionDate: first.ts ? first.ts.slice(0, 10) : '',
     complaint: [d.statement, answers.length ? `Answers in the app — ${answers.join('; ')}.` : '', tx.length > 1 ? `${tx.length} transactions: ${tx.map(t => `${t.merchant || t.id} ${t.amount}`).join(', ')}.` : ''].filter(Boolean).join('\n').slice(0, 800),
     notes: '', intake: { claimId: c.id, reference: c.external_id, channel: c.channel, reportedAt: c.reported_at },
@@ -50,7 +52,8 @@ export function DeskClaims({ cases, onStart }) {
   }, [])
   if (!claims) return null
   const taken = new Set((cases || []).map(o => o.intake?.claimId).filter(Boolean))
-  const list = claims.filter(c => c.data?.route === 'desk' && c.status === 'with_desk' && !c.case_id && !taken.has(c.id))
+  // Straight from the app, or sent here from Triage: with the Desk and no case yet
+  const list = claims.filter(c => (c.segment || 'fi') === 'fi' && c.status === 'with_desk' && !c.case_id && !taken.has(c.id))
     .sort((a, b) => new Date(a.reported_at) - new Date(b.reported_at))
   if (!list.length && !err) return null
   const writer = canWrite()
@@ -70,7 +73,8 @@ export function DeskClaims({ cases, onStart }) {
       {err && <p role="alert" className="mono-font" style={{ fontSize:'11px', color:'#991B1B', margin:0, padding:'0 18px 12px' }}>{err}</p>}
       {shown && <ul style={{ listStyle:'none', margin:0, padding:0, borderTop:'1px solid #E7E2D9' }}>
         {list.map(c => {
-          const d = c.data || {}, tx = d.transactions || [], k = d.clock, expanded = open === c.id
+          const d = c.data || {}, tx = d.transactions || [], k = d.clock, expanded = open === c.id, kind = deskTypeOf(c)
+          const sent = d.route !== 'desk' && [...(c.history || [])].reverse().find(h => h.status === 'with_desk')
           const left = k ? new Date(k.due + 'T23:59:59') - Date.now() : null
           const merchants = [...new Set(tx.map(t => t.merchant).filter(Boolean))]
           return (
@@ -80,7 +84,8 @@ export function DeskClaims({ cases, onStart }) {
                   style={{ flex:'1 1 320px', minWidth:0, textAlign:'left', background:'none', border:0, padding:0, cursor:'pointer' }}>
                   <span style={{ display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center', marginBottom:'4px' }}>
                     <Badge tone="info">{(CHANNELS[c.channel] || c.channel).toUpperCase()}</Badge>
-                    <Badge tone="dark">{(CLAIM_TYPES[d.claimType] || 'Dispute').toUpperCase()}</Badge>
+                    <Badge tone="dark">{(CLAIM_TYPES[kind || d.claimType] || 'Dispute').toUpperCase()}</Badge>
+                    {sent && <Badge tone="info" title={sent.note}>FROM TRIAGE{sent.by ? ` · ${String(sent.by).toUpperCase()}` : ''}</Badge>}
                     {k && <Badge tone={left < 0 ? 'danger' : left < 2 * 86400000 ? 'warn' : 'neutral'} title={`${k.what} by ${day(k.due)}`}>{k.rule.toUpperCase()} · {timeLeft(left).toUpperCase()}</Badge>}
                     {!c.ready && <Badge title={(d.missing || []).join('; ')}>SOMETHING MISSING</Badge>}
                     {d.ai && d.ai.route !== 'dispute' && <Badge tone="warn" title={d.ai.summary}>AI READS IT AS {d.ai.route.replace(/_/g, ' ').toUpperCase()}</Badge>}
@@ -94,6 +99,7 @@ export function DeskClaims({ cases, onStart }) {
               </div>
               {expanded && (
                 <div className="display-font" style={{ fontSize:'13px', color:'#3F3A35', padding:'0 4px 14px', display:'grid', gap:'10px' }}>
+                  {sent && <p style={{ margin:0, color:'#1E3A5F' }}>{sent.note}{sent.by ? ` (${sent.by})` : ''}. The customer reported it as {(CLAIM_TYPES[d.claimType] || 'something else').toLowerCase()}.</p>}
                   {d.instructions?.length > 0 && <Asked d={d} />}
                   {d.ai?.summary && <p style={{ margin:0, borderLeft:'2px solid #1E3A5F', paddingLeft:'10px' }}>{d.ai.summary}</p>}
                   {d.statement && <blockquote style={{ margin:0, paddingLeft:'10px', borderLeft:'2px solid #D4CCBC', fontStyle:'italic' }}>“{d.statement}”</blockquote>}

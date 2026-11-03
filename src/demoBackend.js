@@ -7,10 +7,9 @@
 // counterparty, case links that get viewed and answered. Nothing here ever
 // reaches Supabase; signing in switches to the real backend.
 import { readCases, writeCases } from './caseStore.js'
-import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom, CLAIM_TYPES, INSTRUCTIONS, instructionsFor } from './claims.mjs'
+import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom } from './claims.mjs'
 import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
-import { publicQuestions } from './claimQuestions.mjs'
-import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, FORM_TYPES, CONSENT_TEXT } from './claimLinks.mjs'
+import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor } from './claimLinks.mjs'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
@@ -221,8 +220,9 @@ function openArnSession({ a, b, sides, cases, i, opening, lines }) {
 }
 
 // ── RPCs ─────────────────────────────────────────────────────────────────────
-// Three claims as Demo Bank's app would send them: two complete, one missing the claim type and consent
-const DEMO_QV = 3   // 1: answers to the questions in claimQuestions.mjs; 2: a claim closed at intake ("That was me"); 3: disputes straight to the Desk, and what customers asked for. Older demo claims are brought up to date
+// Demo claims as Demo Bank's app would send them: two complete, one missing the claim type and consent, one called a
+// scam that's a purchase dispute; and one from an exchange's customer and one from a merchant's
+const DEMO_QV = 4   // 1: answers to the questions in claimQuestions.mjs; 2: a claim closed at intake ("That was me"); 3: disputes straight to the Desk, and what customers asked for; 4: an exchange's and a merchant's claims, and a "scam" that's really a purchase dispute. Older demo claims are brought up to date
 function demoClaims() {
   const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
   const raw = [
@@ -245,6 +245,29 @@ function demoClaims() {
       answers: { madePaymentYourself: true, howContacted: 'phone', claimedToBe: 'our_bank' },
       statement: 'Got a call from the bank, they said my account was hacked and to move money to a safe account.',
       attachments: [], consent: { given: false } },
+    // Reported as a scam, but it's a purchase dispute: for "Send to the Desk" in Triage
+    { id: 'APP-55114', channel: 'app', reportedAt: ago(5), claimType: 'other_app',
+      customer: { id: 'A-2675', name: 'Tomás Rivera', accountType: 'debit' },
+      transactions: [{ id: 'TX-91877', ts: ago(24 * 11), amount: -486, currency: 'USD', merchant: 'LUMEN HOME DECOR', merchantCategory: 'Home goods', network: 'Visa', channel: 'card_not_present' }],
+      answers: { madePaymentYourself: true, howContacted: 'other', stillInContact: false },
+      statement: 'They scammed me. I bought 7 lamps and they only sent 4, and now they won’t answer.',
+      attachments: [], consent: { given: true, at: ago(5) } },
+    // A crypto exchange's customer: a withdrawal they didn't make, asking for the account to be frozen
+    { id: 'EXA-7710', channel: 'app', segment: 'ce', reportedAt: ago(1), claimType: 'unauth_withdrawal',
+      customer: { id: 'X-2207', name: 'Riley Chen', accountType: 'exchange' },
+      transactions: [{ id: 'WD-55120', ts: ago(1.5), amount: -2450, currency: 'USD', merchant: 'Withdrawal · 0.034 BTC to bc1q9h…7xk2', channel: 'withdrawal' }],
+      answers: { recognisesTransaction: false, noticedChanges: true, sharedCode: false, canStillSignIn: true },
+      instructions: ['freeze_account', 'lock_withdrawals', 'reset_security'],
+      statement: 'I got an email that my 2FA was changed, then 0.034 BTC left my account. I didn’t do either.',
+      attachments: [], consent: { given: true, at: ago(1) } },
+    // A merchant's own customer: an order of seven, four arrived
+    { id: 'SHOP-20417', channel: 'web', segment: 'mx', reportedAt: ago(26), claimType: 'partial_delivery',
+      customer: { id: 'C-88410', name: 'Ama Owusu', email: 'ama.o@example.com' },
+      transactions: [{ id: 'ORD-20417', ts: ago(24 * 9), amount: -312.6, currency: 'USD', merchant: 'Order #20417 · 7 items', channel: 'card_not_present' }],
+      answers: { whatPurchased: 'Seven glass storage jars', whatWasMissing: 'Ordered 7, only 4 arrived', missingAmount: 134, expectedDelivery: ago(24 * 3).slice(0, 10), orderNumber: '20417' },
+      instructions: ['refund'],
+      statement: 'The box had four jars in it. The packing slip says seven.',
+      attachments: [], consent: { given: true, at: ago(26) } },
   ]
   // What AI triage on arrival (api/claims.js) would make of each
   const ai = [
@@ -258,10 +281,19 @@ function demoClaims() {
       claimType: 'impersonation', route: 'scam', priority: 'urgent', confidence: 'high',
       reasons: ['A caller posing as the bank asked for a transfer to a “safe account”', 'The customer sent the payment themselves', 'The scammer may call again, and consent to investigate is missing'],
       askCustomer: ['Did you share any codes, passwords or card details with the caller?', 'Are they still in touch with you, or asking for more money?', 'Do you agree to us investigating and contacting the receiving bank?'] },
+    { summary: 'The customer calls it a scam, but they made the purchase and only part of it arrived: four of seven lamps. That’s a partial non-receipt dispute for the Desk, not fraud.',
+      claimType: 'partial_delivery', route: 'dispute', priority: 'normal', confidence: 'high',
+      reasons: ['The customer made the payment themselves', 'Some of the order arrived, so the merchant is real', 'The missing items are the dispute'], askCustomer: ['How much were the three missing lamps?'] },
+    { summary: 'A BTC withdrawal minutes after a 2FA change the customer didn’t make. Looks like account takeover; the customer asked for the account to be frozen.',
+      claimType: 'unauth_withdrawal', route: 'fraud', priority: 'urgent', confidence: 'high',
+      reasons: ['2FA changed without the customer', 'Withdrawal straight after the change', 'Customer can still sign in, so the attacker may come back'], askCustomer: [] },
+    { summary: 'Four of seven jars arrived. The customer wants a refund for the three missing, about $134.',
+      claimType: 'partial_delivery', route: 'dispute', priority: 'normal', confidence: 'high',
+      reasons: ['Packing slip shows seven, four arrived', 'Expected delivery date has passed'], askCustomer: [] },
   ]
   const out = raw.map((b, i) => {
     const { claim } = normaliseClaim(b, new Date(now))
-    const { row } = claimRow(claim, { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84'][i], institution: 'demo', by: 'cvl_demo', now: new Date(claim.reportedAt),
+    const { row } = claimRow(claim, { id: ['CLM-7A31C09E52', 'CLM-B4410F2D17', 'CLM-0C9E6A1B84', 'CLM-3B7E5A90C1', 'CLM-E06D2F4A18', 'CLM-91C4B8D2E7'][i], institution: 'demo', by: 'cvl_demo', now: new Date(claim.reportedAt),
       extra: { qv: DEMO_QV, ai: { ...ai[i], at: claim.reportedAt }, ...(claim.instructions.length ? { instructionsSent: { at: claim.reportedAt, ok: false, notConnected: true } } : {}) } })
     return { ...row, case_id: '', created_at: claim.reportedAt, updated_at: claim.reportedAt }
   })
@@ -286,15 +318,25 @@ function demoLinkCreate(b, by) {
   need(!errors.length, errors.join('; '))
   const token = 'demo_' + hex(24), id = linkIdFrom(hex(4)), at = new Date().toISOString()
   const all = read(K.claimLinks, [])
-  all.unshift({ id, token, institution_id: 'demo', reference: link.reference, customer: link.customer, transactions: link.transactions,
+  all.unshift({ id, token, institution_id: 'demo', reference: link.reference, segment: link.segment, customer: link.customer, transactions: link.transactions,
     created_by: by, created_at: at, expires_at: link.expiresAt, opened_at: null, used_at: null, claim_id: '', revoked_at: null })
   write(K.claimLinks, all.slice(0, 50))
   audit('claim.link_created', 'claim', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
   return { id, url: linkUrl(location.origin, token), token, expiresAt: link.expiresAt }
 }
-// A sample customer for /claim/demo: a coffee they buy every week, an online charge they don't know, and a subscription
-function demoSampleLink() {
+// A sample customer for /claim/demo, as the bank's app would open it when they tap Report a problem:
+// a coffee they buy every week, an online charge they don't know, and a subscription.
+// /claim/demo-ce: an exchange customer with a withdrawal they didn't make; /claim/demo-mx: a shop's
+// customer whose order of seven arrived with four.
+function demoSampleLink(seg = 'fi') {
   const ago = d => new Date(Date.now() - d * DAY).toISOString()
+  if (seg === 'ce') return demoLinkCreate({ reference: 'SAMPLE-CE', segment: 'ce', customer: { id: 'X-2207', name: 'Riley Chen', accountType: 'exchange' },
+    transactions: [
+      { id: 'WD-55120', ts: ago(0.2), amount: -2450, merchant: 'Withdrawal · 0.034 BTC to bc1q9h…7xk2', merchantLocation: 'Online', merchantCategory: 'Crypto withdrawal', channel: 'withdrawal' },
+      { id: 'WD-55121', ts: ago(0.19), amount: -1180, merchant: 'Withdrawal · 1,180 USDT (Tron) to TQ3x…p9Lm', merchantLocation: 'Online', merchantCategory: 'Crypto withdrawal', channel: 'withdrawal' },
+    ] }, 'Sample')
+  if (seg === 'mx') return demoLinkCreate({ reference: 'SAMPLE-MX', segment: 'mx', customer: { id: 'C-88410', name: 'Ama Owusu', email: 'ama.o@example.com' },
+    transactions: [{ id: 'ORD-20417', ts: ago(9), amount: -312.6, merchant: 'Order #20417 · 7 items', merchantLocation: 'Online', merchantCategory: 'Home goods', channel: 'card_not_present' }] }, 'Sample')
   return demoLinkCreate({ reference: 'SAMPLE', customer: { id: 'A-5520', name: 'Jordan Ellis', email: 'jordan.e@example.com', accountType: 'debit', accountOpened: '2021-08-14' },
     transactions: [
       { id: 'TX-93011', ts: ago(2), amount: -6.75, merchant: 'SQ *BLUE BOTTLE COFFEE #1234', merchantLocation: 'San Francisco, CA', merchantCategory: 'Coffee shop', channel: 'card_present', network: 'Visa' },
@@ -709,7 +751,7 @@ const HANDLERS = {
   },
 
   // The hosted claim form: links an agent makes, the bank's look, and the customer's side
-  claim_link_sample: () => demoSampleLink(),
+  claim_link_sample: ({ p_segment }) => demoSampleLink(p_segment),
   claim_form_get: () => ({ ...read(K.claimForm, {}), institution: DEMO_INSTITUTION }),
   claim_form_set: ({ p_display_name, p_logo_url, p_support_phone, p_help_url }) => {
     need(canConfigure(), 'Only admins and reviewers can change the claim form')
@@ -726,9 +768,7 @@ const HANDLERS = {
     if (!l.opened_at) { l.opened_at = new Date().toISOString(); write(K.claimLinks, all) }
     const acct = l.customer.accountType || '', history = sampleHistory(l.customer.id)
     return { brand: demoBrand(), firstName: String(l.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: l.expires_at,
-      cards: l.transactions.map(t => cardFor(t, history)), types: FORM_TYPES,
-      questions: Object.fromEntries(Object.keys(CLAIM_TYPES).map(k => [k, publicQuestions(k, acct)])),
-      instructions: Object.fromEntries(Object.keys(CLAIM_TYPES).map(k => [k, instructionsFor(k).map(value => ({ value, label: INSTRUCTIONS[value] }))])), consentText: CONSENT_TEXT }
+      cards: l.transactions.map(t => cardFor(t, history)), ...formFor(l.segment, acct) }
   },
   claim_form_send: ({ p_token, p_claim }) => {
     const all = read(K.claimLinks, []), l = all.find(x => x.token === p_token), problem = linkProblem(l)
