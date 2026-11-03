@@ -16,7 +16,7 @@ import { caseClocks, pressing, sortClocks } from './clocks.mjs'
 import { Badge, Button, NewDot } from './ui.jsx'
 import { insights } from './insights.js'
 import { Refs } from './FrontPage.jsx'
-import { ForecastTiles, DeadlinesPanel, BacklogPanel } from './YourDayViews.jsx'
+import { ForecastTiles, DeadlinesPanel, BacklogPanel, TeamCharts } from './YourDayViews.jsx'
 import { canWrite } from './auth.js'
 import { poolRole, tasksFor, HELP } from './Pool.jsx'
 import { isMerchantCase } from './sides.mjs'
@@ -179,8 +179,8 @@ function Row({ x, i, day, owner }) {
         <span style={{ display:'inline-flex', alignItems:'center', flexWrap:'wrap', minWidth:0, maxWidth:'100%' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone} style={{ whiteSpace:'normal' }}>{r.label}</Badge></span>
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
         <span style={{ minWidth:0 }}>
-          <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflowWrap:'anywhere' }}>{c.merchant || '—'}</span>
-          <span className="mono-font cov-yourday-why" style={{ display:'block', fontSize:'11px', color:'#6B6259', lineHeight:1.5, overflowWrap:'anywhere' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
+          <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflowWrap:'break-word' }}>{c.merchant || '—'}</span>
+          <span className="mono-font cov-yourday-why" style={{ display:'block', fontSize:'11px', color:'#6B6259', lineHeight:1.5, overflowWrap:'break-word' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
         </span>
         {owner && !claim
           ? <span className="mono-font" style={{ fontSize:'11px', color: c.assignedTo ? '#57534E' : '#92400E', whiteSpace:'nowrap' }}>{c.assignedTo ? ownerOf(c) : 'No owner'}</span>
@@ -194,7 +194,7 @@ function Row({ x, i, day, owner }) {
 function Group({ title, note, list, cap, day, owner, children }) {
   if (!list.length && !children) return null
   return (
-    <div className="cov-plan-group">
+    <div className="cov-plan-group" data-group={title}>
       <div className="cov-plan-head">
         <span className="mono-font cov-plan-title">{title}</span>
         {note && <span className="display-font cov-plan-note">{note}</span>}
@@ -221,21 +221,20 @@ function TeamView({ day, pools }) {
     ['NEW, TO ANALYSE', null, take(x => x.r.rank === 3)],
   ]
   const motion = t.filter(x => !used.has(x.c.id))
-  const late = groups[1][2].length, noOwner = groups[0][2].length, openPools = pools.length
   const [all, setAll] = useState(false)
+  // The charts: the same groups as the list below, and how old the open cases are
+  const COLORS = { 'NO OWNER': '#92400E', 'PAST A DEADLINE': '#991B1B', 'CUSTOMERS WAITING': '#1E3A5F', 'DUE IN THE NEXT FEW DAYS': '#1A1814', 'NEW, TO ANALYSE': '#8A7F72' }
+  const WORDS = { 'NO OWNER': 'No owner', 'PAST A DEADLINE': 'Past a deadline', 'CUSTOMERS WAITING': 'Customers waiting', 'DUE IN THE NEXT FEW DAYS': 'Due in the next few days', 'NEW, TO ANALYSE': 'New, to analyse' }
+  const parts = [...groups.map(([title, , list]) => ({ key: title, label: WORDS[title], count: list.length, color: COLORS[title] })), { key: 'IN MOTION', label: 'In motion', count: motion.length, color: '#D4CCBC' }]
+  const now = Date.now(), ages = day.all.filter(c => stageOf(c) !== 'closed' && c.date).map(c => Math.max(0, Math.floor((now - new Date(c.date)) / 86400000)))
+  const jump = key => document.querySelector(`#yd-pane-team [data-group="${key}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   return (
     <>
-      <div className="cov-yd-team-sum mono-font">
-        <span><strong>{day.all.filter(c => stageOf(c) !== 'closed').length}</strong> OPEN</span>
-        <span style={noOwner ? { color:'#92400E' } : undefined}><strong>{noOwner}</strong> NO OWNER</span>
-        <span style={late ? { color:'#991B1B' } : undefined}><strong>{late}</strong> PAST A DEADLINE</span>
-        <span><strong>{groups[2][2].length}</strong> CUSTOMERS WAITING</span>
-        <span><strong>{openPools}</strong> POOL{openPools === 1 ? '' : 'S'}</span>
-      </div>
+      <TeamCharts parts={parts} ages={ages} onPick={jump} />
       {groups.map(([title, note, list]) => <Group key={title} title={title} note={note} list={list} cap={all ? Infinity : 6} day={day} owner={title !== 'NO OWNER'} />)}
       <Group title="POOLS" note="Cases the team is working together" list={pools} cap={all ? Infinity : 6} day={day} />
       {motion.length > 0 && (
-        <div className="cov-plan-group">
+        <div className="cov-plan-group" data-group="IN MOTION">
           <div className="cov-plan-head"><span className="mono-font cov-plan-title">IN MOTION</span></div>
           <p className="display-font" style={{ margin:0, padding:'8px 18px 12px', fontSize:'14px', color:'#57534E', borderTop:'1px solid #EDE7DC' }}>
             {motion.length} queued or waiting on the merchant or the network: <Refs parts={motion.map(x => ({ id: x.c.id }))} />
@@ -365,7 +364,7 @@ export function YourDay({ day, covUser, settings }) {
                   background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
                 <span style={{ display:'inline-flex', alignItems:'center', color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{day.changed(c) && <NewDot />}{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
                 <span style={{ color:'#57534E' }}>{c.id}</span>
-                <span className="cov-comingup-what" style={{ overflowWrap:'anywhere' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
+                <span className="cov-comingup-what" style={{ overflowWrap:'break-word' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
                 <span className="desktop-only" style={{ color: c.assignedTo ? '#6B6259' : '#92400E' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'no owner'}</span>
               </button>
               <TakeIt c={c} day={day} />
