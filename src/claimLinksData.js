@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// CLAIM FORM DATA — links to the hosted claim form, and its look (supabase_claim_links.sql)
+// CLAIM FORM DATA — the hosted claim form and its look (supabase_claim_links.sql)
 // ═══════════════════════════════════════════════════════════════════════════════
-// Signed in: links are made through api/claims.js (it holds the only copy of the token
-// and stores just its hash), listed and revoked through institution-scoped functions.
+// Links are made by the bank's own systems (api/claims.js { link }), never from here.
+// Signed in: the form's look through institution-scoped functions.
 // Demo visitors: Demo Bank's in-browser copy (demoBackend.js); demo links start with demo_.
 // The customer's side (/claim/<token>) needs no sign-in: api/claims.js ?form=.
 import { accessToken, isSignedIn } from './auth.js'
@@ -24,19 +24,8 @@ async function rpc(fn, args) {
   const t = await r.text(); return t ? JSON.parse(t) : null
 }
 
-export const listLinks = () => rpc('claim_links_list').then(rows => rows || [])
-export const revokeLink = id => rpc('claim_link_revoke', { p_id: id })
 export const getClaimForm = () => rpc('claim_form_get')
-export const setClaimForm = f => rpc('claim_form_set', { p_display_name: f.display_name || '', p_accent: f.accent || '', p_logo_url: f.logo_url || '', p_support_phone: f.support_phone || '', p_help_url: f.help_url || '' })
-
-// A link for one customer: { customer, transactions, reference?, expiresInHours? } → { id, url, expiresAt }
-export async function makeLink(link) {
-  if (!isSignedIn()) return demoRpc('claim_link_create', { p_link: link })
-  const r = await fetch('/api/claims', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken()}` }, body: JSON.stringify({ link }) })
-  const j = await r.json().catch(() => null)
-  if (!r.ok) throw new Error(j?.problems?.join('; ') || j?.error || `HTTP ${r.status}`)
-  return j
-}
+export const setClaimForm = f => rpc('claim_form_set', { p_display_name: f.display_name || '', p_logo_url: f.logo_url || '', p_support_phone: f.support_phone || '', p_help_url: f.help_url || '' })
 
 // ── The customer's side ──
 const isDemo = token => /^demo(_[a-f0-9]{48})?$/.test(token)

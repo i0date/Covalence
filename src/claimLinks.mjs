@@ -1,11 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // THE HOSTED CLAIM FORM — links, branding, and turning an answer into a claim
 // ═══════════════════════════════════════════════════════════════════════════════
-// For banks without developers. The bank's systems (POST /api/claims { link }) or
-// an agent in Triage → Claims make a link for one customer and the transactions
-// from the bank's records; the customer opens /claim/<token>, says whether they
-// recognise each payment, picks what went wrong, answers the questions for it and
-// sends the claim. It's stored like a claim from the bank's app, tagged Web.
+// For banks without developers to build claim screens of their own. A customer who
+// sees something wrong taps "Report a problem" in the bank's app or on its website;
+// the bank's systems ask for a link (POST /api/claims { link }) for that customer and
+// the payments from its records, and open it. On /claim/<token> the customer picks
+// what went wrong, says whether they recognise each payment, asks for what they need
+// now (lock the card, …), answers the questions for it and sends the claim. It's stored
+// like a claim from the bank's app, tagged Web: fraud and scams to Triage, disputes
+// about a purchase straight to the Dispute Desk. Covalence never sends these links.
 // Plain functions, imports only claims.mjs, so the server and the browser agree.
 // The SQL is supabase_claim_links.sql.
 import { ACCOUNT_TYPES, MAX_TX } from './claims.mjs'
@@ -81,35 +84,18 @@ export function linkProblem(row, now = new Date()) {
   return ''
 }
 
-// Where the link is, for the list in Triage → Claims
-export function linkState(row, now = new Date()) {
-  if (row.used_at) return { key: 'used', label: 'Claim sent' }
-  if (row.revoked_at) return { key: 'revoked', label: 'Cancelled' }
-  if (new Date(row.expires_at) < now) return { key: 'expired', label: 'Expired' }
-  if (row.opened_at) return { key: 'opened', label: 'Opened' }
-  return { key: 'waiting', label: 'Not opened yet' }
-}
-
-// The bank's look on the form, checked. Anything missing falls back to plain Covalence styling.
+// The bank's name, logo and phone on the form (the form itself is in Covalence's style)
 export function normaliseBrand(f = {}, institution = '') {
-  const accent = /^#[0-9a-f]{6}$/i.test(String(f.accent || '')) ? f.accent : ''
   return {
     name: str(f.display_name || f.displayName || institution, 120) || 'Your bank',
-    accent, logo: /^https:\/\//i.test(String(f.logo_url || f.logoUrl || '')) ? str(f.logo_url || f.logoUrl, 500) : '',
+    logo: /^https:\/\//i.test(String(f.logo_url || f.logoUrl || '')) ? str(f.logo_url || f.logoUrl, 500) : '',
     phone: str(f.support_phone || f.supportPhone, 40),
     help: /^https:\/\//i.test(String(f.help_url || f.helpUrl || '')) ? str(f.help_url || f.helpUrl, 500) : '',
   }
 }
-// Text on the accent colour: dark or light, whichever reads better
-export function onAccent(hex) {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '')
-  if (!m) return '#FFFFFF'
-  const [r, g, b] = m.slice(1).map(x => { const v = parseInt(x, 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#1A1814' : '#FFFFFF'
-}
 
 // What the customer sent → the claim body for normaliseClaim. link: the stored link.
-//   sent: { recognised: { txId: true|false }, claimType, answers, statement, consent: true }
+//   sent: { recognised: { txId: true|false }, claimType, answers, instructions, statement, consent: true }
 // Only transactions the customer doesn't recognise (or, for a purchase problem, all of
 // the ones they picked) go on the claim. If they recognise every one, it's kept as a
 // claim closed at intake, the same as "That was me" from the bank's app.
@@ -126,7 +112,7 @@ export function claimFromForm(link, sent, now = new Date()) {
     id: link.id, channel: 'web', reportedAt: now.toISOString(),
     claimType: allRecognised ? (s.claimType || 'unauth_cnp') : str(s.claimType, 40),
     customer: link.customer, transactions: txs, answers,
-    statement: str(s.statement, 4000), attachments: [],
+    statement: str(s.statement, 4000), attachments: [], instructions: allRecognised || !Array.isArray(s.instructions) ? [] : s.instructions.map(String),
     consent: { given: s.consent === true, at: s.consent === true ? now.toISOString() : null, text: CONSENT_TEXT },
   }
 }

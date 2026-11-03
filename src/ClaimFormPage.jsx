@@ -1,83 +1,90 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// THE HOSTED CLAIM FORM — public page at /claim/<token>, in the bank's colours
+// THE HOSTED CLAIM FORM — public page at /claim/<token>
 // ═══════════════════════════════════════════════════════════════════════════════
-// What a bank's customer sees when the bank sends them a claim link (claimLinks.mjs).
-// No sign-in: the link is the key, and it works once. The customer
-//   1. says what went wrong, in their own words' terms (FORM_TYPES)
+// What a customer sees after tapping "Report a problem" in their bank's app or on its
+// website, when the bank uses Covalence's form instead of building its own
+// (claimLinks.mjs). The customer starts it; Covalence never sends these links. No
+// sign-in: the link is the key, and it works once. The customer
+//   1. says what went wrong (FORM_TYPES)
 //   2. for a payment they didn't make: "Is this yours?" for each one, with the merchant
 //      as people know it; recognising every one ends it there, with nothing to dispute.
 //      For a problem with a purchase: which payments it's about
-//   3. answers the questions for that kind of problem (claimQuestions.mjs)
-//   4. tells it in their own words and agrees to the investigation, then sends it
-// The claim lands in Triage → Claims tagged Web. Styled on its own (not GLOBAL_CSS),
-// so it looks like the bank's page, not Covalence's.
+//   3. asks for what they need now: lock the card, a new card, stop the merchant, a call
+//      (claims.mjs instructionsFor), sent to the bank's systems as soon as the claim arrives
+//   4. answers the questions for that kind of problem (claimQuestions.mjs)
+//   5. tells it in their own words and agrees to the investigation, then sends it
+// Fraud and scams land in Triage → Claims; a dispute about a purchase goes straight to
+// the Dispute Desk. In Covalence's style, with the bank's name and logo at the top.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { openForm, sendForm } from './claimLinksData.js'
-import { onAccent } from './claimLinks.mjs'
 
-const FALLBACK = '#1E3A5F'
 const UNAUTH = /^unauth|^ato|^counterfeit/
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const asked = (q, a) => !q.showIf || Object.entries(q.showIf).every(([k, v]) => a[k] === v)
 const answered = (q, v) => q.kind === 'yesno' ? typeof v === 'boolean' : q.kind === 'amount' ? v !== '' && v != null && isFinite(Number(v)) && Number(v) >= 0 : String(v ?? '').trim() !== ''
+// What we tell the customer we've done with each request
+const DONE_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you' }
 
 const CSS = `
-  .cf { --accent:${FALLBACK}; --on-accent:#fff; --ink:#1B1F24; --muted:#5B6470; --line:#DCE0E5; --soft:#F4F6F8; --card:#FFFFFF; --bg:#EEF1F4; --bad:#B42318;
-    min-height:100vh; background:var(--bg); color:var(--ink); font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; }
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap');
+  .cf { --ink:#1A1814; --muted:#6B6259; --line:#D4CCBC; --soft:#EEE9E0; --card:#FAF7F1; --bg:#F5F1EA; --bad:#991B1B; --ok:#065F46;
+    min-height:100vh; background:var(--bg); color:var(--ink); font:16px/1.55 'Fraunces',Georgia,serif; }
   .cf * { box-sizing:border-box; }
-  .cf-top { background:var(--accent); color:var(--on-accent); }
-  .cf-top-in { max-width:640px; margin:0 auto; padding:14px 16px; display:flex; align-items:center; gap:12px; }
-  .cf-logo { height:32px; max-width:160px; object-fit:contain; }
-  .cf-mono { width:34px; height:34px; border-radius:8px; display:grid; place-items:center; font-weight:700; font-size:14px; background:rgba(255,255,255,.18); }
+  .cf .mono { font-family:'JetBrains Mono',monospace; }
+  .cf-top { background:var(--ink); color:#F5F1EA; }
+  .cf-top-in { max-width:640px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+  .cf-logo { height:28px; max-width:160px; object-fit:contain; }
   .cf-bank { font-weight:600; font-size:17px; }
-  .cf-main { max-width:640px; margin:0 auto; padding:20px 16px 48px; }
-  .cf-card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px 20px; }
-  .cf-step { font-size:13px; color:var(--muted); margin:0 0 6px; }
-  .cf-bar { height:4px; background:var(--soft); border-radius:4px; margin-bottom:18px; overflow:hidden; }
-  .cf-bar > i { display:block; height:100%; background:var(--accent); border-radius:4px; transition:width .25s; }
-  .cf h1 { font-size:22px; line-height:1.25; margin:0 0 6px; font-weight:650; }
-  .cf p.cf-sub { margin:0 0 18px; color:var(--muted); }
-  .cf-group { font-size:13px; font-weight:600; color:var(--muted); margin:18px 0 8px; }
-  .cf-opt { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--card); border:1.5px solid var(--line); border-radius:10px;
-    padding:13px 14px; margin-bottom:8px; font:inherit; color:inherit; cursor:pointer; }
-  .cf-opt:hover { border-color:var(--muted); }
-  .cf-opt[aria-pressed="true"], .cf-opt[aria-checked="true"] { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; background:color-mix(in srgb, var(--accent) 6%, white); }
-  .cf-dot { width:18px; height:18px; border-radius:50%; border:2px solid var(--line); flex:none; }
-  .cf-opt[aria-pressed="true"] .cf-dot, .cf-opt[aria-checked="true"] .cf-dot { border-color:var(--accent); background:radial-gradient(var(--accent) 45%, transparent 50%); }
-  .cf-box { width:18px; height:18px; border-radius:4px; border:2px solid var(--line); flex:none; display:grid; place-items:center; font-size:12px; color:var(--on-accent); }
-  .cf-opt[aria-checked="true"] .cf-box { background:var(--accent); border-color:var(--accent); }
-  .cf :focus-visible { outline:3px solid color-mix(in srgb, var(--accent) 45%, white); outline-offset:2px; }
-  .cf-pay { border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .cf-what { margin-left:auto; font-size:10px; letter-spacing:.18em; color:#BFB6A8; }
+  .cf-main { max-width:640px; margin:0 auto; padding:24px 16px 40px; }
+  .cf-card { background:var(--card); border:1px solid var(--line); padding:24px 22px; }
+  .cf-step { font-size:10px; letter-spacing:.18em; color:var(--muted); margin:0 0 8px; }
+  .cf-bar { height:3px; background:var(--soft); margin-bottom:20px; }
+  .cf-bar > i { display:block; height:100%; background:var(--ink); transition:width .25s; }
+  .cf h1 { font-size:26px; line-height:1.2; margin:0 0 8px; font-weight:600; letter-spacing:-.01em; }
+  .cf p.cf-sub { margin:0 0 18px; color:#57534E; }
+  .cf-group { font-size:10px; letter-spacing:.16em; color:var(--muted); margin:20px 0 8px; text-transform:uppercase; }
+  .cf-opt { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:#fff; border:1px solid var(--line);
+    padding:13px 14px; margin-bottom:6px; font:inherit; color:inherit; cursor:pointer; }
+  .cf-opt:hover { border-color:var(--ink); }
+  .cf-opt[aria-pressed="true"], .cf-opt[aria-checked="true"] { border-color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink); background:var(--soft); }
+  .cf-dot { width:16px; height:16px; border-radius:50%; border:1.5px solid var(--muted); flex:none; }
+  .cf-opt[aria-pressed="true"] .cf-dot { border-color:var(--ink); background:radial-gradient(var(--ink) 42%, transparent 48%); }
+  .cf-box { width:16px; height:16px; border:1.5px solid var(--muted); flex:none; display:grid; place-items:center; font-size:11px; color:#F5F1EA; font-family:'JetBrains Mono',monospace; }
+  .cf-opt[aria-checked="true"] .cf-box { background:var(--ink); border-color:var(--ink); }
+  .cf :focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+  .cf-pay { border:1px solid var(--line); background:#fff; padding:16px; margin-bottom:10px; }
   .cf-pay-head { display:flex; gap:12px; align-items:center; }
-  .cf-pay-logo { width:44px; height:44px; border-radius:10px; flex:none; display:grid; place-items:center; color:#fff; font-weight:700; overflow:hidden; }
+  .cf-pay-logo { width:42px; height:42px; flex:none; display:grid; place-items:center; color:#fff; font:600 13px 'JetBrains Mono',monospace; overflow:hidden; }
   .cf-pay-logo img { width:100%; height:100%; object-fit:cover; }
-  .cf-pay-name { font-weight:650; font-size:17px; }
-  .cf-pay-meta { color:var(--muted); font-size:14px; }
-  .cf-pay-amt { margin-left:auto; font-weight:650; font-size:17px; white-space:nowrap; }
-  .cf-hints { margin:12px 0 0; padding:0; list-style:none; font-size:14px; color:var(--muted); }
-  .cf-hints li { padding:3px 0 3px 18px; position:relative; }
-  .cf-hints li::before { content:''; position:absolute; left:4px; top:11px; width:5px; height:5px; border-radius:50%; background:var(--muted); }
-  .cf-two { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+  .cf-pay-name { font-weight:600; font-size:18px; line-height:1.25; }
+  .cf-pay-meta { color:var(--muted); font-size:12px; font-family:'JetBrains Mono',monospace; }
+  .cf-pay-amt { margin-left:auto; font:500 15px 'JetBrains Mono',monospace; white-space:nowrap; }
+  .cf-hints { margin:12px 0 0; padding:0; list-style:none; font-size:14px; color:#57534E; }
+  .cf-hints li { padding:2px 0 2px 16px; position:relative; }
+  .cf-hints li::before { content:'—'; position:absolute; left:0; color:var(--muted); }
+  .cf-two { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:14px; }
   .cf-two .cf-opt { justify-content:center; margin:0; text-align:center; }
-  .cf-q { margin-bottom:20px; }
+  .cf-q { margin-bottom:22px; }
   .cf-q label, .cf-q .cf-ask { display:block; font-weight:600; margin-bottom:8px; }
   .cf-q .cf-opt-req { color:var(--muted); font-weight:400; font-size:14px; }
-  .cf input[type=text], .cf input[type=date], .cf input[type=number], .cf textarea { width:100%; font:inherit; padding:12px 13px; border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); }
+  .cf input[type=text], .cf input[type=date], .cf input[type=number], .cf textarea { width:100%; font:inherit; padding:11px 12px; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:0; }
   .cf textarea { min-height:120px; resize:vertical; }
-  .cf input:focus, .cf textarea:focus { border-color:var(--accent); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 20%, white); }
-  .cf-nav { display:flex; gap:10px; margin-top:22px; align-items:center; }
-  .cf-btn { font:inherit; font-weight:600; border-radius:10px; padding:13px 20px; cursor:pointer; border:none; background:var(--accent); color:var(--on-accent); }
-  .cf-btn:disabled { opacity:.45; cursor:not-allowed; }
-  .cf-btn.ghost { background:transparent; color:var(--ink); border:1.5px solid var(--line); }
+  .cf input:focus, .cf textarea:focus { border-color:var(--ink); outline:none; }
+  .cf-nav { display:flex; gap:10px; margin-top:24px; align-items:center; }
+  .cf-btn { font:500 11px 'JetBrains Mono',monospace; letter-spacing:.16em; text-transform:uppercase; padding:14px 22px; cursor:pointer; border:1px solid var(--ink); background:var(--ink); color:#F5F1EA; }
+  .cf-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .cf-btn.ghost { background:transparent; color:var(--ink); }
   .cf-nav .cf-btn:not(.ghost) { margin-left:auto; }
-  .cf-err { color:var(--bad); font-size:14px; margin-top:12px; }
-  .cf-hint { color:var(--muted); font-size:14px; margin-top:6px; }
-  .cf-ref { font:600 20px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; background:var(--soft); border-radius:8px; padding:10px 12px; display:inline-block; margin:4px 0 14px; }
+  .cf-err { color:var(--bad); font-size:12px; margin-top:12px; font-family:'JetBrains Mono',monospace; }
+  .cf-hint { color:var(--muted); font-size:14px; margin-top:6px; font-style:italic; }
+  .cf-note { border-left:3px solid var(--ink); background:var(--soft); padding:10px 14px; font-size:14px; margin:14px 0 0; }
+  .cf-ref { font:500 20px/1.2 'JetBrains Mono',monospace; letter-spacing:.06em; border:1px solid var(--line); background:#fff; padding:10px 14px; display:inline-block; margin:4px 0 16px; }
   .cf-foot { max-width:640px; margin:0 auto; padding:0 16px 32px; color:var(--muted); font-size:13px; }
   .cf-foot a { color:inherit; }
-  .cf-tick { width:52px; height:52px; border-radius:50%; background:color-mix(in srgb, var(--accent) 12%, white); color:var(--accent); display:grid; place-items:center; font-size:26px; margin-bottom:12px; }
-  @media (max-width:480px) { .cf-card { padding:18px 16px; } .cf h1 { font-size:20px; } .cf-pay-amt { font-size:15px; } }
+  .cf-tick { width:44px; height:44px; border:1.5px solid var(--ok); color:var(--ok); display:grid; place-items:center; font-size:20px; margin-bottom:14px; }
+  @media (max-width:480px) { .cf-card { padding:20px 16px; } .cf h1 { font-size:22px; } .cf-pay-amt { font-size:14px; } .cf-what { display:none; } }
 `
 
 function Option({ on, onClick, kind = 'radio', children }) {
@@ -137,6 +144,7 @@ export default function ClaimFormPage({ token: initial }) {
   const [type, setType] = useState('')
   const [rec, setRec] = useState({})          // { txId: true | false } — "Is this yours?"
   const [picked, setPicked] = useState([])    // which payments a purchase problem is about
+  const [wants, setWants] = useState([])      // what they need now: lock_card, replace_card, …
   const [answers, setAnswers] = useState({})
   const [statement, setStatement] = useState('')
   const [consent, setConsent] = useState(false)
@@ -159,17 +167,17 @@ export default function ClaimFormPage({ token: initial }) {
   }, [initial])
 
   const brand = form?.brand || done?.brand || null
-  const accent = brand?.accent || FALLBACK
   const cards = form?.cards || []
   const unauth = UNAUTH.test(type)
   const questions = useMemo(() => (form?.questions?.[type] || []).filter(q => q.id !== 'recognisesTransaction'), [form, type])
+  const offers = form?.instructions?.[type] || []
   const shown = questions.filter(q => asked(q, answers))
   const missingQ = shown.filter(q => q.required && !answered(q, answers[q.id]))
   const disputed = unauth ? cards.filter(c => rec[c.transactionId] === false) : cards.filter(c => picked.includes(c.transactionId))
   const allYours = unauth && cards.length > 0 && cards.every(c => rec[c.transactionId] === true)
 
   // The steps this customer goes through, for the progress bar and Back
-  const path = ['what', unauth ? 'yours' : cards.length > 1 ? 'which' : null, shown.length || questions.length ? 'questions' : null, 'story'].filter(Boolean)
+  const path = ['what', unauth ? 'yours' : cards.length > 1 ? 'which' : null, offers.length ? 'protect' : null, questions.length ? 'questions' : null, 'story'].filter(Boolean)
   const at = Math.max(0, path.indexOf(step))
   const go = dir => { setErr(''); const next = path[at + dir]; if (next) { setStep(next); window.scrollTo({ top: 0, behavior: 'smooth' }) } }
 
@@ -178,7 +186,7 @@ export default function ClaimFormPage({ token: initial }) {
     const clean = Object.fromEntries(shown.filter(q => answered(q, answers[q.id])).map(q => [q.id, q.kind === 'amount' ? Number(answers[q.id]) : answers[q.id]]))
     try {
       const r = await sendForm(token, { claimType: type, recognised: unauth ? rec : undefined, transactionIds: unauth ? undefined : picked,
-        answers: all ? {} : clean, statement: all ? '' : statement, consent: all ? false : consent })
+        answers: all ? {} : clean, instructions: all ? [] : wants.filter(w => offers.some(o => o.value === w)), statement: all ? '' : statement, consent: all ? false : consent })
       setDone(r); setStep('done'); window.scrollTo({ top: 0 })
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
@@ -186,22 +194,20 @@ export default function ClaimFormPage({ token: initial }) {
   const header = (
     <header className="cf-top">
       <div className="cf-top-in">
-        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" />
-          : <><div className="cf-mono" aria-hidden>{(brand?.name || 'B').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()}</div><div className="cf-bank">{brand?.name || 'Your bank'}</div></>}
+        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" /> : <div className="cf-bank">{brand?.name || 'Your bank'}</div>}
+        <span className="mono cf-what">REPORT A PROBLEM</span>
       </div>
     </header>
   )
   const footer = (
     <footer className="cf-foot">
-      {brand?.phone && <div>Questions? Call {brand.name} on <a href={`tel:${brand.phone.replace(/[^\d+]/g, '')}`}>{brand.phone}</a>.</div>}
-      {brand?.help && <div><a href={brand.help} target="_blank" rel="noopener noreferrer">Help with disputes</a></div>}
-      <div style={{ marginTop: 6 }}>{brand?.name || 'Your bank'} uses Covalence to receive claims. What you tell us here goes only to {brand?.name || 'your bank'}.</div>
+      {brand?.phone && <div>Need to talk to someone? Call {brand.name} on <a href={`tel:${brand.phone.replace(/[^\d+]/g, '')}`}>{brand.phone}</a>.</div>}
+      {brand?.help && <div><a href={brand.help} target="_blank" rel="noopener noreferrer">Help with disputes and fraud</a></div>}
+      <div className="mono" style={{ marginTop: 8, fontSize: 10, letterSpacing: '.12em' }}>{(brand?.name || 'YOUR BANK').toUpperCase()} · CLAIMS BY COVALENCE</div>
     </footer>
   )
   const wrap = body => (
-    <div className="cf" style={{ '--accent': accent, '--on-accent': onAccent(accent) }}>
-      <style>{CSS}</style>{header}<main className="cf-main"><div className="cf-card">{body}</div></main>{footer}
-    </div>
+    <div className="cf"><style>{CSS}</style>{header}<main className="cf-main"><div className="cf-card">{body}</div></main>{footer}</div>
   )
 
   if (!form) return wrap(<p className="cf-sub" style={{ margin: 0 }}>Loading…</p>)
@@ -209,7 +215,7 @@ export default function ClaimFormPage({ token: initial }) {
 
   const progress = (
     <>
-      <p className="cf-step">Step {at + 1} of {path.length}</p>
+      <p className="mono cf-step">STEP {at + 1} OF {path.length}</p>
       <div className="cf-bar" aria-hidden><i style={{ width: `${((at + 1) / path.length) * 100}%` }} /></div>
     </>
   )
@@ -219,30 +225,31 @@ export default function ClaimFormPage({ token: initial }) {
       <button type="button" className="cf-btn" disabled={!ok || busy} onClick={onNext}>{busy ? 'Sending…' : label}</button>
     </div>
   )
+  const asks = wants.filter(w => offers.some(o => o.value === w))
 
   if (step === 'done') return wrap(done?.closedAtIntake ? (
     <><div className="cf-tick" aria-hidden>✓</div><h1>Thanks — there’s nothing to dispute</h1>
-      <p className="cf-sub">You told us you recognise {cards.length === 1 ? 'this payment' : 'these payments'}, so we’ve closed this. If you change your mind, contact us and we’ll look again.</p></>
+      <p className="cf-sub">You told us you recognise {cards.length === 1 ? 'this payment' : 'these payments'}, so we’ve closed this. If you change your mind, report it again and we’ll look into it.</p></>
   ) : (
-    <><div className="cf-tick" aria-hidden>✓</div><h1>We’ve got your claim</h1>
-      <p className="cf-sub" style={{ marginBottom: 6 }}>Your reference:</p>
+    <><div className="cf-tick" aria-hidden>✓</div><h1>{done?.sentToDesk ? 'Your dispute is with our disputes team' : 'We’ve got your report'}</h1>
+      <p className="mono cf-step" style={{ marginBottom: 6 }}>YOUR REFERENCE</p>
       <div className="cf-ref">{done?.id}</div>
-      <p style={{ margin: '0 0 8px' }}>What happens next:</p>
-      <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--muted)' }}>
-        <li>We’ll look into it and may contact you if we need anything else.</li>
+      {asks.length > 0 && <div className="cf-note">You asked us to {asks.map(a => DONE_WORDS[a]).join(', and ')}. We’ve passed that on to {brand?.name || 'the bank'}{asks.includes('lock_card') && brand?.phone ? `; if it’s urgent, call ${brand.phone}` : ''}.</div>}
+      <p style={{ margin: '16px 0 8px' }}>What happens next:</p>
+      <ul style={{ margin: 0, paddingLeft: 20, color: '#57534E' }}>
+        <li>{done?.sentToDesk ? 'We’ll raise the dispute with the merchant’s bank and tell you how it goes.' : 'We’ll look into it and contact you if we need anything else.'}</li>
         <li>Keep any receipts, emails or messages about {disputed.length === 1 ? 'the payment' : 'the payments'}.</li>
-        {unauth && <li>If your card is still active and you didn’t make {disputed.length === 1 ? 'this payment' : 'these payments'}, lock it in your banking app or call us.</li>}
       </ul></>
   ))
 
   if (step === 'what') return wrap(<>
     {progress}
-    <h1>{form.firstName ? `Hi ${form.firstName}, what went wrong?` : 'What went wrong?'}</h1>
-    <p className="cf-sub">This is about {cards.length === 1 ? 'a payment' : `${cards.length} payments`} on your account. Pick the one that fits best.</p>
+    <h1>{form.firstName ? `${form.firstName}, what went wrong?` : 'What went wrong?'}</h1>
+    <p className="cf-sub">Pick the one that fits best.</p>
     {form.types.map(g => (
       <div key={g.group}>
-        <div className="cf-group">{g.group}</div>
-        {g.types.map(([v, label]) => <Option key={v} on={type === v} onClick={() => { setType(v); setAnswers({}) }}>{label}</Option>)}
+        <div className="mono cf-group">{g.group}</div>
+        {g.types.map(([v, label]) => <Option key={v} on={type === v} onClick={() => { setType(v); setAnswers({}); setWants([]) }}>{label}</Option>)}
       </div>
     ))}
     {nav(!!type)}
@@ -257,7 +264,7 @@ export default function ClaimFormPage({ token: initial }) {
         {c.hints?.length > 0 && <ul className="cf-hints">{c.hints.map(h => <li key={h}>{h}</li>)}</ul>}
         <div className="cf-two">
           <Option kind="plain" on={rec[c.transactionId] === true} onClick={() => setRec(r => ({ ...r, [c.transactionId]: true }))}>Yes, that was me</Option>
-          <Option kind="plain" on={rec[c.transactionId] === false} onClick={() => setRec(r => ({ ...r, [c.transactionId]: false }))}>No, I don’t recognise it</Option>
+          <Option kind="plain" on={rec[c.transactionId] === false} onClick={() => setRec(r => ({ ...r, [c.transactionId]: false }))}>No, it wasn’t me</Option>
         </div>
       </Payment>
     ))}
@@ -278,10 +285,19 @@ export default function ClaimFormPage({ token: initial }) {
     {nav(picked.length > 0)}
   </>)
 
+  if (step === 'protect') return wrap(<>
+    {progress}
+    <h1>{type === 'cancelled_sub' ? 'Do you want us to stop them charging you?' : 'What do you need from us right now?'}</h1>
+    <p className="cf-sub">{type === 'cancelled_sub' ? 'We can block future payments to this merchant while we look into it.' : 'We’ll pass this on as soon as you send your report. Tick everything you want.'}</p>
+    {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{o.label}</Option>)}
+    {wants.includes('lock_card') && <p className="cf-hint">A locked card can’t be used for new payments. You can unlock it later in your banking app.</p>}
+    {nav(true, wants.length ? 'Continue' : 'Nothing for now')}
+  </>)
+
   if (step === 'questions') return wrap(<>
     {progress}
     <h1>A few questions</h1>
-    <p className="cf-sub">These help us handle your claim under the card and banking rules.</p>
+    <p className="cf-sub">These help us handle it under the card and banking rules.</p>
     {shown.map(q => <Question key={q.id} q={q} value={answers[q.id]} set={v => setAnswers(a => ({ ...a, [q.id]: v }))} />)}
     {missingQ.length > 0 && <p className="cf-hint">{missingQ.length === 1 ? 'One question still needs an answer.' : `${missingQ.length} questions still need an answer.`}</p>}
     {nav(!missingQ.length)}
@@ -299,6 +315,6 @@ export default function ClaimFormPage({ token: initial }) {
     </div>
     <Option kind="check" on={consent} onClick={() => setConsent(c => !c)}>{form.consentText}</Option>
     {err && <div className="cf-err" role="alert">{err}</div>}
-    {nav(consent && statement.trim().length > 0, 'Send my claim', () => send(false))}
+    {nav(consent && statement.trim().length > 0, 'Send my report', () => send(false))}
   </>)
 }

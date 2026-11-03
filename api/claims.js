@@ -10,18 +10,18 @@
 //   GET  /api/claims?questions=<claimType>[&accountType=debit]                     → what to ask the customer
 //                                    (src/claimQuestions.mjs); without a type, the claim types to choose from
 //   POST /api/claims                 Authorization: Bearer cvl_…   { "link": { "customer", "transactions", "reference"?, "expiresInHours"? } }
-//                                    → { id, url, expiresAt }: a link to the hosted claim form for that customer, to send them
+//                                    → { id, url, expiresAt }: a link to the hosted claim form for that customer, for your app
+//                                      or website to open when they report a problem (no app of your own to build)
 //                                      (src/claimLinks.mjs, supabase_claim_links.sql). Works once, 72 hours by default, at most 7 days
 // From the customer, with only the link (the hosted claim form at /claim/<token>):
 //   GET  /api/claims?form=cvf_…                                                     → the bank's look, the transactions as
 //                                      "Is this yours?" cards, the kinds of problem and their questions
-//   POST /api/claims                 { "form": "cvf_…", "claim": { recognised, claimType, answers, statement, consent } }
+//   POST /api/claims                 { "form": "cvf_…", "claim": { recognised, claimType, answers, instructions, statement, consent } }
 //                                    → stored like a claim from the bank's app, tagged Web; the link is then used up
 // From Covalence itself, after an analyst moves a claim on (claim_set / claim_step in supabase_claims.sql):
 //   POST /api/claims                 Authorization: Bearer <Supabase session>   { "notify": "CLM-…" }
 //                                    → a signed event to the bank's endpoint: claim.updated, or
 //                                      claim.provisional_credit / claim.filed / claim.resolved for a Desk step
-//   POST /api/claims                 Authorization: Bearer <Supabase session>   { "link": { … } }   → a claim form link, as above
 //   POST /api/claims                 Authorization: Bearer <Supabase session>   { "triage": "CLM-…" }
 //                                    → AI triage again (it runs by itself when a claim arrives)
 // The rules for a claim (what's required, the Reg E / Reg Z clock, Ready for Desk)
@@ -134,7 +134,7 @@ module.exports = async function handler(req, res) {
     const { claim, errors } = m.normaliseClaim(body, now)
     if (errors.length) return { code: 400, body: { error: 'The claim has problems', problems: errors } }
     const id = m.claimIdFrom(crypto.createHash('sha256').update(inst + '|' + claim.externalId).digest('hex'))
-    const { row, recognised, missing, clock } = m.claimRow(claim, { id, institution: inst, by, now, extra })
+    const { row, recognised, desk, missing, clock } = m.claimRow(claim, { id, institution: inst, by, now, extra })
     const answerProblems = (await import('../src/claimQuestions.mjs')).checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).problems
     const stored = await rest('app_claims?select=id,external_id,status,history,created_at,updated_at', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify([row]) })
 
@@ -145,6 +145,15 @@ module.exports = async function handler(req, res) {
     await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !recognised && !missing.length })
     const ep = await endpointFor(inst)
     if (ep?.url) await wh.sendEvent(ep, 'claim.received', m.publicStatus(stored[0])).catch(() => {})
+    if (desk) await audit(inst, 'claim.sent_to_desk', id, { claimType: claim.claimType, reference: claim.externalId })
+    // What the customer asked for now (lock the card, a new card, …): to the bank's systems at once
+    if (claim.instructions.length && !recognised) {
+      const r = ep?.url ? await wh.sendEvent(ep, 'claim.instructions', { id, reference: claim.externalId, customerId: claim.customer.id,
+        transactionIds: claim.transactions.map(t => t.id), instructions: claim.instructions.map(k => ({ action: k, label: m.INSTRUCTIONS[k] })) }).catch(() => ({ ok: false })) : null
+      row.data.instructionsSent = { at: new Date().toISOString(), ok: !!r?.ok, ...(r ? { http: r.status || null, event: r.id || null } : { notConnected: true }) }
+      await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: row.data }) }).catch(() => {})
+      await audit(inst, 'claim.instructions_sent', id, { instructions: claim.instructions, ok: !!r?.ok, connected: !!ep?.url })
+    }
     if (recognised) {   // no AI triage: there's nothing to work
       await audit(inst, 'claim.closed_at_intake', id, { reason: 'recognised', reference: claim.externalId })
       return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, closedAtIntake: true, readyForDesk: false, missing: [] } }
@@ -154,7 +163,7 @@ module.exports = async function handler(req, res) {
       .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))
       .catch(e => console.error('claims triage:', e.message)))
     if (triaged) await triaged
-    return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) } }
+    return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, sentToDesk: desk, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) } }
   }
 
   // A link to the hosted claim form for one customer (src/claimLinks.mjs). by: who made it.
@@ -190,7 +199,8 @@ module.exports = async function handler(req, res) {
         const acct = row.customer.accountType || ''
         return res.status(200).json({ brand, firstName: String(row.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: row.expires_at,
           cards: row.transactions.map(t => iy.cardFor(t, history)), types: cl.FORM_TYPES,
-          questions: Object.fromEntries(Object.keys(m.CLAIM_TYPES).map(k => [k, cq.publicQuestions(k, acct)])), consentText: cl.CONSENT_TEXT })
+          questions: Object.fromEntries(Object.keys(m.CLAIM_TYPES).map(k => [k, cq.publicQuestions(k, acct)])),
+          instructions: Object.fromEntries(Object.keys(m.CLAIM_TYPES).map(k => [k, m.instructionsFor(k).map(value => ({ value, label: m.INSTRUCTIONS[value] }))])), consentText: cl.CONSENT_TEXT })
       }
       if (req.method !== 'POST') return res.status(405).json({ error: 'Not allowed' })
       if (parseInt(req.headers['content-length'] || '0', 10) > MAX_BYTES) return res.status(413).json({ error: 'That’s too much text — shorten it and try again' })
@@ -209,7 +219,7 @@ module.exports = async function handler(req, res) {
       }
       await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claim_id: out.body.id }) }).catch(() => {})
       await audit(row.institution_id, 'claim.link_used', row.id, { claim: out.body.id })
-      return res.status(201).json({ id: out.body.id, status: out.body.status, statusText: out.body.statusText, closedAtIntake: !!out.body.closedAtIntake, brand })
+      return res.status(201).json({ id: out.body.id, status: out.body.status, statusText: out.body.statusText, closedAtIntake: !!out.body.closedAtIntake, sentToDesk: !!out.body.sentToDesk, brand })
     } catch (e) {
       console.error('claims form:', e.message)
       return res.status(500).json({ error: 'Something went wrong on our side — try again in a minute' })
@@ -231,11 +241,6 @@ module.exports = async function handler(req, res) {
     if (limited(user.id)) { res.setHeader('Retry-After', '60'); return res.status(429).json({ error: 'Too many requests — wait a minute' }) }
     const member = (await rest(`memberships?user_id=eq.${encodeURIComponent(user.id)}&select=institution_id,role`).catch(() => []))?.[0]
     if (!member || !WRITERS.includes(member.role)) return res.status(403).json({ error: 'Your role can’t update claims' })
-    if (req.body?.link) {   // an agent makes a link to the hosted claim form
-      const who = (await rest(`memberships?user_id=eq.${encodeURIComponent(user.id)}&select=display_name,email`).catch(() => []))?.[0]
-      try { const out = await makeLink(member.institution_id, req.body.link, who?.display_name || who?.email || user.email || 'agent'); return res.status(out.code).json(out.body) }
-      catch (e) { console.error('claims link:', e.message); return res.status(500).json({ error: 'Couldn’t make the link — is supabase_claim_links.sql run?' }) }
-    }
     const id = String(req.body?.notify || req.body?.triage || '')
     if (!/^CLM-[A-F0-9]{10}$/.test(id)) return res.status(400).json({ error: 'Send { "notify": "CLM-…" } or { "triage": "CLM-…" }' })
     const row = (await rest(`app_claims?institution_id=eq.${member.institution_id}&id=eq.${id}&select=id,external_id,status,history,data,created_at,updated_at`))?.[0]
@@ -280,7 +285,8 @@ module.exports = async function handler(req, res) {
         const type = String(q.questions || ''), acct = m.ACCOUNT_TYPES.includes(q.accountType) ? q.accountType : ''
         if (!type) return res.status(200).json({ claimTypes: Object.entries(m.CLAIM_TYPES).map(([value, label]) => ({ value, label })) })
         if (!m.CLAIM_TYPES[type]) return res.status(400).json({ error: 'Unknown claim type', claimTypes: Object.keys(m.CLAIM_TYPES) })
-        return res.status(200).json({ claimType: type, label: m.CLAIM_TYPES[type], accountType: acct || null, questions: cq.publicQuestions(type, acct) })
+        return res.status(200).json({ claimType: type, label: m.CLAIM_TYPES[type], accountType: acct || null, questions: cq.publicQuestions(type, acct),
+          instructions: m.instructionsFor(type).map(value => ({ value, label: m.INSTRUCTIONS[value] })), straightToDesk: m.DESK_TYPES.includes(type) })
       }
       const filter = q.id ? `id=eq.${encodeURIComponent(String(q.id).slice(0, 20))}` : q.reference ? `external_id=eq.${encodeURIComponent(String(q.reference).slice(0, 120))}` : null
       if (!filter) return res.status(400).json({ error: 'Ask for ?reference=<your claim id> or ?id=CLM-…' })

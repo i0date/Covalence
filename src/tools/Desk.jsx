@@ -2,6 +2,7 @@
 // (Split out of Covalence.jsx — code unchanged; imports/exports added.)
 import { SectionNav } from '../SectionNav.jsx'
 import React, { useState, useEffect, useRef } from 'react'
+import { DeskClaims } from '../DeskClaims.jsx'
 import { Shield, Loader2, ArrowRight, AlertCircle, FileText, Check, Copy, CheckSquare, Square, MessageSquare, ClipboardList, Pencil, Download } from 'lucide-react'
 import { openEvidence } from '../CaseThread.jsx'
 import { SUPA_KEY, SUPA_URL, pushCasesToSupa, uploadEvidence } from '../data.js'
@@ -1360,14 +1361,18 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
 
         </div>
 
+        {/* ── Disputes from the bank's app: straight here, no triage ── */}
+        {platformMode === 'fi' && <DeskClaims cases={outcomes} onStart={h => { setTriageHandoff(h); setTimeout(() => document.getElementById('desk-handoff')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }} />}
+
         {/* ── Triage handoff banner ── */}
         {showHandoffBanner && triageHandoff && (
-          <div className="mb-6 flex items-start gap-3 px-4 py-3" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
+          <div id="desk-handoff" className="mb-6 flex items-start gap-3 px-4 py-3" style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', scrollMarginTop: '70px' }}>
             <Shield className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#065F46' }} />
             <div className="flex-1 min-w-0">
-              <span className="mono-font text-xs tracking-widest" style={{ color: '#064E3B' }}>PRE-FILLED FROM TRIAGE — </span>
+              <span className="mono-font text-xs tracking-widest" style={{ color: '#064E3B' }}>{triageHandoff.source === 'app' ? 'PRE-FILLED FROM THE APP — ' : 'PRE-FILLED FROM TRIAGE — '}</span>
               <span className="mono-font text-xs" style={{ color: '#065F46' }}>
-                Case {triageHandoff.caseId} · {triageHandoff.classification?.replace(/_/g, ' ')} · {triageHandoff.confidence} confidence
+                {triageHandoff.source === 'app' ? `Claim ${triageHandoff.intake?.claimId} · ${triageHandoff.classification?.replace(/_/g, ' ')} · run the analysis to open the case`
+                  : `Case ${triageHandoff.caseId} · ${triageHandoff.classification?.replace(/_/g, ' ')} · ${triageHandoff.confidence} confidence`}
               </span>
               {triageHandoff.headline && (
                 <div className="display-font italic text-sm mt-1" style={{ color: '#065F46' }}>"{triageHandoff.headline}"</div>

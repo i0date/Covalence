@@ -734,15 +734,6 @@ export const GLOBAL_CSS = `
     .cov-set-list { display:none; }
     .cov-set-select { display:block; }
   }
-  .cov-claim-links { border-top:1px solid #E7E2D9; }
-  .cov-claim-links-bar { display:flex; align-items:center; gap:14px; width:100%; background:none; border:0; padding:12px 18px; cursor:pointer; text-align:left; flex-wrap:wrap; }
-  .cov-claim-links-bar:hover { background:#F3EEE4; }
-  .cov-claim-link-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
-  .cov-claim-link-tx { display:grid; grid-template-columns:200px 120px minmax(0,1.4fr) minmax(0,1fr) auto; gap:8px; align-items:center; margin-bottom:8px; }
-  .cov-claim-link-made { border:1px solid #A7F3D0; background:#F0FDF4; padding:12px 14px; }
-  .cov-claim-link-url { font-size:12px; background:#fff; border:1px solid #D4CCBC; padding:6px 8px; word-break:break-all; flex:1 1 280px; min-width:0; }
-  .cov-claim-link-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:8px 0; border-top:1px solid #EFEAE1; }
-  @media (max-width:720px) { .cov-claim-link-grid { grid-template-columns:1fr; } .cov-claim-link-tx { grid-template-columns:1fr 1fr; } .cov-claim-link-tx > :nth-child(3), .cov-claim-link-tx > :nth-child(4) { grid-column:1 / -1; } }
   .cov-app-claims { border:1px solid #D4CCBC; background:#FAF7F1; margin-bottom:24px; }
   .cov-app-claims-bar { width:100%; display:flex; align-items:center; gap:18px; flex-wrap:wrap; background:none; border:none; padding:14px 18px; cursor:pointer; text-align:left; }
   button.cov-app-claims-bar:hover { background:#F3EEE5; }
