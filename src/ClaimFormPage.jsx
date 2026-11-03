@@ -17,8 +17,14 @@
 // match. A bank's fraud and scams land in Triage → Claims and a dispute about a purchase
 // goes straight to the Dispute Desk; an exchange's and a merchant's go to their side of
 // Triage → Claims. In Covalence's style, with the name and logo at the top.
+// With preview ({ segment, brand }) it runs inside Settings → Claim form on a sample customer
+// (claimSamples.mjs), with a bar to jump between the steps for review; nothing is stored or sent.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { openForm, sendForm } from './claimLinksData.js'
+import { formFor, claimFromForm, linkProblem } from './claimLinks.mjs'
+import { normaliseClaim, claimRow } from './claims.mjs'
+import { cardFor } from './isThisYours.mjs'
+import { sampleLink, sampleHistory } from './claimSamples.mjs'
 
 const UNAUTH = /^unauth|^ato|^counterfeit/
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
@@ -48,6 +54,7 @@ const CSS = `
     min-height:100vh; background:var(--bg); color:var(--ink); font:16px/1.55 'Fraunces',Georgia,serif; }
   .cf * { box-sizing:border-box; }
   .cf .mono { font-family:'JetBrains Mono',monospace; }
+  .cf main ul:not(.cf-hints) { list-style:disc; }
   .cf-top { background:var(--ink); color:#F5F1EA; }
   .cf-top-in { max-width:640px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
   .cf-logo { height:28px; max-width:160px; object-fit:contain; }
@@ -100,6 +107,13 @@ const CSS = `
   .cf-foot { max-width:640px; margin:0 auto; padding:0 16px 32px; color:var(--muted); font-size:13px; }
   .cf-foot a { color:inherit; }
   .cf-tick { width:44px; height:44px; border:1.5px solid var(--ok); color:var(--ok); display:grid; place-items:center; font-size:20px; margin-bottom:14px; }
+  .cf.cf-embed { min-height:0; }
+  .cf-review { background:#E7E0D3; color:#1A1814; padding:10px 12px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; border-bottom:2px dashed #8A7F72; }
+  .cf-review-label { font:600 9.5px 'JetBrains Mono',monospace; letter-spacing:.16em; color:#57534E; margin-right:4px; }
+  .cf-chip { font:500 10px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; padding:5px 8px; border:1px solid #8A7F72; background:#FAF7F1; color:#1A1814; cursor:pointer; }
+  .cf-chip[aria-current="step"] { background:#1A1814; color:#F5F1EA; border-color:#1A1814; }
+  .cf-chip:disabled { opacity:.4; cursor:not-allowed; }
+  .cf-review select { font:500 11px 'JetBrains Mono',monospace; background:#FAF7F1; color:#1A1814; border:1px solid #8A7F72; padding:5px 6px; max-width:100%; }
   @media (max-width:480px) { .cf-card { padding:20px 16px; } .cf h1 { font-size:22px; } .cf-pay-amt { font-size:14px; } .cf-what { display:none; } }
 `
 
@@ -153,7 +167,9 @@ function Question({ q, value, set }) {
   )
 }
 
-export default function ClaimFormPage({ token: initial }) {
+const STEP_NAMES = { what: 'What went wrong', yours: 'Is this yours?', which: 'Which ones', protect: 'What they need now', questions: 'Questions', story: 'In their words', done: 'Done' }
+
+export default function ClaimFormPage({ token: initial, preview }) {
   const [token, setToken] = useState(initial)
   const [form, setForm] = useState(null)
   const [step, setStep] = useState('what')
@@ -167,10 +183,19 @@ export default function ClaimFormPage({ token: initial }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState(null)
+  const [screen, setScreen] = useState('')   // preview only: 'expired' | 'used', the screens a link that can't be used shows
 
   const opened = useRef(false)
+  // Preview: the sample customer for this side, built here; nothing is stored
   useEffect(() => {
-    if (opened.current) return
+    if (!preview) return
+    const l = sampleLink(preview.segment), acct = l.customer.accountType || ''
+    setForm({ brand: preview.brand, firstName: l.customer.name.split(/\s+/)[0], accountType: acct || null,
+      cards: l.transactions.map(t => cardFor(t, sampleHistory(l.customer.id))), ...formFor(l.segment, acct) })
+    setPicked(l.transactions.map(t => t.id))
+  }, [preview?.segment])
+  useEffect(() => {
+    if (preview || opened.current) return
     opened.current = true
     document.title = 'Report a problem with a payment'
     // The link is a key: don't send it to the bank's logo host (or anywhere else) as a referrer
@@ -182,7 +207,7 @@ export default function ClaimFormPage({ token: initial }) {
     }).catch(() => setForm({ error: 'We couldn’t open this form — check your connection and try again.' }))
   }, [initial])
 
-  const brand = form?.brand || done?.brand || null
+  const brand = preview?.brand || form?.brand || done?.brand || null
   const W = SIDE[form?.segment] || SIDE.fi
   const cards = form?.cards || []
   const unauth = UNAUTH.test(type)
@@ -201,6 +226,13 @@ export default function ClaimFormPage({ token: initial }) {
   const send = async (all = false) => {
     setBusy(true); setErr('')
     const clean = Object.fromEntries(shown.filter(q => answered(q, answers[q.id])).map(q => [q.id, q.kind === 'amount' ? Number(answers[q.id]) : answers[q.id]]))
+    const sent = { claimType: type, recognised: unauth ? rec : undefined, transactionIds: unauth ? undefined : picked,
+      answers: all ? {} : clean, instructions: all ? [] : wants.filter(w => offers.some(o => o.value === w)), statement: all ? '' : statement, consent: all ? false : consent }
+    if (preview) {   // what the server would do with it (claims.mjs), without storing anything
+      const { claim } = normaliseClaim(claimFromForm({ ...sampleLink(preview.segment), id: 'LNK-SAMPLE' }, sent))
+      const { recognised, desk } = claimRow(claim, { id: 'CLM-SAMPLE0001', institution: 'preview', by: 'claim form' })
+      setDone({ id: 'CLM-SAMPLE0001', closedAtIntake: recognised, sentToDesk: desk }); setStep('done'); setBusy(false); return
+    }
     try {
       const r = await sendForm(token, { claimType: type, recognised: unauth ? rec : undefined, transactionIds: unauth ? undefined : picked,
         answers: all ? {} : clean, instructions: all ? [] : wants.filter(w => offers.some(o => o.value === w)), statement: all ? '' : statement, consent: all ? false : consent })
@@ -208,6 +240,22 @@ export default function ClaimFormPage({ token: initial }) {
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
+  // Preview: jump to any step of this customer's path, pick a kind, or see the screens a bad link shows
+  const reviewPath = () => ['what', UNAUTH.test(type) ? 'yours' : (form?.cards || []).length > 1 ? 'which' : null, (form?.instructions?.[type] || []).length ? 'protect' : null,
+    (form?.questions?.[type] || []).filter(q => q.id !== 'recognisesTransaction').length ? 'questions' : null, 'story', 'done'].filter(Boolean)
+  const jump = k => { setScreen(''); setErr(''); if (k === 'done' && !done) setDone({ id: 'CLM-SAMPLE0001', sentToDesk: preview?.segment === 'fi' && /^(non_receipt|partial_delivery|not_as_described|cancelled_sub|billing_error|duplicate_charge)$/.test(type) }); setStep(k) }
+  const review = preview && (
+    <div className="cf-review" role="toolbar" aria-label="Review the steps">
+      <span className="cf-review-label">REVIEW · NOT SHOWN TO CUSTOMERS</span>
+      <select aria-label="Kind of problem" value={type} onChange={e => { setType(e.target.value); setAnswers({}); setWants([]); setDone(null); setScreen(''); setStep(e.target.value ? (UNAUTH.test(e.target.value) ? 'yours' : 'what') : 'what') }}>
+        <option value="">Pick a kind…</option>
+        {(form?.types || []).map(g => <optgroup key={g.group} label={g.group}>{g.types.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</optgroup>)}
+      </select>
+      {reviewPath().map((k, i) => <button key={k} type="button" className="cf-chip" aria-current={!screen && step === k ? 'step' : undefined} disabled={k !== 'what' && !type} onClick={() => jump(k)}>{i + 1} · {STEP_NAMES[k]}</button>)}
+      <button type="button" className="cf-chip" aria-current={screen === 'expired' ? 'step' : undefined} onClick={() => setScreen('expired')}>Link expired</button>
+      <button type="button" className="cf-chip" aria-current={screen === 'used' ? 'step' : undefined} onClick={() => setScreen('used')}>Already sent</button>
+    </div>
+  )
   const header = (
     <header className="cf-top">
       <div className="cf-top-in">
@@ -224,10 +272,11 @@ export default function ClaimFormPage({ token: initial }) {
     </footer>
   )
   const wrap = body => (
-    <div className="cf"><style>{CSS}</style>{header}<main className="cf-main"><div className="cf-card">{body}</div></main>{footer}</div>
+    <div className={preview ? 'cf cf-embed' : 'cf'}><style>{CSS}</style>{preview && review}{header}<main className="cf-main"><div className="cf-card">{body}</div></main>{footer}</div>
   )
 
   if (!form) return wrap(<p className="cf-sub" style={{ margin: 0 }}>Loading…</p>)
+  if (screen) return wrap(<><h1>This link can’t be used</h1><p className="cf-sub" style={{ margin: 0 }}>{linkProblem(screen === 'expired' ? { segment: preview?.segment, expires_at: 0 } : { segment: preview?.segment, used_at: true })}</p></>)
   if (form.error) return wrap(<><h1>This link can’t be used</h1><p className="cf-sub" style={{ margin: 0 }}>{form.error}</p></>)
 
   const progress = (

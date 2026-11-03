@@ -9,7 +9,7 @@ import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
-import { alertsSource, doesMerchant } from '../sides.mjs'
+import { alertsSource } from '../sides.mjs'
 import { AppClaims } from '../AppClaims.jsx'
 import { setClaim } from '../claimsData.js'
 import { CLAIM_TYPES, TRIAGE_EQUIV, claimTotal } from '../claims.mjs'
@@ -855,7 +855,7 @@ Return ONLY valid JSON:
         </div>
         {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA', maxWidth: '100%', flexWrap: 'wrap' }}>
-          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, ...(intakeTab === 'claims' && doesMerchant(sides) ? [{ id: 'mx', label: 'Merchant' }] : [])].map(m => (
+          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, ...(intakeTab === 'claims' ? [{ id: 'mx', label: 'Merchant' }] : [])].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
               style={{ background: triageChannelMode === m.id ? '#1A1814' : 'transparent', color: triageChannelMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>

@@ -125,12 +125,13 @@ export function normaliseLink(b, now = new Date()) {
   } }
 }
 
-// Can the link still be used? → '' or why not, in words for the customer
+// Can the link still be used? → '' or why not, in words for the customer (of a bank, an exchange or a shop)
 export function linkProblem(row, now = new Date()) {
-  if (!row) return 'This link isn’t valid. Check you copied all of it, or ask the bank for a new one.'
-  if (row.revoked_at) return 'This link has been cancelled. Ask the bank for a new one.'
-  if (row.used_at) return 'This claim has already been sent. The bank will be in touch.'
-  if (new Date(row.expires_at) < now) return 'This link has expired. Ask the bank for a new one.'
+  const who = row?.segment === 'ce' ? 'the exchange' : row?.segment === 'mx' ? 'the shop' : 'the bank'
+  if (!row) return 'This link isn’t valid. Check you copied all of it, or ask for a new one.'
+  if (row.revoked_at) return `This link has been cancelled. Ask ${who} for a new one.`
+  if (row.used_at) return `This has already been sent. ${who.replace(/^./, c => c.toUpperCase())} will be in touch.`
+  if (new Date(row.expires_at) < now) return `This link has expired. Ask ${who} for a new one.`
   return ''
 }
 

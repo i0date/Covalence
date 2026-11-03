@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// SETTINGS → CLAIM FORM — your name on the hosted claim form
+// SETTINGS → CLAIM FORM — your name on the hosted claim form, and a walk-through of it
 // ═══════════════════════════════════════════════════════════════════════════════
 // The form (/claim/<token>, ClaimFormPage.jsx) is what your app or website opens
 // when a customer taps "Report a problem", if you don't build claim screens of your
 // own. It's in Covalence's style; this sets the name, logo and phone number at the
 // top and bottom. Stored for the institution (supabase_claim_links.sql claim_form),
 // not in this browser, because the customer's page reads it on the server. Admins
-// and reviewers change it; every change is audited (claim.form_changed).
+// and reviewers change it; every change is audited (claim.form_changed). Below, the form
+// itself on a sample customer for each side, to step through and review.
 import React, { useEffect, useState } from 'react'
+import ClaimFormPage from './ClaimFormPage.jsx'
 import { getClaimForm, setClaimForm } from './claimLinksData.js'
 import { normaliseBrand } from './claimLinks.mjs'
 import { Button, Field, Input } from './ui.jsx'
@@ -15,11 +17,13 @@ import { Button, Field, Input } from './ui.jsx'
 const EMPTY = { display_name: '', logo_url: '', support_phone: '', help_url: '' }
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', overflow:'hidden' }
 const head = { background:'#EEE9E0', borderBottom:'1px solid #D4CCBC', padding:'10px 20px' }
+const SIDES = [['fi', 'Bank or credit union'], ['ce', 'Crypto exchange'], ['mx', 'Merchant']]
 const pick = r => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map(k => [k, r?.[k] || ''])) })
 
 export function ClaimFormSettings({ locked, demo }) {
   const [f, setF] = useState(null), [inst, setInst] = useState(''), [saved, setSaved] = useState(null)
   const [err, setErr] = useState(''), [busy, setBusy] = useState(false), [ok, setOk] = useState(false)
+  const [side, setSide] = useState('fi'), [wide, setWide] = useState(false)
   useEffect(() => {
     getClaimForm().then(r => { const v = pick(r); setF(v); setSaved(v); setInst(r?.institution || '') })
       .catch(e => { setF(EMPTY); setSaved(EMPTY); setErr(e.message) })
@@ -64,28 +68,26 @@ export function ClaimFormSettings({ locked, demo }) {
         </fieldset>
       </div>
 
-      <div style={box}>
-        <div style={head}><span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E' }}>PREVIEW</span></div>
-        <div style={{ padding:'20px', display:'grid', gap:'14px' }}>
-          <div style={{ border:'1px solid #D4CCBC', background:'#F5F1EA' }} aria-label="Preview of the claim form">
-            <div style={{ background:'#1A1814', color:'#F5F1EA', padding:'10px 14px', display:'flex', alignItems:'center', gap:'10px' }}>
-              {b.logo ? <img src={b.logo} alt="" referrerPolicy="no-referrer" style={{ height:'24px', maxWidth:'140px', objectFit:'contain' }} /> : <span className="display-font" style={{ fontWeight:600 }}>{b.name}</span>}
-              <span className="mono-font" style={{ marginLeft:'auto', fontSize:'9px', letterSpacing:'0.16em', color:'#BFB6A8' }}>REPORT A PROBLEM</span>
-            </div>
-            <div style={{ padding:'14px' }}>
-              <div style={{ background:'#FAF7F1', border:'1px solid #D4CCBC', padding:'14px' }}>
-                <div className="display-font" style={{ fontWeight:600, fontSize:'18px', color:'#1A1814', marginBottom:'10px' }}>Jordan, what went wrong?</div>
-                {['Someone used my card or account online', 'I didn’t receive it'].map((t, i) => (
-                  <div key={t} className="display-font" style={{ border:'1px solid ' + (i === 0 ? '#1A1814' : '#D4CCBC'), background: i === 0 ? '#EEE9E0' : '#fff', padding:'9px 11px', marginBottom:'6px', fontSize:'14px' }}>{t}</div>
-                ))}
-                <div style={{ textAlign:'right', marginTop:'10px' }}><span className="mono-font" style={{ background:'#1A1814', color:'#F5F1EA', padding:'9px 14px', fontSize:'10px', letterSpacing:'0.16em', display:'inline-block' }}>CONTINUE</span></div>
-              </div>
-              {b.phone && <div className="display-font" style={{ fontSize:'12px', color:'#6B6259', marginTop:'10px' }}>Need to talk to someone? Call {b.name} on {b.phone}.</div>}
-            </div>
+      <div style={{ ...box, gridColumn:'1 / -1' }}>
+        <div style={{ ...head, display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
+          <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', marginRight:'auto' }}>WHAT YOUR CUSTOMERS SEE · STEP BY STEP</span>
+          <div role="tablist" aria-label="Who the customer is reporting to" style={{ display:'flex', gap:'2px', flexWrap:'wrap' }}>
+            {SIDES.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={side === k} onClick={() => setSide(k)} className={`grade-tab ${side === k ? 'active' : ''}`} style={{ fontSize:'10px' }}>{l.toUpperCase()}</button>)}
+          </div>
+          <div role="group" aria-label="Screen size" style={{ display:'flex', gap:'2px' }}>
+            {[[false, 'Phone'], [true, 'Wide']].map(([v, l]) => <button key={l} type="button" aria-pressed={wide === v} onClick={() => setWide(v)} className={`grade-tab ${wide === v ? 'active' : ''}`} style={{ fontSize:'10px' }}>{l.toUpperCase()}</button>)}
+          </div>
+        </div>
+        <div style={{ padding:'16px 20px 20px', display:'grid', gap:'12px' }}>
+          <p className="display-font" style={{ fontSize:'13px', color:'#57534E', margin:0, lineHeight:1.5, maxWidth:'760px' }}>
+            The real form, with a sample customer and your name, logo and phone from above. Go through it as they would, or use the bar to jump to any step, pick a kind of problem, or see what a link that’s expired or already used says. Nothing you do here is stored or sent.
+          </p>
+          <div style={{ width:'100%', maxWidth: wide ? '100%' : '400px', margin: wide ? 0 : '0 auto', border:'1px solid #1A1814', boxShadow: wide ? 'none' : '0 10px 30px rgba(26,24,20,.12)' }}>
+            <ClaimFormPage key={side} preview={{ segment: side, brand: b }} />
           </div>
           <p className="display-font" style={{ fontSize:'13px', color:'#57534E', margin:0, lineHeight:1.5 }}>
-            Your app or website opens the form when a customer taps “Report a problem”: your systems ask Covalence for a link for that customer and their recent payments (see For your developers under Connections). Fraud and scams arrive in <strong>001 Triage → Claims</strong>; disputes about a purchase go straight to the <strong>Dispute Desk</strong>.
-            {demo && <> <a className="mono-font cov-ref-more" href="/claim/demo" target="_blank" rel="noopener noreferrer">try it as a customer</a></>}
+            Your app or website opens the form when a customer taps “Report a problem” (see For your developers under Connections). A bank’s fraud and scams arrive in <strong>001 Triage → Claims</strong> and disputes about a purchase go straight to the <strong>Dispute Desk</strong>; an exchange’s and a merchant’s go to their side of Triage → Claims.
+            {demo && <> <a className="mono-font cov-ref-more" href={side === 'fi' ? '/claim/demo' : `/claim/demo-${side}`} target="_blank" rel="noopener noreferrer">open it on its own</a></>}
           </p>
         </div>
       </div>

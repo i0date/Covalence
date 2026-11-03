@@ -9,6 +9,7 @@
 import { readCases, writeCases } from './caseStore.js'
 import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom } from './claims.mjs'
 import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
+import { sampleLink, sampleHistory } from './claimSamples.mjs'
 import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor } from './claimLinks.mjs'
 
 const K = {
@@ -324,29 +325,9 @@ function demoLinkCreate(b, by) {
   audit('claim.link_created', 'claim', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
   return { id, url: linkUrl(location.origin, token), token, expiresAt: link.expiresAt }
 }
-// A sample customer for /claim/demo, as the bank's app would open it when they tap Report a problem:
-// a coffee they buy every week, an online charge they don't know, and a subscription.
-// /claim/demo-ce: an exchange customer with a withdrawal they didn't make; /claim/demo-mx: a shop's
-// customer whose order of seven arrived with four.
-function demoSampleLink(seg = 'fi') {
-  const ago = d => new Date(Date.now() - d * DAY).toISOString()
-  if (seg === 'ce') return demoLinkCreate({ reference: 'SAMPLE-CE', segment: 'ce', customer: { id: 'X-2207', name: 'Riley Chen', accountType: 'exchange' },
-    transactions: [
-      { id: 'WD-55120', ts: ago(0.2), amount: -2450, merchant: 'Withdrawal · 0.034 BTC to bc1q9h…7xk2', merchantLocation: 'Online', merchantCategory: 'Crypto withdrawal', channel: 'withdrawal' },
-      { id: 'WD-55121', ts: ago(0.19), amount: -1180, merchant: 'Withdrawal · 1,180 USDT (Tron) to TQ3x…p9Lm', merchantLocation: 'Online', merchantCategory: 'Crypto withdrawal', channel: 'withdrawal' },
-    ] }, 'Sample')
-  if (seg === 'mx') return demoLinkCreate({ reference: 'SAMPLE-MX', segment: 'mx', customer: { id: 'C-88410', name: 'Ama Owusu', email: 'ama.o@example.com' },
-    transactions: [{ id: 'ORD-20417', ts: ago(9), amount: -312.6, merchant: 'Order #20417 · 7 items', merchantLocation: 'Online', merchantCategory: 'Home goods', channel: 'card_not_present' }] }, 'Sample')
-  return demoLinkCreate({ reference: 'SAMPLE', customer: { id: 'A-5520', name: 'Jordan Ellis', email: 'jordan.e@example.com', accountType: 'debit', accountOpened: '2021-08-14' },
-    transactions: [
-      { id: 'TX-93011', ts: ago(2), amount: -6.75, merchant: 'SQ *BLUE BOTTLE COFFEE #1234', merchantLocation: 'San Francisco, CA', merchantCategory: 'Coffee shop', channel: 'card_present', network: 'Visa' },
-      { id: 'TX-93018', ts: ago(1), amount: -389, merchant: 'SHOPZ*GADGETHUB 8885551234', merchantLocation: 'Online', merchantCategory: 'Electronics', channel: 'card_not_present', network: 'Visa' },
-      { id: 'TX-93020', ts: ago(1), amount: -15.49, merchant: 'NFLX DIGITAL NTFLX.COM', merchantLocation: 'Online', merchantCategory: 'Streaming', channel: 'card_not_present', network: 'Visa' },
-    ] }, 'Sample')
-}
-// Jordan's earlier payments, so "Is this yours?" can say they've paid a merchant before
-const sampleHistory = customerId => customerId !== 'A-5520' ? [] : [7, 14, 21, 28, 35, 42].map(d => ({ id: 'H' + d, ts: new Date(Date.now() - d * DAY).toISOString(), amount: -6.25, currency: 'USD', counterparty: 'SQ *BLUE BOTTLE COFFEE' }))
-  .concat([33, 63, 93].map(d => ({ id: 'N' + d, ts: new Date(Date.now() - d * DAY).toISOString(), amount: -15.49, currency: 'USD', counterparty: 'NETFLIX.COM' })))
+// /claim/demo, /claim/demo-ce, /claim/demo-mx: a link for a sample customer (claimSamples.mjs), as the
+// bank's, exchange's or shop's app would make when they tap Report a problem
+const demoSampleLink = (seg = 'fi') => demoLinkCreate(sampleLink(seg), 'Sample')
 const demoBrand = () => normaliseBrand(read(K.claimForm, {}), DEMO_INSTITUTION)
 
 const HANDLERS = {

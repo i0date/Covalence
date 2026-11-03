@@ -7,7 +7,8 @@
 // Shows the user's own cases (assigned or escalated to them) when there are
 // any, otherwise the team's, grouped into the order to work them (planOf), with
 // the team's other deadlines this week below. Beside it on wide screens (below
-// on narrow ones), the forecast for you and the team, and the week ahead.
+// on narrow ones), the forecast as a short table of you and the team; under both,
+// the deadlines ahead and the backlog, side by side. Always open: nothing folds.
 import React, { useEffect, useMemo, useState } from 'react'
 import { allThreadCases, stageOf, openCase, takeCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
@@ -23,7 +24,6 @@ import { listClaims, openClaim } from './claimsData.js'
 import { alarmList } from './alarmData.js'
 import { usePatterns } from './Alarms.jsx'
 
-const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
 // Show/hide on Home: one look for every panel that folds
 export const foldLook = { background:'#FFFFFF', border:'1px solid #1A1814', padding:'6px 10px', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814', whiteSpace:'nowrap' }
 
@@ -260,41 +260,67 @@ function KeepingUp({ backlog }) {
     </div>
   )
 }
+// The forecast, compact: one row per measure, your figure beside the team's. Each cell is a
+// few words; the full sentence (and what it's based on) is its tooltip and screen-reader text.
+const plain = node => { const out = []; const walk = n => { if (n == null || n === false) return; if (typeof n === 'string' || typeof n === 'number') out.push(String(n)); else if (Array.isArray(n)) n.forEach(walk); else if (n.props) walk(n.props.children) }; walk(node); return out.join('').replace(/\s+/g, ' ').trim() }
+function Cell({ short, long, tone }) {
+  const t = plain(long)
+  return <td className="cov-fc-cell" title={t} style={tone ? { color: tone } : undefined}><span aria-hidden="true">{short}</span><span className="sr-only">{t}</span></td>
+}
+const weekShort = w => w.total ? <><strong>{w.total}</strong> due{w.total > 1 ? <span className="cov-fc-dim"> · most {w.busiestLabel}</span> : ''}</> : <span className="cov-fc-dim">none due</span>
+const paceShort = p => !p.enough ? <span className="cov-fc-dim">none closed yet</span> : <>
+  <strong>{p.last7}</strong>/wk{p.last7 !== p.prev7 && <span style={{ color: p.last7 > p.prev7 ? '#065F46' : '#991B1B' }}> {p.last7 > p.prev7 ? '▲' : '▼'}{Math.abs(p.last7 - p.prev7)}</span>}
+  {p.clearDays != null && p.openNow > 0 && <span className="cov-fc-dim"> · clears ~{p.clearDays}d</span>}</>
+const riskShort = r => r.cases ? <><strong>{money(r.amount, r.currency)}</strong><span className="cov-fc-dim"> · {nOf(r.cases, 'case')}</span></> : <span className="cov-fc-dim">nothing</span>
+
 export function Forecast({ day, settings }) {
   const { ins, unowned } = day
   const ex = ins.expected, you = ins.you, team = ins.team
   const weekday = WEEKDAYS[new Date().getDay()]
+  const youNew = ex?.mine == null ? 'Forecasts start after two weeks of cases.' : ex.mine < 0.5 ? 'Probably nothing new for you today, judging by your share of new cases over the last 30 days.' : `${about(ex.mine).replace(/^./, c => c.toUpperCase())} new for you today, judging by your share of new cases over the last 30 days.`
+  const teamNew = !ex ? 'Forecasts start after two weeks of cases.' : `${ex.team < 0.5 ? `${weekday}s are usually quiet` : `${about(ex.team).replace(/^./, c => c.toUpperCase())} expected today`}, based on the last ${ins.weeks} ${weekday}s; ${team.openedToday} so far.`
+  const rows = [
+    ['OPEN', you && { short: <strong>{you.open}</strong>, long: <>{nOf(you.open, 'case')} assigned to you; {you.dueToday ? `${you.dueToday} with a deadline today` : 'none with a deadline today'}.</> },
+      { short: <><strong>{team.open}</strong>{unowned ? <span style={{ color:'#92400E' }}> · {unowned} no owner</span> : null}</>, long: <>{team.open} open{unowned ? `, ${unowned} without an owner past the ${settings?.slaAssignHours ?? 24}h target` : ''}{team.dueToday ? `; ${team.dueToday} with a deadline today` : ''}.</> }],
+    ['NEW TODAY', you && { short: ex?.mine == null ? <span className="cov-fc-dim">—</span> : <>~{Math.round(ex.mine)}</>, long: youNew },
+      { short: !ex ? <span className="cov-fc-dim">—</span> : <>~{Math.round(ex.team)}<span className="cov-fc-dim"> · {team.openedToday} so far</span></>, long: teamNew }],
+    ['NEXT 7 DAYS', you && { short: weekShort(you.week), long: weekText(you.week) }, { short: weekShort(team.week), long: weekText(team.week) }],
+    ['PACE', you && { short: paceShort(you.pace), long: paceText(you.pace) }, { short: paceShort(team.pace), long: paceText(team.pace) }],
+    ['AT RISK', you && { short: riskShort(you.atRisk), long: riskText(you.atRisk), tone: you.atRisk.cases ? '#991B1B' : null }, { short: riskShort(team.atRisk), long: riskText(team.atRisk), tone: team.atRisk.cases ? '#991B1B' : null }],
+  ]
   return (
-    <div className="cov-yd-forecast">
-      <div className="mono-font cov-fc-head">THE FORECAST</div>
-      {you && (
-        <section className="cov-fc-block" aria-label="Your forecast">
-          <div className="display-font cov-fc-who">For you</div>
-          <Line label="OPEN"><strong>{nOf(you.open, 'case')}</strong> assigned to you; {you.dueToday ? <><strong>{you.dueToday}</strong> with a deadline today.</> : 'none with a deadline today.'}</Line>
-          <Line label="NEW">{ex?.mine == null ? 'Forecasts start after two weeks of cases.' : ex.mine < 0.5 ? 'Probably nothing new for you today, judging by your share of new cases over the last 30 days.'
-            : <>{about(ex.mine).replace(/^./, c => c.toUpperCase())} new for you today, judging by your share of new cases over the last 30 days.</>}</Line>
-          <Line label="THIS WEEK">{weekText(you.week)}</Line>
-          <Line label="PACE">{paceText(you.pace)}</Line>
-          <Line label="AT RISK">{riskText(you.atRisk)}</Line>
-        </section>
-      )}
-      <section className="cov-fc-block" aria-label="The team's forecast">
-        <div className="display-font cov-fc-who">For the team</div>
-        <Line label="OPEN"><strong>{team.open}</strong> open{unowned ? <>, {unowned} without an owner past the {settings?.slaAssignHours ?? 24}h target</> : ''}{team.dueToday ? <>; {team.dueToday} with a deadline today</> : ''}.</Line>
-        <Line label="NEW">{!ex ? 'Forecasts start after two weeks of cases.' : <>
-          {ex.team < 0.5 ? `${weekday}s are usually quiet` : `${about(ex.team).replace(/^./, c => c.toUpperCase())} expected today`}, based on the last {ins.weeks} {weekday}s; {team.openedToday} so far.</>}</Line>
-        <Line label="THIS WEEK">{weekText(team.week)}</Line>
-        <Line label="PACE">{paceText(team.pace)}</Line>
-        <Line label="AT RISK">{riskText(team.atRisk)}</Line>
-      </section>
+    <aside className="cov-yd-forecast" aria-label="The forecast">
+      <div className="cov-fc-sticky">
+      <table className="cov-fc-table">
+        <caption className="mono-font cov-fc-head">THE FORECAST</caption>
+        <thead><tr><td />{you && <th scope="col" className="mono-font">YOU</th>}<th scope="col" className="mono-font">TEAM</th></tr></thead>
+        <tbody>
+          {rows.map(([label, mine, all]) => (
+            <tr key={label}>
+              <th scope="row" className="mono-font cov-fc-label">{label}</th>
+              {you && <Cell {...mine} />}
+              <Cell {...all} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="display-font cov-fc-note">Averages of past weeks: holidays, time off and one-off spikes throw them off. Point at a figure for what it’s based on.</p>
+      </div>
+    </aside>
+  )
+}
+// The two charts, side by side under the list
+function Charts({ day }) {
+  const { ins } = day
+  return (
+    <div className="cov-yd-charts">
       <section className="cov-fc-block" aria-label="The week ahead">
         <div className="display-font cov-fc-who">Deadlines ahead · whole team</div>
-        <DeadlinesAhead ahead={ins.ahead} late={ins.late} withMine={!!you} />
+        <DeadlinesAhead ahead={ins.ahead} late={ins.late} withMine={!!ins.you} />
       </section>
       <section className="cov-fc-block" aria-label="Keeping up">
         <KeepingUp backlog={ins.backlog} />
       </section>
-      <p className="display-font cov-fc-note">Forecasts are averages of past weeks, so holidays, time off and one-off spikes will throw them off.</p>
     </div>
   )
 }
@@ -381,10 +407,8 @@ function Group({ title, note, list, cap, day, children }) {
 }
 
 export function YourDay({ day, covUser, settings }) {
-  const [showAll, setShowAll] = useState(false)
-  const { items, scope, counts, comingUp, unowned } = day
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
-  const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
+  const [showAll, setShowAll] = useState(false), [showAllComing, setShowAllComing] = useState(false)
+  const { items, scope, comingUp, unowned } = day
   const plan = useMemo(() => planOf(items), [items])
   // Pools: asked to help, ones you're in, your own, then open ones you could join (urgent first)
   const pools = useMemo(() => {
@@ -419,27 +443,14 @@ export function YourDay({ day, covUser, settings }) {
   const refs = list => list.map(x => ({ id: x.c.id }))
 
   return (
-    <section aria-labelledby="your-day" className="mb-8" style={{ border:'1px solid #1A1814', background:'#FAF7F1' }}>
-      {/* The whole header folds and unfolds the panel (easier to hit on a phone than the small button) */}
-      <div onClick={e => { if (!e.target.closest('button')) toggle() }} className="cov-yourday-head"
-        style={{ position:'relative', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', flexWrap:'wrap', padding:'18px 20px 16px', borderBottom: open ? '1px solid #1A1814' : 'none' }}>
-        <div style={{ minWidth:0, flex:'1 1 320px' }}>
-          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'6px' }}>YOUR DAY{scope === 'team' ? ' · THE TEAM’S LIST' : ''}</div>
-          <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(20px, 2.2vw, 26px)', fontWeight:600, color:'#1A1814', margin:0, lineHeight:1.25, letterSpacing:'-0.01em' }}>{headline}</h2>
-          {subText && <p className="display-font" style={{ margin:'6px 0 0', fontSize:'15px', color:'#57534E', lineHeight:1.45 }}>{subText}</p>}
-        </div>
-        <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-          {!open && counts.urgent > 0 && <Badge tone="danger">{counts.urgent} URGENT</Badge>}
-          {!open && counts.todo > 0 && <Badge tone="info">{counts.todo} TO ANALYSE</Badge>}
-          {!open && counts.batch > 0 && <Badge tone="neutral">{counts.batch} IN TODAY’S BATCH</Badge>}
-          <button onClick={toggle} aria-expanded={open} aria-controls="your-day-body" className="mono-font cov-yourday-toggle"
-            style={{ ...foldLook, cursor:'pointer' }}>
-            {open ? '▴ HIDE' : '▾ SHOW'}
-          </button>
-        </div>
+    <section aria-labelledby="your-day" className="mb-8 cov-yd" style={{ border:'1px solid #1A1814', background:'#FAF7F1' }}>
+      <div className="cov-yourday-head">
+        <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.14em', color:'#6B6259', marginBottom:'4px' }}>YOUR DAY{scope === 'team' ? ' · THE TEAM’S LIST' : ''}</div>
+        <h2 id="your-day" className="display-font" style={{ fontSize:'clamp(19px, 2vw, 23px)', fontWeight:600, color:'#1A1814', margin:0, lineHeight:1.25, letterSpacing:'-0.01em' }}>{headline}</h2>
+        {subText && <p className="display-font" style={{ margin:'3px 0 0', fontSize:'14px', color:'#57534E', lineHeight:1.45 }}>{subText}</p>}
       </div>
 
-      {open && (<div id="your-day-body" className="cov-yd-grid">
+      <div id="your-day-body" className="cov-yd-grid">
         <div className="cov-yd-plan">
           {items.length === 0 && <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing on the list. Use the time for the cases coming up below.</div>}
           <Group title="START WITH" note="Past a deadline, escalated to you, or a customer waiting" list={plan.first} cap={cap(5)} day={day} />
@@ -480,7 +491,7 @@ export function YourDay({ day, covUser, settings }) {
                 {settings?.autoAssign ? '.' : <> — take one with <strong>Take it</strong> below, assign them in Multi, or turn on auto-assignment in Settings → Workflow.</>}
               </div>
             )}
-            {comingUp.map(({ c, k }) => (
+            {comingUp.slice(0, showAllComing ? Infinity : 5).map(({ c, k }) => (
               <div key={c.id} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
               <button onClick={() => openCase(c.id)} className="cov-search-row mono-font cov-comingup-row"
                 style={{ display:'grid', gridTemplateColumns:'86px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', flex:1, minWidth:0, textAlign:'left',
@@ -493,10 +504,12 @@ export function YourDay({ day, covUser, settings }) {
               <TakeIt c={c} day={day} />
               </div>
             ))}
+            {comingUp.length > 5 && <button type="button" className="mono-font cov-ref-more" style={{ marginTop:'4px' }} onClick={() => setShowAllComing(v => !v)}>{showAllComing ? 'show fewer' : `show all ${comingUp.length}`}</button>}
           </div>
         </div>
         <Forecast day={day} settings={settings} />
-      </div>)}
+      </div>
+      <Charts day={day} />
     </section>
   )
 }
