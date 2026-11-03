@@ -8,6 +8,8 @@
 // Out: when an analyst presses Hold / Block / Lock, and when new alerts arrive,
 // Covalence POSTs signed events to the institution's endpoint, and new alerts can
 // post to Slack (supabase_actions.sql, api/action.js).
+// The request and event formats, with examples, are on the developer guide
+// (DevelopersPage.jsx, /developers); admins see a link to it here.
 import React, { useEffect, useState } from 'react'
 import { createKey, listKeys, revokeKey, getEndpoint, setEndpoint, rotateSecret, sendAction, intakeStatus } from './monitoringData.js'
 import { Badge, Button, Input } from './ui.jsx'
@@ -15,12 +17,11 @@ import { Badge, Button, Input } from './ui.jsx'
 const box = { border:'1px solid #D4CCBC', background:'#FAF7F1', padding:'18px 20px', marginBottom:'20px' }
 const day = ts => ts ? new Date(ts).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '—'
 const H2 = ({ children }) => <h2 className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.2em', color:'#57534E', margin:'0 0 12px', fontWeight:500 }}>{children}</h2>
-const Code = ({ children }) => <pre className="mono-font" style={{ fontSize:'12px', background:'#1A1814', color:'#F5F1EA', padding:'12px 14px', overflowX:'auto', margin:'8px 0', lineHeight:1.5 }}>{children}</pre>
 
 export function ConnectionsPanel({ covUser }) {
   const [keys, setKeys] = useState([]), [label, setLabel] = useState(''), [fresh, setFresh] = useState(null), [err, setErr] = useState('')
   const admin = covUser?.role === 'admin'
-  const [status, setStatus] = useState(null)
+  const [status, setStatus] = useState(null), [copied, setCopied] = useState(false)
   const refresh = () => { listKeys().then(setKeys).catch(e => setErr(e.message)); intakeStatus().then(setStatus).catch(() => {}) }
   useEffect(refresh, [])
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
@@ -76,88 +77,18 @@ export function ConnectionsPanel({ covUser }) {
 
     <ActOnAlerts admin={admin} demo={!!covUser?.demo} origin={origin} />
 
-    <section style={box}>
-      <H2>HOW TO SEND DATA</H2>
-      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>One endpoint. Up to 1,000 of each per call; sending the same id twice is ignored.</p>
-      <Code>{`POST ${origin}/api/intake
-Authorization: Bearer cvl_…
-Content-Type: application/json
-
-{
-  "transactions": [{ "id": "TX-88121", "customerId": "A-1005", "customerName": "M. Okafor",
-                     "ts": "2026-10-28T08:41:00Z", "amount": -2400, "currency": "USD",
-                     "channel": "zelle", "counterparty": "Zed Holdings", "description": "Transfer" }],
-  "events":       [{ "id": "EV-551", "customerId": "A-1005", "ts": "2026-10-28T08:12:00Z",
-                     "type": "new device login", "device": "Android 14", "location": "Lagos NG" }],
-  "alerts":       [{ "id": "ENGINE-77", "customerId": "A-1006", "title": "High device risk",
-                     "reason": "Device risk 97/100", "severity": "high", "amount": 450,
-                     "recommendedAction": "block_card" }]
-}`}</Code>
-      <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
-        <li><strong>Transactions:</strong> negative amounts are money out (or send <code>direction</code>: "in" / "out"). Channel words like zelle, wire, ach, card, cash, crypto, check are recognised.</li>
-        <li><strong>Events:</strong> logins, new devices or locations, password, phone or email changes, new payees — what the account-takeover rule reads.</li>
-        <li><strong>Alerts</strong> from your own fraud engine land in 001 Triage → Alerts as they are.</li>
-        <li><strong>Crypto exchanges:</strong> add <code>"segment": "ce"</code> to the body — withdrawals to wallets are judged as an exchange’s, and alerts land on Triage’s Crypto Exchange side.</li>
-        <li>The answer lists what was stored, what was a duplicate, any rows with problems, and the ids of the alerts raised.</li>
-      </ul>
-    </section>
-
-    <section style={box}>
-      <H2>CLAIMS FROM YOUR APP</H2>
-      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>When a customer reports a problem in your app or on your website, send the claim here with the same key. It lands in 001 Triage → Claims, tagged with where it came from, with the Reg E or Reg Z clock running from the customer’s report.</p>
-      <Code>{`POST ${origin}/api/claims
-Authorization: Bearer cvl_…
-Content-Type: application/json
-
-{
-  "id": "APP-55102",                       // your reference; sending it again is ignored
-  "channel": "app",                         // app, web, agent or phone
-  "reportedAt": "2026-10-29T09:14:00Z",
-  "claimType": "unauth_cnp",
-  "customer": { "id": "A-2231", "name": "Dana Whitfield", "accountType": "debit" },
-  "transactions": [{ "id": "TX-90311", "ts": "2026-10-28T02:10:00Z", "amount": -84.50,
-                     "currency": "USD", "merchant": "SHOPZ*GADGETHUB", "network": "Visa" }],
-  "answers": { "recognisesTransaction": false, "cardInPossession": true,
-               "sharedCardDetails": false },       // ids from the questions below
-  "statement": "Two charges from a shop I’ve never heard of…",
-  "attachments": [{ "name": "receipt.pdf", "url": "https://files.yourbank.com/…" }],
-  "consent": { "given": true, "at": "2026-10-29T09:14:00Z" }
-}
-
-GET ${origin}/api/claims?reference=APP-55102     → where the claim is now
-GET ${origin}/api/claims?questions=unauth_cnp&accountType=debit
-                                                  → what to ask the customer
-GET ${origin}/api/claims?questions=              → the claim types to choose from`}</Code>
-      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'14px 0 6px' }}><strong>Is this yours? first.</strong> Before a customer reports a payment they don’t recognise, ask for a card per transaction and show it. Many “unauthorised” payments are the customer’s own under a name they don’t know, and seeing the merchant clearly settles it.</p>
-      <Code>{`POST ${origin}/api/claims
-Authorization: Bearer cvl_…
-
-{ "isThisYours": { "customerId": "A-2231",
-    "transactions": [{ "id": "TX-90311", "ts": "2026-10-28T02:10:00Z", "amount": -84.50,
-                       "merchant": "SQ *BLUE BOTTLE COFFEE #1234", "merchantLocation": "San Francisco, CA",
-                       "channel": "card_present", "merchantLogo": "https://…" }] } }
-
-→ { "cards": [{ "name": "Blue Bottle Coffee", "via": "Square", "where": "San Francisco, CA",
-               "amountText": "$84.50", "seenBefore": { "count": 2, "first": "2026-04-02…" },
-               "hints": ["You’ve paid Blue Bottle Coffee 2 times since April 2026.", …],
-               "logo": null, "website": null, "monogram": { "letters": "BB", "color": "#1E3A5F" },
-               "question": "Do you recognise this payment?", "answers": [ … ] }] }`}</Code>
-      <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
-        <li><strong>The name</strong> comes from the statement descriptor: processor prefixes (SQ *, TST*, PAYPAL *, DD *), store numbers, phone numbers and the city are taken off, and well-known brands are named. <code>via</code> says who processed it.</li>
-        <li><strong>Paid before</strong> is read from the transactions you send to <code>/api/intake</code>, over the last 13 months. Without that feed, the card still works and says nothing about history.</li>
-        <li><strong>Logo:</strong> send your own as <code>merchantLogo</code> (https). Otherwise <code>website</code> names a known brand’s site for your logo service, and <code>monogram</code> always gives two letters and a colour. Covalence calls no outside service for this.</li>
-        <li><strong>“That was me”:</strong> send the claim with <code>"recognisesTransaction": true</code> and it’s stored closed at intake, with a note you can show the customer. Nothing reaches an analyst, and Triage → Claims counts these over the last 7 days.</li>
-      </ul>
-      <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
-        <li><strong>Required:</strong> id, customer.id, and at least one transaction with id, ts and amount. Everything else makes the claim faster to work.</li>
-        <li><strong>Questions:</strong> ask for the questions once the customer picks what happened, and show them in your app. Each has an <code>id</code> (send the answer under it), the words to show, a <code>kind</code> (yesno, choice, date, amount, text), whether it’s required, an optional <code>showIf</code> (ask it only when an earlier answer matches), and <code>why</code>, for your product team. They follow network and Reg E rules, so a claim answered in full can go straight to an analyst.</li>
-        <li><strong>Ready for Desk:</strong> a claim with its type, the account type, every merchant, the customer’s own account, their consent and the required questions answered is marked ready (for unauthorised claims, “Do you recognise this transaction?” answered no). The answer says what’s missing, and <code>answerProblems</code> lists any answer of the wrong kind.</li>
-        <li><strong>Account types:</strong> debit, credit, p2p, ach_eft, bnpl, crypto. Claim types are the ones in Triage’s list, such as unauth_card_present, unauth_cnp, ato, non_receipt, not_as_described, duplicate_charge, impersonation.</li>
-        <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
-        <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint above as a signed <code>claim.updated</code> event, so your app can tell the customer. Once the claim is with the Desk, its case sends <code>claim.provisional_credit</code>, <code>claim.filed</code> and <code>claim.resolved</code> (with <code>outcome</code>), each once, with a note you can show the customer.</li>
-        <li><strong>AI triage:</strong> each claim is read as it arrives, without the customer’s name or contact details, and your analysts see a suggested route and questions in Triage → Claims. It suggests; they decide.</li>
-      </ul>
-    </section>
+    {admin && (
+      <section style={box}>
+        <H2>FOR YOUR DEVELOPERS</H2>
+        <p className="display-font" style={{ fontSize:'15px', color:'#3F3A35', lineHeight:1.55, margin:'0 0 12px', maxWidth:'780px' }}>
+          How to send transactions, events, alerts and claims, what Covalence sends back, and how to check its signature, with examples to copy. It’s on its own page, so you can send the link to your engineers; they don’t need a Covalence account to read it.
+        </p>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center' }}>
+          <a href="/developers" target="_blank" rel="noopener" className="mono-font cov-owner-btn cov-owner-btn-main" style={{ textDecoration:'none' }}>OPEN THE DEVELOPER GUIDE ↗</a>
+          <button type="button" className="mono-font cov-owner-btn" onClick={() => { navigator.clipboard?.writeText(`${origin}/developers`); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>{copied ? 'LINK COPIED' : 'COPY THE LINK'}</button>
+        </div>
+      </section>
+    )}
   </>)
 }
 
@@ -238,21 +169,5 @@ function ActOnAlerts({ admin, demo, origin }) {
       {msg && <p role={msg.err ? 'alert' : 'status'} className="mono-font" style={{ fontSize:'11px', color: msg.err ? '#991B1B' : '#065F46', margin:'10px 0 0' }}>{msg.err || msg.ok}</p>}
     </section>
 
-    <section style={box}>
-      <H2>WHAT YOUR ENDPOINT RECEIVES</H2>
-      <Code>{`POST <your endpoint>
-Covalence-Event-Type: action.requested
-Covalence-Signature: t=1793170000,v1=5f2c…   (HMAC-SHA256 of "<t>.<body>" with your secret)
-
-{ "id": "evt_9c1…", "type": "action.requested", "created": "2026-10-28T08:45:12Z",
-  "data": { "action": "hold_payment", "segment": "fi", "alertId": "FR-…",
-            "customerId": "A-1005", "customerName": "M. Okafor", "amount": 2400,
-            "transactionIds": ["TX-88121"], "requestedBy": { "name": "…", "email": "…" } } }
-
-Answer 2xx when it's done — add { "reference": "HOLD-5521" } to show it on the alert.`}</Code>
-      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.5 }}>
-        Other events: <code>alert.created</code> (new alerts, with their customer and recommended action) and <code>covalence.test</code>. Check the signature and reject anything older than five minutes. Actions for crypto exchanges arrive as <code>block_card</code> (lock the account) and <code>hold_payment</code> (hold the withdrawal) with <code>"segment": "ce"</code>.
-      </p>
-    </section>
   </>)
 }
