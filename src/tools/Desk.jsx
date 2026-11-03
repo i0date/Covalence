@@ -10,7 +10,7 @@ import { DEFAULT_SETTINGS, REASON_TITLES, daysUntil, estimateFundingGrade, loadD
 import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withDecision } from '../ai.js'
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
-import { doesIssuing, doesMerchant, isMerchantCase } from '../sides.mjs'
+import { isMerchantCase } from '../sides.mjs'
 import { ChargebackRatioPanel, ratiosFor } from '../ChargebackRatioPanel.jsx'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
@@ -1343,7 +1343,8 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
               ? 'An operational tool for translating customer complaints into compliant dispute summaries — with a built-in evidence package and merchant defense preview for every case.'
               : 'Build your representment case, fight chargebacks with evidence, and monitor your chargeback ratio against Visa and Mastercard network thresholds.'}
           </p>
-          {doesIssuing(sides) && doesMerchant(sides) && <div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
+          {/* Both halves are always here; the workspace's sides (Settings → Profile) only pick which one opens first */}
+          {<div className="flex items-center mt-6" style={{ borderTop: '1px solid #D4CCBC', paddingTop: '20px' }}>
             <button onClick={() => { setPlatformMode('fi'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (platformMode === 'fi' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>ISSUER / FI MODE</button>
             <button onClick={() => { setPlatformMode('merchant'); window.scrollTo({top:0,behavior:'smooth'}) }} className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border-t border-b border-r border-stone-900 transition-all ' + (platformMode === 'merchant' ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>MERCHANT / ACQUIRER</button>
           </div>}

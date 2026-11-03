@@ -207,7 +207,7 @@ module.exports = async function handler(req, res) {
       if (sent.consent !== true && body.answers.recognisesTransaction !== true) return res.status(400).json({ error: 'Tick the box to agree before you send your claim' })
       // Used once: mark it first, so two sends at the same moment can't both store a claim
       const took = await rest(`claim_links?id=eq.${row.id}&used_at=is.null&revoked_at=is.null&select=id`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ used_at: new Date().toISOString() }) })
-      if (!took?.length) return res.status(410).json({ error: cl.linkProblem({ used_at: true }), brand })
+      if (!took?.length) return res.status(410).json({ error: cl.linkProblem({ ...row, used_at: true }), brand })
       let out
       try { out = await storeClaim(row.institution_id, body, 'claim form', { link: row.id, ...(row.reference ? { bankReference: row.reference } : {}) }) }
       catch (e) { out = { code: 500, body: { error: 'We couldn’t send your claim — try again' } } }

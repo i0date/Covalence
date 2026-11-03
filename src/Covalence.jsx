@@ -340,7 +340,7 @@ export default function Covalence() {
   // pipeline first; merchant-side workspaces get their chargebacks first. Every tool is listed.
   const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
   const NAV = navFor(sides)
-  // Desk opens on a side this workspace works
+  // Desk opens on a side this workspace works (both stay a click away)
   const sidesKey = sides.join(',')
   useEffect(() => {
     if (!doesIssuing(sides) && platformMode !== 'merchant') setPlatformMode('merchant')

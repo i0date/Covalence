@@ -6,8 +6,8 @@
 // due soon, new cases waiting for analysis, and what goes out in today's batch.
 // Shows the user's own cases (assigned or escalated to them) when there are
 // any, otherwise the team's, grouped into the order to work them (planOf), with
-// the team's other deadlines this week below. Beside it on wide screens (below
-// on narrow ones), the forecast for you and the team, and the week ahead.
+// the team's other deadlines this week below. Tabs inside keep it to one thing at a
+// time: the list, the forecast for you and the team, the deadlines ahead, the backlog.
 import React, { useEffect, useMemo, useState } from 'react'
 import { allThreadCases, stageOf, openCase, takeCase } from './CaseThread.jsx'
 import { caseClocks, pressing, sortClocks } from './clocks.mjs'
@@ -24,6 +24,7 @@ import { alarmList } from './alarmData.js'
 import { usePatterns } from './Alarms.jsx'
 
 const OPEN_KEY = 'cov_yourday_open'   // per browser: whether Your day is expanded
+const TAB_KEY = 'cov_yourday_tab'     // per browser: which of its tabs is showing
 // Show/hide on Home: one look for every panel that folds
 export const foldLook = { background:'#FFFFFF', border:'1px solid #1A1814', padding:'6px 10px', fontSize:'10px', letterSpacing:'0.12em', color:'#1A1814', whiteSpace:'nowrap' }
 
@@ -260,13 +261,14 @@ function KeepingUp({ backlog }) {
     </div>
   )
 }
+// The forecast tab: for you and for the team, side by side on wide screens
 export function Forecast({ day, settings }) {
   const { ins, unowned } = day
   const ex = ins.expected, you = ins.you, team = ins.team
   const weekday = WEEKDAYS[new Date().getDay()]
   return (
-    <div className="cov-yd-forecast">
-      <div className="mono-font cov-fc-head">THE FORECAST</div>
+    <div className="cov-yd-pane">
+      <div className="cov-yd-fc-cols">
       {you && (
         <section className="cov-fc-block" aria-label="Your forecast">
           <div className="display-font cov-fc-who">For you</div>
@@ -287,13 +289,7 @@ export function Forecast({ day, settings }) {
         <Line label="PACE">{paceText(team.pace)}</Line>
         <Line label="AT RISK">{riskText(team.atRisk)}</Line>
       </section>
-      <section className="cov-fc-block" aria-label="The week ahead">
-        <div className="display-font cov-fc-who">Deadlines ahead · whole team</div>
-        <DeadlinesAhead ahead={ins.ahead} late={ins.late} withMine={!!you} />
-      </section>
-      <section className="cov-fc-block" aria-label="Keeping up">
-        <KeepingUp backlog={ins.backlog} />
-      </section>
+      </div>
       <p className="display-font cov-fc-note">Forecasts are averages of past weeks, so holidays, time off and one-off spikes will throw them off.</p>
     </div>
   )
@@ -380,12 +376,23 @@ function Group({ title, note, list, cap, day, children }) {
   )
 }
 
+// The tabs, each with a count when it has one: what's on the list, what's late, what's open
+const TABS = (day, items) => [
+  ['list', 'THE LIST', items.length || null],
+  ['forecast', 'FORECAST', null],
+  ['ahead', 'DEADLINES AHEAD', day.ins.late?.length ? `${day.ins.late.length} LATE` : null, '#991B1B'],
+  ['backlog', 'KEEPING UP', day.ins.backlog?.length ? `${day.ins.backlog[day.ins.backlog.length - 1].open} OPEN` : null],
+]
+
 export function YourDay({ day, covUser, settings }) {
   const [showAll, setShowAll] = useState(false)
   const { items, scope, counts, comingUp, unowned } = day
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) !== '0' } catch { return true } })
   const toggle = () => setOpen(o => { try { localStorage.setItem(OPEN_KEY, o ? '0' : '1') } catch {} return !o })
   const plan = useMemo(() => planOf(items), [items])
+  // Inside, one thing at a time: the list, the forecast, the deadlines ahead, the backlog
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem(TAB_KEY) || 'list' } catch { return 'list' } })
+  const pickTab = t => { setTab(t); try { localStorage.setItem(TAB_KEY, t) } catch {} }
   // Pools: asked to help, ones you're in, your own, then open ones you could join (urgent first)
   const pools = useMemo(() => {
     const me = covUser?.email || '', order = { invited: 0, member: 1, owner: 2, open: 3 }
@@ -439,8 +446,22 @@ export function YourDay({ day, covUser, settings }) {
         </div>
       </div>
 
-      {open && (<div id="your-day-body" className="cov-yd-grid">
-        <div className="cov-yd-plan">
+      {open && (<div id="your-day-body">
+        <div role="tablist" aria-label="Your day" className="cov-yd-tabs">
+          {TABS(day, items).map(([k, l, n, tone]) => (
+            <button key={k} type="button" role="tab" id={`yd-tab-${k}`} aria-selected={tab === k} aria-controls={`yd-pane-${k}`} onClick={() => pickTab(k)} className="mono-font cov-yd-tab"
+              onKeyDown={e => { const ks = TABS(day, items).map(t => t[0]), i = ks.indexOf(k); if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); const nx = ks[(i + (e.key === 'ArrowRight' ? 1 : ks.length - 1)) % ks.length]; pickTab(nx); document.getElementById(`yd-tab-${nx}`)?.focus() } }}>
+              {l}{n != null && <span className="cov-yd-tab-n" style={tone ? { color: tone } : undefined}>{n}</span>}
+            </button>
+          ))}
+        </div>
+        {tab === 'forecast' && <div role="tabpanel" id="yd-pane-forecast" aria-labelledby="yd-tab-forecast"><Forecast day={day} settings={settings} /></div>}
+        {tab === 'ahead' && <div role="tabpanel" id="yd-pane-ahead" aria-labelledby="yd-tab-ahead" className="cov-yd-pane cov-yd-chart">
+          <div className="display-font cov-fc-who">Deadlines ahead · whole team</div>
+          <DeadlinesAhead ahead={day.ins.ahead} late={day.ins.late} withMine={!!day.ins.you} />
+        </div>}
+        {tab === 'backlog' && <div role="tabpanel" id="yd-pane-backlog" aria-labelledby="yd-tab-backlog" className="cov-yd-pane cov-yd-chart"><KeepingUp backlog={day.ins.backlog} /></div>}
+        {(tab === 'list' || !['forecast', 'ahead', 'backlog'].includes(tab)) && <div role="tabpanel" id="yd-pane-list" aria-labelledby="yd-tab-list" className="cov-yd-plan">
           {items.length === 0 && <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing on the list. Use the time for the cases coming up below.</div>}
           <Group title="START WITH" note="Past a deadline, escalated to you, or a customer waiting" list={plan.first} cap={cap(5)} day={day} />
           <Group title="POOLS" note="Cases the team is working together" list={pools} cap={cap(4)} day={day} />
@@ -494,8 +515,7 @@ export function YourDay({ day, covUser, settings }) {
               </div>
             ))}
           </div>
-        </div>
-        <Forecast day={day} settings={settings} />
+        </div>}
       </div>)}
     </section>
   )

@@ -751,6 +751,18 @@ export const GLOBAL_CSS = `
     .cov-front-item { padding:12px 0 12px !important; border-left:none !important; } .cov-front-item + .cov-front-item { border-top:1px solid #D4CCBC; }
     .cov-front-greeting { margin-top:14px; font-size:16px; } .cov-front-lead { margin-bottom:14px; } }
   /* Your day: the plan, and the forecast beside it on wide screens (below it on narrow ones) */
+  .cov-yd-tabs { display:flex; gap:0; border-bottom:1px solid #D4CCBC; padding:0 12px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .cov-yd-tab { background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:11px 10px 9px; font-size:10px; letter-spacing:0.14em; color:#6B6259; cursor:pointer; white-space:nowrap; display:inline-flex; gap:7px; align-items:baseline; }
+  .cov-yd-tab:hover { color:#1A1814; }
+  .cov-yd-tab[aria-selected="true"] { color:#1A1814; border-bottom-color:#1A1814; font-weight:600; }
+  .cov-yd-tab-n { font-size:9.5px; color:#8A7F72; font-weight:500; }
+  .cov-yd-pane { padding:14px 20px 16px; }
+  .cov-yd-fc-cols { display:grid; grid-template-columns:minmax(0,1fr); }
+  .cov-yd-fc-cols > .cov-fc-block { padding:4px 0 12px; }
+  .cov-yd-fc-cols > .cov-fc-block + .cov-fc-block { border-top:1px solid #D4CCBC; padding-top:12px; }
+  @media (min-width:900px) { .cov-yd-fc-cols { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:28px; } .cov-yd-fc-cols > .cov-fc-block + .cov-fc-block { border-top:none; border-left:1px solid #D4CCBC; padding:4px 0 12px 28px; } }
+  .cov-yd-chart { max-width:760px; }
+  .cov-yd-chart svg g[role=button]:focus-visible > rect:first-child { stroke:#1A1814; stroke-width:1; }
   .cov-yd-grid { display:grid; grid-template-columns:minmax(0,1fr); }
   .cov-yd-plan { min-width:0; }
   .cov-yd-forecast { min-width:0; background:#F3EEE6; border-top:1px solid #1A1814; padding:16px 20px 18px; }
