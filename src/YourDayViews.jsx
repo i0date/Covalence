@@ -165,7 +165,7 @@ export function DeadlinesPanel({ ahead, late, withMine }) {
               <li key={e.id + e.key + k}>
                 <button type="button" onClick={() => openCase(e.id)} className="cov-ydv-case">
                   <span className="mono-font" style={{ fontSize: '11px', color: '#57534E' }}>{e.id}</span>
-                  <span className="display-font" style={{ fontSize: '14px', color: INK, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.merchant || '—'}</span>
+                  <span className="display-font" style={{ fontSize: '14px', color: INK, minWidth: 0, overflowWrap: 'anywhere' }}>{e.merchant || '—'}</span>
                   <span className="mono-font" style={{ fontSize: '10px', color: sel.late ? LATE : '#6B6259', whiteSpace: 'nowrap' }}>{e.label}{withMine && e.mine ? ' · YOURS' : ''}</span>
                 </button>
               </li>

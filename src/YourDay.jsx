@@ -109,7 +109,9 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
       return k ? { c, k } : null
     }).filter(Boolean).sort((a, b) => a.k.left - b.k.left)
     const unowned = all.filter(c => caseClocks(c, settings).some(k => k.key === 'assign' && k.state === 'breached')).length
-    return { all, items: list, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
+    // The whole team's open work, whoever is signed in (the Team tab)
+    const team = [...open, ...waiting].sort((a, b) => a.r.rank - b.r.rank || (a.c.nextRespDate || '9').localeCompare(b.c.nextRespDate || '9'))
+    return { all, items: list, team, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
   }, [outcomes, me, settings, platformMode, claims])
   const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
   const patterns = usePatterns(outcomes, platformMode)
@@ -163,7 +165,9 @@ const TakeIt = ({ c, day, style }) => !c.assignedTo && day.canTake ? (
   <button type="button" className="mono-font cov-take-it" style={style} onClick={() => takeCase(c.id)} aria-label={`Take ${c.id}`}>TAKE IT</button>
 ) : null
 
-function Row({ x, i, day }) {
+// A first name for a case's owner, from their name or email
+const ownerOf = c => { const n = c.assignedName || c.assignedTo || ''; return n ? n.split(/[\s@.]/)[0].replace(/^./, ch => ch.toUpperCase()) : '' }
+function Row({ x, i, day, owner }) {
   const { c, r, claim } = x
   const take = !claim && !c.assignedTo && day.canTake
   return (
@@ -172,20 +176,22 @@ function Row({ x, i, day }) {
         style={{ display:'grid', gridTemplateColumns:'150px 92px minmax(0,1fr) auto', gap:'12px', alignItems:'center', width:'100%', textAlign:'left', flex:1, minWidth:0,
           padding:'9px 18px', background:'none', border:'none', borderTop: take ? 'none' : '1px solid #EDE7DC', cursor:'pointer' }}
         className="cov-search-row cov-yourday-row">
-        <span style={{ display:'inline-flex', alignItems:'center', minWidth:0, maxWidth:'100%', overflow:'hidden' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone}>{r.label}</Badge></span>
+        <span style={{ display:'inline-flex', alignItems:'center', flexWrap:'wrap', minWidth:0, maxWidth:'100%' }}>{day.changed(c) && <NewDot />}<Badge tone={r.tone} style={{ whiteSpace:'normal' }}>{r.label}</Badge></span>
         <span className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{c.id}</span>
         <span style={{ minWidth:0 }}>
-          <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'}</span>
-          <span className="mono-font cov-yourday-why" style={{ display:'block', fontSize:'11px', color:'#6B6259', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
+          <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814', overflowWrap:'anywhere' }}>{c.merchant || '—'}</span>
+          <span className="mono-font cov-yourday-why" style={{ display:'block', fontSize:'11px', color:'#6B6259', lineHeight:1.5, overflowWrap:'anywhere' }}>{r.why}{c.amount ? ` · ${c.amount}` : ''}</span>
         </span>
-        <span className="mono-font desktop-only" style={{ fontSize:'11px', color:'#1A1814' }}>Open →</span>
+        {owner && !claim
+          ? <span className="mono-font" style={{ fontSize:'11px', color: c.assignedTo ? '#57534E' : '#92400E', whiteSpace:'nowrap' }}>{c.assignedTo ? ownerOf(c) : 'No owner'}</span>
+          : <span className="mono-font desktop-only" style={{ fontSize:'11px', color:'#1A1814' }}>Open →</span>}
       </button>
       {take && <TakeIt c={c} day={day} style={{ marginRight:'18px' }} />}
     </li>
   )
 }
 
-function Group({ title, note, list, cap, day, children }) {
+function Group({ title, note, list, cap, day, owner, children }) {
   if (!list.length && !children) return null
   return (
     <div className="cov-plan-group">
@@ -194,16 +200,58 @@ function Group({ title, note, list, cap, day, children }) {
         {note && <span className="display-font cov-plan-note">{note}</span>}
       </div>
       <ol style={{ listStyle:'none', margin:0, padding:0 }}>
-        {list.slice(0, cap).map((x, i) => <Row key={x.c.id} x={x} i={i} day={day} />)}
+        {list.slice(0, cap).map((x, i) => <Row key={x.c.id} x={x} i={i} day={day} owner={owner} />)}
         {children}
       </ol>
     </div>
   )
 }
 
+// ── The Team tab: the whole team's open work, by what it needs ──
+// Team-level only: each case shows who has it, and nothing counts or ranks people.
+function TeamView({ day, pools }) {
+  const t = day.team || []
+  const used = new Set()
+  const take = f => t.filter(x => !used.has(x.c.id) && f(x)).map(x => { used.add(x.c.id); return x })
+  const groups = [
+    ['NO OWNER', 'Take one, or assign them in Multi', take(x => !x.claim && !x.c.assignedTo)],
+    ['PAST A DEADLINE', 'Missed clocks, whoever has them', take(x => x.r.rank === 0)],
+    ['CUSTOMERS WAITING', 'Claims from your app with no update in days', take(x => x.claim)],
+    ['DUE IN THE NEXT FEW DAYS', null, take(x => x.r.rank <= 2)],
+    ['NEW, TO ANALYSE', null, take(x => x.r.rank === 3)],
+  ]
+  const motion = t.filter(x => !used.has(x.c.id))
+  const late = groups[1][2].length, noOwner = groups[0][2].length, openPools = pools.length
+  const [all, setAll] = useState(false)
+  return (
+    <>
+      <div className="cov-yd-team-sum mono-font">
+        <span><strong>{day.all.filter(c => stageOf(c) !== 'closed').length}</strong> OPEN</span>
+        <span style={noOwner ? { color:'#92400E' } : undefined}><strong>{noOwner}</strong> NO OWNER</span>
+        <span style={late ? { color:'#991B1B' } : undefined}><strong>{late}</strong> PAST A DEADLINE</span>
+        <span><strong>{groups[2][2].length}</strong> CUSTOMERS WAITING</span>
+        <span><strong>{openPools}</strong> POOL{openPools === 1 ? '' : 'S'}</span>
+      </div>
+      {groups.map(([title, note, list]) => <Group key={title} title={title} note={note} list={list} cap={all ? Infinity : 6} day={day} owner={title !== 'NO OWNER'} />)}
+      <Group title="POOLS" note="Cases the team is working together" list={pools} cap={all ? Infinity : 6} day={day} />
+      {motion.length > 0 && (
+        <div className="cov-plan-group">
+          <div className="cov-plan-head"><span className="mono-font cov-plan-title">IN MOTION</span></div>
+          <p className="display-font" style={{ margin:0, padding:'8px 18px 12px', fontSize:'14px', color:'#57534E', borderTop:'1px solid #EDE7DC' }}>
+            {motion.length} queued or waiting on the merchant or the network: <Refs parts={motion.map(x => ({ id: x.c.id }))} />
+          </p>
+        </div>
+      )}
+      {groups.some(g => g[2].length > 6) && <div style={{ padding:'8px 18px 12px', borderTop:'1px solid #EDE7DC' }}><Button variant="quiet" onClick={() => setAll(v => !v)}>{all ? 'Show fewer' : 'Show all'}</Button></div>}
+      {!t.length && <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing open for the team.</div>}
+    </>
+  )
+}
+
 // The tabs, each with a count when it has one: what's on the list, what's late, what's open
 const TABS = (day, items) => [
-  ['list', 'THE LIST', items.length || null],
+  ['list', day.scope === 'mine' ? 'YOUR LIST' : 'THE LIST', items.length || null],
+  ['team', 'TEAM', (day.team || []).length || null],
   ['forecast', 'FORECAST', null],
   ['ahead', 'DEADLINES AHEAD', day.ins.late?.length ? `${day.ins.late.length} LATE` : null, '#991B1B'],
   ['backlog', 'KEEPING UP', day.ins.backlog?.length ? `${day.ins.backlog[day.ins.backlog.length - 1].open} OPEN` : null],
@@ -269,7 +317,8 @@ export function YourDay({ day, covUser, settings }) {
         {tab === 'forecast' && <div role="tabpanel" id="yd-pane-forecast" aria-labelledby="yd-tab-forecast"><ForecastTiles ins={day.ins} unowned={unowned} settings={settings} /></div>}
         {tab === 'ahead' && <div role="tabpanel" id="yd-pane-ahead" aria-labelledby="yd-tab-ahead"><DeadlinesPanel ahead={day.ins.ahead} late={day.ins.late} withMine={!!day.ins.you} /></div>}
         {tab === 'backlog' && <div role="tabpanel" id="yd-pane-backlog" aria-labelledby="yd-tab-backlog"><BacklogPanel backlog={day.ins.backlog} pace={day.ins.team.pace} /></div>}
-        {(tab === 'list' || !['forecast', 'ahead', 'backlog'].includes(tab)) && <div role="tabpanel" id="yd-pane-list" aria-labelledby="yd-tab-list" className="cov-yd-plan cov-yd-scroll" tabIndex={0}>
+        {tab === 'team' && <div role="tabpanel" id="yd-pane-team" aria-labelledby="yd-tab-team" className="cov-yd-plan cov-yd-scroll" tabIndex={0}><TeamView day={day} pools={pools} /></div>}
+        {(tab === 'list' || !['team', 'forecast', 'ahead', 'backlog'].includes(tab)) && <div role="tabpanel" id="yd-pane-list" aria-labelledby="yd-tab-list" className="cov-yd-plan cov-yd-scroll" tabIndex={0}>
           {items.length === 0 && <div className="display-font" style={{ padding:'18px', fontSize:'15px', color:'#57534E', fontStyle:'italic' }}>Nothing on the list. Use the time for the cases coming up below.</div>}
           <Group title="START WITH" note="Past a deadline, escalated to you, or a customer waiting" list={plan.first} cap={cap(5)} day={day} />
           <Group title="POOLS" note="Cases the team is working together" list={pools} cap={cap(4)} day={day} />
@@ -316,7 +365,7 @@ export function YourDay({ day, covUser, settings }) {
                   background:'none', border:'none', padding:'5px 0', cursor:'pointer', fontSize:'11px', color:'#1A1814' }}>
                 <span style={{ display:'inline-flex', alignItems:'center', color: k.state === 'breached' ? '#991B1B' : k.state === 'soon' ? '#92400E' : '#1E3A5F', fontWeight:500 }}>{day.changed(c) && <NewDot />}{k.state === 'breached' ? `OVERDUE ${short(k)}` : `in ${short(k)}`}</span>
                 <span style={{ color:'#57534E' }}>{c.id}</span>
-                <span className="cov-comingup-what" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
+                <span className="cov-comingup-what" style={{ overflowWrap:'anywhere' }}>{c.merchant || '—'} <span className="cov-comingup-why" style={{ color:'#6B6259' }}><span className="cov-comingup-dot">· </span>{k.label}</span></span>
                 <span className="desktop-only" style={{ color: c.assignedTo ? '#6B6259' : '#92400E' }}>{c.assignedTo ? c.assignedTo.split('@')[0] : 'no owner'}</span>
               </button>
               <TakeIt c={c} day={day} />

@@ -760,6 +760,8 @@ export const GLOBAL_CSS = `
   .cov-yd-tab[aria-selected="true"] { color:#1A1814; border-bottom-color:#1A1814; font-weight:600; }
   .cov-yd-tab-n { font-size:9.5px; color:#8A7F72; font-weight:500; }
   .cov-yd-pane { padding:14px 20px 16px; }
+  .cov-yd-team-sum { display:flex; flex-wrap:wrap; gap:6px 18px; padding:12px 18px; font-size:10px; letter-spacing:0.12em; color:#57534E; border-bottom:1px solid #D4CCBC; background:#F7F3EC; }
+  .cov-yd-team-sum strong { font-size:13px; color:inherit; font-weight:600; margin-right:4px; letter-spacing:0; }
   /* Your day's panel: the same height on every tab, so it never takes over Home */
   .cov-yd-panel { height:460px; overflow:hidden; position:relative; }
   .cov-yd-panel > [role=tabpanel] { height:100%; }
