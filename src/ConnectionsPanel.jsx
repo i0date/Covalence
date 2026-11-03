@@ -128,6 +128,26 @@ GET ${origin}/api/claims?reference=APP-55102     → where the claim is now
 GET ${origin}/api/claims?questions=unauth_cnp&accountType=debit
                                                   → what to ask the customer
 GET ${origin}/api/claims?questions=              → the claim types to choose from`}</Code>
+      <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'14px 0 6px' }}><strong>Is this yours? first.</strong> Before a customer reports a payment they don’t recognise, ask for a card per transaction and show it. Many “unauthorised” payments are the customer’s own under a name they don’t know, and seeing the merchant clearly settles it.</p>
+      <Code>{`POST ${origin}/api/claims
+Authorization: Bearer cvl_…
+
+{ "isThisYours": { "customerId": "A-2231",
+    "transactions": [{ "id": "TX-90311", "ts": "2026-10-28T02:10:00Z", "amount": -84.50,
+                       "merchant": "SQ *BLUE BOTTLE COFFEE #1234", "merchantLocation": "San Francisco, CA",
+                       "channel": "card_present", "merchantLogo": "https://…" }] } }
+
+→ { "cards": [{ "name": "Blue Bottle Coffee", "via": "Square", "where": "San Francisco, CA",
+               "amountText": "$84.50", "seenBefore": { "count": 2, "first": "2026-04-02…" },
+               "hints": ["You’ve paid Blue Bottle Coffee 2 times since April 2026.", …],
+               "logo": null, "website": null, "monogram": { "letters": "BB", "color": "#1E3A5F" },
+               "question": "Do you recognise this payment?", "answers": [ … ] }] }`}</Code>
+      <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+        <li><strong>The name</strong> comes from the statement descriptor: processor prefixes (SQ *, TST*, PAYPAL *, DD *), store numbers, phone numbers and the city are taken off, and well-known brands are named. <code>via</code> says who processed it.</li>
+        <li><strong>Paid before</strong> is read from the transactions you send to <code>/api/intake</code>, over the last 13 months. Without that feed, the card still works and says nothing about history.</li>
+        <li><strong>Logo:</strong> send your own as <code>merchantLogo</code> (https). Otherwise <code>website</code> names a known brand’s site for your logo service, and <code>monogram</code> always gives two letters and a colour. Covalence calls no outside service for this.</li>
+        <li><strong>“That was me”:</strong> send the claim with <code>"recognisesTransaction": true</code> and it’s stored closed at intake, with a note you can show the customer. Nothing reaches an analyst, and Triage → Claims counts these over the last 7 days.</li>
+      </ul>
       <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
         <li><strong>Required:</strong> id, customer.id, and at least one transaction with id, ts and amount. Everything else makes the claim faster to work.</li>
         <li><strong>Questions:</strong> ask for the questions once the customer picks what happened, and show them in your app. Each has an <code>id</code> (send the answer under it), the words to show, a <code>kind</code> (yesno, choice, date, amount, text), whether it’s required, an optional <code>showIf</code> (ask it only when an earlier answer matches), and <code>why</code>, for your product team. They follow network and Reg E rules, so a claim answered in full can go straight to an analyst.</li>

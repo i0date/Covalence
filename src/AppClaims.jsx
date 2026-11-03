@@ -88,6 +88,8 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const silent = waitingClaims(open_), quiet = new Set(silent.map(c => c.id))
   const waiting = open_.filter(c => c.status !== 'with_desk')
   const urgent = waiting.filter(c => c.data?.ai?.priority === 'urgent').length
+  // "That was me" in the last 7 days: claims the customer dropped once they saw the merchant clearly
+  const recognised = claims.filter(c => (c.segment || 'fi') === segment && c.data?.closedAtIntake?.reason === 'recognised' && Date.now() - new Date(c.created_at) < 7 * 86400000).length
   // The order you pick; by default, customers who've waited longest for an update first,
   // and claims already with the Desk last
   const due = c => c.data?.clock?.due ? new Date(c.data.clock.due + 'T23:59:59').getTime() : Infinity
@@ -135,6 +137,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           {open_.length > waiting.length && <span><strong style={{ color:'#1A1814' }}>{open_.length - waiting.length}</strong> WITH THE DESK</span>}
           {urgent > 0 && <span style={{ color:'#991B1B' }}><strong>{urgent}</strong> URGENT</span>}
           {silent.length > 0 && <span style={{ color:'#92400E' }}><strong>{silent.length}</strong> WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
+          {recognised > 0 && <span title="The customer recognised the payment when the app showed the merchant clearly, so the claim closed on arrival"><strong style={{ color:'#1A1814' }}>{recognised}</strong> “THAT WAS ME” · 7 DAYS</span>}
         </span>
         <span className="mono-font cov-app-claims-btn">{shown ? '▴ HIDE' : '▾ SHOW'}</span>
       </button>
