@@ -5,10 +5,11 @@
 // or on the phone) and the bank's systems post it to /api/claims. These rules
 // check the claim, start the right clock from the moment the customer reported
 // it, and say whether it's complete enough to go straight to the Dispute Desk.
-// Plain functions, no imports beyond clocks.mjs and claimQuestions.mjs, so the
+// Plain functions, no imports beyond clocks.mjs, claimQuestions.mjs and isThisYours.mjs, so the
 // server and the browser judge a claim the same way.
 import { addBusinessDays } from './clocks.mjs'
 import { checkAnswers } from './claimQuestions.mjs'
+import { asksIsThisYours, RECOGNISED_NOTE } from './isThisYours.mjs'
 
 export const CHANNELS = { app: 'From app', web: 'Web', agent: 'Agent', phone: 'Phone' }
 export const ACCOUNT_TYPES = ['debit', 'credit', 'p2p', 'ach_eft', 'bnpl', 'crypto']
@@ -24,6 +25,22 @@ export const STATUSES = {
   received: 'Received', in_review: 'Being reviewed', with_desk: 'Investigating', closed: 'Closed',
 }
 export const MAX_TX = 25, MAX_ANSWERS = 40, MAX_ATTACHMENTS = 20
+
+// What the customer asks the bank to do now, to keep their account safe. The bank's
+// systems are told as soon as the claim arrives (claim.instructions), and Triage shows it.
+export const INSTRUCTIONS = {
+  lock_card: 'Lock my card', replace_card: 'Send me a new card', stop_merchant: 'Stop payments to this merchant', call_me: 'Call me',
+}
+// Which ones to offer for a kind of problem (the bank's app asks; the hosted form shows them)
+export const instructionsFor = type => /^unauth|^counterfeit/.test(type || '') ? ['lock_card', 'replace_card', 'call_me']
+  : /^ato/.test(type || '') ? ['lock_card', 'call_me']
+  : SCAMS.includes(type) ? ['lock_card', 'call_me']
+  : type === 'cancelled_sub' ? ['stop_merchant'] : []
+// A dispute about a purchase the customer made: nothing for Triage to decide, so it goes
+// straight to the Dispute Desk when it arrives. Fraud and scams stay with Triage.
+export const DESK_TYPES = ['non_receipt', 'not_as_described', 'cancelled_sub', 'billing_error', 'duplicate_charge']
+export const SCAMS = ['romance_scam', 'investment_scam', 'impersonation', 'fake_invoice', 'grandparent_scam', 'other_app']
+export const goesStraightToDesk = claim => DESK_TYPES.includes(claim?.claimType) && claim?.answers?.recognisesTransaction !== false
 
 const str = (v, n) => String(v ?? '').trim().slice(0, n)
 const isTs = v => v != null && v !== '' && !isNaN(new Date(v).getTime())
@@ -73,6 +90,7 @@ export function normaliseClaim(b, now = new Date()) {
       accountType: ACCOUNT_TYPES.includes(c.accountType) ? c.accountType : '', accountOpened: isTs(c.accountOpened) ? iso(c.accountOpened).slice(0, 10) : '' },
     transactions, answers, attachments, consent,
     statement: str(b.statement, 4000),
+    instructions: [...new Set((Array.isArray(b.instructions) ? b.instructions : []).filter(k => INSTRUCTIONS[k]))],
   }
   return { claim, errors }
 }
@@ -102,6 +120,25 @@ export function missingForDesk(claim) {
   checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).unanswered
     .filter(q => q.id !== 'recognisesTransaction').forEach(q => m.push(`the customer’s answer to “${q.ask}”`))
   return m
+}
+
+// The stored row for a checked claim (api/claims.js, and the demo). by: who sent it (a key's
+// prefix, or "claim form"); extra goes on its data. "That was me" — the customer recognises
+// the transaction — keeps it, closed at intake, since there's nothing to dispute. A dispute
+// about a purchase (DESK_TYPES) goes straight to the Dispute Desk, without Triage.
+export function claimRow(claim, { id, institution, by, now = new Date(), extra = {} }) {
+  const at = now.toISOString(), clock = claimClock(claim), missing = missingForDesk(claim)
+  const recognised = asksIsThisYours(claim.claimType) && claim.answers.recognisesTransaction === true
+  const received = { status: 'received', at, by, note: `Received from the ${CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }
+  const desk = !recognised && goesStraightToDesk(claim)
+  const row = { institution_id: institution, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment,
+    status: recognised ? 'closed' : desk ? 'with_desk' : 'received', ready: !recognised && !missing.length,
+    data: { ...claim, ...extra, clock: recognised ? null : clock, missing: recognised ? [] : missing, source: by,
+      ...(desk ? { route: 'desk' } : {}), ...(recognised ? { closedAtIntake: { reason: 'recognised', at } } : {}) }, reported_at: claim.reportedAt,
+    history: recognised ? [received, { status: 'closed', at, by, note: 'The customer recognised the transaction (“That was me”)', public: RECOGNISED_NOTE }]
+      : desk ? [received, { status: 'with_desk', at, by, note: `Sent straight to the Dispute Desk: ${CLAIM_TYPES[claim.claimType].toLowerCase()}, a dispute about a purchase`, public: 'We’re looking into your dispute.' }]
+      : [received] }
+  return { row, recognised, desk, missing: recognised ? [] : missing, clock }
 }
 
 export const claimTotal = claim => (claim?.transactions || []).reduce((s, t) => s + (Number(t.amount) || 0), 0)

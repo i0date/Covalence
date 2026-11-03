@@ -23,7 +23,7 @@ function Code({ children }) {
     </div>
   )
 }
-const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['events', 'What your endpoint receives']]
+const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['events', 'What your endpoint receives']]
 
 export default function DevelopersPage() {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
@@ -135,7 +135,30 @@ Authorization: Bearer cvl_…
           <li><strong>Account types:</strong> debit, credit, p2p, ach_eft, bnpl, crypto. Claim types are the ones in Triage’s list, such as unauth_card_present, unauth_cnp, ato, non_receipt, not_as_described, duplicate_charge, impersonation.</li>
           <li><strong>Attachments</strong> are links to files in your own storage. Covalence keeps the link and never downloads it.</li>
           <li><strong>Status:</strong> received → being reviewed → investigating or closed. Each change is sent to your endpoint as a signed <code>claim.updated</code> event, so your app can tell the customer. Once the claim is with the Desk, its case sends <code>claim.provisional_credit</code>, <code>claim.filed</code> and <code>claim.resolved</code> (with <code>outcome</code>), each once, with a note you can show the customer.</li>
+          <li><strong>Where it goes:</strong> a dispute about a purchase (non_receipt, not_as_described, cancelled_sub, billing_error, duplicate_charge) goes straight to the Dispute Desk, with no triage; the answer says <code>"sentToDesk": true</code>. Fraud and scams go to 001 Triage → Claims.</li>
+          <li><strong>What the customer needs now:</strong> send <code>"instructions": ["lock_card", "replace_card", "stop_merchant", "call_me"]</code> with the claim (the questions answer lists which to offer for each claim type). They’re sent straight back to your endpoint as a signed <code>claim.instructions</code> event, so your systems can act at once, and analysts see them at the top of the claim. If your app can lock the card itself, do it there too.</li>
           <li><strong>AI triage:</strong> each claim is read as it arrives, without the customer’s name or contact details, and your analysts see a suggested route and questions in Triage → Claims. It suggests; they decide.</li>
+        </ul>
+      </section>
+
+      <section style={box} id="form">
+        <H2>THE HOSTED CLAIM FORM</H2>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px', lineHeight:1.6 }}>No claim screens to build: when a customer taps “Report a problem” in your app or on your website, ask for a link for them and their recent payments, and open it (in a web view, or a new tab). The customer picks what went wrong, says whether they recognise each payment, asks for what they need now (lock the card, a new card, a call), answers the questions, and sends it. Your name, logo and phone number are in Settings → Claim form. Covalence never sends these links to customers.</p>
+        <Code>{`POST ${origin}/api/claims
+Authorization: Bearer cvl_…
+
+{ "link": { "reference": "CASE-7781",
+    "customer": { "id": "A-7781", "name": "Sam Ortiz", "accountType": "debit" },
+    "transactions": [{ "id": "TX-77120", "ts": "2026-11-02T14:20:00Z", "amount": -129.99,
+                       "merchant": "AMZN MKTP US*2K4", "merchantLocation": "Online" }],
+    "expiresInHours": 72 } }
+
+→ 201 { "id": "LNK-3F09A1C2", "url": "${origin}/claim/cvf_…", "expiresAt": "2026-11-06T14:20:00Z" }`}</Code>
+        <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+          <li><strong>Required:</strong> customer.id and at least one transaction with id, ts and amount, as for a claim. Up to 25 transactions.</li>
+          <li><strong>The link works once,</strong> for 72 hours unless you say otherwise (at most 7 days); ask for it when the customer taps, not ahead of time. Covalence stores only a hash of it; if it’s lost, ask for another.</li>
+          <li><strong>The customer sees</strong> their first name, your name and colours, and the payments on the link, nothing else from their account.</li>
+          <li><strong>The claim</strong> has the link’s <code>id</code> as its reference, and your <code>reference</code> kept with it. It’s handled like a claim from your own app (below), and its events go to your endpoint as usual.</li>
         </ul>
       </section>
 

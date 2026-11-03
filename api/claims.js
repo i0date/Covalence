@@ -9,6 +9,15 @@
 //                                      closed at intake ("That was me")
 //   GET  /api/claims?questions=<claimType>[&accountType=debit]                     → what to ask the customer
 //                                    (src/claimQuestions.mjs); without a type, the claim types to choose from
+//   POST /api/claims                 Authorization: Bearer cvl_…   { "link": { "customer", "transactions", "reference"?, "expiresInHours"? } }
+//                                    → { id, url, expiresAt }: a link to the hosted claim form for that customer, for your app
+//                                      or website to open when they report a problem (no app of your own to build)
+//                                      (src/claimLinks.mjs, supabase_claim_links.sql). Works once, 72 hours by default, at most 7 days
+// From the customer, with only the link (the hosted claim form at /claim/<token>):
+//   GET  /api/claims?form=cvf_…                                                     → the bank's look, the transactions as
+//                                      "Is this yours?" cards, the kinds of problem and their questions
+//   POST /api/claims                 { "form": "cvf_…", "claim": { recognised, claimType, answers, instructions, statement, consent } }
+//                                    → stored like a claim from the bank's app, tagged Web; the link is then used up
 // From Covalence itself, after an analyst moves a claim on (claim_set / claim_step in supabase_claims.sql):
 //   POST /api/claims                 Authorization: Bearer <Supabase session>   { "notify": "CLM-…" }
 //                                    → a signed event to the bank's endpoint: claim.updated, or
@@ -21,6 +30,8 @@
 //   • Keys are looked up by SHA-256 hash; revoked keys are refused; each key is tied to one institution
 //   • Every field is validated and trimmed; ≤ 25 transactions, ≤ 20 attachment links, ≤ 256 KB per request
 //   • Attachments are links in the bank's own storage (https only); Covalence never fetches them
+//   • The hosted form: a link token is 24 random bytes, stored only as its SHA-256 hash; it works once and expires;
+//     a per-address rate limit; the customer sees only their first name and the link's own transactions
 //   • Per-key rate limit: 120 requests / 60 s; no CORS for keyed calls (server-to-server); each claim is audited
 //   • Status events and AI triage: the caller must be signed in to the claim's institution with a role that can work cases
 //   • AI triage sees no customer name, email or id, and card, account and phone numbers are masked;
@@ -32,6 +43,8 @@ const RATE_LIMIT_MAX = 120, RATE_LIMIT_WINDOW_MS = 60 * 1000, MAX_BYTES = 256 * 
 const WRITERS = ['admin', 'reviewer', 'analyst']
 const AI_MODEL = 'claude-opus-5-5', AI_MAX_TOKENS = 4000, AI_TIMEOUT_MS = 50000
 const _rate = {}
+const sha = t => crypto.createHash('sha256').update(t).digest('hex')
+const PUBLIC_URL = process.env.PUBLIC_URL || process.env.ALLOWED_ORIGIN || 'https://covalence.vercel.app'
 function limited(k) {
   const now = Date.now(), e = _rate[k]
   if (!e || now > e.resetAt) { _rate[k] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS }; return false }
@@ -113,7 +126,105 @@ module.exports = async function handler(req, res) {
   const audit = (inst, action, id, detail) => rest('rpc/audit_add', { method: 'POST', body: JSON.stringify({ p_inst: inst, p_action: action, p_entity: 'claim', p_entity_id: id, p_detail: detail }) }).catch(() => {})
   const endpointFor = async inst => (await rest(`action_endpoints?institution_id=eq.${inst}&select=url,secret`).catch(() => []))?.[0]
   const m = await import('../src/claims.mjs')
+  const cl = await import('../src/claimLinks.mjs')
+  // Store one claim for an institution: from the bank's systems (by = the key's prefix) or the hosted form.
+  // Returns { code, body } for the answer. extra goes on the claim's data.
+  const storeClaim = async (inst, body, by, extra = {}) => {
+    const now = new Date()
+    const { claim, errors } = m.normaliseClaim(body, now)
+    if (errors.length) return { code: 400, body: { error: 'The claim has problems', problems: errors } }
+    const id = m.claimIdFrom(crypto.createHash('sha256').update(inst + '|' + claim.externalId).digest('hex'))
+    const { row, recognised, desk, missing, clock } = m.claimRow(claim, { id, institution: inst, by, now, extra })
+    const answerProblems = (await import('../src/claimQuestions.mjs')).checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).problems
+    const stored = await rest('app_claims?select=id,external_id,status,history,created_at,updated_at', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify([row]) })
+
+    if (!stored?.length) {   // the same reference again: answer with where it is now
+      const cur = (await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}&select=id,external_id,status,history,created_at,updated_at`))?.[0]
+      return { code: 200, body: { ...m.publicStatus(cur), duplicate: true } }
+    }
+    await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !recognised && !missing.length })
+    const ep = await endpointFor(inst)
+    if (ep?.url) await wh.sendEvent(ep, 'claim.received', m.publicStatus(stored[0])).catch(() => {})
+    if (desk) await audit(inst, 'claim.sent_to_desk', id, { claimType: claim.claimType, reference: claim.externalId })
+    // What the customer asked for now (lock the card, a new card, …): to the bank's systems at once
+    if (claim.instructions.length && !recognised) {
+      const r = ep?.url ? await wh.sendEvent(ep, 'claim.instructions', { id, reference: claim.externalId, customerId: claim.customer.id,
+        transactionIds: claim.transactions.map(t => t.id), instructions: claim.instructions.map(k => ({ action: k, label: m.INSTRUCTIONS[k] })) }).catch(() => ({ ok: false })) : null
+      row.data.instructionsSent = { at: new Date().toISOString(), ok: !!r?.ok, ...(r ? { http: r.status || null, event: r.id || null } : { notConnected: true }) }
+      await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: row.data }) }).catch(() => {})
+      await audit(inst, 'claim.instructions_sent', id, { instructions: claim.instructions, ok: !!r?.ok, connected: !!ep?.url })
+    }
+    if (recognised) {   // no AI triage: there's nothing to work
+      await audit(inst, 'claim.closed_at_intake', id, { reason: 'recognised', reference: claim.externalId })
+      return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, closedAtIntake: true, readyForDesk: false, missing: [] } }
+    }
+    // AI triage runs after the answer is sent; if it fails, the analyst can run it from Triage → Claims
+    const triaged = afterResponse(aiTriage(m, row.data)
+      .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))
+      .catch(e => console.error('claims triage:', e.message)))
+    if (triaged) await triaged
+    return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, sentToDesk: desk, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) } }
+  }
+
+  // A link to the hosted claim form for one customer (src/claimLinks.mjs). by: who made it.
+  const makeLink = async (inst, b, by) => {
+    const { link, errors } = cl.normaliseLink(b)
+    if (errors.length) return { code: 400, body: { error: 'The link has problems', problems: errors } }
+    const tok = 'cvf_' + crypto.randomBytes(24).toString('hex'), id = cl.linkIdFrom(crypto.randomBytes(4).toString('hex'))
+    await rest('claim_links', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ id, token_hash: sha(tok), institution_id: inst,
+      reference: link.reference, customer: link.customer, transactions: link.transactions, created_by: by, expires_at: link.expiresAt }]) })
+    await audit(inst, 'claim.link_created', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
+    return { code: 201, body: { id, url: cl.linkUrl(PUBLIC_URL, tok), expiresAt: link.expiresAt } }
+  }
+  const findLink = async tok => cl.TOKEN_RE.test(tok) ? (await rest(`claim_links?token_hash=eq.${sha(tok)}&select=*`).catch(() => []))?.[0] || null : null
+
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+
+  // ── The hosted claim form: the customer, with only the link (no key, no session) ──
+  const formToken = String(req.query?.form || (req.method === 'POST' && req.body?.form) || '')
+  if (formToken && !token) {
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'ip'
+    if (limited('form|' + ip)) { res.setHeader('Retry-After', '60'); return res.status(429).json({ error: 'Too many tries — wait a minute and try again' }) }
+    try {
+      const row = await findLink(formToken), problem = cl.linkProblem(row)
+      const brandRow = row ? (await rest(`claim_form?institution_id=eq.${row.institution_id}&select=*`).catch(() => []))?.[0] : null
+      const instName = row ? (await rest(`institutions?id=eq.${row.institution_id}&select=name`).catch(() => []))?.[0]?.name : ''
+      const brand = cl.normaliseBrand(brandRow || {}, instName)
+      if (problem) return res.status(row ? 410 : 404).json({ error: problem, brand: row ? brand : null })
+      if (req.method === 'GET') {
+        if (!row.opened_at) await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ opened_at: new Date().toISOString() }) }).catch(() => {})
+        const iy = await import('../src/isThisYours.mjs'), cq = await import('../src/claimQuestions.mjs')
+        const since = new Date(Date.now() - 400 * 86400000).toISOString()
+        const history = await rest(`tm_transactions?institution_id=eq.${row.institution_id}&customer_id=eq.${encodeURIComponent(row.customer.id)}&ts=gte.${encodeURIComponent(since)}&order=ts.desc&limit=2000&select=id,ts,amount,currency,counterparty`).catch(() => []) || []
+        const acct = row.customer.accountType || ''
+        return res.status(200).json({ brand, firstName: String(row.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: row.expires_at,
+          cards: row.transactions.map(t => iy.cardFor(t, history)), types: cl.FORM_TYPES,
+          questions: Object.fromEntries(Object.keys(m.CLAIM_TYPES).map(k => [k, cq.publicQuestions(k, acct)])),
+          instructions: Object.fromEntries(Object.keys(m.CLAIM_TYPES).map(k => [k, m.instructionsFor(k).map(value => ({ value, label: m.INSTRUCTIONS[value] }))])), consentText: cl.CONSENT_TEXT })
+      }
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Not allowed' })
+      if (parseInt(req.headers['content-length'] || '0', 10) > MAX_BYTES) return res.status(413).json({ error: 'That’s too much text — shorten it and try again' })
+      const sent = req.body?.claim || {}, body = cl.claimFromForm(row, sent)
+      // Consent is needed to investigate; a customer who recognises every payment has nothing to investigate
+      if (sent.consent !== true && body.answers.recognisesTransaction !== true) return res.status(400).json({ error: 'Tick the box to agree before you send your claim' })
+      // Used once: mark it first, so two sends at the same moment can't both store a claim
+      const took = await rest(`claim_links?id=eq.${row.id}&used_at=is.null&revoked_at=is.null&select=id`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ used_at: new Date().toISOString() }) })
+      if (!took?.length) return res.status(410).json({ error: cl.linkProblem({ used_at: true }), brand })
+      let out
+      try { out = await storeClaim(row.institution_id, body, 'claim form', { link: row.id, ...(row.reference ? { bankReference: row.reference } : {}) }) }
+      catch (e) { out = { code: 500, body: { error: 'We couldn’t send your claim — try again' } } }
+      if (out.code >= 300) {   // nothing stored: the link can be used again
+        await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ used_at: null }) }).catch(() => {})
+        return res.status(out.code).json({ error: out.code === 400 ? 'Some answers are missing — check the form and try again' : out.body.error, problems: out.body.problems })
+      }
+      await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claim_id: out.body.id }) }).catch(() => {})
+      await audit(row.institution_id, 'claim.link_used', row.id, { claim: out.body.id })
+      return res.status(201).json({ id: out.body.id, status: out.body.status, statusText: out.body.statusText, closedAtIntake: !!out.body.closedAtIntake, sentToDesk: !!out.body.sentToDesk, brand })
+    } catch (e) {
+      console.error('claims form:', e.message)
+      return res.status(500).json({ error: 'Something went wrong on our side — try again in a minute' })
+    }
+  }
 
   // ── From Covalence: tell the bank a claim moved on ──
   if (!token.startsWith('cvl_')) {
@@ -174,7 +285,8 @@ module.exports = async function handler(req, res) {
         const type = String(q.questions || ''), acct = m.ACCOUNT_TYPES.includes(q.accountType) ? q.accountType : ''
         if (!type) return res.status(200).json({ claimTypes: Object.entries(m.CLAIM_TYPES).map(([value, label]) => ({ value, label })) })
         if (!m.CLAIM_TYPES[type]) return res.status(400).json({ error: 'Unknown claim type', claimTypes: Object.keys(m.CLAIM_TYPES) })
-        return res.status(200).json({ claimType: type, label: m.CLAIM_TYPES[type], accountType: acct || null, questions: cq.publicQuestions(type, acct) })
+        return res.status(200).json({ claimType: type, label: m.CLAIM_TYPES[type], accountType: acct || null, questions: cq.publicQuestions(type, acct),
+          instructions: m.instructionsFor(type).map(value => ({ value, label: m.INSTRUCTIONS[value] })), straightToDesk: m.DESK_TYPES.includes(type) })
       }
       const filter = q.id ? `id=eq.${encodeURIComponent(String(q.id).slice(0, 20))}` : q.reference ? `external_id=eq.${encodeURIComponent(String(q.reference).slice(0, 120))}` : null
       if (!filter) return res.status(400).json({ error: 'Ask for ?reference=<your claim id> or ?id=CLM-…' })
@@ -184,6 +296,13 @@ module.exports = async function handler(req, res) {
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST a claim, or GET ?reference=…' })
     if (parseInt(req.headers['content-length'] || '0', 10) > MAX_BYTES) return res.status(413).json({ error: 'Request larger than 256 KB — send attachments as links' })
+
+    // ── A link to the hosted claim form, for the bank to send its customer ──
+    if (req.body?.link) {
+      const out = await makeLink(inst, req.body.link, keyRow.prefix)
+      await touchKey()
+      return res.status(out.code).json(out.body)
+    }
 
     // ── "Is this yours?": cards for the transactions the customer is about to dispute ──
     if (req.body?.isThisYours) {
@@ -206,41 +325,9 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ customerId, historyChecked: history.length > 0, cards: txs.map(t => iy.cardFor(t, history)) })
     }
 
-    const now = new Date()
-    const { claim, errors } = m.normaliseClaim(req.body, now)
-    if (errors.length) return res.status(400).json({ error: 'The claim has problems', problems: errors })
-    const id = m.claimIdFrom(crypto.createHash('sha256').update(inst + '|' + claim.externalId).digest('hex'))
-    const clock = m.claimClock(claim), missing = m.missingForDesk(claim)
-    // "That was me": the customer recognises it, so there's nothing to dispute; it's kept, closed
-    const iy = await import('../src/isThisYours.mjs')
-    const recognised = iy.asksIsThisYours(claim.claimType) && claim.answers.recognisesTransaction === true
-    const answerProblems = (await import('../src/claimQuestions.mjs')).checkAnswers(claim.claimType, claim.customer.accountType, claim.answers).problems
-    const received = { status: 'received', at: now.toISOString(), by: keyRow.prefix, note: `Received from the ${m.CHANNELS[claim.channel].toLowerCase().replace('from ', '')}` }
-    const row = { institution_id: inst, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment,
-      status: recognised ? 'closed' : 'received', ready: !recognised && !missing.length,
-      data: { ...claim, clock: recognised ? null : clock, missing: recognised ? [] : missing, source: keyRow.prefix,
-        ...(recognised ? { closedAtIntake: { reason: 'recognised', at: now.toISOString() } } : {}) }, reported_at: claim.reportedAt,
-      history: recognised ? [received, { status: 'closed', at: now.toISOString(), by: keyRow.prefix, note: 'The customer recognised the transaction (“That was me”)', public: iy.RECOGNISED_NOTE }] : [received] }
-    const stored = await rest('app_claims?select=id,external_id,status,history,created_at,updated_at', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify([row]) })
+    const out = await storeClaim(inst, req.body, keyRow.prefix)
     await touchKey()
-
-    if (!stored?.length) {   // the same reference again: answer with where it is now
-      const cur = (await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}&select=id,external_id,status,history,created_at,updated_at`))?.[0]
-      return res.status(200).json({ ...m.publicStatus(cur), duplicate: true })
-    }
-    await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !recognised && !missing.length })
-    const ep = await endpointFor(inst)
-    if (ep?.url) await wh.sendEvent(ep, 'claim.received', m.publicStatus(stored[0])).catch(() => {})
-    if (recognised) {   // no AI triage: there's nothing to work
-      await audit(inst, 'claim.closed_at_intake', id, { reason: 'recognised', reference: claim.externalId })
-      return res.status(201).json({ ...m.publicStatus(stored[0]), duplicate: false, closedAtIntake: true, readyForDesk: false, missing: [] })
-    }
-    // AI triage runs after the bank has its answer; if it fails, the analyst can run it from Triage → Claims
-    const triaged = afterResponse(aiTriage(m, row.data)
-      .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))
-      .catch(e => console.error('claims triage:', e.message)))
-    if (triaged) await triaged
-    return res.status(201).json({ ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) })
+    return res.status(out.code).json(out.body)
   } catch (e) {
     console.error('claims:', e.message)
     return res.status(500).json({ error: 'Couldn’t store the claim — try again' })

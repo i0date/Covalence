@@ -16,6 +16,7 @@ import { QaPanel } from '../QaPanel.jsx'
 import { ImportPanel } from '../ImportPanel.jsx'
 import { FincrimeSettings } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
+import { ClaimFormSettings } from '../ClaimFormSettings.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { SIDES, alertsSource, doesMerchant, workspaceSides } from '../sides.mjs'
 
@@ -48,6 +49,8 @@ const PAGES = [
     keys: ['sarThreshold', 'sarThresholdACH', 'sarThresholdP2P', 'sarThresholdCrypto'] },
   { group: 'Integrations', id: 'connections', label: 'Connections', who: 'admin', workspace: true, blurb: 'Your systems sending data to Covalence, and Covalence acting in them.',
     find: ['API keys', 'Create a key', 'Act in your systems', 'Your endpoint', 'Signing secret', 'Alert notifications', 'Slack', 'For your developers', 'Developer guide'] },
+  { group: 'Integrations', id: 'claimform', label: 'Claim form', who: 'reviewer', workspace: true, blurb: 'The form your app or website can open when a customer reports a problem: your name, logo and phone number on it.',
+    find: ['Hosted claim form', 'Report a problem', 'Logo', 'Support phone number', 'Help page'] },
   { group: 'Integrations', id: 'import', label: 'Import cases', who: 'reviewer', workspace: true, blurb: 'Bring cases in from a CSV or spreadsheet export.', find: ['CSV', 'Mapping', 'Spreadsheet'] },
   { group: 'Records', id: 'audit', label: 'Audit log', workspace: true, blurb: 'Everything that happened in the workspace, in a chain that can’t be changed.', find: ['Export the log', 'Verify the chain'] },
   { group: 'Records', id: 'retention', label: 'Data retention', who: 'admin', workspace: true, blurb: 'How long closed cases are kept, and legal holds.', find: ['Retention period', 'Legal hold', 'Purge'] },
@@ -260,6 +263,7 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
       {activeTab === 'qa'        && <QaPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
       {activeTab === 'fincrime'  && <FincrimeSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} admin={covUser?.role === 'admin'} />}
       {activeTab === 'connections' && <ConnectionsPanel covUser={covUser} />}
+      {activeTab === 'claimform' && <ClaimFormSettings locked={!canChange(page)} demo={!!covUser?.demo && !covUser?.authed} />}
       {activeTab === 'import'    && <ImportPanel covUser={covUser} locked={locked} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
       {activeTab === 'team'      && <TeamPanel covUser={covUser} />}
       {activeTab === 'audit'     && <AuditPanel covUser={covUser} />}

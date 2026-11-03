@@ -12,7 +12,7 @@
 // filing and resolution are sent too (claim.provisional_credit, .filed, .resolved).
 import React, { useEffect, useState } from 'react'
 import { listClaims, setClaim, triageClaim } from './claimsData.js'
-import { CHANNELS, CLAIM_TYPES, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
+import { CHANNELS, CLAIM_TYPES, INSTRUCTIONS, OUTCOMES, STATUSES, STEPS, UPDATE_DAYS, claimTotal, silentDays, waitingClaims } from './claims.mjs'
 import { questionById, answerWords } from './claimQuestions.mjs'
 import { timeLeft } from './clocks.mjs'
 import { canWrite, isSignedIn } from './auth.js'
@@ -39,6 +39,7 @@ const FILTERS = [
   ['ready', 'Ready for Desk', c => c.status !== 'with_desk' && c.ready], ['look', 'Needs a look', c => c.status !== 'with_desk' && !c.ready],
   ['desk', 'With the Desk', c => c.status === 'with_desk'],
 ]
+export const ASK_SHORT = { lock_card: 'LOCK CARD', replace_card: 'NEW CARD', stop_merchant: 'STOP MERCHANT', call_me: 'CALL THEM' }
 const CLOSE_REASONS = ['The customer recognised the transaction', 'The customer withdrew the claim', 'Duplicate of another claim', 'Resolved with the merchant before a dispute', 'Not a dispute: sent to another team']
 
 // Due in → a tone: overdue red, two business days or less amber
@@ -47,6 +48,22 @@ function clockOf(c) {
   if (!k) return null
   const left = new Date(k.due + 'T23:59:59') - Date.now()
   return { ...k, left, text: timeLeft(left), tone: left < 0 ? 'danger' : left < 2 * 86400000 ? 'warn' : 'neutral' }
+}
+
+// What the customer asked the bank to do now, and whether your systems were told (api/claims.js claim.instructions)
+export function Asked({ d }) {
+  const sent = d.instructionsSent
+  return (
+    <div style={{ borderLeft:'3px solid #991B1B', background:'#FEF2F2', padding:'8px 12px', display:'grid', gap:'2px' }}>
+      <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#991B1B' }}>THE CUSTOMER ASKED YOU TO</span>
+      <span className="display-font" style={{ fontSize:'14px', color:'#1A1814' }}>{d.instructions.map(k => INSTRUCTIONS[k] || k).join(' · ')}</span>
+      <span className="display-font" style={{ fontSize:'12px', color:'#57534E' }}>
+        {sent?.ok ? `Sent to your systems ${new Date(sent.at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}. Check it was done.`
+          : sent?.notConnected ? 'Not sent: your systems aren’t connected (Settings → Connections). Do it by hand.'
+          : 'Sending to your systems didn’t work. Do it by hand.'}
+      </span>
+    </div>
+  )
 }
 
 export function AppClaims({ segment, activeId, onTriage }) {
@@ -81,7 +98,9 @@ export function AppClaims({ segment, activeId, onTriage }) {
     return () => clearTimeout(t)
   }, [focus, claims])
   if (claims === null) return null
-  const inSeg = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed')
+  // A dispute about a purchase went straight to the Dispute Desk when it arrived (claims.mjs DESK_TYPES): not Triage's
+  const toDesk = claims.filter(c => (c.segment || 'fi') === segment && c.data?.route === 'desk' && c.status !== 'closed').length
+  const inSeg = claims.filter(c => (c.segment || 'fi') === segment && c.status !== 'closed' && c.data?.route !== 'desk')
   const others = inSeg.filter(c => !SELF_SERVE.includes(c.channel)).length
   const open_ = allChannels ? inSeg : inSeg.filter(c => SELF_SERVE.includes(c.channel))
   const prevVisit = previousVisit()
@@ -103,7 +122,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
   const test = FILTERS.find(f => f[0] === filter)[2]
   const mine = open_.filter(test).sort(order)
   const countOf = f => open_.filter(FILTERS.find(x => x[0] === f)[2]).length
-  if (!open_.length && !others && !err) return (
+  if (!open_.length && !others && !err && !toDesk) return (
     <section aria-label="Claims from your app" className="cov-app-claims">
       <div className="cov-app-claims-bar" style={{ cursor:'default' }}>
         <span className="display-font cov-app-claims-title">From your app and website</span>
@@ -137,6 +156,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
           {open_.length > waiting.length && <span><strong style={{ color:'#1A1814' }}>{open_.length - waiting.length}</strong> WITH THE DESK</span>}
           {urgent > 0 && <span style={{ color:'#991B1B' }}><strong>{urgent}</strong> URGENT</span>}
           {silent.length > 0 && <span style={{ color:'#92400E' }}><strong>{silent.length}</strong> WITHOUT AN UPDATE FOR {UPDATE_DAYS}+ DAYS</span>}
+          {toDesk > 0 && <span title="Disputes about a purchase go straight to the Dispute Desk, without Triage"><strong style={{ color:'#1A1814' }}>{toDesk}</strong> STRAIGHT TO THE DESK</span>}
           {recognised > 0 && <span title="The customer recognised the payment when the app showed the merchant clearly, so the claim closed on arrival"><strong style={{ color:'#1A1814' }}>{recognised}</strong> “THAT WAS ME” · 7 DAYS</span>}
         </span>
         <span className="mono-font cov-app-claims-btn">{shown ? '▴ HIDE' : '▾ SHOW'}</span>
@@ -180,6 +200,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
                     <Badge tone="info">{(CHANNELS[c.channel] || c.channel).toUpperCase()}</Badge>
                     {onDesk ? <Badge tone="dark">WITH THE DESK{c.case_id ? ` · ${c.case_id}` : ''}</Badge> : c.ready ? <Badge tone="ok">READY FOR DESK</Badge> : <Badge>NEEDS A LOOK</Badge>}
                     {c.status === 'in_review' && <Badge tone="dark">IN REVIEW</Badge>}
+                    {d.instructions?.length > 0 && <Badge tone="danger" title="What the customer asked you to do now">ASKED: {d.instructions.map(k => ASK_SHORT[k] || k).join(' · ')}</Badge>}
                     {steps.map(h => <Badge key={h.step} tone="ok">{STEPS[h.step].toUpperCase()}</Badge>)}
                     {!onDesk && ai && <Badge tone={ai.priority === 'urgent' ? 'danger' : 'neutral'} title={ai.summary}>AI · {ROUTES[ai.route].toUpperCase()}{ai.priority === 'urgent' ? ' · URGENT' : ''}</Badge>}
                     {!onDesk && !steps.length && k && <Badge tone={k.tone} title={`${k.what} by ${day(k.due)}`}>{k.rule.toUpperCase()} · {k.text.toUpperCase()}</Badge>}
@@ -228,6 +249,7 @@ export function AppClaims({ segment, activeId, onTriage }) {
                       <Button small variant="quiet" disabled={busy} onClick={() => rerun(c)}>Run AI triage</Button>
                     </p>
                   )}
+                  {d.instructions?.length > 0 && <Asked d={d} />}
                   {d.statement && <blockquote style={{ margin:0, paddingLeft:'10px', borderLeft:'2px solid #D4CCBC', fontStyle:'italic' }}>“{d.statement}”</blockquote>}
                   {!c.ready && d.missing?.length > 0 && <p style={{ margin:0, color:'#92400E' }}>Missing for the Desk: {d.missing.map(x => x.replace(/ \(\w+\)$/, '')).join('; ')}.</p>}
                   {k && <p style={{ margin:0 }}>{k.rule}: {k.what.toLowerCase()} by {day(k.due)}.</p>}
