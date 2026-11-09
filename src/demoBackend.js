@@ -11,6 +11,7 @@ import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom } fro
 import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
 import { sampleLink, sampleHistory } from './claimSamples.mjs'
 import { normaliseAlert, settle as settlePd } from './preDispute.mjs'
+import { normaliseApplication, runChecks, rate } from './onboarding.mjs'
 import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor } from './claimLinks.mjs'
 
 const K = {
@@ -18,7 +19,7 @@ const K = {
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
   sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms', claims: 'cov_demo_claims',
-  claimLinks: 'cov_demo_claim_links', claimForm: 'cov_demo_claim_form', preDispute: 'cov_demo_predispute',
+  claimLinks: 'cov_demo_claim_links', claimForm: 'cov_demo_claim_form', preDispute: 'cov_demo_predispute', onboarding: 'cov_demo_onboarding',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -354,7 +355,86 @@ function demoPreDispute() {
   })
 }
 
+// ── Onboard with Covalence: Demo Bank's applications (supabase_onboarding.sql) ──
+// Nine as they'd arrive: ready to approve, medium and high risk, a PEP, a possible sanctions
+// match, one waiting on the ID check, one sharing details with another, and two businesses.
+// The sanctions results are samples: the demo doesn't screen.
+function demoOnboarding() {
+  const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
+  const addr = (line1, city, region, postal) => ({ line1, city, region, postal, country: 'US' })
+  const base = { purpose: 'everyday', activity: { monthly: '2k_10k' }, sourceOfFunds: 'salary', pep: { declared: false }, consent: true }
+  const P = (name, dob, email, phone, a, extra = {}) => ({ kind: 'person', ...base, occupation: 'Nurse', applicant: { name, dob, email, phone, address: a }, ...extra })
+  const passed = { result: 'passed', provider: 'Persona', providerReference: 'inq_demo' }
+  const raw = [
+    { h: 3,  idv: passed, a: P('Maya Thompson', '1991-04-12', 'maya.thompson@gmail.com', '(617) 555-0142', addr('41 Linden Street', 'Somerville', 'MA', '02143')) },
+    { h: 7,  idv: passed, a: P('Daniel Okafor', '1985-09-03', 'd.okafor@outlook.com', '(713) 555-0199', addr('2200 Westheimer Rd Apt 5', 'Houston', 'TX', '77098'),
+      { occupation: 'Car dealer', purpose: 'sending_abroad', activity: { monthly: '10k_50k', cash: true, international: true, countries: 'Nigeria, Ghana' }, sourceOfFunds: 'business_income' }), ip: 'NG' },
+    { h: 20, idv: passed, a: P('Elena Vasquez', '1968-01-22', 'elena.vasquez@vasquezlaw.com', '(305) 555-0110', addr('900 Brickell Key Blvd', 'Miami', 'FL', '33131'),
+      { occupation: 'Attorney', purpose: 'savings', activity: { monthly: '50k_250k', international: true, countries: 'Colombia' }, sourceOfFunds: 'investments', pep: { declared: true, detail: 'Deputy mayor of Miami-Dade, 2014–2018' } }) },
+    { h: 5,  idv: passed, a: P('Viktor Arbatov', '1972-06-30', 'v.arbatov@protonmail.com', '(212) 555-0177', addr('15 Central Park West', 'New York', 'NY', '10023'),
+      { occupation: 'Investor', purpose: 'savings', activity: { monthly: 'over_250k', international: true, countries: 'Cyprus, UAE' }, sourceOfFunds: 'investments' }),
+      sanctions: { results: [{ role: 'Applicant', name: 'Viktor Arbatov', hits: [{ name: 'ARBATOV, Viktor Pavlovich (sample match)', programs: ['RUSSIA-EO14024'], score: 0.94 }] }] } },
+    { h: 1,  idv: null,   a: P('Priya Raman', '1999-11-08', 'priya.raman@icloud.com', '(408) 555-0123', addr('77 Mission Street', 'San Jose', 'CA', '95112'), { occupation: 'Software engineer' }) },
+    { h: 2,  idv: { result: 'review', provider: 'Persona', providerReference: 'inq_demo2' }, a: P('Jordan Lee', '2001-02-14', 'jl.accounts@mailinator.com', '(602) 555-0148', addr('PO Box 4410', 'Phoenix', 'AZ', '85001'), { occupation: 'Student' }),
+      duplicates: [{ field: 'Phone', id: 'ONB-0B0A1D0011', sameName: false }, { field: 'Network address (IP)', id: 'ONB-0B0A1D0011', sameName: false }] },
+    { h: 26, idv: passed, a: { kind: 'business', ...base, purpose: 'receiving', activity: { monthly: '10k_50k' }, sourceOfFunds: 'business_income',
+      business: { name: 'Harbor & Pine Coffee LLC', type: 'LLC', industry: 'hospitality', registeredIn: 'MA', formedOn: '2019-05-01', website: 'https://harborandpine.example', address: addr('120 Hanover Street', 'Boston', 'MA', '02108') },
+      applicant: { name: 'Grace Liu', dob: '1987-03-19', email: 'grace@harborandpine.example', phone: '(617) 555-0166', address: addr('8 Union Park', 'Boston', 'MA', '02118') },
+      owners: [{ name: 'Grace Liu', dob: '1987-03-19', ownership: 60, controller: true, title: 'Managing member', address: addr('8 Union Park', 'Boston', 'MA', '02118') },
+               { name: 'Samuel Brooks', dob: '1983-12-02', ownership: 40, address: addr('31 Pearl Street', 'Cambridge', 'MA', '02139') }] } },
+    { h: 30, idv: passed, a: { kind: 'business', ...base, purpose: 'international', activity: { monthly: 'over_250k', cash: true, international: true, countries: 'Mexico, Guatemala' }, sourceOfFunds: 'business_income',
+      business: { name: 'Northgate Exchange Services LLC', type: 'LLC', industry: 'msb', registeredIn: 'TX', formedOn: new Date(now - 120 * DAY).toISOString().slice(0, 10), address: addr('4100 Alameda Ave', 'El Paso', 'TX', '79905') },
+      applicant: { name: 'Ramon Ortiz', dob: '1979-08-27', email: 'ramon@northgate-exchange.example', phone: '(915) 555-0131', address: addr('22 Mesa Hills Dr', 'El Paso', 'TX', '79912') },
+      owners: [{ name: 'Ramon Ortiz', dob: '1979-08-27', ownership: 50, address: addr('22 Mesa Hills Dr', 'El Paso', 'TX', '79912') }] } },
+    { h: 24 * 12, idv: passed, a: P('Aisha Bello', '1994-07-15', 'aisha.bello@gmail.com', '(312) 555-0187', addr('1500 N Lake Shore Dr', 'Chicago', 'IL', '60610'), { occupation: 'Pharmacist' }),
+      decided: { status: 'approved', by: 'Maria', note: 'Everything checked out' } },
+  ]
+  return raw.map((r, i) => {
+    const at = new Date(now - r.h * 3600000)
+    const { app } = normaliseApplication({ ...r.a, reference: 'APP-' + (52310 + i) }, at)
+    const idv = r.idv ? { result: r.idv.result, provider: r.idv.provider, reference: r.idv.providerReference, at: ago(r.h - 0.5) } : null
+    const checks = runChecks(app, { sanctions: r.sanctions || { results: [] }, duplicates: r.duplicates || [], ipCountry: r.ip || 'US', idv, now: at })
+    const { rating, reasons, status, recommend } = rate(app, checks)
+    const history = [{ status, at: at.toISOString(), by: 'The customer', note: 'Through the onboarding form' }]
+    const out = { id: 'ONB-0B0A1D' + String(i + 1).padStart(4, '0'), reference: app.reference, kind: app.kind, channel: 'form', applicant: app, checks, rating, reasons, recommend,
+      status, idv, history, created_at: at.toISOString(), updated_at: at.toISOString() }
+    if (r.decided) { out.status = r.decided.status; out.history.push({ status: r.decided.status, at: ago(r.h - 20), by: r.decided.by, note: r.decided.note }) }
+    return out
+  })
+}
+
 const HANDLERS = {
+
+  // Onboard with Covalence (supabase_onboarding.sql): seeded the first time
+  onboarding_list: () => { let all = read(K.onboarding, null); if (!all) { all = demoOnboarding(); write(K.onboarding, all) } return all },
+  onboarding_decide: ({ p_id, p_action, p_note }) => {
+    need(canWrite(), 'Your role can’t decide applications')
+    need(['approve', 'more_info', 'decline'].includes(p_action), 'Unknown decision')
+    const all = read(K.onboarding, []), a = all.find(x => x.id === p_id), note = String(p_note || '').trim().slice(0, 500)
+    need(a, 'No such application'); need(!['approved', 'declined'].includes(a.status), `This application was already decided (${a.status})`)
+    need(p_action !== 'approve' || a.status !== 'on_hold', 'Clear the possible sanctions match before approving')
+    need(p_action !== 'approve' || a.idv?.result === 'passed', 'Approve once the identity check has passed')
+    need(p_action !== 'approve' || a.rating !== 'high' || note, 'A high-risk approval needs a note: what enhanced due diligence was done')
+    need(p_action === 'approve' || note, 'Say what you need, or why it’s declined')
+    const next = p_action === 'approve' ? 'approved' : p_action === 'decline' ? 'declined' : 'more_info'
+    a.status = next; a.updated_at = new Date().toISOString(); a.history = [...a.history, { status: next, at: a.updated_at, by: visitor().name || 'You', note }]
+    write(K.onboarding, all)
+    audit('onboarding.' + next, 'onboarding', a.id, { rating: a.rating, note: note.slice(0, 200) })
+    return { id: a.id, status: a.status, changed: true }
+  },
+  onboarding_clear_hold: ({ p_id, p_note }) => {
+    need(canWrite(), 'Your role can’t decide applications')
+    const all = read(K.onboarding, []), a = all.find(x => x.id === p_id), note = String(p_note || '').trim().slice(0, 500)
+    need(note, 'Say why it isn’t a match'); need(a, 'No such application'); need(a.status === 'on_hold', 'This application isn’t on hold')
+    a.status = a.idv ? 'to_review' : 'waiting_idv'; a.updated_at = new Date().toISOString()
+    a.checks = a.checks.map(c => c.key === 'sanctions' ? { ...c, state: 'pass', detail: 'Cleared as a false positive: ' + note } : c)
+    a.reasons = a.reasons.filter(r => r !== 'A possible sanctions match')
+    a.recommend = { action: !a.idv ? 'wait' : a.rating === 'high' ? 'edd' : 'review', why: 'The possible sanctions match was cleared as a false positive. The rating is kept as it was: look at the remaining reasons.' }
+    a.history = [...a.history, { status: 'cleared', at: a.updated_at, by: visitor().name || 'You', note }]
+    write(K.onboarding, all)
+    audit('onboarding.hold_cleared', 'onboarding', a.id, { note: note.slice(0, 200) })
+    return { id: a.id, status: a.status, changed: true }
+  },
   // Transaction monitoring (supabase_monitoring.sql) — kept to the last 20,000 transactions
   tm_ingest: ({ p_rows }) => {
     need(canWrite(), 'Your role can’t import transactions')

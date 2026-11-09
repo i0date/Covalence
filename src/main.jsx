@@ -6,6 +6,7 @@ import CaseViewer from './CaseViewer.jsx'
 import AiPage from './AiPage.jsx'
 import DevelopersPage from './DevelopersPage.jsx'
 import ClaimFormPage from './ClaimFormPage.jsx'
+import OnboardPage from './OnboardPage.jsx'
 import { initCaseStore } from './caseStore.js'
 
 const caseToken = new URLSearchParams(window.location.search).get('case')
@@ -13,11 +14,12 @@ const path = window.location.pathname.replace(/\/+$/, '')
 const aiPage = path === '/ai'                 // public: how Covalence uses AI
 const devPage = path === '/developers'       // public: how to connect your systems
 const claimToken = path.match(/^\/claim\/([A-Za-z0-9_-]{4,80})$/)?.[1]   // public: the hosted claim form, opened by its link
+const onboardToken = path.match(/^\/onboard\/([A-Za-z0-9_-]{4,80})$/)?.[1]   // public: the hosted onboarding form, opened by its link
 
 // Cases load from IndexedDB first, so the tools (and demo seeding) can read them synchronously
 initCaseStore().finally(() => ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {claimToken ? <ClaimFormPage token={claimToken} /> : aiPage ? <AiPage /> : devPage ? <DevelopersPage /> : caseToken ? <CaseViewer token={caseToken} /> : <Covalence />}
-    {!claimToken && <Analytics />}{/* a claim link is a key: it stays out of analytics */}
+    {onboardToken ? <OnboardPage token={onboardToken} /> : claimToken ? <ClaimFormPage token={claimToken} /> : aiPage ? <AiPage /> : devPage ? <DevelopersPage /> : caseToken ? <CaseViewer token={caseToken} /> : <Covalence />}
+    {!claimToken && !onboardToken && <Analytics />}{/* a claim or onboarding link is a key: it stays out of analytics */}
   </React.StrictMode>
 ))

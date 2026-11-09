@@ -2,6 +2,7 @@
 // Works on the same case records as the dispute tools. Rules and screening are
 // in fincrime.js; this is where the BSA/AML team does the work:
 //   Queue           possible matches, OFAC reports due, SAR decisions and filings
+//   Onboarding      new customers to decide (Onboard with Covalence: OnboardingQueue.jsx)
 //   Investigations  cases tied together by a shared customer, payee or wallet
 //   SAR builder     facts gathered from the cases, an AI-drafted narrative with
 //                   every statement traced to a case, and a worksheet for BSA E-Filing
@@ -15,6 +16,7 @@ import { amlIndex, amlSignals, screeningStatus, walletsOf } from '../fincrime.js
 import { EXPLAIN_RULES, aiDraftRecord, readAiJson } from '../ai.js'
 import { Badge, Button } from '../ui.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
+import { OnboardingQueue } from '../OnboardingQueue.jsx'
 
 const DAY = 86400000
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
@@ -111,7 +113,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
   const clusters = useMemo(() => clustersOf(cases, settings), [cases, settings])
   const open = cases.filter(c => !CLOSED_STATUSES.includes(c.status))
 
-  const TABS = [['queue', 'Queue', potential.length + toReport.length + toDecide.length + toFile.length], ['alerts', 'Alerts', null], ['investigations', 'Investigations', clusters.length], ['sar', 'SAR builder', toDecide.length + toFile.length], ['log', 'Screening log', null]]
+  const TABS = [['queue', 'Queue', potential.length + toReport.length + toDecide.length + toFile.length], ['alerts', 'Alerts', null], ['onboarding', 'Onboarding', null], ['investigations', 'Investigations', clusters.length], ['sar', 'SAR builder', toDecide.length + toFile.length], ['log', 'Screening log', null]]
 
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -122,7 +124,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
             <span style={{ fontWeight:700 }}>Li</span><span style={{ fontStyle:'italic', fontWeight:500 }}>cit</span>
           </h1>
           <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:1.6, maxWidth:'600px' }}>
-            The compliance desk. Sanctions matches, money-laundering investigations and SARs — on the same case records the dispute team works, so nothing is keyed twice.
+            The compliance desk. New customers, sanctions matches, money-laundering investigations and SARs — on the same records the dispute team works, so nothing is keyed twice.
           </p>
         </div>
         <div className="mono-font text-xs tracking-widest text-stone-600">{new Date().toLocaleDateString('en-US', { day:'2-digit', month:'short', year:'numeric' }).toUpperCase()}</div>
@@ -189,6 +191,8 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
       </>)}
 
       {tab === 'alerts' && <AlertsPanel outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} />}
+
+      {tab === 'onboarding' && <OnboardingQueue covUser={covUser} />}
 
       {tab === 'sar' && <SarBuilder cases={cases} clusters={clusters} settings={settings} covUser={covUser} setOutcomes={setOutcomes} preset={sarIds} />}
 

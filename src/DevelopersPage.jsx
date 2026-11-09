@@ -23,7 +23,7 @@ function Code({ children }) {
     </div>
   )
 }
-const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['predispute', 'Pre-dispute alerts (merchants)'], ['events', 'What your endpoint receives']]
+const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['predispute', 'Pre-dispute alerts (merchants)'], ['onboarding', 'Customer onboarding'], ['events', 'What your endpoint receives']]
 
 export default function DevelopersPage() {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
@@ -185,6 +185,33 @@ Authorization: Bearer cvl_…
           <li><strong>What comes back:</strong> <code>predispute.decided</code> with the decision (refunded, already_refunded, declined, shared, acknowledged), the amount, the order and the ARN.</li>
         </ul>
       </section>
+      <section style={box} id="onboarding">
+        <H2>CUSTOMER ONBOARDING</H2>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px', lineHeight:1.6 }}>New customers, people or businesses, checked when they open an account and decided by your compliance team in 005 Licit → Onboarding. Send the application from your own app, or open Covalence’s hosted form for the customer. Your endpoint must be set up first: ID numbers (SSN, ITIN, EIN) go straight to it as a signed <code>onboarding.identity</code> event and aren’t kept in Covalence, which keeps only the last four digits.</p>
+        <Code>{`POST ${origin}/api/onboarding
+Authorization: Bearer cvl_…
+
+{ "link": { "kind": "person", "reference": "APP-52310",
+            "prefill": { "name": "Maya Thompson", "email": "maya@example.com" } } }
+→ { "id": "ONL-…", "url": "${origin}/onboard/cvo_…", "expiresAt": "…" }   open it in your app; works once, 72 hours
+
+{ "application": { "kind": "person", "reference": "APP-52311",
+    "applicant": { "name": "…", "dob": "1991-04-12", "email": "…", "phone": "…", "idNumber": "123456789",
+                   "address": { "line1": "…", "city": "…", "region": "MA", "postal": "02143", "country": "US" } },
+    "occupation": "Nurse", "purpose": "everyday", "activity": { "monthly": "2k_10k", "cash": false, "international": false },
+    "sourceOfFunds": "salary", "pep": { "declared": false }, "consent": true } }
+→ { "id": "ONB-…", "status": "waiting_idv", "rating": "low" }
+
+{ "idv": { "reference": "APP-52311", "result": "passed", "provider": "Persona", "providerReference": "inq_…" } }
+
+GET ${origin}/api/onboarding?reference=APP-52311   → where it is now`}</Code>
+        <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+          <li><strong>Businesses:</strong> <code>"kind": "business"</code> with <code>business</code> (name, dba, type, industry, registeredIn, formedOn, website, ein, address), <code>applicant</code> (the person opening it) and <code>owners</code>: everyone with 25% or more, and one person who manages it (<code>"controller": true</code>), each with name, dob, ownership and address.</li>
+          <li><strong>Checks on arrival:</strong> OFAC screening of every name, the applicant’s answer on public positions (no PEP list is connected), age, a PO box as a home address, throwaway email domains, where a hosted-form application was sent from, details used on other applications in the last 90 days, a business’s owners and industry. Then a rating (low, medium or high) with its reasons.</li>
+          <li><strong>Identity documents and selfies</strong> stay with your identity provider. Post its result as <code>{'{ "idv": … }'}</code>; an application waits for it, and can’t be approved until it has passed.</li>
+          <li><strong>What comes back:</strong> <code>onboarding.received</code> on arrival, then <code>onboarding.decided</code> with the decision (approved, declined or more_info), the rating and the analyst’s note.</li>
+        </ul>
+      </section>
       <section style={box} id="events">
         <H2>WHAT YOUR ENDPOINT RECEIVES</H2>
         <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>An admin sets your endpoint and its signing secret in Settings → Connections. Covalence sends a signed event when an analyst presses Block the card, Hold the payment or Lock the account, when new alerts arrive, and when a claim from your app moves on.</p>
@@ -199,7 +226,7 @@ Covalence-Signature: t=1793170000,v1=5f2c…   (HMAC-SHA256 of "<t>.<body>" with
 
 Answer 2xx when it's done — add { "reference": "HOLD-5521" } to show it on the alert.`}</Code>
         <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'6px 0 0', lineHeight:1.5 }}>
-          Other events: <code>alert.created</code> (new alerts, with their customer and recommended action) and <code>covalence.test</code>. Check the signature and reject anything older than five minutes. Actions for crypto exchanges arrive as <code>block_card</code> (lock the account) and <code>hold_payment</code> (hold the withdrawal) with <code>"segment": "ce"</code>.
+          Other events: <code>onboarding.identity</code>, <code>onboarding.received</code> and <code>onboarding.decided</code> (Customer onboarding, above), <code>alert.created</code> (new alerts, with their customer and recommended action) and <code>covalence.test</code>. Check the signature and reject anything older than five minutes. Actions for crypto exchanges arrive as <code>block_card</code> (lock the account) and <code>hold_payment</code> (hold the withdrawal) with <code>"segment": "ce"</code>.
         </p>
       </section>
       </main>

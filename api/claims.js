@@ -1,4 +1,5 @@
 // Vercel serverless function — /api/claims → disputes reported in the bank's own app
+// (also serves /api/onboarding: see api/_onboarding.js)
 // From the bank's systems, with an API key from Settings → Connections:
 //   POST /api/claims                 Authorization: Bearer cvl_…   { one claim }  → stored, lands in 001 Triage → Claims
 //   GET  /api/claims?reference=…     Authorization: Bearer cvl_…                   → where the claim is now
@@ -114,6 +115,8 @@ function afterResponse(p) {
 }
 
 module.exports = async function handler(req, res) {
+  // /api/onboarding is served here (vercel.json rewrite): the free plan allows 12 functions
+  if (req.query?.route === 'onboarding') return require('./_onboarding.js')(req, res)
   res.setHeader('Cache-Control', 'no-store')
   const supa = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL, svc = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supa || !svc) return res.status(500).json({ error: 'Claims are not configured' })
