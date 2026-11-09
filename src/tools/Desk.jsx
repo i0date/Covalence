@@ -324,25 +324,45 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
   // COV- number the next analysis should reuse (set by a Triage handoff or by opening a tracked case)
   const pendingCaseIdRef = useRef(null)
   const pendingIntakeRef = useRef(null)   // a claim from the bank's app: { claimId, reference, channel, reportedAt }
-  // Case panel → "Open in Desk": pre-fill the form from the case (no automatic AI re-run)
-  useEffect(() => {
-    const o = deskOpenRequest?.case
-    if (!o) return
-    if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
-    if (o.amount && o.amount !== '—') {
-      const pts = String(o.amount).split(' ')
-      if (pts[0]) setAmount(pts[0])
-      if (pts[1]) setCurrency(pts[1])
-    }
-    if (o.network) setNetwork(String(o.network).toLowerCase().includes('visa') ? 'visa' : 'mastercard')
-    if (o._transactionDate || o._triageRecord?._transactionDate) setTransactionDate(o._transactionDate || o._triageRecord._transactionDate)
-    if (o._cardType) setCardType(o._cardType)
-    setComplaint(o._complaint || o._triageRecord?._complaint || '')   // never leave the last case's words behind
+  // A saved case into the form: every field the analysis reads, from the case or back to
+  // its default, so nothing from the last case is left behind (Open in Desk, ↺ RERUN)
+  const loadCaseIntoForm = (o) => {
+    const pts = o.amount && o.amount !== '—' ? String(o.amount).split(' ') : []
+    const net = String(o.network || '').toLowerCase()
+    setMerchant(o.merchant && o.merchant !== '—' ? o.merchant : '')
+    setAmount(pts[0] || '')
+    setCurrency(pts[1] || o._currency || currency)
+    if (net) setNetwork(net.includes('visa') ? 'visa' : 'mastercard')
+    setTransactionDate(o._transactionDate || o._triageRecord?._transactionDate || '')
+    setExpectedDeliveryDate(o._expectedDeliveryDate || '')
+    setDisputedAmount(o._disputedAmount || '')
+    setCardType(o._cardType || 'credit')
+    setThreeDSStatus(o.threeDSStatus || 'unknown')
+    setFiAvsMismatch(o.avsMismatch === true ? true : o.avsMismatch === false ? false : null)
+    setFiIsVFMP(o.isVFMP === true ? true : o.isVFMP === false ? false : null)
+    setFiPriorClaims(o.priorClaims != null ? String(o.priorClaims) : '')
+    setComplaint(o._complaint || o._triageRecord?._complaint || '')
     if (o.cbStage) setCbCycleStage(o.cbStage)
     if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
     setCurrentDeskCaseId(o.id)
     pendingCaseIdRef.current = o.id
     setResult(null); setRebuttal(null); setError(null)
+  }
+  // ↺ RERUN: analyse once the form holds the case (an analysis started in the same click
+  // would read the form as it was before, i.e. the previous case's details)
+  const [rerunFor, setRerunFor] = useState(null)
+  useEffect(() => {
+    if (!rerunFor || rerunFor !== currentDeskCaseId) return
+    setRerunFor(null)
+    if (complaint.trim()) analyze()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rerunFor, currentDeskCaseId, complaint])
+
+  // Case panel → "Open in Desk": pre-fill the form from the case (no automatic AI re-run)
+  useEffect(() => {
+    const o = deskOpenRequest?.case
+    if (!o) return
+    loadCaseIntoForm(o)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deskOpenRequest])
@@ -574,6 +594,8 @@ Return ONLY a valid JSON object:
         _transactionDate: transactionDate,
         _cardType: cardType,
         _currency: currency,
+        _expectedDeliveryDate: expectedDeliveryDate || '',
+        _disputedAmount: disputedAmount && parseFloat(disputedAmount) > 0 ? disputedAmount : '',
       }, ...prev.filter(p => p.id !== _newCaseId)] })
     } catch (e) {
       setError(`Analysis failed: ${e.message}`)
@@ -3622,28 +3644,14 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     )}
                                   <button
                                     onClick={() => {
-                                      if (o.merchant && o.merchant !== '—') setMerchant(o.merchant)
-                                      if (o.amount && o.amount !== '—') {
-                                        const pts = (o.amount || '').split(' ')
-                                        if (pts[0]) setAmount(pts[0])
-                                        if (pts[1]) setCurrency(pts[1])
-                                      }
-                                      if (o.network) setNetwork((o.network||'').toLowerCase().includes('visa') ? 'visa' : 'mastercard')
-                                      if (o._transactionDate) setTransactionDate(o._transactionDate)
-                                      if (o._cardType) setCardType(o._cardType)
-                                      if (o._complaint) setComplaint(o._complaint)
-                                      if (o.cbStage) setCbCycleStage(o.cbStage)
-                                      if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
-                                      setCurrentDeskCaseId(o.id)
-                                      pendingCaseIdRef.current = o.id
-                                      setResult(null); setRebuttal(null); setError(null)
+                                      loadCaseIntoForm(o)
                                       if (onGoToDesk) onGoToDesk()
                                       window.scrollTo({ top: 0, behavior: 'smooth' })
-                                      if (o._complaint) setTimeout(() => analyze(o._complaint), 0)
+                                      if (o._complaint || o._triageRecord?._complaint) setRerunFor(o.id)
                                     }}
                                     className="mono-font text-[10px] tracking-wide px-1.5 py-0.5 border border-stone-500 text-stone-600 hover:bg-stone-50 transition-colors whitespace-nowrap"
-                                    title={o._complaint ? 'Re-run analysis on this case' : 'Pre-fill desk form from this case (no saved complaint)'}
-                                  >{o._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
+                                    title={o._complaint || o._triageRecord?._complaint ? 'Re-run the analysis on this case, with everything saved on it' : 'Pre-fill the desk form from this case (no saved explanation to analyse)'}
+                                  >{o._complaint || o._triageRecord?._complaint ? '↺ RERUN' : 'OPEN IN DESK'}</button>
                                    <button
                                      onClick={() => setExpandedCbRow(expandedCbRow === o.id ? null : o.id)}
                                      className="mono-font text-[10px] tracking-wide px-1.5 py-0.5 border transition-colors whitespace-nowrap"
