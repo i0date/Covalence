@@ -1,6 +1,12 @@
 // Vercel serverless function — POST /api/action → act on an alert in the institution's own systems
 //   Authorization: Bearer <Supabase session token>
 //   { "alertId": "...", "action": "block_card" | "hold_payment" }   or   { "test": true }
+//   { "preDisputeId": "PDA-…" }   after a decision on a merchant's pre-dispute alert (supabase_predispute.sql
+//                                 predispute_act): predispute.decided, so the merchant's systems refund and
+//                                 report the outcome to Ethoca or Verifi
+//   { "merchantWarning": { caseId, merchant, amount, currency, network, arn, cardLast4, reason, until } }
+//                                 a bank warning the merchant before filing (src/merchantWarning.mjs):
+//                                 dispute.merchant_warning, so the bank's systems raise it with Ethoca or Verifi
 // Covalence POSTs a signed action.requested event to the endpoint saved in Settings →
 // Connections (supabase_actions.sql); the institution's receiver blocks the card, holds
 // the payment or locks the account, and answers 2xx — ideally with { "reference": "..." }.
@@ -50,7 +56,7 @@ module.exports = async function handler(req, res) {
   if (!member) return res.status(403).json({ error: 'You aren’t a member of an institution' })
   const inst = member.institution_id
 
-  const { alertId, action, test } = req.body || {}
+  const { alertId, action, test, preDisputeId, merchantWarning: mw } = req.body || {}
   if (test ? !CONFIGURERS.includes(member.role) : !WRITERS.includes(member.role)) return res.status(403).json({ error: `Your role (${member.role}) can’t do this` })
 
   const endpoint = (await rest(`action_endpoints?institution_id=eq.${inst}&select=url,secret`))[0]
@@ -58,7 +64,24 @@ module.exports = async function handler(req, res) {
 
   let type, data
   const by = { name: member.display_name || '', email: member.email || user.email || '' }
-  if (test) {
+  if (preDisputeId) {
+    if (typeof preDisputeId !== 'string' || !/^PDA-[A-F0-9]{10}$/.test(preDisputeId)) return res.status(400).json({ error: 'Send preDisputeId as PDA-…' })
+    const row = (await rest(`predispute_alerts?institution_id=eq.${inst}&id=eq.${preDisputeId}&select=id,external_id,source,network,amount,currency,order_id,arn,status,history`))[0]
+    if (!row) return res.status(404).json({ error: 'No such alert in your institution' })
+    if (row.status === 'open') return res.status(409).json({ error: 'This alert hasn’t been decided yet' })
+    type = 'predispute.decided'
+    data = { id: row.id, alertId: row.external_id, source: row.source, network: row.network, decision: row.status, amount: Number(row.amount), currency: row.currency,
+      orderId: row.order_id || null, arn: row.arn || null, note: (row.history || []).at(-1)?.note || '', requestedBy: by }
+  } else if (mw) {
+    const str = (v, n) => String(v ?? '').trim().slice(0, n)
+    const amount = Number(mw.amount), until = new Date(mw.until)
+    if (typeof mw !== 'object' || !str(mw.caseId, 60) || !isFinite(amount) || amount <= 0 || !['Visa', 'Mastercard'].includes(mw.network) || isNaN(until))
+      return res.status(400).json({ error: 'Send merchantWarning with caseId, amount, network (Visa or Mastercard) and until' })
+    type = 'dispute.merchant_warning'
+    data = { caseId: str(mw.caseId, 60), via: mw.network === 'Visa' ? 'verifi_cdrn' : 'ethoca', network: mw.network, merchant: str(mw.merchant, 160),
+      amount: Math.round(amount * 100) / 100, currency: str(mw.currency || 'USD', 3).toUpperCase(), arn: str(mw.arn, 40).replace(/\s/g, '') || null,
+      cardLast4: String(mw.cardLast4 ?? '').replace(/\D/g, '').slice(-4) || null, reason: ['fraud', 'dispute'].includes(mw.reason) ? mw.reason : 'dispute', respondBy: until.toISOString(), requestedBy: by }
+  } else if (test) {
     type = 'covalence.test'
     data = { message: 'A test event from Covalence. Answer 2xx to show it arrived.', requestedBy: by }
   } else {
@@ -73,8 +96,8 @@ module.exports = async function handler(req, res) {
 
   const r = await sendEvent(endpoint, type, data)
   const reference = r.json && (r.json.reference || r.json.id) ? String(r.json.reference || r.json.id).slice(0, 120) : null
-  await fetch(`${supa}/rest/v1/rpc/audit_add`, { method: 'POST', headers: H, body: JSON.stringify({ p_inst: inst, p_action: test ? 'connection.tested' : 'alert.action_sent', p_entity: test ? 'workspace' : 'alert',
-    p_entity_id: test ? 'action_endpoint' : alertId, p_detail: { action: action || null, event: r.id || null, status: r.status, ok: r.ok, reference, by: by.email } }) }).catch(() => {})
+  await fetch(`${supa}/rest/v1/rpc/audit_add`, { method: 'POST', headers: H, body: JSON.stringify({ p_inst: inst, p_action: test ? 'connection.tested' : preDisputeId ? 'predispute.sent' : mw ? 'case.merchant_warning_sent' : 'alert.action_sent', p_entity: test ? 'workspace' : preDisputeId ? 'predispute' : mw ? 'case' : 'alert',
+    p_entity_id: test ? 'action_endpoint' : preDisputeId || (mw ? data.caseId : alertId), p_detail: { action: action || null, event: r.id || null, status: r.status, ok: r.ok, reference, by: by.email } }) }).catch(() => {})
 
   if (!r.ok) return res.status(200).json({ ok: false, status: r.status, error: r.error || `Your endpoint answered ${r.status}${r.text ? `: ${r.text.slice(0, 160)}` : ''}`, event: r.id || null })
   return res.status(200).json({ ok: true, status: r.status, reference, event: r.id })

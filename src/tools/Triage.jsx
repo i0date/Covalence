@@ -11,6 +11,7 @@ import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
 import { alertsSource } from '../sides.mjs'
 import { AppClaims } from '../AppClaims.jsx'
+import { PreDisputePanel } from '../PreDisputePanel.jsx'
 import { setClaim } from '../claimsData.js'
 import { CLAIM_TYPES, TRIAGE_EQUIV, claimTotal } from '../claims.mjs'
 import { questionById, answerWords } from '../claimQuestions.mjs'
@@ -40,8 +41,7 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake,
   // Two ways in: alerts the bank's monitoring raised, and claims customers report
   // Where Triage starts is an institution default (Settings → Default views)
   const [intakeTab, setIntakeTab] = useState(() => settings?.triageDefaultTab === 'claims' ? 'claims' : 'alerts')
-  // Merchant (complaints from your own customers) is a side of Claims only; Alerts go back to the FI side
-  const pickIntake = k => { setIntakeTab(k); if (k === 'alerts') setTriageChannelMode(m => m === 'mx' ? 'fi' : m) }
+  const pickIntake = setIntakeTab
   // Other screens can send people to a tab here: 'cov:go' with { section: 'triage', tab: 'claims' | 'alerts' }
   useEffect(() => {
     const h = e => { if (e.detail?.section === 'triage' && ['claims', 'alerts'].includes(e.detail.tab)) setIntakeTab(e.detail.tab) }
@@ -845,7 +845,7 @@ Return ONLY valid JSON:
         </p>
         {/* Alerts (the FI, the exchange or the network found it) | Claims (the customer reported it) */}
         <div role="tablist" aria-label="Triage" className="mt-6" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC' }}>
-          {[['alerts', 'Alerts', alertsSource(sides, isCE)], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
+          {[['alerts', 'Alerts', alertsSource(sides, isCE, triageChannelMode)], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
             <button key={k} role="tab" aria-selected={intakeTab === k} onClick={() => pickIntake(k)} className="mono-font"
               style={{ background:'none', border:'none', borderBottom: intakeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px', padding:'10px 16px', cursor:'pointer', textAlign:'left' }}>
               <span style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: intakeTab === k ? '#1A1814' : '#6B6259', fontWeight:600 }}>{l.toUpperCase()}</span>
@@ -855,7 +855,7 @@ Return ONLY valid JSON:
         </div>
         {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA', maxWidth: '100%', flexWrap: 'wrap' }}>
-          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, ...(intakeTab === 'claims' ? [{ id: 'mx', label: 'Merchant' }] : [])].map(m => (
+          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, { id: 'mx', label: 'Merchant' }].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
               style={{ background: triageChannelMode === m.id ? '#1A1814' : 'transparent', color: triageChannelMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
@@ -865,8 +865,10 @@ Return ONLY valid JSON:
         </div>
       </div>
 
-      {intakeTab === 'alerts' && (
-        <AlertsPanel kind="fraud" segment={triageChannelMode === 'mx' ? 'fi' : triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
+      {/* A merchant's alerts are the network's warnings before a chargeback */}
+      {intakeTab === 'alerts' && triageChannelMode === 'mx' && <PreDisputePanel settings={settings} />}
+      {intakeTab === 'alerts' && triageChannelMode !== 'mx' && (
+        <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
           institution={settings?.duoInstitutionName || covUser?.institution || ''} />
       )}
 

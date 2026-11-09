@@ -10,6 +10,7 @@ import { readCases, writeCases } from './caseStore.js'
 import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom } from './claims.mjs'
 import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
 import { sampleLink, sampleHistory } from './claimSamples.mjs'
+import { normaliseAlert, settle as settlePd } from './preDispute.mjs'
 import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor } from './claimLinks.mjs'
 
 const K = {
@@ -17,7 +18,7 @@ const K = {
   retention: 'cov_demo_retention_days', purged: 'cov_demo_purged', duo: 'cov_demo_duo', links: 'cov_demo_links',
   seeded: 'cov_demo_backend', role: 'cov_demo_role', tmTx: 'cov_demo_tm_tx', tmAlerts: 'cov_demo_tm_alerts', tmEvents: 'cov_demo_tm_events', keys: 'cov_demo_intake_keys', endpoint: 'cov_demo_action_endpoint', feed: 'cov_demo_feed_at',
   sharing: 'cov_demo_sharing', shareLog: 'cov_demo_share_log', arn: 'cov_demo_arn_invites', arnState: 'cov_demo_arn_state', settle: 'cov_demo_settlements', alarms: 'cov_demo_alarms', claims: 'cov_demo_claims',
-  claimLinks: 'cov_demo_claim_links', claimForm: 'cov_demo_claim_form',
+  claimLinks: 'cov_demo_claim_links', claimForm: 'cov_demo_claim_form', preDispute: 'cov_demo_predispute',
 }
 export const DEMO_INSTITUTION = 'Demo Bank'
 const COUNTERPARTY = 'Harbor Credit Union'
@@ -329,6 +330,29 @@ function demoLinkCreate(b, by) {
 // bank's, exchange's or shop's app would make when they tap Report a problem
 const demoSampleLink = (seg = 'fi') => demoLinkCreate(sampleLink(seg), 'Sample')
 const demoBrand = () => normaliseBrand(read(K.claimForm, {}), DEMO_INSTITUTION)
+
+// ── Pre-dispute alerts on Demo Bank's merchant side (supabase_predispute.sql) ──
+// Eight as Ethoca, Verifi and Visa would send them: five waiting (one already a chargeback), three settled
+function demoPreDispute() {
+  const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
+  const raw = [
+    { source: 'ethoca', id: 'ETH-88123', amount: 189, reason: 'fraud', descriptor: 'HARBORLINE HOME*ORDER 51877', orderId: '51877', cardLast4: '4412', transactionAt: ago(24 * 6), receivedAt: ago(20), arn: '74837261005512345678901' },
+    { source: 'cdrn', id: 'CDRN-40917', amount: 642.5, reason: 'dispute', reasonCode: '13.1', descriptor: 'HARBORLINE HOME*ORDER 51630', orderId: '51630', cardLast4: '9031', transactionAt: ago(24 * 19), receivedAt: ago(50) },
+    { source: 'ethoca', id: 'ETH-88140', amount: 18.4, reason: 'dispute', descriptor: 'HARBORLINE HOME*ORDER 51902', orderId: '51902', cardLast4: '1187', transactionAt: ago(24 * 4), receivedAt: ago(6) },
+    { source: 'order_insight', id: 'VOI-77231', amount: 129, reason: 'unknown', descriptor: 'HARBORLINE HOME*ORDER 51744', orderId: '51744', cardLast4: '6650', transactionAt: ago(24 * 11), receivedAt: ago(2) },
+    { source: 'ethoca', id: 'ETH-88152', amount: 312, reason: 'fraud', chargebackFiled: true, descriptor: 'HARBORLINE HOME*ORDER 51811', orderId: '51811', cardLast4: '2208', transactionAt: ago(24 * 9), receivedAt: ago(9) },
+    { source: 'rdr', id: 'RDR-55018', amount: 34.99, reason: 'dispute', rdrDecision: 'refund', descriptor: 'HARBORLINE HOME*ORDER 51511', orderId: '51511', transactionAt: ago(24 * 12), receivedAt: ago(24 * 5) },
+    { source: 'cdrn', id: 'CDRN-40702', amount: 76, reason: 'dispute', descriptor: 'HARBORLINE HOME*ORDER 51388', orderId: '51388', transactionAt: ago(24 * 20), receivedAt: ago(24 * 7) },
+    { source: 'ethoca', id: 'ETH-87990', amount: 220, reason: 'fraud', descriptor: 'HARBORLINE HOME*ORDER 51290', orderId: '51290', transactionAt: ago(24 * 15), receivedAt: ago(24 * 9) },
+  ]
+  return raw.map((a, i) => {
+    const { alert } = normaliseAlert(a, new Date(a.receivedAt))
+    const id = 'PDA-' + (0x3A10C0FFEE + i).toString(16).toUpperCase().slice(0, 10).padStart(10, '0')
+    const hist = [{ status: alert.status, at: alert.receivedAt, by: 'Provider', note: 'Received' }]
+    if (a.id === 'ETH-87990') { alert.status = 'refunded'; hist.push({ status: 'refunded', at: ago(24 * 9 - 3), by: 'Maria', note: 'Refunded in time' }) }
+    return { id, ...alert, history: hist }
+  })
+}
 
 const HANDLERS = {
   // Transaction monitoring (supabase_monitoring.sql) — kept to the last 20,000 transactions
@@ -773,6 +797,31 @@ const HANDLERS = {
     audit('claim.link_used', 'claim', l.id, { claim: id })
     window.dispatchEvent(new Event('cov:claims-changed'))
     return { id, status: row.status, statusText: recognised ? 'Closed' : desk ? 'Investigating' : 'Received', closedAtIntake: recognised, sentToDesk: desk, brand: demoBrand() }
+  },
+
+  // Pre-dispute alerts (supabase_predispute.sql): seeded the first time; open ones past their window expire
+  predispute_list: () => {
+    let all = read(K.preDispute, null)
+    if (!all) all = demoPreDispute()
+    all = all.map(a => { const b = settlePd(a); return b.status !== a.status ? { ...b, history: [...a.history, { status: 'expired', at: new Date().toISOString(), by: 'Covalence', note: 'The window passed with no answer' }] } : a })
+    write(K.preDispute, all)
+    return all.map(a => ({ id: a.id, external_id: a.externalId, source: a.source, network: a.network, amount: a.amount, currency: a.currency, reason: a.reason, reason_code: a.reasonCode,
+      descriptor: a.descriptor, order_id: a.orderId, arn: a.arn, card_last4: a.cardLast4, transaction_at: a.transactionAt, received_at: a.receivedAt, respond_by: a.respondBy,
+      status: a.status, note: a.note, cb_filed: !!a.cbFiled, history: a.history }))
+  },
+  predispute_act: ({ p_id, p_action, p_note }) => {
+    need(canWrite(), 'Your role can’t decide alerts')
+    need(['refunded', 'already_refunded', 'declined', 'shared', 'acknowledged'].includes(p_action), 'Unknown decision')
+    const all = read(K.preDispute, []), a = all.find(x => x.id === p_id)
+    need(a, 'No such alert'); need(a.status === 'open', `This alert was already decided (${a.status})`)
+    need(!a.cbFiled || !['refunded', 'already_refunded'].includes(p_action), 'The bank already filed the chargeback: a refund now pays twice. Acknowledge it and answer on Desk')
+    need(p_action !== 'acknowledged' || a.cbFiled, 'Only an alert whose chargeback is already filed is acknowledged')
+    need(p_action !== 'refunded' || !a.respondBy || new Date(a.respondBy) > new Date(), 'The window has passed: a refund now won’t stop the chargeback')
+    need(p_action !== 'declined' || String(p_note || '').trim(), 'Say why you’re letting it go to a chargeback')
+    a.status = p_action; a.history = [...a.history, { status: p_action, at: new Date().toISOString(), by: visitor().name || 'You', note: String(p_note || '').trim().slice(0, 300) }]
+    write(K.preDispute, all)
+    audit('predispute.' + p_action, 'predispute', a.id, { source: a.source, amount: a.amount, note: String(p_note || '').slice(0, 200) })
+    return { id: a.id, status: a.status, changed: true }
   },
 
   // Sound the alarm (supabase_alarms.sql): one open alarm at a time; another report joins it

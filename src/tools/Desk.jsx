@@ -11,6 +11,9 @@ import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withD
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { isMerchantCase } from '../sides.mjs'
+import { canWarn, startWarning, settleWarning, warningClock, OUTCOMES as WARN_OUTCOMES, WARN_HOURS } from '../merchantWarning.mjs'
+import { sendMerchantWarning } from '../preDisputeData.js'
+import { auditWrite } from '../audit.js'
 import { ChargebackRatioPanel, ratiosFor } from '../ChargebackRatioPanel.jsx'
 
 // ─── Evidence Package — per reason code ──────────────────────────────────────
@@ -1221,6 +1224,27 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
   // Advance a case to the next lifecycle stage
   const advanceStage = (id, newStatus) =>
     setOutcomes(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+
+  // Warn the merchant first (merchantWarning.mjs): Ethoca or Verifi CDRN before filing.
+  // A refund in the window resolves the case with no dispute; otherwise file as normal.
+  const [warnMsg, setWarnMsg] = useState(null)   // { id, text, bad }
+  const warnMerchant = (o) => {
+    const w = startWarning(o, covUser?.name || 'Agent'), ts = new Date().toISOString()
+    setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, merchantWarning: w, updatedAt: ts,
+      history: [...(x.history || []), { ts, event: 'merchant_warned', by: w.by, note: `Warned through ${w.via}; answer by ${new Date(w.until).toLocaleString()}` }] } : x))
+    auditWrite('case.merchant_warned', 'case', o.id, { via: w.via, until: w.until })
+    setWarnMsg({ id: o.id, text: `Merchant warned through ${w.via}. ${WARN_HOURS} hours to refund.` })
+    sendMerchantWarning(o, w).then(r => setWarnMsg({ id: o.id, bad: r.sent === false,
+      text: `Merchant warned through ${w.via}. ${r.sent === true ? 'Sent to your systems.' : r.sent === false ? `Not sent to your systems${r.error ? ` (${r.error})` : ''}: raise it there by hand.` : 'Raise it with the provider from your systems.'}` }))
+  }
+  const settleMerchantWarning = (o, outcome) => {
+    const ts = new Date().toISOString(), by = covUser?.name || 'Agent'
+    setOutcomes(prev => prev.map(x => x.id === o.id ? { ...x, merchantWarning: settleWarning(x.merchantWarning, outcome, by), updatedAt: ts,
+      ...(outcome === 'refunded' ? { status: 'resolved', resolvedDate: ts, resolution: 'Merchant refunded after a warning: no dispute filed' } : {}),
+      history: [...(x.history || []), { ts, event: 'merchant_warning', by, note: WARN_OUTCOMES[outcome] }] } : x))
+    auditWrite('case.merchant_warning_settled', 'case', o.id, { outcome })
+    setWarnMsg({ id: o.id, text: WARN_OUTCOMES[outcome] + '.' })
+  }
 
   // Escalation paths (post-resolution)
   const escalateCase = (id, escalation) =>
@@ -3452,6 +3476,27 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     : <span className="text-stone-300 mono-font text-[10px]">—</span>
                                 })() : <span className="text-stone-300 mono-font text-[10px]">—</span>}
                                 <div className="flex gap-1 flex-wrap items-start" style={{minWidth:0,maxWidth:'100%',overflow:'hidden'}}>
+
+                                  {/* ── WARN THE MERCHANT FIRST (FI, before filing) ── */}
+                                  {!isMerchantCase(o) && (() => {
+                                    const w = o.merchantWarning, k = warningClock(w)
+                                    if (k.open) {
+                                      const h = Math.floor(Math.abs(k.left) / 3600000)
+                                      return (<>
+                                        <span className={`mono-font text-[10px] px-1.5 py-0.5 font-bold whitespace-nowrap ${k.late ? 'bg-red-900 text-red-50' : 'bg-amber-700 text-amber-50'}`}
+                                          title={`Warned through ${w.via} by ${w.by || 'an analyst'}. Reg E / Reg Z deadlines keep running while you wait.`}>
+                                          {k.late ? 'MCH NO ANSWER · FILE' : `MCH WARNED · ${h >= 24 ? `${Math.floor(h / 24)}D ${h % 24}H` : `${Math.max(h, 1)}H`} LEFT`}
+                                        </span>
+                                        <button onClick={() => settleMerchantWarning(o, 'refunded')} title="The merchant refunded the customer: close the case with no dispute" className="mono-font text-[10px] px-1.5 py-0.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 whitespace-nowrap transition-colors">MCH REFUNDED</button>
+                                        <button onClick={() => settleMerchantWarning(o, k.late ? 'expired' : 'no_refund')} title={k.late ? 'No answer in the window: file the dispute' : 'The merchant won’t refund: file the dispute'} className="mono-font text-[10px] px-1.5 py-0.5 border border-red-600 text-red-700 hover:bg-red-50 whitespace-nowrap transition-colors">{k.late ? 'NO ANSWER' : 'NO REFUND'}</button>
+                                      </>)
+                                    }
+                                    if (w?.outcome && w.outcome !== 'refunded' && ['pending', 'investigating'].includes(o.status || 'pending'))
+                                      return <span className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-600 whitespace-nowrap" title={WARN_OUTCOMES[w.outcome]}>MCH WARNED · NO REFUND</span>
+                                    const can = canWarn(o)
+                                    return can.ok ? <button onClick={() => warnMerchant(o)} title={can.why} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-600 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">WARN MCH</button> : null
+                                  })()}
+                                  {warnMsg?.id === o.id && <span role="status" className={`mono-font text-[10px] w-full ${warnMsg.bad ? 'text-red-700' : 'text-emerald-800'}`} style={{whiteSpace:'normal'}}>{warnMsg.text}</span>}
 
                                   {/* ── PENDING (FI only) ───────────────────── */}
                                   {!isMerchantCase(o) && (!o.status || o.status === 'pending') && (<>

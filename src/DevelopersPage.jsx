@@ -23,7 +23,7 @@ function Code({ children }) {
     </div>
   )
 }
-const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['events', 'What your endpoint receives']]
+const CONTENTS = [['start', 'Before you start'], ['send', 'Send transactions, events and alerts'], ['claims', 'Claims from your app'], ['form', 'The hosted claim form'], ['predispute', 'Pre-dispute alerts (merchants)'], ['events', 'What your endpoint receives']]
 
 export default function DevelopersPage() {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://covalence.vercel.app'
@@ -163,6 +163,28 @@ Authorization: Bearer cvl_…
         </ul>
       </section>
 
+      <section style={box} id="predispute">
+        <H2>PRE-DISPUTE ALERTS (MERCHANTS)</H2>
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px', lineHeight:1.6 }}>Forward the alerts you get from Ethoca, Verifi (CDRN and RDR), Visa Order Insight and Mastercard Consumer Clarity. They land in 001 Triage → Alerts on the Merchant side, where someone refunds in time, records that it was already refunded, lets it go to a chargeback, or shares the order’s details. Each decision is sent back to you as a signed <code>predispute.decided</code> event, so your systems make the refund and report the outcome to the provider.</p>
+        <Code>{`POST ${origin}/api/intake
+Authorization: Bearer cvl_…
+
+{ "preDispute": [
+  { "source": "ethoca", "id": "ETH-88123", "amount": 189.00, "currency": "USD",
+    "reason": "fraud", "orderId": "51877", "cardLast4": "4412",
+    "transactionAt": "2026-10-28T14:02:00Z", "receivedAt": "2026-11-03T09:10:00Z" },
+  { "source": "rdr", "id": "RDR-55018", "amount": 34.99, "rdrDecision": "refund" }
+] }
+
+→ { "ok": true, "stored": ["PDA-…", "PDA-…"], "duplicates": 0, "problems": [] }`}</Code>
+        <ul className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.6, margin:'8px 0 0', paddingLeft:'18px' }}>
+          <li><strong>source:</strong> ethoca, cdrn, rdr, order_insight or consumer_clarity. <strong>Required:</strong> source, id (the provider’s, so a retry isn’t stored twice) and amount; an RDR alert also needs <code>rdrDecision</code> (refund or decline).</li>
+          <li><strong>The window:</strong> Ethoca and CDRN default to 72 hours from <code>receivedAt</code>; send <code>respondWithinHours</code> if your contract says otherwise. An alert left past its window shows as expired: expect the chargeback.</li>
+          <li><strong>Optional:</strong> reason (fraud or dispute), reasonCode, descriptor, orderId, arn, cardLast4, transactionAt.</li>
+          <li><strong>Already a chargeback:</strong> when the provider says the bank had already filed (Ethoca’s “chargeback occurred”), send <code>"chargebackFiled": true</code>. Refunding is then refused, because it would pay twice; the alert is acknowledged and the chargeback answered on 002 Desk.</li>
+          <li><strong>What comes back:</strong> <code>predispute.decided</code> with the decision (refunded, already_refunded, declined, shared, acknowledged), the amount, the order and the ARN.</li>
+        </ul>
+      </section>
       <section style={box} id="events">
         <H2>WHAT YOUR ENDPOINT RECEIVES</H2>
         <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', margin:'0 0 6px' }}>An admin sets your endpoint and its signing secret in Settings → Connections. Covalence sends a signed event when an analyst presses Block the card, Hold the payment or Lock the account, when new alerts arrive, and when a claim from your app moves on.</p>
