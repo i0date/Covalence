@@ -463,7 +463,9 @@ export default function Covalence() {
             onTriageHandoff={(c) => {
               setTriageHandoff({ caseId: c.id, classification: c.verdict, confidence: c.confidence || 'MEDIUM',
                 headline: (c.verdict || '').replace(/_/g, ' '), merchant: c.merchant || '', amount: String(c.amount || '').split(' ')[0],
-                network: (c.network || '').toLowerCase(), complaint: c._complaint || '' })
+                currency: String(c.amount || '').split(' ')[1] || '', network: (c.network || '').toLowerCase(),
+                transactionDate: c._transactionDate || c._triageRecord?._transactionDate || '',
+                complaint: c._complaint || c._triageRecord?._complaint || '' })
               setActiveSection('desk')
             }}
             onScoreInDfa={(c) => scoreInDfa([toDfaClaim(c)])}

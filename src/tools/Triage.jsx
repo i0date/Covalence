@@ -489,6 +489,7 @@ Return ONLY valid JSON, no markdown. Include ALL fields:
         verdict: parsed.classification, confidence: parsed.confidence,
         routing: parsed.routing, outcome: 'pending',
         fraud_sub_type: parsed.fraud_sub_type || '',
+        _complaint: customerReason.trim().slice(0, 2000), _transactionDate: transactionDate || '',
       }, ...prev].slice(0, 100))
     } catch (e) {
       setError(`Classification failed: ${e.message}`)
@@ -591,6 +592,7 @@ Return ONLY valid JSON, no markdown:
         accountType: 'crypto_exchange', network: ceChain || ceAsset || '',
         verdict: parsed.classification, confidence: parsed.confidence,
         routing: parsed.routing, outcome: 'pending',
+        _complaint: ceComplaint.trim().slice(0, 2000), _transactionDate: ceTxDate || '',
       }, ...prev].slice(0, 100))
     } catch (e) {
       setError(`Classification failed: ${e.message}`)
@@ -2242,8 +2244,11 @@ Return ONLY valid JSON:
                                       confidence: o.confidence || 'MEDIUM',
                                       headline: (o.verdict || '').replace(/_/g, ' '),
                                       merchant: o.merchant || '',
-                                      amount: o.amount || '',
+                                      amount: String(o.amount || '').split(' ')[0],
+                                      currency: String(o.amount || '').split(' ')[1] || '',
                                       network: (o.network || '').toLowerCase(),
+                                      transactionDate: o._transactionDate || '',
+                                      complaint: o._complaint || '',
                                     })}
                                     className="mono-font text-[10px] px-2 py-0.5"
                                     style={{ background:'#1E3A5F', color:'#BFDBFE', border:'none', cursor:'pointer', letterSpacing:'0.06em', whiteSpace:'nowrap' }}
