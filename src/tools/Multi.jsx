@@ -7,15 +7,17 @@ import { canWrite } from '../auth.js'
 import { notesList, registerOutcomeSubscriber, saveOutcomes } from '../shared.jsx'
 import { readCases } from '../caseStore.js'
 import { MerchantQueue } from '../MerchantQueue.jsx'
-import { doesIssuing, doesMerchant } from '../sides.mjs'
+import { AcquirerView } from '../AcquirerView.jsx'
+import { doesIssuing, doesMerchant, doesAcquiring } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS VIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── MULTI — Bulk dispute management ──────────────────────────────────────────
-export function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setActiveSection, covUser, platformMode = 'fi', setPlatformMode, sides = ['issuer'] }) {
+export function MultiView({ outcomes: _propOutcomes, setOutcomes: setAppOutcomes, settings, setSettings, setActiveSection, covUser, platformMode = 'fi', setPlatformMode, sides = ['issuer'] }) {
   // Read live from the case store so DeskView changes appear immediately
   const [outcomes, setLiveOutcomes] = React.useState(readCases)
+  const [merchantBookTab, setMerchantBookTab] = React.useState('merchant')   // merchant + acquirer workspaces
   // Subscribe to all outcome changes (same-tab and cross-tab)
   React.useEffect(() => {
     const refresh = (merged) => {
@@ -388,11 +390,28 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
       </div>
     </div>
   )
+  // Merchant / acquirer: a workspace that does both picks which book it's looking at
+  const ownMerchant = sides.includes('merchant'), acquiring = doesAcquiring(sides)
+  const book = acquiring && (!ownMerchant || merchantBookTab === 'acquirer') ? 'acquirer' : 'merchant'
+  const bookSwitch = acquiring && ownMerchant && (
+    <div role="tablist" aria-label="Whose chargebacks" className="cov-tabs" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC', marginBottom:'18px' }}>
+      {[['merchant', 'Against your sales', 'You’re the merchant'], ['acquirer', 'Your merchants', 'You’re their acquirer']].map(([k, l, sub]) => (
+        <button key={k} type="button" role="tab" aria-selected={book === k} onClick={() => setMerchantBookTab(k)}
+          style={{ background:'none', border:0, borderBottom: book === k ? '2px solid #1A1814' : '2px solid transparent', padding:'8px 16px 10px 0', marginRight:'18px', textAlign:'left', cursor:'pointer' }}>
+          <span className="mono-font" style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: book === k ? '#1A1814' : '#78716C', fontWeight: book === k ? 600 : 400 }}>{l.toUpperCase()}</span>
+          <span className="display-font" style={{ display:'block', fontSize:'13px', color:'#6B6259' }}>{sub}</span>
+        </button>
+      ))}
+    </div>
+  )
   if (merchantView) return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
       {header}
       {sideSwitch}
-      <MerchantQueue outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} setActiveSection={setActiveSection} />
+      {bookSwitch}
+      {book === 'acquirer'
+        ? <AcquirerView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setSettings={setSettings} covUser={covUser} />
+        : <MerchantQueue outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} setActiveSection={setActiveSection} />}
     </div>
   )
 

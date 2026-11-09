@@ -19,15 +19,19 @@ export function caseSide(c) {
   if (c && KNOWN.has(c.side)) return c.side
   return c?.mode === 'merchant' ? 'merchant' : 'issuer'
 }
-// Merchant and acquirer cases share the merchant views until the acquirer views exist
-export const isMerchantCase = c => caseSide(c) !== 'issuer'
+// Each case shows on its own side: an acquirer's cases (its merchants' chargebacks)
+// stay out of the merchant's own queue, ratio and figures, and out of the issuer's
+export const isMerchantCase = c => caseSide(c) === 'merchant'
+export const isIssuerCase   = c => caseSide(c) === 'issuer'
+export const isAcquirerCase = c => caseSide(c) === 'acquirer'
+export const doesAcquiring  = sides => sides.includes('acquirer')
 
 // What this workspace does: chosen in Settings, or implied by the institution type.
-// Demo visitors see every side, so both halves of Desk stay on show.
+// Demo visitors see every side.
 export function workspaceSides(settings, { demo = false } = {}) {
   const picked = Array.isArray(settings?.sides) ? settings.sides.filter(s => KNOWN.has(s)) : []
   if (picked.length) return picked
-  if (demo) return ['issuer', 'merchant']
+  if (demo) return ['issuer', 'merchant', 'acquirer']
   if (settings?.institutionType === 'merchant')  return ['merchant']
   if (settings?.institutionType === 'processor') return ['acquirer']
   return ['issuer']

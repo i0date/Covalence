@@ -8,7 +8,7 @@ import { readCases } from '../caseStore.js'
 import { isSignedIn } from '../auth.js'
 import { recordDemoCaseEvent } from '../demoBackend.js'
 import { MerchantFile } from '../MerchantFile.jsx'
-import { doesIssuing, doesMerchant, isMerchantCase } from '../sides.mjs'
+import { doesIssuing, doesMerchant, isIssuerCase } from '../sides.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FILE VIEW
@@ -31,7 +31,7 @@ export function FileView({ setActiveSection, setAppOutcomes, platformMode = 'fi'
     const refresh = (merged) => {
       try {
         const all = merged || readCases()
-        setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status) && !isMerchantCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+        setFiledCases(all.filter(o => FILE_STATUSES.includes(o.status) && isIssuerCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
         setAllCases(all)
       } catch {}
     }
@@ -56,7 +56,7 @@ export function FileView({ setActiveSection, setAppOutcomes, platformMode = 'fi'
       saveOutcomes(updated)
       if (setAppOutcomes) setAppOutcomes(updated)
       setAllCases(updated)
-      setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status) && !isMerchantCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
+      setFiledCases(updated.filter(o => FILE_STATUSES.includes(o.status) && isIssuerCase(o)).sort((a,b) => new Date(b.filedAt||b.date) - new Date(a.filedAt||a.date)))
       if (SUPA_URL && SUPA_KEY) pushCasesToSupa(updated).catch(()=>{})
     } catch {}
   }

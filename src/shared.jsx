@@ -770,6 +770,19 @@ export const GLOBAL_CSS = `
   .cov-pd-row { padding:14px 18px; border-top:1px solid #E7E2D9; }
   .cov-pd-main { flex:1 1 360px; min-width:0; text-align:left; background:none; border:0; padding:0; cursor:pointer; }
   .cov-pd-settled { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; padding:7px 0; border-top:1px solid #EFEAE1; }
+  .cov-acq-merchant { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1.3fr) auto; gap:8px 16px; align-items:center; width:100%; text-align:left; background:none; border:0; padding:0; cursor:pointer; }
+  .cov-acq-name { font-size:17px; color:#1A1814; min-width:0; overflow-wrap:break-word; }
+  .cov-acq-name span { display:block; font-size:11px; color:#6B6259; margin-top:2px; }
+  .cov-acq-counts { display:flex; gap:5px; flex-wrap:wrap; }
+  .cov-acq-ratios { display:flex; gap:10px; font-size:10px; letter-spacing:0.1em; color:#6B6259; white-space:nowrap; }
+  .cov-acq-case { padding:10px 0; border-top:1px solid #EFEAE1; }
+  .cov-acq-answer { margin-top:10px; padding:12px 14px; background:#FFFFFF; border:1px solid #E2DACC; }
+  .cov-acq-checks { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:4px; }
+  .cov-acq-checks li { font-family:'Fraunces',Georgia,serif; font-size:14px; color:#3F3A35; display:flex; gap:8px; }
+  .cov-acq-checks li span { width:14px; flex:none; font-weight:700; }
+  .cov-acq-checks li.yes span { color:#065F46; } .cov-acq-checks li.no { color:#991B1B; } .cov-acq-checks li.opt { color:#78716C; }
+  .cov-acq-checks em { font-style:normal; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.08em; margin-left:6px; }
+  @media (max-width:767px) { .cov-acq-merchant { grid-template-columns:1fr; } }
   @media (max-width:767px) { .cov-pd-stats { grid-template-columns:repeat(2, minmax(0,1fr)); } .cov-pd-stats > div:nth-child(3) { border-left:none; } .cov-pd-stats > div:nth-child(n+3) { border-top:1px solid #E2DACC; } .cov-pd-row { padding:12px 14px; } }
   .cov-ydv-team { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); border-bottom:1px solid #D4CCBC; }
   .cov-ydv-team-block { padding:14px 18px 14px; min-width:0; }

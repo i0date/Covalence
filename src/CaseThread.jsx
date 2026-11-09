@@ -839,6 +839,22 @@ export function buildDemoInstitution(userEmail) {
       history:h([60,'received'],[57,'rebuttal_prep','received'],[52,'submitted','rebuttal_prep'],[9,'pre_arb','submitted']) },
     { id:'MCH-DEMO13', mode:'merchant', side:'merchant', date:iso(48), merchant:'Northwind Electronics', amount:'129.00 USD', network:'VISA', status:'lost', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', acquirer:'Demo Acquiring', cardholderName:'E. Novak', winProb:'MEDIUM', resolvedDate:iso(10),
       history:h([48,'received'],[45,'rebuttal_prep','received'],[41,'submitted','rebuttal_prep'],[10,'lost','submitted']) },
+    // Acquirer side: Demo Bank's merchant clients' chargebacks (acquirer.mjs), at each stage
+    { id:'MCH-DEMOA01', side:'acquirer', date:iso(1),  merchant:'Vela Supplements', amount:'59.99 USD', network:'VISA', status:'received', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'T. Moreau', arn:'74000126101500418861201', history:h([1,'received']) },
+    { id:'MCH-DEMOA02', side:'acquirer', date:iso(4),  merchant:'Vela Supplements', amount:'59.99 USD', network:'VISA', status:'with_merchant', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'R. Ito', sentToMerchantAt:iso(3), history:h([4,'received'],[3,'with_merchant','received']) },
+    { id:'MCH-DEMOA03', side:'acquirer', date:iso(9),  merchant:'Vela Supplements', amount:'119.98 USD', network:'VISA', status:'response_in', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', cardholderName:'K. Brandt', sentToMerchantAt:iso(8),
+      merchantResponse:{ decision:'fight', evidence:['letter','receipt','delivery'], note:'Shipped to the address on the order; tracking attached.', at:iso(2), by:'Vela Supplements' }, history:h([9,'received'],[8,'with_merchant','received'],[2,'response_in','with_merchant']) },
+    { id:'MCH-DEMOA04', side:'acquirer', date:iso(12), merchant:'Vela Supplements', amount:'59.99 USD', network:'MC', status:'response_in', reasonCode:'4841', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'P. Ndiaye', sentToMerchantAt:iso(11),
+      merchantResponse:{ decision:'fight', evidence:['letter','receipt','terms','cancel','usage'], note:'Customer logged in and ordered a refill after the date they say they cancelled.', at:iso(3), by:'Vela Supplements' }, history:h([12,'received'],[11,'with_merchant','received'],[3,'response_in','with_merchant']) },
+    { id:'MCH-DEMOA05', side:'acquirer', date:iso(20), merchant:'Vela Supplements', amount:'89.00 USD', network:'VISA', status:'submitted', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', cardholderName:'G. Hale', sentToMerchantAt:iso(19), history:h([20,'received'],[19,'with_merchant','received'],[13,'response_in','with_merchant'],[12,'submitted','response_in']) },
+    { id:'MCH-DEMOA06', side:'acquirer', date:iso(28), merchant:'Vela Supplements', amount:'59.99 USD', network:'VISA', status:'lost', reasonCode:'13.2', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'S. Abara', resolvedDate:iso(4), history:h([28,'received'],[27,'with_merchant','received'],[20,'response_in','with_merchant'],[19,'submitted','response_in'],[4,'lost','submitted']) },
+    { id:'MCH-DEMOA07', side:'acquirer', date:iso(6),  merchant:'Brightline Fitness', amount:'49.00 USD', network:'MC', status:'with_merchant', reasonCode:'4841', reasonTitle:'Cancelled Recurring Transaction', cardholderName:'H. Kowalski', sentToMerchantAt:iso(5), history:h([6,'received'],[5,'with_merchant','received']) },
+    { id:'MCH-DEMOA08', side:'acquirer', date:iso(7),  merchant:'Brightline Fitness', amount:'240.00 USD', network:'MC', status:'response_in', reasonCode:'4853', reasonTitle:'Cardholder Dispute', cardholderName:'C. Duarte', sentToMerchantAt:iso(6),
+      merchantResponse:{ decision:'accept', evidence:[], note:'The trainer missed the sessions. We accept.', at:iso(1), by:'Brightline Fitness' }, history:h([7,'received'],[6,'with_merchant','received'],[1,'response_in','with_merchant']) },
+    { id:'MCH-DEMOA09', side:'acquirer', date:iso(25), merchant:'Kestrel Outdoor', amount:'312.40 USD', network:'VISA', status:'with_merchant', reasonCode:'13.1', reasonTitle:'Merchandise / Services Not Received', cardholderName:'B. Lindqvist', sentToMerchantAt:iso(24), history:h([25,'received'],[24,'with_merchant','received']) },
+    { id:'MCH-DEMOA10', side:'acquirer', date:iso(40), merchant:'Kestrel Outdoor', amount:'845.00 USD', network:'VISA', status:'won', reasonCode:'10.4', reasonTitle:'Other Fraud — Card Absent', cardholderName:'F. Osei', resolvedDate:iso(9), history:h([40,'received'],[39,'with_merchant','received'],[33,'response_in','with_merchant'],[32,'submitted','response_in'],[9,'won','submitted']) },
+    { id:'MCH-DEMOA11', side:'acquirer', date:iso(2),  merchant:'Copperleaf Hotels', amount:'1180.00 USD', network:'MC', status:'received', reasonCode:'4853', reasonTitle:'Cardholder Dispute', cardholderName:'Y. Haddad', history:h([2,'received']) },
+    { id:'MCH-DEMOA12', side:'acquirer', date:iso(18), merchant:'Copperleaf Hotels', amount:'410.00 USD', network:'MC', status:'submitted', reasonCode:'4837', reasonTitle:'No Cardholder Authorization', cardholderName:'A. Fontaine', sentToMerchantAt:iso(17), history:h([18,'received'],[17,'with_merchant','received'],[11,'response_in','with_merchant'],[10,'submitted','response_in']) },
     // Financial crime: a romance / investment scam paying out to a wallet on OFAC's SDN list (the address is real and public)
     { id:'COV-DEMO19', date:iso(3), merchant:'Bitvault Exchange', amount:'4600.00 USD', accountType:'p2p', network:'', status:'pending', verdict:'AUTHORIZED_PUSH_PAYMENT', cardholderName:'D. Okonkwo',
       _complaint:'Someone I met online talked me into buying USDT on Bitvault Exchange (bitvault-exchange.xyz) and sending it to 0x252a8bd2319d8a555b872990601221b3a2053bce for a "guaranteed" trading plan. Now I can’t withdraw anything.',
@@ -951,7 +967,7 @@ function writeDemoToStorage(userEmail) {
 }
 
 // Bump when the demo set changes; browsers holding an older set get it refreshed.
-const DEMO_VERSION = '9'
+const DEMO_VERSION = '10'
 
 // First visit: a new visitor gets a working portfolio instead of empty screens.
 // Call before the tools mount. Returns true when it seeded.

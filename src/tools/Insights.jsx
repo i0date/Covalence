@@ -6,7 +6,7 @@
 // Multi → Intel stays where it is, beside the filing queue it describes.
 import React, { useMemo } from 'react'
 import { allThreadCases } from '../CaseThread.jsx'
-import { isMerchantCase } from '../sides.mjs'
+import { isMerchantCase, isIssuerCase } from '../sides.mjs'
 import { money } from '../insights.js'
 import { moneyView, leaks, examReady, EXAM_CHECKS, LEAK_MIN } from '../insightsData.mjs'
 import { Refs } from '../FrontPage.jsx'
@@ -37,7 +37,7 @@ function Figure({ label, value, sub, refs, tone }) {
 }
 
 export function InsightsView({ outcomes, settings, platformMode }) {
-  const cases = useMemo(() => allThreadCases(outcomes).filter(c => platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)), [outcomes, platformMode])
+  const cases = useMemo(() => allThreadCases(outcomes).filter(c => platformMode === 'merchant' ? isMerchantCase(c) : isIssuerCase(c)), [outcomes, platformMode])
   const m = useMemo(() => moneyView(cases, { settings }), [cases, settings])
   const lk = useMemo(() => leaks(cases), [cases])
   const ex = useMemo(() => examReady(cases, { settings }), [cases, settings])

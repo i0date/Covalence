@@ -7,7 +7,7 @@ import { NewDot } from '../ui.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { GetSetUp } from '../GetSetUp.jsx'
-import { isMerchantCase } from '../sides.mjs'
+import { isMerchantCase, isIssuerCase } from '../sides.mjs'
 import { merchantQueue } from '../merchantQueue.mjs'
 import { merchantFile } from '../merchantFile.mjs'
 import { worstRatio } from '../chargebackRatio.mjs'
@@ -44,7 +44,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
   const inRange = o => { if (!since) return true; const d = new Date(o.date || o.createdAt || o.ts || 0); return isNaN(d) || d > since }
   const rangeText = windowDays ? `last ${windowDays} days` : 'all time'
   // Every count on Home comes from the same cases: this side's, in the chosen period
-  const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : !isMerchantCase(o))
+  const everything = allThreadCases(outcomes).filter(o => platformMode === 'merchant' ? isMerchantCase(o) : isIssuerCase(o))
   const active   = everything.filter(inRange)
   const resolved = active.filter(o => o.status === 'won' || o.status === 'lost')
   const won      = active.filter(o => o.status === 'won')
