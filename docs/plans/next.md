@@ -9,6 +9,10 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 3. **Disputes from the bank's app.** The biggest selling point for a design partner.
 4. **Settings redesign.**
 5. **Onboard with Covalence.** Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account. Listed on the sign-up page as coming.
+6. **Claim form rework.** Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
+7. **Settings, again.** The redesign didn't land; go through it together first.
+8. **Home, tighter.** A tighter revamp of the home page.
+9. **Every tool, with a fine-tooth comb.** After Onboard with Covalence: one tool at a time, list what's wrong, fix it.
 
 ## 1. Home and the tour — show, don't tell
 
@@ -103,3 +107,29 @@ A customer's record should start when they open the account, not at their first 
 - **Back to the bank:** `onboarding.decided` to the bank's endpoint; enhanced due diligence opens a Licit case for a high rating.
 - **Afterwards:** the onboarding record shows on the customer's later cases (how long they've been a customer, what was checked), which feeds fraud and scam decisions.
 - **Before it ships:** counsel reviews the consent text and data retention; the identity-provider connection is tested with a real sandbox.
+
+## 6. Claim form rework (the bank's customers)
+
+What's wrong today:
+- **Only recent payments.** The link carries the payments the bank sent with it, so a customer who notices fraud on a statement a month or more later can't find it. Card networks allow 120 days from processing, and Reg E gives 60 days from the statement it first appeared on. Late discovery is normal and has to be easy.
+- **The questions are weak.** They don't follow how people actually find fraud (a statement, a declined card, an alert, a letter from a merchant) or the pattern it often takes (small test charges, then larger ones, over weeks).
+- **Covalence sounds like the one acting.** "We've passed that on to Your bank" reads as if a third party is handling it. The customer is talking to their bank; Covalence should be invisible, and anything the customer asks for (a new card, a lock) has to be done and confirmed by the bank's own systems.
+
+What it becomes:
+- **Find any payment, not just recent ones.** Search by date range, merchant name and amount, back as far as the bank's records go (at least 13 months). The bank either sends a wider window with the link or answers a search from Covalence through its own API, scoped to that customer. If the customer still can't find it, "I can't find it" lets them describe it (roughly when, how much, who) so an analyst can trace it.
+- **Late reports are taken, not blocked.** The form never refuses an old payment. The analyst sees how old it is against the Reg E and network time limits, and the claim is marked so nobody misses it.
+- **Questions rewritten around discovery:** when and how they noticed; when they last saw a statement; whether the card was with them; whether anyone else uses the card or has their details; other payments they don't recognise since (with the earliest one); whether it repeats; whether they've contacted the merchant. Fewer, plainer questions, by claim type, reviewed with someone who has run a disputes operation, and by counsel for the consent text.
+- **In the bank's voice, with the bank acting.** Every message is in the bank's name (no "Your bank" placeholder: a bank can't issue links until its name is set). Requests such as lock the card or send a new card go to the bank's endpoint while the customer waits; the confirmation shows what the bank's system actually did ("Your card ending 4412 is locked", with the bank's reference). If the bank's system doesn't confirm, the customer is told to call the bank's number, not that it's been "passed on".
+- **Done when:** a customer can report a payment from three months ago without help; the questions read well to a disputes lead; and a lock or new card shown as done has been confirmed by the bank's system.
+
+## 7. Settings, again
+
+The Linear-style redesign (section 4) is live but doesn't work for you. Start by going through each page together and writing down what's wrong (too much on one page, wrong grouping, unclear wording, missing settings), then fix it in one pass.
+
+## 8. Home, tighter
+
+A tighter revamp of the home page: less on screen, the most important thing first, no repetition between the Brief, Your day and the numbers. Start with a walk-through of what you'd remove.
+
+## 9. Every tool, with a fine-tooth comb
+
+After Onboard with Covalence ships: go through each tool in menu order (Triage, Desk, Multi, File, Licit, DFA, Duo, Trio, Insights, Settings), on a phone and on a desktop, with real-looking data. For each: list what's wrong (wording, layout, missing steps, anything that doesn't match how the work is really done), agree the list, then fix it in one PR per tool.
