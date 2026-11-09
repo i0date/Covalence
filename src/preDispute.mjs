@@ -37,9 +37,12 @@ export const REASONS = { fraud: 'Cardholder says it’s fraud', dispute: 'Cardho
 //   expired    the window passed with no answer: expect a chargeback
 //   rdr_refunded / rdr_declined   decided by the RDR rules
 //   shared     order details were shared (lookups)
+//   acknowledged  the bank had already filed the chargeback (Ethoca says so on the alert):
+//              a refund would pay twice, so it's acknowledged and answered on Desk
 export const STATUSES = {
   open: 'Waiting on you', refunded: 'Refunded in time', already_refunded: 'Already refunded', declined: 'Let it go to a chargeback',
   expired: 'Window passed', rdr_refunded: 'Refunded by your RDR rules', rdr_declined: 'Declined by your RDR rules', shared: 'Order details shared',
+  acknowledged: 'Already a chargeback: answer it on Desk',
 }
 export const AVOIDED = ['refunded', 'already_refunded', 'rdr_refunded']   // no chargeback follows
 export const DECLINE_REASONS = ['Delivered, with proof of delivery', 'The cardholder used the service', 'Already disputed: answering the chargeback instead', 'A known abuse pattern on this customer', 'Above what we refund without a fight']
@@ -59,17 +62,19 @@ export function normaliseAlert(a, now = new Date()) {
   if (!isFinite(amount) || amount <= 0) errors.push('amount is required')
   const receivedAt = isTs(a.receivedAt) ? new Date(a.receivedAt) : now
   const hours = isFinite(Number(a.respondWithinHours)) && Number(a.respondWithinHours) > 0 ? Math.min(240, Number(a.respondWithinHours)) : (SOURCES[source]?.hours || 0)
+  // The bank filed before (or as) it warned: Ethoca marks these. Refunding now pays twice.
+  const cbFiled = SOURCES[source]?.kind === 'refund' && (a.chargebackFiled === true || a.outcome === 'chargeback_filed')
   const decided = source === 'rdr' ? (a.rdrDecision === 'refund' ? 'rdr_refunded' : a.rdrDecision === 'decline' ? 'rdr_declined' : null) : null
   if (source === 'rdr' && !decided) errors.push('rdrDecision is required for an RDR alert: refund or decline')
   return { errors, alert: {
     externalId: id, source, network: SOURCES[source]?.network || '',
     amount: Math.round(Math.abs(amount) * 100) / 100, currency: str(a.currency || 'USD', 3).toUpperCase(),
     reason: REASONS[a.reason] ? a.reason : 'unknown', reasonCode: str(a.reasonCode, 12),
-    descriptor: str(a.descriptor, 160), orderId: str(a.orderId, 120), arn: str(a.arn, 40).replace(/\s/g, ''), cardLast4: str(a.cardLast4, 4).replace(/\D/g, ''),
+    descriptor: str(a.descriptor, 160), orderId: str(a.orderId, 120), arn: str(a.arn, 40).replace(/\s/g, ''), cardLast4: String(a.cardLast4 ?? '').replace(/\D/g, '').slice(-4),
     transactionAt: isTs(a.transactionAt) ? new Date(a.transactionAt).toISOString() : null, receivedAt: receivedAt.toISOString(),
     respondBy: hours ? new Date(receivedAt.getTime() + hours * HOUR).toISOString() : null,
     status: decided || (SOURCES[source]?.kind === 'lookup' ? (a.shared === true ? 'shared' : 'open') : 'open'),
-    note: str(a.note, 500),
+    note: str(a.note, 500), cbFiled,
   } }
 }
 
@@ -89,6 +94,7 @@ export const settle = (alert, now = new Date()) => clockOf(alert, now).late ? { 
 export function recommend(alert, settings = {}) {
   const src = SOURCES[alert.source]
   if (!src || alert.status !== 'open') return null
+  if (alert.cbFiled) return { action: 'answer', why: 'The bank already filed the chargeback. Refunding now would pay twice, because the chargeback takes the money back as well. Acknowledge the alert, then answer the chargeback on Desk.' }
   if (src.kind === 'lookup') return { action: 'share', why: 'Share the order: what was bought, where it went, and the customer’s earlier undisputed orders. Visa’s Compelling Evidence 3.0 counts two earlier orders from the same customer.' }
   const fight = Number(settings.mchFightCost) || 25, below = Number(settings.mchAcceptBelow) || 25
   const fee = 15   // a typical chargeback fee from the acquirer; the real one is in the merchant's contract
@@ -105,7 +111,7 @@ export function summary(alerts, now = new Date()) {
     open: alerts.filter(a => a.status === 'open' && (a.respondBy || SOURCES[a.source]?.kind === 'lookup')).length,
     late: alerts.filter(a => clockOf(a, now).late).length,
     avoided: avoided.length, avoidedAmount: avoided.reduce((s, a) => s + a.amount, 0),
-    toChargeback: month.filter(a => ['declined', 'expired', 'rdr_declined'].includes(a.status)).length,
+    toChargeback: month.filter(a => ['declined', 'expired', 'rdr_declined', 'acknowledged'].includes(a.status)).length,
     month: month.length,
   }
 }

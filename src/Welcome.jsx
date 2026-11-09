@@ -23,7 +23,14 @@ const CSS = `
   .wl-tab.on { color:#F5F1EA; border-bottom-color:#D6CFC4; }
   .wl-primary{ width:100%; padding:14px; background:#F5F1EA; color:#1A1814; border:none; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.16em; cursor:pointer; }
   .wl-primary:disabled { opacity:0.5; cursor:not-allowed; }
+  .wl-scope { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:#D4CCBC; border:1px solid #D4CCBC; max-width:640px; margin:0; padding:0; list-style:none; }
+  .wl-scope li { background:#FAF7F1; padding:12px 14px; }
+  .wl-scope li.soon { background:#EDE9E3; }
+  .wl-scope strong { display:block; font-family:'Fraunces',Georgia,serif; font-size:14px; font-weight:600; color:#1A1814; }
+  .wl-scope span { display:block; font-family:'Fraunces',Georgia,serif; font-size:13px; line-height:1.45; color:#57534E; margin-top:2px; }
+  .wl-scope em { font-style:normal; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:0.14em; color:#F5F1EA; background:#1A1814; padding:1px 5px; margin-left:6px; vertical-align:2px; }
   @media (max-width: 900px) {
+    .wl-scope   { grid-template-columns:1fr; }
     .wl-root    { grid-template-columns:1fr; }
     .wl-pitch   { padding:32px 20px 28px; gap:28px; }
     .wl-doors   { padding:32px 20px 40px; position:static; height:auto; }
@@ -72,6 +79,16 @@ function CasePreview() {
   )
 }
 
+// Everything Covalence does, and for whom: shown beside the sign-up so people see the whole of it
+const SCOPE = [
+  ['Disputes and chargebacks', 'For card issuers and merchants: triage, filing, representment and pre-arbitration, with every network deadline tracked.'],
+  ['Pre-dispute alerts', 'Banks warn the merchant before filing; merchants refund in time through Ethoca and Verifi, and keep it off their ratio.'],
+  ['Fraud and scam recovery', 'Monitoring rules, customer claims from your app and website, and the other institution brought in when the money has moved.'],
+  ['Sanctions, AML and SARs', 'OFAC screening, linked customers and wallets, and SAR narratives drafted from the case.'],
+  ['For exchanges and merchants too', 'Unauthorised withdrawals and wrong-network deposits for crypto exchanges; order problems and refunds for merchants.'],
+  ['Onboard with Covalence', 'For banks and financial institutions: identity checks, sanctions and PEP screening and a risk rating when a customer opens an account, on the same record as everything after.', 'soon'],
+]
+
 export function WelcomePage({ children }) {
   const proof = [
     ['One record, start to finish', 'A case keeps one number from first contact through triage, filing, representment and funding — with its timeline, evidence and AI reasoning attached.'],
@@ -107,6 +124,12 @@ export function WelcomePage({ children }) {
               </div>
             ))}
           </div>
+        </div>
+        <div>
+          <div className="wl-mono" style={{ fontSize:'10px', letterSpacing:'0.22em', color:'#8A7F72', marginBottom:'10px' }}>WHAT COVALENCE COVERS · BANKS, CREDIT UNIONS, EXCHANGES, MERCHANTS</div>
+          <ul className="wl-scope">
+            {SCOPE.map(([h, t, soon]) => <li key={h} className={soon ? 'soon' : undefined}><strong>{h}{soon && <em>COMING</em>}</strong><span>{t}</span></li>)}
+          </ul>
         </div>
         <CasePreview />
         <div>

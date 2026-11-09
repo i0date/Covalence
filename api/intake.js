@@ -65,7 +65,7 @@ module.exports = async function handler(req, res) {
       const id = 'PDA-' + crypto.createHash('sha256').update(`${inst}|${alert.source}|${alert.externalId}`).digest('hex').slice(0, 10).toUpperCase()
       rows.push({ institution_id: inst, id, external_id: alert.externalId, source: alert.source, network: alert.network, amount: alert.amount, currency: alert.currency,
         reason: alert.reason, reason_code: alert.reasonCode, descriptor: alert.descriptor, order_id: alert.orderId, arn: alert.arn, card_last4: alert.cardLast4,
-        transaction_at: alert.transactionAt, received_at: alert.receivedAt, respond_by: alert.respondBy, status: alert.status, note: alert.note,
+        transaction_at: alert.transactionAt, received_at: alert.receivedAt, respond_by: alert.respondBy, status: alert.status, note: alert.note, cb_filed: alert.cbFiled,
         history: [{ status: alert.status, at: now.toISOString(), by: pd.SOURCES[alert.source].label, note: 'Received' }] })
     })
     if (!rows.length) return res.status(400).json({ error: 'No alert could be stored', problems })

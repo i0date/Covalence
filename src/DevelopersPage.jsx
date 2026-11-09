@@ -181,7 +181,8 @@ Authorization: Bearer cvl_…
           <li><strong>source:</strong> ethoca, cdrn, rdr, order_insight or consumer_clarity. <strong>Required:</strong> source, id (the provider’s, so a retry isn’t stored twice) and amount; an RDR alert also needs <code>rdrDecision</code> (refund or decline).</li>
           <li><strong>The window:</strong> Ethoca and CDRN default to 72 hours from <code>receivedAt</code>; send <code>respondWithinHours</code> if your contract says otherwise. An alert left past its window shows as expired: expect the chargeback.</li>
           <li><strong>Optional:</strong> reason (fraud or dispute), reasonCode, descriptor, orderId, arn, cardLast4, transactionAt.</li>
-          <li><strong>What comes back:</strong> <code>predispute.decided</code> with the decision (refunded, already_refunded, declined, shared), the amount, the order and the ARN.</li>
+          <li><strong>Already a chargeback:</strong> when the provider says the bank had already filed (Ethoca’s “chargeback occurred”), send <code>"chargebackFiled": true</code>. Refunding is then refused, because it would pay twice; the alert is acknowledged and the chargeback answered on 002 Desk.</li>
+          <li><strong>What comes back:</strong> <code>predispute.decided</code> with the decision (refunded, already_refunded, declined, shared, acknowledged), the amount, the order and the ARN.</li>
         </ul>
       </section>
       <section style={box} id="events">

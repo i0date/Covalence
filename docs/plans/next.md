@@ -8,6 +8,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 2. **Phase 4 + the alarm.** Merchant pre-dispute alerts in Triage, merchant playbooks in Trio, the alarm (built with the Trio work), and the acquirer role.
 3. **Disputes from the bank's app.** The biggest selling point for a design partner.
 4. **Settings redesign.**
+5. **Onboard with Covalence.** Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account. Listed on the sign-up page as coming.
 
 ## 1. Home and the tour — show, don't tell
 
@@ -28,6 +29,8 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 
 ## 2. Phase 4 and the alarm
 
+- **Warn the merchant first (banks):** (done) on a Visa or Mastercard case before filing, Desk's WARN MCH sends the warning through the bank's systems to Verifi CDRN or Ethoca (`dispute.merchant_warning`, `src/merchantWarning.mjs`). A refund in the 72-hour window resolves the case with no dispute; no refund or no answer means file. Reg E / Reg Z clocks keep running.
+- **Already a chargeback (merchants):** (done) an alert sent after the bank filed (`chargebackFiled: true`) can't be refunded, because that pays twice; it's acknowledged and answered on Desk.
 - **Merchant Triage:** (done: pre-dispute alerts PR — `src/preDispute.mjs`, `supabase_predispute.sql`, `/api/intake { preDispute }`, decisions sent as `predispute.decided`)
   - Alerts: "The network warned you". Pre-dispute alerts (Ethoca, Verifi, Order Insight), so the merchant can refund before a chargeback.
   - Claims: customer complaints and refund requests.
@@ -88,3 +91,15 @@ Built so far (claims API PR): `/api/claims` with `supabase_claims.sql`; claims l
 - **On each setting:** a one-line description, a dot when it's changed from the default, and a lock icon when only admins can change it.
 - **Only what applies,** e.g. merchant settings for merchant workspaces.
 - **Deep links (`cov:go`) keep working.**
+
+## 5. Onboard with Covalence (banks and FIs)
+
+A customer's record should start when they open the account, not at their first dispute. The bank's app or website opens Covalence's onboarding flow, like the hosted claim form, and the result lands on the same record every later case, alert and SAR uses.
+
+- **The flow (hosted, in Covalence's style with the bank's name):** personal or business; the CIP fields the bank's programme requires (name, date of birth, address, ID number); an ID document and a selfie through the identity provider the bank already uses (Covalence connects to it rather than replacing it). The ID number goes straight to the bank's systems and isn't stored in Covalence.
+- **Checks on arrival:** OFAC and PEP screening (`src/sanctionsMatch.mjs`), duplicate and synthetic-identity signals (the same phone, email, device or address on other applications), and the IP's country against the address.
+- **Businesses (KYB):** the business's registration and its beneficial owners under the FinCEN CDD rule (25% owners and one controller), each screened.
+- **A risk rating** with its reasons (low, medium, high), set in Settings, and an **Onboarding queue** in Licit: approve, ask for more, or decline, each with a reason, audited.
+- **Back to the bank:** `onboarding.decided` to the bank's endpoint; enhanced due diligence opens a Licit case for a high rating.
+- **Afterwards:** the onboarding record shows on the customer's later cases (how long they've been a customer, what was checked), which feeds fraud and scam decisions.
+- **Before it ships:** counsel reviews the consent text and data retention; the identity-provider connection is tested with a real sandbox.

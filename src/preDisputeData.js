@@ -26,7 +26,7 @@ async function rpc(fn, args) {
 // Rows as the panel uses them (camelCase, like preDispute.mjs)
 const shape = r => ({ id: r.id, externalId: r.external_id, source: r.source, network: r.network, amount: Number(r.amount), currency: r.currency,
   reason: r.reason, reasonCode: r.reason_code, descriptor: r.descriptor, orderId: r.order_id, arn: r.arn, cardLast4: r.card_last4,
-  transactionAt: r.transaction_at, receivedAt: r.received_at, respondBy: r.respond_by, status: r.status, note: r.note, history: r.history || [] })
+  transactionAt: r.transaction_at, receivedAt: r.received_at, respondBy: r.respond_by, status: r.status, note: r.note, cbFiled: !!r.cb_filed, history: r.history || [] })
 export const listPreDispute = () => rpc('predispute_list').then(rows => (rows || []).map(shape))
 
 // A decision, then the merchant's systems are told (a failed send doesn't undo the decision)
@@ -39,4 +39,18 @@ export async function decidePreDispute(id, action, note = '') {
   const j = r ? await r.json().catch(() => null) : null
   if (r?.status === 409 && j?.error === 'not_connected') return { ok: true, sent: null }
   return { ok: true, sent: !!j?.ok, error: j?.ok ? null : j?.error || null }
+}
+
+// The bank's side: a warning to the merchant before filing (merchantWarning.mjs), sent to
+// the bank's systems, which raise it with Ethoca or Verifi → { sent: true | false | null, error? }
+export async function sendMerchantWarning(c, w) {
+  if (!isSignedIn()) return { sent: null }
+  const amount = parseFloat(String(c.amount || '').replace(/[^0-9.]/g, ''))
+  const currency = String(c.amount || '').match(/[A-Z]{3}/)?.[0] || 'USD'
+  const body = { merchantWarning: { caseId: c.id, merchant: c.merchant || '', amount, currency, network: w.network, arn: c.arn || '', cardLast4: c.cardLast4 || '',
+    reason: /fraud|unauthori[sz]ed/i.test(`${c.verdict || ''} ${c.category || ''}`) ? 'fraud' : 'dispute', until: w.until } }
+  const r = await fetch('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken()}` }, body: JSON.stringify(body) }).catch(() => null)
+  const j = r ? await r.json().catch(() => null) : null
+  if (r?.status === 409 && j?.error === 'not_connected') return { sent: null }
+  return { sent: !!j?.ok, error: j?.ok ? null : j?.error || null }
 }

@@ -9,7 +9,8 @@
 -- The merchant's systems post them to /api/intake { "preDispute": [...] } with an
 -- API key; they're stored here once per provider alert, and analysts decide in
 -- Triage: refund in time (no chargeback, nothing on the ratio), already refunded,
--- let it go to a chargeback (with a reason), or share the order's details. Each
+-- let it go to a chargeback (with a reason), share the order's details, or, when
+-- the bank had already filed, acknowledge it and answer the chargeback on Desk. Each
 -- decision is audited and sent to the merchant's endpoint (api/action.js) so
 -- their systems refund and report the outcome to the provider.
 -- Rules: src/preDispute.mjs.
@@ -32,7 +33,8 @@ create table if not exists public.predispute_alerts (
   transaction_at timestamptz,
   received_at    timestamptz not null,
   respond_by     timestamptz,
-  status         text not null default 'open' check (status in ('open', 'refunded', 'already_refunded', 'declined', 'expired', 'rdr_refunded', 'rdr_declined', 'shared')),
+  status         text not null default 'open',
+  cb_filed       boolean not null default false,       -- the bank had already filed the chargeback
   note           text not null default '',
   history        jsonb not null default '[]'::jsonb,   -- [{ status, at, by, note }]
   created_at     timestamptz not null default now(),
@@ -40,6 +42,10 @@ create table if not exists public.predispute_alerts (
   primary key (institution_id, id),
   unique (institution_id, source, external_id)
 );
+alter table public.predispute_alerts add column if not exists cb_filed boolean not null default false;
+alter table public.predispute_alerts drop constraint if exists predispute_alerts_status_check;
+alter table public.predispute_alerts add constraint predispute_alerts_status_check
+  check (status in ('open', 'refunded', 'already_refunded', 'declined', 'expired', 'rdr_refunded', 'rdr_declined', 'shared', 'acknowledged'));
 create index if not exists predispute_open_idx on public.predispute_alerts (institution_id, status, received_at desc);
 alter table public.predispute_alerts enable row level security;
 
@@ -64,10 +70,12 @@ language plpgsql security definer set search_path = public as $$
 declare me uuid := my_institution(); cur predispute_alerts; who text;
 begin
   perform need_write();
-  if p_action not in ('refunded', 'already_refunded', 'declined', 'shared') then raise exception 'Unknown decision'; end if;
+  if p_action not in ('refunded', 'already_refunded', 'declined', 'shared', 'acknowledged') then raise exception 'Unknown decision'; end if;
   select * into cur from predispute_alerts where institution_id = me and id = p_id for update;
   if not found then raise exception 'No such alert'; end if;
   if cur.status <> 'open' then raise exception 'This alert was already decided (%)', cur.status; end if;
+  if p_action in ('refunded', 'already_refunded') and cur.cb_filed then raise exception 'The bank already filed the chargeback: a refund now pays twice. Acknowledge it and answer on Desk'; end if;
+  if p_action = 'acknowledged' and not cur.cb_filed then raise exception 'Only an alert whose chargeback is already filed is acknowledged'; end if;
   if p_action = 'refunded' and cur.respond_by is not null and cur.respond_by < now() then raise exception 'The window has passed: a refund now won''t stop the chargeback'; end if;
   if p_action = 'declined' and trim(coalesce(p_note, '')) = '' then raise exception 'Say why you''re letting it go to a chargeback'; end if;
   select coalesce(nullif(m.display_name, ''), m.email) into who from memberships m where m.user_id = auth.uid() limit 1;

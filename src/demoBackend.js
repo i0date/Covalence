@@ -332,7 +332,7 @@ const demoSampleLink = (seg = 'fi') => demoLinkCreate(sampleLink(seg), 'Sample')
 const demoBrand = () => normaliseBrand(read(K.claimForm, {}), DEMO_INSTITUTION)
 
 // ── Pre-dispute alerts on Demo Bank's merchant side (supabase_predispute.sql) ──
-// Seven as Ethoca, Verifi and Visa would send them: four waiting, three already settled
+// Eight as Ethoca, Verifi and Visa would send them: five waiting (one already a chargeback), three settled
 function demoPreDispute() {
   const now = Date.now(), ago = h => new Date(now - h * 3600000).toISOString()
   const raw = [
@@ -340,6 +340,7 @@ function demoPreDispute() {
     { source: 'cdrn', id: 'CDRN-40917', amount: 642.5, reason: 'dispute', reasonCode: '13.1', descriptor: 'HARBORLINE HOME*ORDER 51630', orderId: '51630', cardLast4: '9031', transactionAt: ago(24 * 19), receivedAt: ago(50) },
     { source: 'ethoca', id: 'ETH-88140', amount: 18.4, reason: 'dispute', descriptor: 'HARBORLINE HOME*ORDER 51902', orderId: '51902', cardLast4: '1187', transactionAt: ago(24 * 4), receivedAt: ago(6) },
     { source: 'order_insight', id: 'VOI-77231', amount: 129, reason: 'unknown', descriptor: 'HARBORLINE HOME*ORDER 51744', orderId: '51744', cardLast4: '6650', transactionAt: ago(24 * 11), receivedAt: ago(2) },
+    { source: 'ethoca', id: 'ETH-88152', amount: 312, reason: 'fraud', chargebackFiled: true, descriptor: 'HARBORLINE HOME*ORDER 51811', orderId: '51811', cardLast4: '2208', transactionAt: ago(24 * 9), receivedAt: ago(9) },
     { source: 'rdr', id: 'RDR-55018', amount: 34.99, reason: 'dispute', rdrDecision: 'refund', descriptor: 'HARBORLINE HOME*ORDER 51511', orderId: '51511', transactionAt: ago(24 * 12), receivedAt: ago(24 * 5) },
     { source: 'cdrn', id: 'CDRN-40702', amount: 76, reason: 'dispute', descriptor: 'HARBORLINE HOME*ORDER 51388', orderId: '51388', transactionAt: ago(24 * 20), receivedAt: ago(24 * 7) },
     { source: 'ethoca', id: 'ETH-87990', amount: 220, reason: 'fraud', descriptor: 'HARBORLINE HOME*ORDER 51290', orderId: '51290', transactionAt: ago(24 * 15), receivedAt: ago(24 * 9) },
@@ -806,13 +807,15 @@ const HANDLERS = {
     write(K.preDispute, all)
     return all.map(a => ({ id: a.id, external_id: a.externalId, source: a.source, network: a.network, amount: a.amount, currency: a.currency, reason: a.reason, reason_code: a.reasonCode,
       descriptor: a.descriptor, order_id: a.orderId, arn: a.arn, card_last4: a.cardLast4, transaction_at: a.transactionAt, received_at: a.receivedAt, respond_by: a.respondBy,
-      status: a.status, note: a.note, history: a.history }))
+      status: a.status, note: a.note, cb_filed: !!a.cbFiled, history: a.history }))
   },
   predispute_act: ({ p_id, p_action, p_note }) => {
     need(canWrite(), 'Your role can’t decide alerts')
-    need(['refunded', 'already_refunded', 'declined', 'shared'].includes(p_action), 'Unknown decision')
+    need(['refunded', 'already_refunded', 'declined', 'shared', 'acknowledged'].includes(p_action), 'Unknown decision')
     const all = read(K.preDispute, []), a = all.find(x => x.id === p_id)
     need(a, 'No such alert'); need(a.status === 'open', `This alert was already decided (${a.status})`)
+    need(!a.cbFiled || !['refunded', 'already_refunded'].includes(p_action), 'The bank already filed the chargeback: a refund now pays twice. Acknowledge it and answer on Desk')
+    need(p_action !== 'acknowledged' || a.cbFiled, 'Only an alert whose chargeback is already filed is acknowledged')
     need(p_action !== 'refunded' || !a.respondBy || new Date(a.respondBy) > new Date(), 'The window has passed: a refund now won’t stop the chargeback')
     need(p_action !== 'declined' || String(p_note || '').trim(), 'Say why you’re letting it go to a chargeback')
     a.status = p_action; a.history = [...a.history, { status: p_action, at: new Date().toISOString(), by: visitor().name || 'You', note: String(p_note || '').trim().slice(0, 300) }]

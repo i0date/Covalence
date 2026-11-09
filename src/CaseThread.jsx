@@ -317,6 +317,8 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
           : h.from ? `Reassigned from ${h.from} to ${h.to}` : `Assigned to ${h.to}` } :
       h.event === 'created_from_alert' ? { ts:h.ts, kind:'FROM MONITORING', text:`Opened from alert: ${h.alert}`, by:h.by } :
       h.event === 'alert_added' ? { ts:h.ts, kind:'ALERT ADDED', text:h.alert, by:h.by } :
+      h.event === 'merchant_warned' ? { ts:h.ts, kind:'MERCHANT WARNED', text:h.note, by:h.by } :
+      h.event === 'merchant_warning' ? { ts:h.ts, kind:'MERCHANT WARNING', text:h.note, by:h.by } :
       h.event === 'closed_at_intake' ? { ts:h.ts, kind:'CLOSED AT INTAKE', text:h.reason, by:h.by } :
       h.event === 'imported'  ? { ts:h.ts, kind:'IMPORTED',  text:`${h.update ? 'Updated from' : 'Imported from'} ${h.file || 'a file'}`, by:h.by } :
       h.event === 'escalated' ? { ts:h.ts, kind:'ESCALATED', text:`Escalated to ${h.to} — ${h.reason}`, by:h.by } :
