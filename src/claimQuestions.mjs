@@ -10,7 +10,7 @@
 // A question: { id, ask, kind, options?, required?, showIf?, accounts?, sides?, why }
 //   kind      yesno (true / false), choice (one of options' values), date (YYYY-MM-DD),
 //             amount (a number), text (up to 500 characters)
-//   showIf    asked only when an earlier answer has this value: { id: value }
+//   showIf    asked only when an earlier answer has this value (or one of these values): { id: value | [values] }
 //   accounts  asked only for these account types (default: every one)
 //   sides     asked only on these sides: fi (a bank), ce (an exchange), mx (a merchant) (default: every one)
 //   why       what the answer is for, for the bank's product team (wording to review with counsel)
@@ -31,15 +31,34 @@ const ORDER_REF = { id: 'orderNumber', ask: 'What’s your order number, if you 
 const WHAT_BOUGHT = { id: 'whatPurchased', ask: 'What did you buy?', kind: 'text', required: true,
   why: 'The dispute has to describe the goods or service.' }
 
+// How the customer found out, and when: people find fraud on a statement weeks later, from a
+// declined card, an alert or a letter. Late reports are taken; these answers set the clock.
+const HOW_NOTICED = { id: 'howNoticed', ask: 'How did you find out?', kind: 'choice', required: true,
+  options: [['statement', 'Looking at my statement or transactions'], ['alert', 'A text, email or app alert'], ['declined', 'My card was declined'],
+    ['merchant', 'A letter, email or parcel from a company'], ['someone', 'Someone else told me'], ['other', 'Another way']],
+  why: 'How fraud comes to light shapes the investigation; a statement found late is normal and still taken.' }
+const NOTICED_ON = { id: 'noticedOn', ask: 'When did you first notice?', kind: 'date', required: true,
+  why: 'Under Reg E the customer’s liability depends on how soon they told the bank after they knew.' }
+const LAST_LOOKED = { id: 'lastLooked', ask: 'Before this, when did you last look through your statement or transactions?', kind: 'choice',
+  options: [['week', 'In the last week'], ['month', 'In the last month'], ['quarter', 'One to three months ago'], ['longer', 'Longer ago, or I don’t remember']],
+  why: 'Reg E counts 60 days from the statement the charge first appeared on; this shows when the customer could have seen it.' }
+const OTHER_PAYMENTS = { id: 'otherPayments', ask: 'Are there other payments you don’t recognise?', kind: 'choice', required: true,
+  options: [['no', 'No, just this'], ['same', 'Yes, from the same name'], ['other', 'Yes, from other names too'], ['unsure', 'I haven’t checked yet']],
+  why: 'Fraud often starts with small test charges and grows over weeks; finding them all means one claim and one blocked card.' }
+const EARLIEST = { id: 'earliestUnrecognisedOn', ask: 'Roughly when was the earliest one?', kind: 'date', showIf: { otherPayments: ['same', 'other'] },
+  why: 'Sets how far back to look, and which payments are still inside the time limits.' }
+
 const UNAUTH = [
   RECOGNISES,
+  HOW_NOTICED, NOTICED_ON, LAST_LOOKED,
   yn('cardInPossession', 'Do you still have your card?', 'Lost or stolen and card-still-in-hand fraud are filed under different reason codes.',
     { required: true, accounts: CARDS }),
   { id: 'noticedMissingOn', ask: 'When did you notice the card was missing?', kind: 'date', showIf: { cardInPossession: false }, required: true, accounts: CARDS,
     why: 'Under Reg E the customer’s liability depends on how soon they told the bank after they knew.' },
-  yn('sharedCardDetails', 'Has anyone else had your card, PIN or banking details, even someone you know?',
+  yn('sharedCardDetails', 'Does anyone else use your card, or have your card details, PIN or online banking login, even someone you trust?',
     'A charge by someone the customer gave access to may count as authorised.', { required: true }),
-  yn('otherUnrecognised', 'Are there other transactions you don’t recognise?', 'Finds the rest of the fraud, so it can be claimed together and the card blocked.'),
+  OTHER_PAYMENTS, EARLIEST,
+  { ...CONTACTED, required: false, why: 'Not needed for fraud, but a merchant can sometimes cancel or refund it straight away.' },
 ]
 
 const SCAM_COMMON = [
@@ -65,7 +84,7 @@ export const QUESTIONS = {
     yn('sharedCode', 'Did anyone ask you for a code, a password, or to approve a sign-in?',
       'If the customer gave a code to a caller, it may be a scam rather than a takeover.', { required: true }),
     yn('canStillSignIn', 'Can you still sign in to your account?', 'If not, the bank needs to secure the account first.'),
-    yn('otherUnrecognised', 'Are there other transactions you don’t recognise?', 'Finds the rest of the fraud, so it can be claimed together.'),
+    HOW_NOTICED, NOTICED_ON, OTHER_PAYMENTS, EARLIEST,
   ],
   non_receipt: [
     WHAT_BOUGHT,
@@ -175,7 +194,7 @@ export function questionsFor(claimType, accountType = '', segment = 'fi') {
 }
 
 // Is a question asked, given the answers so far?
-const asked = (q, answers) => !q.showIf || Object.entries(q.showIf).every(([k, v]) => answers?.[k] === v)
+export const asked = (q, answers) => !q.showIf || Object.entries(q.showIf).every(([k, v]) => Array.isArray(v) ? v.includes(answers?.[k]) : answers?.[k] === v)
 
 // An answer of the right kind? (dates as YYYY-MM-DD, choices one of the values)
 function fits(q, v) {

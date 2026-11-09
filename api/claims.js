@@ -147,13 +147,16 @@ module.exports = async function handler(req, res) {
     }
     await audit(inst, 'claim.received', id, { reference: claim.externalId, channel: claim.channel, transactions: claim.transactions.length, ready: !recognised && !missing.length })
     const ep = await endpointFor(inst)
+    let actions = []
     if (ep?.url) await wh.sendEvent(ep, 'claim.received', m.publicStatus(stored[0])).catch(() => {})
     if (desk) await audit(inst, 'claim.sent_to_desk', id, { claimType: claim.claimType, reference: claim.externalId })
     // What the customer asked for now (lock the card, a new card, …): to the bank's systems at once
     if (claim.instructions.length && !recognised) {
+      // The customer waits for this: what the bank's systems confirm is what they're told was done
       const r = ep?.url ? await wh.sendEvent(ep, 'claim.instructions', { id, reference: claim.externalId, customerId: claim.customer.id,
         transactionIds: claim.transactions.map(t => t.id), instructions: claim.instructions.map(k => ({ action: k, label: m.INSTRUCTIONS[k] })) }).catch(() => ({ ok: false })) : null
-      row.data.instructionsSent = { at: new Date().toISOString(), ok: !!r?.ok, ...(r ? { http: r.status || null, event: r.id || null } : { notConnected: true }) }
+      actions = cl.confirmations(claim.instructions, r?.ok ? r.json : null)
+      row.data.instructionsSent = { at: new Date().toISOString(), ok: !!r?.ok, results: actions, ...(r ? { http: r.status || null, event: r.id || null } : { notConnected: true }) }
       await rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: row.data }) }).catch(() => {})
       await audit(inst, 'claim.instructions_sent', id, { instructions: claim.instructions, ok: !!r?.ok, connected: !!ep?.url })
     }
@@ -166,18 +169,27 @@ module.exports = async function handler(req, res) {
       .then(ai => rest(`app_claims?institution_id=eq.${inst}&id=eq.${id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ data: { ...row.data, ai } }) }))
       .catch(e => console.error('claims triage:', e.message)))
     if (triaged) await triaged
-    return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, sentToDesk: desk, missing, clock, ...(answerProblems.length ? { answerProblems } : {}) } }
+    return { code: 201, body: { ...m.publicStatus(stored[0]), duplicate: false, readyForDesk: !missing.length, sentToDesk: desk, missing, clock, actions, ...(answerProblems.length ? { answerProblems } : {}) } }
   }
 
   // A link to the hosted claim form for one customer (src/claimLinks.mjs). by: who made it.
+  const brandOf = async inst => cl.normaliseBrand((await rest(`claim_form?institution_id=eq.${inst}&select=*`).catch(() => []))?.[0] || {},
+    (await rest(`institutions?id=eq.${inst}&select=name`).catch(() => []))?.[0]?.name || '')
   const makeLink = async (inst, b, by) => {
     const { link, errors } = cl.normaliseLink(b)
     if (errors.length) return { code: 400, body: { error: 'The link has problems', problems: errors } }
+    // Every word on the form is in the bank's name, so there's no link until it has one
+    if (!(await brandOf(inst)).name) return { code: 409, body: { error: 'Set the name your customers know you by in Settings → Claim form before making links' } }
     const tok = 'cvf_' + crypto.randomBytes(24).toString('hex'), id = cl.linkIdFrom(crypto.randomBytes(4).toString('hex'))
     await rest('claim_links', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify([{ id, token_hash: sha(tok), institution_id: inst,
-      reference: link.reference, segment: link.segment, customer: link.customer, transactions: link.transactions, created_by: by, expires_at: link.expiresAt }]) })
-    await audit(inst, 'claim.link_created', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
+      reference: link.reference, segment: link.segment, customer: link.customer, transactions: link.transactions, ...(link.history.length ? { history: link.history } : {}), created_by: by, expires_at: link.expiresAt }]) })
+    await audit(inst, 'claim.link_created', id, { reference: link.reference || null, transactions: link.transactions.length, history: link.history.length, by, expires: link.expiresAt })
     return { code: 201, body: { id, url: cl.linkUrl(PUBLIC_URL, tok), expiresAt: link.expiresAt } }
+  }
+  // The customer's own payments out, about 13 months, from the files the bank sends for monitoring
+  const customerHistory = async row => {
+    const since = new Date(Date.now() - cl.HISTORY_DAYS * 86400000).toISOString()
+    return await rest(`tm_transactions?institution_id=eq.${row.institution_id}&customer_id=eq.${encodeURIComponent(row.customer.id)}&ts=gte.${encodeURIComponent(since)}&order=ts.desc&limit=2000&select=id,ts,amount,currency,counterparty,description,channel,direction`).catch(() => []) || []
   }
   const findLink = async tok => cl.TOKEN_RE.test(tok) ? (await rest(`claim_links?token_hash=eq.${sha(tok)}&select=*`).catch(() => []))?.[0] || null : null
 
@@ -190,22 +202,19 @@ module.exports = async function handler(req, res) {
     if (limited('form|' + ip)) { res.setHeader('Retry-After', '60'); return res.status(429).json({ error: 'Too many tries — wait a minute and try again' }) }
     try {
       const row = await findLink(formToken), problem = cl.linkProblem(row)
-      const brandRow = row ? (await rest(`claim_form?institution_id=eq.${row.institution_id}&select=*`).catch(() => []))?.[0] : null
-      const instName = row ? (await rest(`institutions?id=eq.${row.institution_id}&select=name`).catch(() => []))?.[0]?.name : ''
-      const brand = cl.normaliseBrand(brandRow || {}, instName)
+      const brand = row ? await brandOf(row.institution_id) : null
       if (problem) return res.status(row ? 410 : 404).json({ error: problem, brand: row ? brand : null })
       if (req.method === 'GET') {
         if (!row.opened_at) await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ opened_at: new Date().toISOString() }) }).catch(() => {})
         const iy = await import('../src/isThisYours.mjs')
-        const since = new Date(Date.now() - 400 * 86400000).toISOString()
-        const history = await rest(`tm_transactions?institution_id=eq.${row.institution_id}&customer_id=eq.${encodeURIComponent(row.customer.id)}&ts=gte.${encodeURIComponent(since)}&order=ts.desc&limit=2000&select=id,ts,amount,currency,counterparty`).catch(() => []) || []
+        const history = await customerHistory(row), more = cl.searchPool(row, history)
         const acct = row.customer.accountType || ''
         return res.status(200).json({ brand, firstName: String(row.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: row.expires_at,
-          cards: row.transactions.map(t => iy.cardFor(t, history)), ...cl.formFor(row.segment, acct) })
+          cards: row.transactions.map(t => iy.cardFor(t, history)), more, ...cl.formFor(row.segment, acct) })
       }
       if (req.method !== 'POST') return res.status(405).json({ error: 'Not allowed' })
       if (parseInt(req.headers['content-length'] || '0', 10) > MAX_BYTES) return res.status(413).json({ error: 'That’s too much text — shorten it and try again' })
-      const sent = req.body?.claim || {}, body = cl.claimFromForm(row, sent)
+      const sent = req.body?.claim || {}, body = cl.claimFromForm(row, sent, new Date(), cl.searchPool(row, await customerHistory(row)))
       // Consent is needed to investigate; a customer who recognises every payment has nothing to investigate
       if (sent.consent !== true && body.answers.recognisesTransaction !== true) return res.status(400).json({ error: 'Tick the box to agree before you send your claim' })
       // Used once: mark it first, so two sends at the same moment can't both store a claim
@@ -220,7 +229,7 @@ module.exports = async function handler(req, res) {
       }
       await rest(`claim_links?id=eq.${row.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ claim_id: out.body.id }) }).catch(() => {})
       await audit(row.institution_id, 'claim.link_used', row.id, { claim: out.body.id })
-      return res.status(201).json({ id: out.body.id, status: out.body.status, statusText: out.body.statusText, closedAtIntake: !!out.body.closedAtIntake, sentToDesk: !!out.body.sentToDesk, brand })
+      return res.status(201).json({ id: out.body.id, status: out.body.status, statusText: out.body.statusText, closedAtIntake: !!out.body.closedAtIntake, sentToDesk: !!out.body.sentToDesk, actions: out.body.actions || [], brand })
     } catch (e) {
       console.error('claims form:', e.message)
       return res.status(500).json({ error: 'Something went wrong on our side — try again in a minute' })

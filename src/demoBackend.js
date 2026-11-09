@@ -9,10 +9,10 @@
 import { readCases, writeCases } from './caseStore.js'
 import { normaliseClaim, claimClock, missingForDesk, claimRow, claimIdFrom } from './claims.mjs'
 import { RECOGNISED_NOTE, cardFor } from './isThisYours.mjs'
-import { sampleLink, sampleHistory } from './claimSamples.mjs'
+import { sampleLink, sampleHistory, samplePool } from './claimSamples.mjs'
 import { normaliseAlert, settle as settlePd } from './preDispute.mjs'
 import { normaliseApplication, runChecks, rate } from './onboarding.mjs'
-import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor } from './claimLinks.mjs'
+import { normaliseLink, linkIdFrom, linkProblem, claimFromForm, normaliseBrand, linkUrl, formFor, searchPool, confirmations } from './claimLinks.mjs'
 
 const K = {
   audit: 'cov_demo_audit', team: 'cov_demo_team', invites: 'cov_demo_invites', holds: 'cov_demo_holds',
@@ -321,7 +321,7 @@ function demoLinkCreate(b, by) {
   need(!errors.length, errors.join('; '))
   const token = 'demo_' + hex(24), id = linkIdFrom(hex(4)), at = new Date().toISOString()
   const all = read(K.claimLinks, [])
-  all.unshift({ id, token, institution_id: 'demo', reference: link.reference, segment: link.segment, customer: link.customer, transactions: link.transactions,
+  all.unshift({ id, token, institution_id: 'demo', reference: link.reference, segment: link.segment, customer: link.customer, transactions: link.transactions, history: link.history,
     created_by: by, created_at: at, expires_at: link.expiresAt, opened_at: null, used_at: null, claim_id: '', revoked_at: null })
   write(K.claimLinks, all.slice(0, 50))
   audit('claim.link_created', 'claim', id, { reference: link.reference || null, transactions: link.transactions.length, by, expires: link.expiresAt })
@@ -853,19 +853,25 @@ const HANDLERS = {
     if (!l.opened_at) { l.opened_at = new Date().toISOString(); write(K.claimLinks, all) }
     const acct = l.customer.accountType || '', history = sampleHistory(l.customer.id)
     return { brand: demoBrand(), firstName: String(l.customer.name || '').split(/\s+/)[0] || '', accountType: acct || null, expiresAt: l.expires_at,
-      cards: l.transactions.map(t => cardFor(t, history)), ...formFor(l.segment, acct) }
+      cards: l.transactions.map(t => cardFor(t, history)), more: searchPool(l, samplePool(l.customer.id)), ...formFor(l.segment, acct) }
   },
   claim_form_send: ({ p_token, p_claim }) => {
     const all = read(K.claimLinks, []), l = all.find(x => x.token === p_token), problem = linkProblem(l)
     need(!problem, problem)
-    const body = claimFromForm(l, p_claim)
+    const body = claimFromForm(l, p_claim, new Date(), searchPool(l, samplePool(l.customer.id)))
     need(p_claim?.consent === true || body.answers.recognisesTransaction === true, 'Tick the box to agree before you send your claim')
     const { claim, errors } = normaliseClaim(body)
     need(!errors.length, 'Some answers are missing — check the form and try again')
     const id = claimIdFrom(hex(5)), { row, recognised, desk, missing } = claimRow(claim, { id, institution: 'demo', by: 'claim form', extra: { link: l.id, qv: DEMO_QV, ...(l.reference ? { bankReference: l.reference } : {}) } })
     const at = row.history[0].at
-    // The customer's instructions go to Demo Bank's systems at once, if an endpoint is saved in Settings → Connections
-    if (claim.instructions.length && !recognised) row.data.instructionsSent = read(K.endpoint, null)?.url ? { at, ok: true, demo: true } : { at, ok: false, notConnected: true }
+    // The customer's instructions go to Demo Bank's systems while they wait. Demo Bank's systems are
+    // make-believe and confirm everything, with a reference, as a connected bank's would
+    let actions = []
+    if (claim.instructions.length && !recognised) {
+      actions = confirmations(claim.instructions, { results: claim.instructions.map(a => ({ action: a, done: true, reference: 'DB-' + hex(3).toUpperCase(),
+        ...(a === 'lock_card' ? { message: 'Your debit card ending 4412 is locked' } : a === 'replace_card' ? { message: 'A new card is on its way to the address we have for you' } : {}) })) })
+      row.data.instructionsSent = { at, ok: true, demo: true, results: actions }
+    }
     const claims = read(K.claims, null) || demoClaims()
     claims.push({ ...row, case_id: '', created_at: at, updated_at: at })
     write(K.claims, claims)
@@ -876,7 +882,7 @@ const HANDLERS = {
     if (row.data.instructionsSent) audit('claim.instructions_sent', 'claim', id, { instructions: claim.instructions, ok: row.data.instructionsSent.ok, connected: !row.data.instructionsSent.notConnected })
     audit('claim.link_used', 'claim', l.id, { claim: id })
     window.dispatchEvent(new Event('cov:claims-changed'))
-    return { id, status: row.status, statusText: recognised ? 'Closed' : desk ? 'Investigating' : 'Received', closedAtIntake: recognised, sentToDesk: desk, brand: demoBrand() }
+    return { id, status: row.status, statusText: recognised ? 'Closed' : desk ? 'Investigating' : 'Received', closedAtIntake: recognised, sentToDesk: desk, actions, brand: demoBrand() }
   },
 
   // Pre-dispute alerts (supabase_predispute.sql): seeded the first time; open ones past their window expire

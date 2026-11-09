@@ -14,7 +14,8 @@
 --   • A link is a random token; only its SHA-256 hash is stored here
 --   • It works once, and only until it expires (72 hours unless the bank says otherwise, at most 7 days)
 --   • Links are made and used only through api/claims.js, with the service role
---   • claim_form holds the bank's name, logo and phone number on the form
+--   • claim_form holds the bank's name, logo and phone number on the form; no link is
+--     made until the bank has a name, since every word on the form is in it
 -- =============================================================================
 
 -- Claims for every side: a bank or credit union (fi), a crypto exchange (ce), and now a
@@ -49,6 +50,9 @@ create table if not exists public.claim_links (
   claim_id       text not null default '',
   revoked_at     timestamptz
 );
+-- The customer's other payments, about 13 months, for them to search when the one they
+-- mean isn't among the link's transactions (sent by the bank with the link, optional)
+alter table public.claim_links add column if not exists history jsonb not null default '[]'::jsonb;
 create index if not exists claim_links_inst_idx on public.claim_links (institution_id, created_at desc);
 alter table public.claim_links enable row level security;
 
