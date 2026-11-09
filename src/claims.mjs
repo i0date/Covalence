@@ -52,16 +52,16 @@ export const INSTRUCTIONS = {
   refund: 'Refund me', replacement: 'Send a replacement', cancel_subscription: 'Cancel my subscription',
   call_me: 'Call me',
 }
-// Which ones to offer for a kind of problem on a side (the bank's app asks; the hosted form shows them)
+// Which ones to offer for a kind of problem on a side (the bank's app asks; the hosted form shows them).
+// "Call me" is still accepted from a bank's own app, but not offered: the bank's number is on every screen.
 export function instructionsFor(type, segment = 'fi') {
   const t = type || ''
-  if (segment === 'ce') return ['unauth_withdrawal', 'ato'].includes(t) ? ['freeze_account', 'lock_withdrawals', 'reset_security', 'call_me']
-    : SCAMS.includes(t) ? ['lock_withdrawals', 'call_me'] : ['deposit_missing', 'withdrawal_missing', 'wrong_address'].includes(t) ? ['call_me'] : []
-  if (segment === 'mx') return ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described'].includes(t) ? ['refund', 'replacement', 'call_me']
-    : t === 'cancelled_sub' ? ['cancel_subscription', 'refund'] : ['refund_not_received', 'duplicate_charge', 'billing_error'].includes(t) ? ['refund', 'call_me'] : t === 'unauth_cnp' ? ['call_me'] : []
-  return /^unauth|^counterfeit/.test(t) ? ['lock_card', 'replace_card', 'call_me']
-    : /^ato/.test(t) ? ['lock_card', 'call_me']
-    : SCAMS.includes(t) ? ['lock_card', 'call_me']
+  if (segment === 'ce') return ['unauth_withdrawal', 'ato'].includes(t) ? ['freeze_account', 'lock_withdrawals', 'reset_security']
+    : SCAMS.includes(t) ? ['lock_withdrawals'] : []
+  if (segment === 'mx') return ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described'].includes(t) ? ['refund', 'replacement']
+    : t === 'cancelled_sub' ? ['cancel_subscription', 'refund'] : ['refund_not_received', 'duplicate_charge', 'billing_error'].includes(t) ? ['refund'] : []
+  return /^unauth|^counterfeit/.test(t) ? ['lock_card', 'replace_card']
+    : /^ato/.test(t) || SCAMS.includes(t) ? ['lock_card']
     : t === 'cancelled_sub' ? ['stop_merchant'] : []
 }
 // A dispute about a purchase the customer made, reported to their bank: nothing for Triage

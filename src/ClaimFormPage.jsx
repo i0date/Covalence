@@ -35,6 +35,8 @@ const UNAUTH = /^unauth|^ato|^counterfeit/
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const answered = (q, v) => q.kind === 'yesno' ? typeof v === 'boolean' : q.kind === 'amount' ? v !== '' && v != null && isFinite(Number(v)) && Number(v) >= 0 : String(v ?? '').trim() !== ''
+// The options as the customer reads them on the form (Triage keeps claims.mjs INSTRUCTIONS)
+const LABELS = { lock_card: 'Lock my card', replace_card: 'Send me a new card', stop_merchant: 'Block payments to this merchant' }
 // What the customer asked for, when the bank's systems didn't confirm it
 const ASKED_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you',
   freeze_account: 'freeze your account', lock_withdrawals: 'stop all withdrawals', reset_security: 'reset your password and 2FA',
@@ -46,7 +48,7 @@ const SIDE = {
   fi: { who: 'Your bank', one: 'payment', many: 'payments', yours: 'Is this payment yours?', yoursMany: 'Are these payments yours?',
     yoursSub: 'Payments often show under a different name from the shop’s. Here’s each one as you’d know it.', qSub: 'These help us handle it under the card and banking rules.',
     find: 'Can’t see it? Search your payments from the last 13 months', none: 'There are no payments to show here. Tell us about the one you mean below.',
-    protect: 'What do you need from us right now?', got: 'We’ve got your report', next: 'We’ll look into it and contact you if we need anything else.' },
+    protect: 'Is there anything else you need right now?', got: 'We’ve got your report', next: 'We’ll look into it and contact you if we need anything else.' },
   ce: { who: 'Your exchange', one: 'transaction', many: 'transactions', yours: 'Is this withdrawal yours?', yoursMany: 'Are these withdrawals yours?',
     yoursSub: 'Check where each one went and when.', qSub: 'These help us trace it.',
     find: 'Can’t see it? Search your transactions from the last 13 months', none: 'There are no transactions to show here. Tell us about the one you mean below.',
@@ -376,6 +378,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
     </div>
   )
   const asks = wants.filter(w => offers.some(o => o.value === w))
+  const canLock = offers.some(o => o.value === 'lock_card')
   // Done only when the bank's systems said so (claimLinks.mjs confirmations)
   const results = done?.actions || asks.map(action => ({ action, done: false }))
   const confirmed = results.filter(a => a.done), unconfirmed = results.filter(a => !a.done)
@@ -393,6 +396,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
       {confirmed.length > 0 && <div className="cf-done" aria-label="Done">{confirmed.map(a => (
         <div key={a.action} className="cf-done-row"><span className="cf-done-tick" aria-hidden>✓</span><span>{a.message || DONE_TEXT[a.action]}{a.reference && <span className="mono cf-done-ref"> · REF {a.reference}</span>}</span></div>
       ))}</div>}
+      {canLock && !asks.includes('lock_card') && <div className="cf-note cf-note-warn">Your card isn’t locked. If you still have it, lock it now in your banking app{brand?.phone ? `, or call us on ${brand.phone}` : ''}, so it can’t be used again.</div>}
       {unconfirmed.length > 0 && <div className="cf-note cf-note-warn" role="alert">
         We couldn’t confirm that we’ve {unconfirmed.map(a => ASKED_WORDS[a.action] === 'call you' ? 'arranged to call you' : `been able to ${ASKED_WORDS[a.action]}`).join(', or ')}. {urgentAsk(unconfirmed)
           ? `Please call us${brand?.phone ? ` on ${brand.phone}` : ', on the number on the back of your card or in your banking app,'} now so we can do it straight away.`
@@ -454,12 +458,14 @@ export default function ClaimFormPage({ token: initial, preview }) {
 
   if (step === 'protect') return wrap(<>
     {progress}
-    <h1>{type === 'cancelled_sub' && form.segment !== 'mx' ? 'Do you want us to stop them charging you?' : W.protect}</h1>
-    <p className="cf-sub">{type === 'cancelled_sub' && form.segment !== 'mx' ? 'We can block future payments to this merchant while we look into it.' : 'We’ll pass this on as soon as you send it. Tick everything you want.'}</p>
-    {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{o.label}</Option>)}
-    {wants.includes('lock_card') && <p className="cf-hint">A locked card can’t be used for new payments. You can unlock it later in your banking app.</p>}
+    <h1>{type === 'cancelled_sub' && form.segment !== 'mx' ? 'Do you want us to stop them charging you?' : canLock ? 'Lock your card now' : W.protect}</h1>
+    <p className="cf-sub">{type === 'cancelled_sub' && form.segment !== 'mx' ? 'We can block future payments to this merchant while we look into it.'
+      : canLock ? `${unauth ? 'Whoever made this payment may still have your card details.' : 'If anyone else has your card details, they can still use them.'} Locking it stops any new payments straight away, and you can unlock it later in your banking app.`
+      : 'We’ll do it as soon as you send this. Tick anything you want.'}</p>
+    {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{LABELS[o.value] || o.label}</Option>)}
+    {canLock && !wants.includes('lock_card') && <p className="cf-note cf-note-warn">We recommend locking your card. Until it’s locked, it can still be used.</p>}
     {wants.includes('freeze_account') && <p className="cf-hint">A frozen account can’t trade or withdraw until you and the exchange unfreeze it together.</p>}
-    {nav(true, wants.length ? 'Continue' : 'Nothing for now')}
+    {nav(true, wants.length ? 'Continue' : canLock ? 'Continue without locking' : 'Nothing for now')}
   </>)
 
   if (step === 'questions') return wrap(<>
