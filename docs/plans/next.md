@@ -10,7 +10,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 4. **Settings redesign.**
 5. **Onboard with Covalence.** Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account. Listed on the sign-up page as coming.
 6. **Claim form rework.** Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
-7. **Settings, again.** The redesign didn't land; go through it together first.
+7. **Settings, again.** The redesign didn't land; go through it together first. Every function becomes a toggle there, and you only see what you've switched on (the acquirer and merchant views included).
 8. **Home, tighter.** A tighter revamp of the home page.
 9. **Every tool, with a fine-tooth comb.** After Onboard with Covalence: one tool at a time, list what's wrong, fix it.
 
@@ -125,6 +125,13 @@ What it becomes:
 ## 7. Settings, again
 
 The Linear-style redesign (section 4) is live but doesn't work for you. Start by going through each page together and writing down what's wrong (too much on one page, wrong grouping, unclear wording, missing settings), then fix it in one pass.
+
+**Everything is switched on in Settings, and only what's on shows.**
+- **Sides first: the acquirer and merchant reminder.** The merchant views (Against your sales, Triage's Merchant side, pre-dispute alerts) and the acquirer view (Your merchants in 003 Multi) show only when the workspace has ticked Merchant or Acquirer under *What you do*. Today the demo shows every side, and a signed-in workspace falls back on its institution type; that fallback goes. Each side's tab, menu entry, Home figures and Your day rows follow the tick.
+- **Then every function is a toggle.** Each tool (Triage, Desk, Multi, File, Licit, DFA, Duo, Trio, Insights) and each feature inside one (for example pre-dispute alerts, claims from the app, the hosted claim form, warn the merchant first, monitoring rules, sanctions screening, SARs, Onboard with Covalence, the alarm, pools) can be switched on or off. Off means gone: not in the menu, not on Home, not in Your day, not in search.
+- **Who can change it:** admins only, audited, with a one-line description of each toggle and what turning it off hides. Turning a feature off never deletes its data; turning it back on brings it back.
+- **New workspaces** start from what they said they do at sign-up, with a short list to switch on the rest.
+- **The demo** keeps everything on, with the same toggles so a visitor can see what a switched-off workspace looks like.
 
 ## 8. Home, tighter
 
