@@ -8,7 +8,8 @@ import { notesList, registerOutcomeSubscriber, saveOutcomes } from '../shared.js
 import { readCases } from '../caseStore.js'
 import { MerchantQueue } from '../MerchantQueue.jsx'
 import { AcquirerView } from '../AcquirerView.jsx'
-import { doesIssuing, doesMerchant, doesAcquiring } from '../sides.mjs'
+import { doesIssuing, doesMerchant, doesAcquiring, isIssuerCase, isAcquirerCase } from '../sides.mjs'
+import { merchantQueue } from '../merchantQueue.mjs'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS VIEW
@@ -361,14 +362,30 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
     setNoteOpen(prev => ({ ...prev, [id]: false }))
   }
 
-  // Merchant side: chargebacks filed against the merchant, waiting for an answer.
-  // A workspace that works both sides switches here, the same switch as Desk's.
+  // Whose chargebacks: one row of tabs for every side this workspace works (issuer, its own
+  // sales as a merchant, its merchants as an acquirer), each with what needs someone now.
+  // Picking one also sets Desk's side (platformMode), as the old switch did.
   const merchantView = platformMode === 'merchant'
-  const sideSwitch = doesIssuing(sides) && doesMerchant(sides) && setPlatformMode && (
-    <div role="group" aria-label="Side" className="flex mb-6" style={{ flexWrap:'wrap' }}>
-      {[['fi', 'ISSUER / FI'], ['merchant', 'MERCHANT / ACQUIRER']].map(([k, l], i) => (
-        <button key={k} type="button" onClick={() => setPlatformMode(k)} aria-pressed={platformMode === k}
-          className={'platform-toggle-btn mono-font text-xs tracking-widest px-5 py-2.5 border border-stone-900 transition-all ' + (i ? 'border-l-0 ' : '') + (platformMode === k ? 'bg-stone-900 text-stone-50' : 'bg-transparent text-stone-600 hover:bg-stone-100')}>{l}</button>
+  const ownMerchant = sides.includes('merchant'), acquiring = doesAcquiring(sides)
+  const book = acquiring && (!ownMerchant || merchantBookTab === 'acquirer') ? 'acquirer' : 'merchant'
+  const activeSide = merchantView ? book : 'issuer'
+  const sideTabs = [
+    doesIssuing(sides) && { k: 'issuer', label: 'Your cardholders', sub: 'Disputes you file', n: outcomes.filter(o => isIssuerCase(o) && o.status === 'queued').length, nLabel: 'to file' },
+    ownMerchant && { k: 'merchant', label: 'Against your sales', sub: 'Chargebacks to answer', n: merchantQueue(outcomes, settings).length, nLabel: 'to answer' },
+    acquiring && { k: 'acquirer', label: 'Your merchants', sub: 'Their chargebacks, checked before they go on', n: outcomes.filter(o => isAcquirerCase(o) && ['received', 'response_in'].includes(o.status || 'received')).length, nLabel: 'need you' },
+  ].filter(Boolean)
+  const pickSide = k => {
+    if (k === 'issuer') { setPlatformMode && setPlatformMode('fi'); return }
+    setMerchantBookTab(k)
+    if (setPlatformMode && platformMode !== 'merchant') setPlatformMode('merchant')
+  }
+  const sideSwitch = sideTabs.length > 1 && (
+    <div role="tablist" aria-label="Whose chargebacks" className="cov-side-tabs">
+      {sideTabs.map(t => (
+        <button key={t.k} type="button" role="tab" aria-selected={activeSide === t.k} onClick={() => pickSide(t.k)} className="cov-side-tab">
+          <span className="mono-font cov-side-tab-label">{t.label.toUpperCase()}{t.n > 0 && <b title={`${t.n} ${t.nLabel}`}>{t.n}</b>}</span>
+          <span className="display-font cov-side-tab-sub">{t.sub}</span>
+        </button>
       ))}
     </div>
   )
@@ -380,7 +397,9 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
           <span style={{ fontWeight:700 }}>Mul</span><span style={{ fontStyle:'italic', fontWeight:500 }}>ti</span>
         </h1>
         <p className="display-font text-stone-600 mt-4" style={{ fontSize:'clamp(14px,1.8vw,16px)', lineHeight:'1.5', maxWidth:'520px' }}>
-          {merchantView
+          {activeSide === 'acquirer'
+            ? 'Your merchants’ chargebacks: send each to the merchant, check their answer against what its reason code needs, then send it to the network. Merchants near a Visa or Mastercard threshold come first.'
+            : merchantView
             ? 'Every chargeback filed against you that still needs an answer, soonest deadline first, with a fight-or-accept call on each. Build the response in the Dispute Desk; accept the small ones here in bulk.'
             : 'Bulk dispute operations. Queue fraud and service cases from the Dispute Desk, file fraud chargebacks in batch, and route service disputes for manual review.'}
         </p>
@@ -390,25 +409,10 @@ Prepared by: ${agentName} · ${instName} · ${filedDate}
       </div>
     </div>
   )
-  // Merchant / acquirer: a workspace that does both picks which book it's looking at
-  const ownMerchant = sides.includes('merchant'), acquiring = doesAcquiring(sides)
-  const book = acquiring && (!ownMerchant || merchantBookTab === 'acquirer') ? 'acquirer' : 'merchant'
-  const bookSwitch = acquiring && ownMerchant && (
-    <div role="tablist" aria-label="Whose chargebacks" className="cov-tabs" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC', marginBottom:'18px' }}>
-      {[['merchant', 'Against your sales', 'You’re the merchant'], ['acquirer', 'Your merchants', 'You’re their acquirer']].map(([k, l, sub]) => (
-        <button key={k} type="button" role="tab" aria-selected={book === k} onClick={() => setMerchantBookTab(k)}
-          style={{ background:'none', border:0, borderBottom: book === k ? '2px solid #1A1814' : '2px solid transparent', padding:'8px 16px 10px 0', marginRight:'18px', textAlign:'left', cursor:'pointer' }}>
-          <span className="mono-font" style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: book === k ? '#1A1814' : '#78716C', fontWeight: book === k ? 600 : 400 }}>{l.toUpperCase()}</span>
-          <span className="display-font" style={{ display:'block', fontSize:'13px', color:'#6B6259' }}>{sub}</span>
-        </button>
-      ))}
-    </div>
-  )
   if (merchantView) return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '32px 24px 80px' }}>
       {header}
       {sideSwitch}
-      {bookSwitch}
       {book === 'acquirer'
         ? <AcquirerView outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} setSettings={setSettings} covUser={covUser} />
         : <MerchantQueue outcomes={outcomes} setOutcomes={setOutcomes} settings={settings} covUser={covUser} setActiveSection={setActiveSection} />}

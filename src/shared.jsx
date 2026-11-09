@@ -770,6 +770,15 @@ export const GLOBAL_CSS = `
   .cov-pd-row { padding:14px 18px; border-top:1px solid #E7E2D9; }
   .cov-pd-main { flex:1 1 360px; min-width:0; text-align:left; background:none; border:0; padding:0; cursor:pointer; }
   .cov-pd-settled { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; padding:7px 0; border-top:1px solid #EFEAE1; }
+  .cov-side-tabs { display:flex; flex-wrap:wrap; gap:0 28px; border-bottom:1px solid #D4CCBC; margin-bottom:24px; }
+  .cov-side-tab { background:none; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; padding:8px 0 10px; text-align:left; cursor:pointer; }
+  .cov-side-tab[aria-selected="true"] { border-bottom-color:#1A1814; }
+  .cov-side-tab-label { display:flex; align-items:center; gap:7px; font-size:11px; letter-spacing:0.14em; color:#78716C; }
+  .cov-side-tab[aria-selected="true"] .cov-side-tab-label { color:#1A1814; font-weight:600; }
+  .cov-side-tab-label b { font-weight:600; font-size:10px; letter-spacing:0.04em; background:#1A1814; color:#F5F1EA; padding:1px 6px; }
+  .cov-side-tab:not([aria-selected="true"]) .cov-side-tab-label b { background:#92400E; }
+  .cov-side-tab-sub { display:block; font-size:13px; color:#6B6259; margin-top:2px; }
+  .cov-side-tab:focus-visible { outline:2px solid #1A1814; outline-offset:2px; }
   .cov-acq-merchant { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1.3fr) auto; gap:8px 16px; align-items:center; width:100%; text-align:left; background:none; border:0; padding:0; cursor:pointer; }
   .cov-acq-name { font-size:17px; color:#1A1814; min-width:0; overflow-wrap:break-word; }
   .cov-acq-name span { display:block; font-size:11px; color:#6B6259; margin-top:2px; }
