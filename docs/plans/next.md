@@ -52,7 +52,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
   - A duplicate report joins the alarm that's already open.
   - Every alarm is audited.
   - Only level 3 is red.
-- **Acquirer role:** Multi grouped by merchant, merchant ratios, and checking merchants' responses before they're sent on.
+- **Acquirer role:** (done) 003 Multi → Merchant / Acquirer → *Your merchants* (`src/acquirer.mjs`, `src/AcquirerView.jsx`): chargebacks against the acquirer's merchants (`side: 'acquirer'`), grouped by merchant, the ones near a Visa VAMP or Mastercard ECM threshold first, with each merchant's 30-day ratio from its monthly card sales. Each chargeback goes received → with the merchant (10 days, never later than 3 days before the network's deadline) → the merchant's answer, checked against the evidence its reason code needs → sent to the network, sent back, or closed when the merchant accepts. Acquirer cases stay out of the merchant's own and the issuer's views. Later: notifying merchants from Covalence (today the stage is recorded; the acquirer's systems tell the merchant), and merchants answering through Covalence directly.
 
 ## 3. Disputes from the bank's app
 

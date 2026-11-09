@@ -19,7 +19,7 @@ import { Refs } from './FrontPage.jsx'
 import { ForecastTiles, DeadlinesPanel, BacklogPanel, TeamCharts } from './YourDayViews.jsx'
 import { canWrite } from './auth.js'
 import { poolRole, tasksFor, HELP } from './Pool.jsx'
-import { isMerchantCase } from './sides.mjs'
+import { isMerchantCase, isIssuerCase } from './sides.mjs'
 import { briefPeriod, noteVisit, changedSince } from './brief.js'
 import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
 import { listClaims, openClaim } from './claimsData.js'
@@ -89,7 +89,7 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
   }, [canAlarm])
   const work = useMemo(() => {
     const all = allThreadCases(outcomes)
-      .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c)))
+      .filter(c => (platformMode === 'merchant' ? isMerchantCase(c) : isIssuerCase(c)))
     const open = all.map(c => ({ c, r: reasonFor(c, settings, me) })).filter(x => x.r)
     const isMine = c => !!me && ((c.assignedTo || '').toLowerCase() === me || (c.escalatedTo || '').toLowerCase() === me)
     const mine = open.filter(x => isMine(x.c))

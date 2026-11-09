@@ -11,7 +11,7 @@ import { listTeam } from './auth.js'
 import { demoRpc } from './demoBackend.js'
 import { Button, Input } from './ui.jsx'
 import { typesFor } from './trioPlaybooks.mjs'
-import { doesIssuing, isMerchantCase } from './sides.mjs'
+import { doesIssuing, isMerchantCase, isIssuerCase } from './sides.mjs'
 import { allThreadCases } from './CaseThread.jsx'
 import { livePatterns, dismissPattern } from './patterns.mjs'
 import { Refs } from './FrontPage.jsx'
@@ -23,7 +23,7 @@ const openDialog = () => window.dispatchEvent(new Event('cov:alarm-open'))
 export function usePatterns(outcomes, platformMode) {
   const [tick, setTick] = useState(0)
   useEffect(() => { const h = () => setTick(t => t + 1); window.addEventListener('cov:patterns-changed', h); return () => window.removeEventListener('cov:patterns-changed', h) }, [])
-  return useMemo(() => livePatterns(allThreadCases(outcomes || []).filter(c => platformMode === 'merchant' ? isMerchantCase(c) : !isMerchantCase(c))), [outcomes, platformMode, tick])
+  return useMemo(() => livePatterns(allThreadCases(outcomes || []).filter(c => platformMode === 'merchant' ? isMerchantCase(c) : isIssuerCase(c))), [outcomes, platformMode, tick])
 }
 
 // Each pattern: what's happening, what it's based on, the cases, and what to do with it

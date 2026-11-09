@@ -10,7 +10,7 @@ import React, { useEffect, useState } from 'react'
 import { arnFindOtherSide, arnInvites, arnLinkState, loadMyDuoSessions, saveMyDuoSessions } from './data.js'
 import { stageText } from './LinkedCases.jsx'
 import { Button, Input } from './ui.jsx'
-import { isMerchantCase } from './sides.mjs'
+import { isIssuerCase } from './sides.mjs'
 
 const digits = v => String(v || '').replace(/\D/g, '')
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : ''
@@ -34,7 +34,7 @@ export function ArnLink({ c, setOutcomes, covUser, onClose }) {
   useEffect(() => { setLink(null); if (linkedId) arnLinkState(linkedId).then(setLink).catch(() => setLink(null)) }, [linkedId])
   if (!c.network && !c.arn) return null   // ARNs belong to card disputes
 
-  const other = isMerchantCase(c) ? 'the cardholder’s bank' : 'the merchant'
+  const other = !isIssuerCase(c) ? 'the cardholder’s bank' : 'the merchant'
   const linked = invites.find(i => i.my_case_id === c.id && i.status === 'accepted')
   const waiting = invites.find(i => i.my_case_id === c.id && i.direction === 'in' && i.status === 'pending')
   const valid = digits(draft).length === 23
