@@ -8,7 +8,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 2. **Phase 4 + the alarm.** Merchant pre-dispute alerts in Triage, merchant playbooks in Trio, the alarm (built with the Trio work), and the acquirer role.
 3. **Disputes from the bank's app.** The biggest selling point for a design partner.
 4. **Settings redesign.**
-5. **Onboard with Covalence.** Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account. Listed on the sign-up page as coming.
+5. **Onboard with Covalence.** (built) Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account.
 6. **Claim form rework.** Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
 7. **Settings, again.** The redesign didn't land; go through it together first.
 8. **Home, tighter.** A tighter revamp of the home page.
@@ -97,6 +97,8 @@ Built so far (claims API PR): `/api/claims` with `supabase_claims.sql`; claims l
 - **Deep links (`cov:go`) keep working.**
 
 ## 5. Onboard with Covalence (banks and FIs)
+
+**Built** (onboarding PR): `src/onboarding.mjs` (the application, the checks, the rating), `api/_onboarding.js` served at `/api/onboarding` through `api/claims.js` (the free plan's 12-function limit), `supabase_onboarding.sql`, the hosted form at `/onboard/<token>` (`src/OnboardPage.jsx`; samples at `/onboard/demo` and `/onboard/demo-business`), and 005 Licit → Onboarding (`src/OnboardingQueue.jsx`). ID numbers go straight to the bank's endpoint (`onboarding.identity`) and only the last four digits are kept; the identity provider's result comes back as `{ idv }`; decisions go back as `onboarding.decided`. Not yet: a PEP list (the check rests on the customer's answer), the onboarding record on the customer's later cases, and opening a Licit case for enhanced due diligence.
 
 A customer's record should start when they open the account, not at their first dispute. The bank's app or website opens Covalence's onboarding flow, like the hosted claim form, and the result lands on the same record every later case, alert and SAR uses.
 

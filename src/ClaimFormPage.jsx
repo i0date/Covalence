@@ -48,7 +48,8 @@ const SIDE = {
     protect: 'What would put this right?', got: 'We’ve got your request', next: 'We’ll check your order and get back to you, usually within two working days.' },
 }
 
-const CSS = `
+// Shared with the hosted onboarding form (OnboardPage.jsx)
+export const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap');
   .cf { --ink:#1A1814; --muted:#6B6259; --line:#D4CCBC; --soft:#EEE9E0; --card:#FAF7F1; --bg:#F5F1EA; --bad:#991B1B; --ok:#065F46;
     min-height:100vh; background:var(--bg); color:var(--ink); font:16px/1.55 'Fraunces',Georgia,serif; }

@@ -86,7 +86,7 @@ const SCOPE = [
   ['Fraud and scam recovery', 'Monitoring rules, customer claims from your app and website, and the other institution brought in when the money has moved.'],
   ['Sanctions, AML and SARs', 'OFAC screening, linked customers and wallets, and SAR narratives drafted from the case.'],
   ['For exchanges and merchants too', 'Unauthorised withdrawals and wrong-network deposits for crypto exchanges; order problems and refunds for merchants.'],
-  ['Onboard with Covalence', 'For banks and financial institutions: identity checks, sanctions and PEP screening and a risk rating when a customer opens an account, on the same record as everything after.', 'soon'],
+  ['Onboard with Covalence', 'For banks and financial institutions: new customers, people and businesses, checked when they open an account: sanctions screening, public positions, owners, and a risk rating with its reasons.'],
 ]
 
 export function WelcomePage({ children }) {
