@@ -335,9 +335,9 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
       if (pts[1]) setCurrency(pts[1])
     }
     if (o.network) setNetwork(String(o.network).toLowerCase().includes('visa') ? 'visa' : 'mastercard')
-    if (o._transactionDate) setTransactionDate(o._transactionDate)
+    if (o._transactionDate || o._triageRecord?._transactionDate) setTransactionDate(o._transactionDate || o._triageRecord._transactionDate)
     if (o._cardType) setCardType(o._cardType)
-    if (o._complaint) setComplaint(o._complaint)
+    setComplaint(o._complaint || o._triageRecord?._complaint || '')   // never leave the last case's words behind
     if (o.cbStage) setCbCycleStage(o.cbStage)
     if (o.cbFiledDate) setCbFiledDate(o.cbFiledDate)
     setCurrentDeskCaseId(o.id)
@@ -354,7 +354,7 @@ export function DeskView({ onGoToDesk, triageHandoff, setTriageHandoff, onScoreI
     if (triageHandoff.amount)           setAmount(triageHandoff.amount)
     if (triageHandoff.currency)         setCurrency(triageHandoff.currency)
     if (triageHandoff.transactionDate)  setTransactionDate(triageHandoff.transactionDate)
-    if (triageHandoff.complaint)        setComplaint(triageHandoff.complaint)
+    setComplaint(triageHandoff.complaint || '')   // never leave the last case's words behind
     if (triageHandoff.network) {
       const n = triageHandoff.network.toLowerCase()
       if (n.includes('mastercard') || n.includes('mc')) setNetwork('mastercard')
