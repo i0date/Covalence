@@ -42,7 +42,7 @@ const CSS = `
 `
 
 // A single case, drawn the way it appears inside the product
-function CasePreview() {
+export function CasePreview() {
   const stages = [['001','TRIAGE','done'],['002','DESK','done'],['003','MULTI','current'],['004','FILE','todo'],['005','LICIT','todo']]
   return (
     <div className="wl-preview" aria-hidden="true" style={{ maxWidth:'460px', background:'#FAF7F1', border:'1px solid #D4CCBC', boxShadow:'0 18px 40px -24px rgba(26,24,20,0.45)' }}>
@@ -80,7 +80,7 @@ function CasePreview() {
 }
 
 // Everything Covalence does, and for whom: shown beside the sign-up so people see the whole of it
-const SCOPE = [
+export const SCOPE = [
   ['Disputes and chargebacks', 'For card issuers and merchants: triage, filing, representment and pre-arbitration, with every network deadline tracked.'],
   ['Pre-dispute alerts', 'Banks warn the merchant before filing; merchants refund in time through Ethoca and Verifi, and keep it off their ratio.'],
   ['Fraud and scam recovery', 'Monitoring rules, customer claims from your app and website, and the other institution brought in when the money has moved.'],
