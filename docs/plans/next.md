@@ -9,10 +9,11 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 3. **Disputes from the bank's app.** The biggest selling point for a design partner.
 4. **Settings redesign.**
 5. **Onboard with Covalence.** (built) Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account.
-6. **Claim form rework.** Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
+6. **Claim form rework.** (built) Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
 7. **Settings, again.** The redesign didn't land; go through it together first. Every function becomes a toggle there, and you only see what you've switched on (the acquirer and merchant views included).
 8. **Home, tighter.** A tighter revamp of the home page.
 9. **Every tool, with a fine-tooth comb.** After Onboard with Covalence: one tool at a time, list what's wrong, fix it.
+10. **Credit underwriting.** Lending decisions for banks and FIs, built on what Covalence already knows about a customer: who they are from onboarding, how money moves through their account, and any fraud or disputes. The bank decides; Covalence lays out the case.
 
 ## 1. Home and the tour — show, don't tell
 
@@ -142,3 +143,23 @@ A tighter revamp of the home page: less on screen, the most important thing firs
 ## 9. Every tool, with a fine-tooth comb
 
 After Onboard with Covalence ships: go through each tool in menu order (Triage, Desk, Multi, File, Licit, DFA, Duo, Trio, Insights, Settings), on a phone and on a desktop, with real-looking data. For each: list what's wrong (wording, layout, missing steps, anything that doesn't match how the work is really done), agree the list, then fix it in one PR per tool.
+
+## 10. Credit underwriting (banks and FIs)
+
+Covalence already holds what most of an underwriting file needs: the customer's identity and checks from onboarding, a year or more of their transactions from monitoring, and their fraud, disputes and alerts. Underwriting puts that in front of a credit analyst, so a decision on a card, a loan or an overdraft is made with the whole picture.
+
+What it covers:
+- **Applications in, from the bank's systems or a hosted form** (the onboarding and claim-form pattern: the bank's name, a link that works once).
+- **Cash-flow underwriting from the account's own history:** income and how regular it is, spending, balances, overdrafts and returned payments. This matters most for thin-file applicants, where a credit report says little.
+- **Credit report data** through the bank's own bureau connection, under its permissible purpose (FCRA). Covalence doesn't pull reports itself.
+- **Risk flags from the rest of Covalence:** fraud and scam claims, chargebacks, alerts, sanctions or adverse media from onboarding, and a recently opened account or recently changed details.
+- **Explainable rules, like transaction monitoring:** every figure and flag says where it came from. No black-box score decides anything. A model, if added, goes through the bank's model risk review (SR 11-7) and stays explainable.
+- **A credit analyst decides:** approve, decline, counter-offer (a lower limit or amount), or ask for more. Each decision is audited and sent to the bank's systems, which open the account or line.
+- **Fair lending built in:** declines and counter-offers record the principal reasons, in words fit for the adverse action notice the bank sends (ECOA / Reg B, and FCRA when a report was used). Protected characteristics are never inputs.
+
+To settle first:
+- Which products come first: cards, personal loans, overdrafts or small-business lending.
+- Where bureau data comes from, and in what format.
+- Who issues the adverse action notice (the bank, from Covalence's reasons), and the review of its wording with counsel.
+
+Done when: a bank can send an application, an analyst sees identity, cash flow, credit data and risk flags on one page with every figure explained, and the decision and its reasons go back to the bank's systems.
