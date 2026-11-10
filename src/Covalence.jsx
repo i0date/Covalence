@@ -5,6 +5,7 @@ import { pendingInvite, authAvailable, clearPendingInvite, signOut, getSession, 
 import { DEMO_INSTITUTION, demoRole, setDemoRole, ensureDemoSeeded, demoAudit } from './demoBackend.js'
 import { SignInPanel, Onboarding } from './AuthScreens.jsx'
 import { WelcomePage } from './Welcome.jsx'
+import LandingPage from './LandingPage.jsx'
 import { startWorkspaceSync, stopWorkspaceSync } from './workspaceSync.js'
 import { useShortcuts, ShortcutHelp } from './shortcuts.jsx'
 import { auditWrite } from './audit.js'
@@ -132,6 +133,7 @@ export default function Covalence() {
   const [membership,    setMembership]    = useState(null)
   const [membershipChecked, setMembershipChecked] = useState(false)
   const [showSignIn,    setShowSignIn]    = useState(() => authAvailable && !!pendingInvite()) // invite links go straight to sign-in
+  const [pastLanding,   setPastLanding]   = useState(false) // new visitors see the landing page before the demo form
   // Demo visitors work inside "Demo Bank" with a role they can switch (Admin by default)
   const [demoRoleState, setDemoRoleState] = useState(demoRole)
   useEffect(() => {
@@ -356,6 +358,8 @@ export default function Covalence() {
   )
   if (session && !membership) return <Onboarding email={session.user?.email || ''} onDone={m => { setMembership(m); setShowSignIn(false); setDataVersion(v => v + 1) }} />
   if (showSignIn && !session) return <LoginGate startInSignIn onLogin={handleLogin} onCancel={() => setShowSignIn(false)} />
+  if (!covUser && !pastLanding) return <LandingPage onDemo={() => { setPastLanding(true); setTimeout(() => document.getElementById('wl-name')?.focus(), 0) }}
+    onSignIn={authAvailable ? () => { setShowSignIn(true); window.scrollTo(0, 0) } : null} />
   if (!covUser) return <LoginGate onLogin={handleLogin} />
 
   return (
