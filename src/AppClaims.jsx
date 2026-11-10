@@ -66,10 +66,16 @@ export function Asked({ d }) {
       <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#991B1B' }}>THE CUSTOMER ASKED YOU TO</span>
       <span className="display-font" style={{ fontSize:'14px', color:'#1A1814' }}>{d.instructions.map(k => INSTRUCTIONS[k] || k).join(' · ')}</span>
       <span className="display-font" style={{ fontSize:'12px', color:'#57534E' }}>
-        {sent?.ok ? `Sent to your systems ${new Date(sent.at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}. Check it was done.`
+        {sent?.ok ? `Sent to your systems ${new Date(sent.at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}.${sent.results ? '' : ' Check it was done.'}`
           : sent?.notConnected ? 'Not sent: your systems aren’t connected (Settings → Connections). Do it by hand.'
           : 'Sending to your systems didn’t work. Do it by hand.'}
       </span>
+      {/* What your systems confirmed while the customer waited; the customer was told to call about the rest */}
+      {sent?.results?.map(r => (
+        <span key={r.action} className="display-font" style={{ fontSize:'12px', color: r.done ? '#065F46' : '#991B1B' }}>
+          {r.done ? `✓ ${INSTRUCTIONS[r.action] || r.action}: confirmed${r.message ? `, “${r.message}”` : ''}${r.reference ? ` (${r.reference})` : ''}` : `✗ ${INSTRUCTIONS[r.action] || r.action}: not confirmed. The customer was told to call you; do it by hand.`}
+        </span>
+      ))}
     </div>
   )
 }
@@ -225,6 +231,8 @@ export function AppClaims({ segment, activeId, onTriage }) {
                     {d.instructions?.length > 0 && <Badge tone="danger" title="What the customer asked you to do now">ASKED: {d.instructions.map(k => ASK_SHORT[k] || k).join(' · ')}</Badge>}
                     {steps.map(h => <Badge key={h.step} tone="ok">{STEPS[h.step].toUpperCase()}</Badge>)}
                     {!onDesk && ai && <Badge tone={ai.priority === 'urgent' ? 'danger' : 'neutral'} title={ai.summary}>AI · {ROUTES[ai.route].toUpperCase()}{ai.priority === 'urgent' ? ' · URGENT' : ''}</Badge>}
+                    {d.late && <Badge tone={d.late.network === 'past' || d.late.regE === 'past' ? 'danger' : 'warn'} title={d.late.text}>LATE · {d.late.days} DAYS{d.late.network === 'past' || d.late.regE === 'past' ? ' · PAST A LIMIT' : ''}</Badge>}
+                    {tx.some(t => t.described) && <Badge tone="warn" title="The customer couldn’t find this payment and described it: find it in your records">TRACE A PAYMENT</Badge>}
                     {!onDesk && !steps.length && k && <Badge tone={k.tone} title={`${k.what} by ${day(k.due)}`}>{k.rule.toUpperCase()} · {k.text.toUpperCase()}</Badge>}
                   </span>
                   <span className="display-font" style={{ display:'block', fontSize:'15px', color:'#1A1814' }}>
@@ -288,12 +296,13 @@ export function AppClaims({ segment, activeId, onTriage }) {
                   {d.statement && <blockquote style={{ margin:0, paddingLeft:'10px', borderLeft:'2px solid #D4CCBC', fontStyle:'italic' }}>“{d.statement}”</blockquote>}
                   {!c.ready && d.missing?.length > 0 && <p style={{ margin:0, color:'#92400E' }}>Missing for the Desk: {d.missing.map(x => x.replace(/ \(\w+\)$/, '')).join('; ')}.</p>}
                   {k && <p style={{ margin:0 }}>{k.rule}: {k.what.toLowerCase()} by {day(k.due)}.</p>}
+                  {d.late && <p style={{ margin:0, color: d.late.network === 'past' || d.late.regE === 'past' ? '#991B1B' : '#92400E' }}>Reported late: {d.late.text}. Taken anyway; check what still applies before deciding.</p>}
                   <table style={{ borderCollapse:'collapse', fontSize:'12px', width:'100%' }}>
                     <thead><tr>{['Transaction', 'Date', 'Merchant', 'Amount'].map(h => <th key={h} scope="col" className="mono-font" style={{ textAlign:'left', fontWeight:500, color:'#6B6259', padding:'4px 6px', borderBottom:'1px solid #D4CCBC', fontSize:'10px', letterSpacing:'0.1em' }}>{h.toUpperCase()}</th>)}</tr></thead>
                     <tbody>{tx.map(t => (
                       <tr key={t.id}>
-                        <td className="mono-font" style={{ padding:'4px 6px' }}>{t.id}</td>
-                        <td style={{ padding:'4px 6px', whiteSpace:'nowrap' }}>{t.ts ? day(t.ts) : '—'}</td>
+                        <td className="mono-font" style={{ padding:'4px 6px' }}>{t.described ? 'DESCRIBED' : t.id}</td>
+                        <td style={{ padding:'4px 6px', whiteSpace:'nowrap' }}>{t.ts ? `${t.described ? 'about ' : ''}${day(t.ts)}` : '—'}</td>
                         <td style={{ padding:'4px 6px' }}>{t.merchant || '—'}{t.merchantLocation ? ` · ${t.merchantLocation}` : ''}</td>
                         <td style={{ padding:'4px 6px', whiteSpace:'nowrap' }}>{money(t.amount, t.currency)}</td>
                       </tr>

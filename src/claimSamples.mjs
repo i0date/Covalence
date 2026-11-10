@@ -28,3 +28,19 @@ export function sampleLink(segment = 'fi', now = Date.now()) {
 export const sampleHistory = (customerId, now = Date.now()) => customerId !== 'A-5520' ? []
   : [7, 14, 21, 28, 35, 42].map(d => ({ id: 'H' + d, ts: new Date(now - d * DAY).toISOString(), amount: -6.25, currency: 'USD', counterparty: 'SQ *BLUE BOTTLE COFFEE' }))
     .concat([33, 63, 93].map(d => ({ id: 'N' + d, ts: new Date(now - d * DAY).toISOString(), amount: -15.49, currency: 'USD', counterparty: 'NETFLIX.COM' })))
+
+// Jordan's payments over the last year, to search when the one they mean isn't on the link
+// (claimLinks.mjs searchPool takes these like rows the bank sends for monitoring). Among them,
+// the pattern fraud often takes: two $1 test charges about three months ago, then a bigger one.
+export const samplePool = (customerId, now = Date.now()) => {
+  if (customerId !== 'A-5520') return []
+  const ago = d => new Date(now - d * DAY).toISOString(), out = []
+  const regular = [['SQ *BLUE BOTTLE COFFEE', 6.25, 7, 'card_present'], ['NETFLIX.COM', 15.49, 30, 'card_not_present'], ['WHOLEFDS MKT #10213', 84.3, 9, 'card_present'],
+    ['PG&E WEB ONLINE', 112.4, 30, 'card_not_present'], ['UBER *TRIP', 18.9, 12, 'card_not_present'], ['SHELL OIL 57442', 46.1, 14, 'card_present']]
+  regular.forEach(([name, amt, every, channel], k) => { for (let d = 3 + k; d < 395; d += every) out.push({ id: `P-${k}-${d}`, ts: ago(d), amount: amt + (d % 5) * 0.37, currency: 'USD', counterparty: name, channel, direction: 'out' }) })
+  out.push({ id: 'P-T1', ts: ago(96), amount: 1, currency: 'USD', counterparty: 'PAYPAL *XJ8SHOP', channel: 'card_not_present', direction: 'out' },
+    { id: 'P-T2', ts: ago(95), amount: 1, currency: 'USD', counterparty: 'PAYPAL *XJ8SHOP', channel: 'card_not_present', direction: 'out' },
+    { id: 'P-T3', ts: ago(88), amount: 249, currency: 'USD', counterparty: 'XJ8 DIGITAL GOODS LTD', channel: 'card_not_present', direction: 'out' },
+    { id: 'P-IN', ts: ago(15), amount: 2400, currency: 'USD', counterparty: 'ACME PAYROLL', channel: 'ach', direction: 'in' })
+  return out
+}

@@ -8,43 +8,54 @@
 //   1. says what went wrong (FORM_TYPES)
 //   2. for a payment they didn't make: "Is this yours?" for each one, with the merchant
 //      as people know it; recognising every one ends it there, with nothing to dispute.
-//      For a problem with a purchase: which payments it's about
+//      For a problem with a purchase: which payments it's about. Either way they can search
+//      about 13 months of their own payments (Finder), or describe one they can't find,
+//      since fraud is often found on a statement weeks later; an old payment is never refused
 //   3. asks for what they need now: lock the card, a new card, stop the merchant, a call
-//      (claims.mjs instructionsFor), sent to the bank's systems as soon as the claim arrives
+//      (claims.mjs instructionsFor), sent to the bank's systems while they wait; the last
+//      screen shows only what those systems confirmed, and the bank's number for the rest
 //   4. answers the questions for that kind of problem (claimQuestions.mjs)
 //   5. tells it in their own words and agrees to the investigation, then sends it
 // For a bank, an exchange (segment ce) or a merchant's own customers (mx), with words to
 // match. A bank's fraud and scams land in Triage → Claims and a dispute about a purchase
 // goes straight to the Dispute Desk; an exchange's and a merchant's go to their side of
-// Triage → Claims. In Covalence's style, with the name and logo at the top.
+// Triage → Claims. In Covalence's style, with the bank's name and logo, and every word in
+// the bank's voice: Covalence isn't named to the customer.
 // With preview ({ segment, brand }) it runs inside Settings → Claim form on a sample customer
 // (claimSamples.mjs), with a bar to jump between the steps for review; nothing is stored or sent.
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { openForm, sendForm } from './claimLinksData.js'
-import { formFor, claimFromForm, linkProblem } from './claimLinks.mjs'
+import { formFor, claimFromForm, linkProblem, confirmations, searchPool, DONE_TEXT } from './claimLinks.mjs'
 import { normaliseClaim, claimRow } from './claims.mjs'
 import { cardFor } from './isThisYours.mjs'
-import { sampleLink, sampleHistory } from './claimSamples.mjs'
+import { asked } from './claimQuestions.mjs'
+import { sampleLink, sampleHistory, samplePool } from './claimSamples.mjs'
 
 const UNAUTH = /^unauth|^ato|^counterfeit/
 const when = ts => ts ? new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
-const asked = (q, a) => !q.showIf || Object.entries(q.showIf).every(([k, v]) => a[k] === v)
 const answered = (q, v) => q.kind === 'yesno' ? typeof v === 'boolean' : q.kind === 'amount' ? v !== '' && v != null && isFinite(Number(v)) && Number(v) >= 0 : String(v ?? '').trim() !== ''
-// What we tell the customer we've done with each request
-const DONE_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you',
-  freeze_account: 'freeze your account', lock_withdrawals: 'stop all withdrawals', reset_security: 'help you reset your password and 2FA',
+// The options as the customer reads them on the form (Triage keeps claims.mjs INSTRUCTIONS)
+const LABELS = { lock_card: 'Lock my card', replace_card: 'Send me a new card', stop_merchant: 'Block payments to this merchant' }
+// What the customer asked for, when the bank's systems didn't confirm it
+const ASKED_WORDS = { lock_card: 'lock your card', replace_card: 'send you a new card', stop_merchant: 'stop payments to this merchant', call_me: 'call you',
+  freeze_account: 'freeze your account', lock_withdrawals: 'stop all withdrawals', reset_security: 'reset your password and 2FA',
   refund: 'refund you', replacement: 'send a replacement', cancel_subscription: 'cancel your subscription' }
+const DAY = 86400000
+const monthOf = ts => new Date(ts).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 // Words that change with who the customer is reporting to: a bank, an exchange or a shop
 const SIDE = {
   fi: { who: 'Your bank', one: 'payment', many: 'payments', yours: 'Is this payment yours?', yoursMany: 'Are these payments yours?',
     yoursSub: 'Payments often show under a different name from the shop’s. Here’s each one as you’d know it.', qSub: 'These help us handle it under the card and banking rules.',
-    protect: 'What do you need from us right now?', got: 'We’ve got your report', next: 'We’ll look into it and contact you if we need anything else.' },
+    find: 'Can’t see it? Search your payments from the last 13 months', none: 'There are no payments to show here. Tell us about the one you mean below.',
+    protect: 'Is there anything else you need right now?', got: 'We’ve got your report', next: 'We’ll look into it and contact you if we need anything else.' },
   ce: { who: 'Your exchange', one: 'transaction', many: 'transactions', yours: 'Is this withdrawal yours?', yoursMany: 'Are these withdrawals yours?',
     yoursSub: 'Check where each one went and when.', qSub: 'These help us trace it.',
+    find: 'Can’t see it? Search your transactions from the last 13 months', none: 'There are no transactions to show here. Tell us about the one you mean below.',
     protect: 'Do you want us to secure your account now?', got: 'We’ve got your report', next: 'We’ll look into it and trace the funds where we can. We’ll contact you if we need anything else.' },
   mx: { who: 'The shop', one: 'order', many: 'orders', yours: 'Is this order yours?', yoursMany: 'Are these orders yours?',
     yoursSub: 'Check each one.', qSub: 'These help us sort it out quickly.',
+    find: 'Can’t see it? Search your other orders', none: 'There are no other orders to show here. Tell us about the one you mean below.',
     protect: 'What would put this right?', got: 'We’ve got your request', next: 'We’ll check your order and get back to you, usually within two working days.' },
 }
 
@@ -109,6 +120,15 @@ export const CSS = `
   .cf-foot a { color:inherit; }
   .cf-tick { width:44px; height:44px; border:1.5px solid var(--ok); color:var(--ok); display:grid; place-items:center; font-size:20px; margin-bottom:14px; }
   .cf.cf-embed { min-height:0; }
+  .cf-search { display:grid; grid-template-columns:1fr auto; gap:6px; margin-bottom:8px; }
+  .cf-search select { font:inherit; font-size:14px; padding:10px; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:0; max-width:160px; }
+  .cf-results { max-height:360px; overflow:auto; }
+  .cf-describe { border:1px solid var(--line); background:#fff; padding:16px; margin-top:10px; }
+  .cf-done { border:1px solid var(--ok); background:#ECFDF5; padding:10px 14px; margin:4px 0 0; display:grid; gap:6px; }
+  .cf-done-row { display:flex; gap:10px; align-items:baseline; }
+  .cf-done-tick { color:var(--ok); font-weight:600; }
+  .cf-done-ref { font-size:11px; color:var(--muted); letter-spacing:.06em; }
+  .cf-note-warn { border-left-color:var(--bad); background:#FEF2F2; }
   .cf-review { background:#E7E0D3; color:#1A1814; padding:10px 12px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; border-bottom:2px dashed #8A7F72; }
   .cf-review-label { font:600 9.5px 'JetBrains Mono',monospace; letter-spacing:.16em; color:#57534E; margin-right:4px; }
   .cf-chip { font:500 10px 'JetBrains Mono',monospace; letter-spacing:.08em; text-transform:uppercase; padding:5px 8px; border:1px solid #8A7F72; background:#FAF7F1; color:#1A1814; cursor:pointer; }
@@ -168,6 +188,61 @@ function Question({ q, value, set }) {
   )
 }
 
+// Older payments: search the customer's own (about 13 months), or describe one they can't find.
+// added: ids from pool; described: { on, amount, to, note } or null
+function Finder({ pool, W, added, setAdded, described, setDescribed, room }) {
+  const [open, setOpen] = useState(false), [q, setQ] = useState(''), [month, setMonth] = useState(''), [telling, setTelling] = useState(!!described)
+  const cards = useMemo(() => pool.map(t => ({ ...cardFor(t, []), month: monthOf(t.ts) })), [pool])
+  const months = [...new Set(cards.map(c => c.month))]
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const hits = cards.filter(c => (!month || c.month === month) && words.every(w => `${c.name} ${c.statementName} ${c.amount.toFixed(2)} ${c.amountText}`.toLowerCase().includes(w.replace(/^\$/, ''))))
+  const mine = cards.filter(c => added.includes(c.transactionId))
+  const toggle = id => setAdded(a => a.includes(id) ? a.filter(x => x !== id) : a.length < room ? [...a, id] : a)
+  const tell = (k, v) => setDescribed(d => ({ on: '', amount: '', to: '', note: '', ...(d || {}), [k]: v }))
+  return (
+    <div style={{ marginTop: 18 }}>
+      {!open ? <button type="button" className="cf-btn ghost" style={{ width: '100%' }} onClick={() => setOpen(true)}>{W.find}</button> : <>
+        <div className="mono cf-group">Search</div>
+        {pool.length ? <>
+          <div className="cf-search">
+            <input type="text" aria-label="Name or amount" placeholder="Name or amount" value={q} onChange={e => setQ(e.target.value)} />
+            <select aria-label="Month" value={month} onChange={e => setMonth(e.target.value)}>
+              <option value="">Any month</option>{months.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div className="cf-results" role="group" aria-label="Your payments">
+            {hits.slice(0, 30).map(c => (
+              <Option key={c.transactionId} kind="check" on={added.includes(c.transactionId)} onClick={() => toggle(c.transactionId)}>
+                <strong>{c.name}</strong> · {c.amountText}<br /><span className="cf-pay-meta">{[when(c.when), c.where].filter(Boolean).join(' · ')}</span>
+              </Option>
+            ))}
+            {!hits.length && <p className="cf-hint">Nothing matches. Try part of the name, or a different month.</p>}
+            {hits.length > 30 && <p className="cf-hint">Showing the newest 30 of {hits.length}. Add a name, an amount or a month to narrow it down.</p>}
+          </div>
+        </> : <p className="cf-hint">{W.none}</p>}
+      </>}
+      {/* Below the results, so ticking one doesn't move the list under the customer's finger */}
+      {mine.length > 0 && <>
+        <div className="mono cf-group">You’ve added {mine.length}</div>
+        {mine.map(c => <Option key={c.transactionId} kind="check" on onClick={() => toggle(c.transactionId)}><strong>{c.name}</strong> · {c.amountText}<br /><span className="cf-pay-meta">{when(c.when)}</span></Option>)}
+      </>}
+      {open && <>
+        {!telling ? <button type="button" className="cf-btn ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => setTelling(true)}>I can’t find it</button> : (
+          <div className="cf-describe">
+            <p style={{ margin: '0 0 12px' }}>Tell us what you remember, and we’ll find it in our records.</p>
+            <div className="cf-q"><label htmlFor="d-on">Roughly when was it?</label><input id="d-on" type="date" max={today()} value={described?.on || ''} onChange={e => tell('on', e.target.value)} /></div>
+            <div className="cf-q"><label htmlFor="d-amt">Roughly how much?</label><input id="d-amt" type="number" inputMode="decimal" min="0" step="0.01" value={described?.amount ?? ''} onChange={e => tell('amount', e.target.value)} /></div>
+            <div className="cf-q"><label htmlFor="d-to">Who was it paid to, as far as you know? <span className="cf-opt-req">(optional)</span></label><input id="d-to" type="text" maxLength={160} value={described?.to || ''} onChange={e => tell('to', e.target.value)} /></div>
+            <div className="cf-q"><label htmlFor="d-note">Anything else that would help us find it? <span className="cf-opt-req">(optional)</span></label><textarea id="d-note" maxLength={300} style={{ minHeight: 70 }} value={described?.note || ''} onChange={e => tell('note', e.target.value)} /></div>
+            <button type="button" className="cf-btn ghost" onClick={() => { setTelling(false); setDescribed(null) }}>Remove this</button>
+          </div>
+        )}
+      </>}
+    </div>
+  )
+}
+const describedOk = d => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d.on || '') && Number(d.amount) > 0
+
 const STEP_NAMES = { what: 'What went wrong', yours: 'Is this yours?', which: 'Which ones', protect: 'What they need now', questions: 'Questions', story: 'In their words', done: 'Done' }
 
 export default function ClaimFormPage({ token: initial, preview }) {
@@ -177,6 +252,8 @@ export default function ClaimFormPage({ token: initial, preview }) {
   const [type, setType] = useState('')
   const [rec, setRec] = useState({})          // { txId: true | false } — "Is this yours?"
   const [picked, setPicked] = useState([])    // which payments a purchase problem is about
+  const [added, setAdded] = useState([])      // older payments the customer found by searching
+  const [described, setDescribed] = useState(null)   // one they couldn't find, in their words
   const [wants, setWants] = useState([])      // what they need now: lock_card, replace_card, …
   const [answers, setAnswers] = useState({})
   const [statement, setStatement] = useState('')
@@ -192,7 +269,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
     if (!preview) return
     const l = sampleLink(preview.segment), acct = l.customer.accountType || ''
     setForm({ brand: preview.brand, firstName: l.customer.name.split(/\s+/)[0], accountType: acct || null,
-      cards: l.transactions.map(t => cardFor(t, sampleHistory(l.customer.id))), ...formFor(l.segment, acct) })
+      cards: l.transactions.map(t => cardFor(t, sampleHistory(l.customer.id))), more: searchPool(l, samplePool(l.customer.id)), ...formFor(l.segment, acct) })
     setPicked(l.transactions.map(t => t.id))
   }, [preview?.segment])
   useEffect(() => {
@@ -210,17 +287,23 @@ export default function ClaimFormPage({ token: initial, preview }) {
 
   const brand = preview?.brand || form?.brand || done?.brand || null
   const W = SIDE[form?.segment] || SIDE.fi
-  const cards = form?.cards || []
+  const cards = form?.cards || [], pool = form?.more || []
   const unauth = UNAUTH.test(type)
   const questions = useMemo(() => (form?.questions?.[type] || []).filter(q => q.id !== 'recognisesTransaction'), [form, type])
   const offers = form?.instructions?.[type] || []
   const shown = questions.filter(q => asked(q, answers))
   const missingQ = shown.filter(q => q.required && !answered(q, answers[q.id]))
-  const disputed = unauth ? cards.filter(c => rec[c.transactionId] === false) : cards.filter(c => picked.includes(c.transactionId))
-  const allYours = unauth && cards.length > 0 && cards.every(c => rec[c.transactionId] === true)
+  const found = pool.filter(t => added.includes(t.id)).map(t => cardFor(t, []))
+  const disputed = [...(unauth ? cards.filter(c => rec[c.transactionId] === false) : cards.filter(c => picked.includes(c.transactionId))), ...found]
+  const extra = found.length > 0 || describedOk(described)
+  const allYours = unauth && cards.length > 0 && cards.every(c => rec[c.transactionId] === true) && !extra
+  const room = 25 - cards.length
+  // A while ago is fine: the customer is told so, and the analyst sees how old it is against the limits
+  const oldest = Math.max(0, ...disputed.map(c => c.when ? (Date.now() - new Date(c.when)) / DAY : 0), describedOk(described) ? (Date.now() - new Date(described.on + 'T12:00:00')) / DAY : 0)
+  const finder = <Finder pool={pool} W={W} added={added} setAdded={setAdded} described={described} setDescribed={setDescribed} room={room} />
 
   // The steps this customer goes through, for the progress bar and Back
-  const path = ['what', unauth ? 'yours' : cards.length > 1 ? 'which' : null, offers.length ? 'protect' : null, questions.length ? 'questions' : null, 'story'].filter(Boolean)
+  const path = ['what', unauth ? 'yours' : cards.length !== 1 || pool.length ? 'which' : null, offers.length ? 'protect' : null, questions.length ? 'questions' : null, 'story'].filter(Boolean)
   const at = Math.max(0, path.indexOf(step))
   const go = dir => { setErr(''); const next = path[at + dir]; if (next) { setStep(next); window.scrollTo({ top: 0, behavior: 'smooth' }) } }
 
@@ -228,23 +311,26 @@ export default function ClaimFormPage({ token: initial, preview }) {
     setBusy(true); setErr('')
     const clean = Object.fromEntries(shown.filter(q => answered(q, answers[q.id])).map(q => [q.id, q.kind === 'amount' ? Number(answers[q.id]) : answers[q.id]]))
     const sent = { claimType: type, recognised: unauth ? rec : undefined, transactionIds: unauth ? undefined : picked,
+      added: all ? [] : added, described: !all && describedOk(described) ? { ...described, amount: Number(described.amount) } : undefined,
       answers: all ? {} : clean, instructions: all ? [] : wants.filter(w => offers.some(o => o.value === w)), statement: all ? '' : statement, consent: all ? false : consent }
-    if (preview) {   // what the server would do with it (claims.mjs), without storing anything
-      const { claim } = normaliseClaim(claimFromForm({ ...sampleLink(preview.segment), id: 'LNK-SAMPLE' }, sent))
+    if (preview) {   // what the server would do with it (claims.mjs), without storing anything; the sample bank confirms what was asked
+      const l = sampleLink(preview.segment)
+      const { claim } = normaliseClaim(claimFromForm({ ...l, id: 'LNK-SAMPLE' }, sent, new Date(), searchPool(l, samplePool(l.customer.id))))
       const { recognised, desk } = claimRow(claim, { id: 'CLM-SAMPLE0001', institution: 'preview', by: 'claim form' })
-      setDone({ id: 'CLM-SAMPLE0001', closedAtIntake: recognised, sentToDesk: desk }); setStep('done'); setBusy(false); return
+      const actions = confirmations(sent.instructions, { results: sent.instructions.map((a, i) => ({ action: a, done: true, reference: `SAMPLE-${i + 1}` })) })
+      setDone({ id: 'CLM-SAMPLE0001', closedAtIntake: recognised, sentToDesk: desk, actions }); setStep('done'); setBusy(false); return
     }
     try {
-      const r = await sendForm(token, { claimType: type, recognised: unauth ? rec : undefined, transactionIds: unauth ? undefined : picked,
-        answers: all ? {} : clean, instructions: all ? [] : wants.filter(w => offers.some(o => o.value === w)), statement: all ? '' : statement, consent: all ? false : consent })
+      const r = await sendForm(token, sent)
       setDone(r); setStep('done'); window.scrollTo({ top: 0 })
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
   // Preview: jump to any step of this customer's path, pick a kind, or see the screens a bad link shows
-  const reviewPath = () => ['what', UNAUTH.test(type) ? 'yours' : (form?.cards || []).length > 1 ? 'which' : null, (form?.instructions?.[type] || []).length ? 'protect' : null,
+  const reviewPath = () => ['what', UNAUTH.test(type) ? 'yours' : (form?.cards || []).length !== 1 || (form?.more || []).length ? 'which' : null, (form?.instructions?.[type] || []).length ? 'protect' : null,
     (form?.questions?.[type] || []).filter(q => q.id !== 'recognisesTransaction').length ? 'questions' : null, 'story', 'done'].filter(Boolean)
-  const jump = k => { setScreen(''); setErr(''); if (k === 'done' && !done) setDone({ id: 'CLM-SAMPLE0001', sentToDesk: preview?.segment === 'fi' && /^(non_receipt|partial_delivery|not_as_described|cancelled_sub|billing_error|duplicate_charge)$/.test(type) }); setStep(k) }
+  const jump = k => { setScreen(''); setErr(''); if (k === 'done' && !done) setDone({ id: 'CLM-SAMPLE0001', sentToDesk: preview?.segment === 'fi' && /^(non_receipt|partial_delivery|not_as_described|cancelled_sub|billing_error|duplicate_charge)$/.test(type),
+    actions: confirmations(wants, { results: wants.map((a, i) => ({ action: a, done: true, reference: `SAMPLE-${i + 1}` })) }) }); setStep(k) }
   const review = preview && (
     <div className="cf-review" role="toolbar" aria-label="Review the steps">
       <span className="cf-review-label">REVIEW · NOT SHOWN TO CUSTOMERS</span>
@@ -260,7 +346,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
   const header = (
     <header className="cf-top">
       <div className="cf-top-in">
-        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" /> : <div className="cf-bank">{brand?.name || W.who}</div>}
+        {brand?.logo ? <img className="cf-logo" src={brand.logo} alt={brand.name} referrerPolicy="no-referrer" /> : brand?.name ? <div className="cf-bank">{brand.name}</div> : null}
         <span className="mono cf-what">REPORT A PROBLEM</span>
       </div>
     </header>
@@ -269,7 +355,6 @@ export default function ClaimFormPage({ token: initial, preview }) {
     <footer className="cf-foot">
       {brand?.phone && <div>Need to talk to someone? Call {brand.name} on <a href={`tel:${brand.phone.replace(/[^\d+]/g, '')}`}>{brand.phone}</a>.</div>}
       {brand?.help && <div><a href={brand.help} target="_blank" rel="noopener noreferrer">Help with disputes and fraud</a></div>}
-      <div className="mono" style={{ marginTop: 8, fontSize: 10, letterSpacing: '.12em' }}>{(brand?.name || W.who).toUpperCase()} · CLAIMS BY COVALENCE</div>
     </footer>
   )
   const wrap = body => (
@@ -293,6 +378,13 @@ export default function ClaimFormPage({ token: initial, preview }) {
     </div>
   )
   const asks = wants.filter(w => offers.some(o => o.value === w))
+  const canLock = offers.some(o => o.value === 'lock_card')
+  // Done only when the bank's systems said so (claimLinks.mjs confirmations)
+  const results = done?.actions || asks.map(action => ({ action, done: false }))
+  const confirmed = results.filter(a => a.done), unconfirmed = results.filter(a => !a.done)
+  const urgentAsk = list => list.some(a => ['lock_card', 'replace_card', 'freeze_account', 'lock_withdrawals', 'reset_security'].includes(a.action))
+
+  const lateNote = oldest > 60 && <p className="cf-note">This was a while ago, and that’s fine: we’ll still look into it. The sooner we hear about a payment, the more we can usually do, so tell us about any others now.</p>
 
   if (step === 'done') return wrap(done?.closedAtIntake ? (
     <><div className="cf-tick" aria-hidden>✓</div><h1>Thanks — there’s nothing to dispute</h1>
@@ -301,7 +393,15 @@ export default function ClaimFormPage({ token: initial, preview }) {
     <><div className="cf-tick" aria-hidden>✓</div><h1>{done?.sentToDesk ? 'Your dispute is with our disputes team' : W.got}</h1>
       <p className="mono cf-step" style={{ marginBottom: 6 }}>YOUR REFERENCE</p>
       <div className="cf-ref">{done?.id}</div>
-      {asks.length > 0 && <div className="cf-note">You asked us to {asks.map(a => DONE_WORDS[a]).join(', and ')}. {form.segment === 'mx' ? 'We’ll get back to you about it' : form.segment === 'ce' ? 'Our security team has it now' : `We’ve passed that on to ${brand?.name || 'your bank'}`}{asks.some(a => ['lock_card', 'freeze_account', 'lock_withdrawals'].includes(a)) && brand?.phone ? `; if it’s urgent, call ${brand.phone}` : ''}.</div>}
+      {confirmed.length > 0 && <div className="cf-done" aria-label="Done">{confirmed.map(a => (
+        <div key={a.action} className="cf-done-row"><span className="cf-done-tick" aria-hidden>✓</span><span>{a.message || DONE_TEXT[a.action]}{a.reference && <span className="mono cf-done-ref"> · REF {a.reference}</span>}</span></div>
+      ))}</div>}
+      {canLock && !asks.includes('lock_card') && <div className="cf-note cf-note-warn">Your card isn’t locked. If you still have it, lock it now in your banking app{brand?.phone ? `, or call us on ${brand.phone}` : ''}, so it can’t be used again.</div>}
+      {unconfirmed.length > 0 && <div className="cf-note cf-note-warn" role="alert">
+        We couldn’t confirm that we’ve {unconfirmed.map(a => ASKED_WORDS[a.action] === 'call you' ? 'arranged to call you' : `been able to ${ASKED_WORDS[a.action]}`).join(', or ')}. {urgentAsk(unconfirmed)
+          ? `Please call us${brand?.phone ? ` on ${brand.phone}` : ', on the number on the back of your card or in your banking app,'} now so we can do it straight away.`
+          : `Call us${brand?.phone ? ` on ${brand.phone}` : ' on the number in your banking app'} if you’d like it done.`}
+      </div>}
       <p style={{ margin: '16px 0 8px' }}>What happens next:</p>
       <ul style={{ margin: 0, paddingLeft: 20, color: '#57534E' }}>
         <li>{done?.sentToDesk ? 'We’ll raise the dispute with the merchant’s bank and tell you how it goes.' : W.next}</li>
@@ -325,7 +425,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
   if (step === 'yours') return wrap(<>
     {progress}
     <h1>{cards.length === 1 ? W.yours : W.yoursMany}</h1>
-    <p className="cf-sub">{W.yoursSub}</p>
+    <p className="cf-sub">{cards.length ? W.yoursSub : 'Find the payment you didn’t make, or tell us about it.'}</p>
     {cards.map(c => (
       <Payment key={c.transactionId} card={c}>
         {c.hints?.length > 0 && <ul className="cf-hints">{c.hints.map(h => <li key={h}>{h}</li>)}</ul>}
@@ -335,31 +435,37 @@ export default function ClaimFormPage({ token: initial, preview }) {
         </div>
       </Payment>
     ))}
+    {finder}
+    {lateNote}
     {allYours && <p className="cf-hint">You recognise {cards.length === 1 ? 'it' : 'all of them'}, so there’s nothing to dispute.</p>}
     {err && <div className="cf-err" role="alert">{err}</div>}
-    {allYours ? nav(true, 'That’s all, close this', () => send(true)) : nav(cards.every(c => typeof rec[c.transactionId] === 'boolean'))}
+    {allYours ? nav(true, 'That’s all, close this', () => send(true)) : nav(cards.every(c => typeof rec[c.transactionId] === 'boolean') && (cards.some(c => rec[c.transactionId] === false) || extra))}
   </>)
 
   if (step === 'which') return wrap(<>
     {progress}
     <h1>Which {W.many} is it about?</h1>
-    <p className="cf-sub">Tick each one.</p>
+    <p className="cf-sub">{cards.length ? 'Tick each one.' : 'Find it below, or tell us about it.'}</p>
     {cards.map(c => (
       <Option key={c.transactionId} kind="check" on={picked.includes(c.transactionId)} onClick={() => setPicked(p => p.includes(c.transactionId) ? p.filter(x => x !== c.transactionId) : [...p, c.transactionId])}>
         <strong>{c.name}</strong> · {c.amountText}<br /><span className="cf-pay-meta">{[when(c.when), c.where].filter(Boolean).join(' · ')}</span>
       </Option>
     ))}
-    {nav(picked.length > 0)}
+    {finder}
+    {lateNote}
+    {nav(picked.length > 0 || extra)}
   </>)
 
   if (step === 'protect') return wrap(<>
     {progress}
-    <h1>{type === 'cancelled_sub' && form.segment !== 'mx' ? 'Do you want us to stop them charging you?' : W.protect}</h1>
-    <p className="cf-sub">{type === 'cancelled_sub' && form.segment !== 'mx' ? 'We can block future payments to this merchant while we look into it.' : 'We’ll pass this on as soon as you send it. Tick everything you want.'}</p>
-    {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{o.label}</Option>)}
-    {wants.includes('lock_card') && <p className="cf-hint">A locked card can’t be used for new payments. You can unlock it later in your banking app.</p>}
+    <h1>{type === 'cancelled_sub' && form.segment !== 'mx' ? 'Do you want us to stop them charging you?' : canLock ? 'Lock your card now' : W.protect}</h1>
+    <p className="cf-sub">{type === 'cancelled_sub' && form.segment !== 'mx' ? 'We can block future payments to this merchant while we look into it.'
+      : canLock ? `${unauth ? 'Whoever made this payment may still have your card details.' : 'If anyone else has your card details, they can still use them.'} Locking it stops any new payments straight away, and you can unlock it later in your banking app.`
+      : 'We’ll do it as soon as you send this. Tick anything you want.'}</p>
+    {offers.map(o => <Option key={o.value} kind="check" on={wants.includes(o.value)} onClick={() => setWants(w => w.includes(o.value) ? w.filter(x => x !== o.value) : [...w, o.value])}>{LABELS[o.value] || o.label}</Option>)}
+    {canLock && !wants.includes('lock_card') && <p className="cf-note cf-note-warn">We recommend locking your card. Until it’s locked, it can still be used.</p>}
     {wants.includes('freeze_account') && <p className="cf-hint">A frozen account can’t trade or withdraw until you and the exchange unfreeze it together.</p>}
-    {nav(true, wants.length ? 'Continue' : 'Nothing for now')}
+    {nav(true, wants.length ? 'Continue' : canLock ? 'Continue without locking' : 'Nothing for now')}
   </>)
 
   if (step === 'questions') return wrap(<>
@@ -375,7 +481,7 @@ export default function ClaimFormPage({ token: initial, preview }) {
   return wrap(<>
     {progress}
     <h1>In your own words</h1>
-    <p className="cf-sub">Tell us what happened{disputed.length ? ` with ${disputed.length === 1 ? disputed[0].name : `these ${disputed.length} ${W.many}`}` : ''}. Include anything that might help.</p>
+    <p className="cf-sub">Tell us what happened{disputed.length ? ` with ${disputed.length === 1 ? disputed[0].name : `these ${disputed.length} ${W.many}`}` : ''}. Include how you found out, and anything that might help.</p>
     <div className="cf-q">
       <label htmlFor="cf-story">What happened</label>
       <textarea id="cf-story" maxLength={4000} value={statement} onChange={e => setStatement(e.target.value)} />

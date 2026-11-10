@@ -52,16 +52,16 @@ export const INSTRUCTIONS = {
   refund: 'Refund me', replacement: 'Send a replacement', cancel_subscription: 'Cancel my subscription',
   call_me: 'Call me',
 }
-// Which ones to offer for a kind of problem on a side (the bank's app asks; the hosted form shows them)
+// Which ones to offer for a kind of problem on a side (the bank's app asks; the hosted form shows them).
+// "Call me" is still accepted from a bank's own app, but not offered: the bank's number is on every screen.
 export function instructionsFor(type, segment = 'fi') {
   const t = type || ''
-  if (segment === 'ce') return ['unauth_withdrawal', 'ato'].includes(t) ? ['freeze_account', 'lock_withdrawals', 'reset_security', 'call_me']
-    : SCAMS.includes(t) ? ['lock_withdrawals', 'call_me'] : ['deposit_missing', 'withdrawal_missing', 'wrong_address'].includes(t) ? ['call_me'] : []
-  if (segment === 'mx') return ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described'].includes(t) ? ['refund', 'replacement', 'call_me']
-    : t === 'cancelled_sub' ? ['cancel_subscription', 'refund'] : ['refund_not_received', 'duplicate_charge', 'billing_error'].includes(t) ? ['refund', 'call_me'] : t === 'unauth_cnp' ? ['call_me'] : []
-  return /^unauth|^counterfeit/.test(t) ? ['lock_card', 'replace_card', 'call_me']
-    : /^ato/.test(t) ? ['lock_card', 'call_me']
-    : SCAMS.includes(t) ? ['lock_card', 'call_me']
+  if (segment === 'ce') return ['unauth_withdrawal', 'ato'].includes(t) ? ['freeze_account', 'lock_withdrawals', 'reset_security']
+    : SCAMS.includes(t) ? ['lock_withdrawals'] : []
+  if (segment === 'mx') return ['non_receipt', 'partial_delivery', 'wrong_item', 'not_as_described'].includes(t) ? ['refund', 'replacement']
+    : t === 'cancelled_sub' ? ['cancel_subscription', 'refund'] : ['refund_not_received', 'duplicate_charge', 'billing_error'].includes(t) ? ['refund'] : []
+  return /^unauth|^counterfeit/.test(t) ? ['lock_card', 'replace_card']
+    : /^ato/.test(t) || SCAMS.includes(t) ? ['lock_card']
     : t === 'cancelled_sub' ? ['stop_merchant'] : []
 }
 // A dispute about a purchase the customer made, reported to their bank: nothing for Triage
@@ -71,7 +71,9 @@ export function instructionsFor(type, segment = 'fi') {
 // really a purchase dispute ("they sent four of the seven things I paid for").
 export const DESK_TYPES = ['non_receipt', 'partial_delivery', 'not_as_described', 'cancelled_sub', 'billing_error', 'duplicate_charge']
 export const SCAMS = ['romance_scam', 'investment_scam', 'impersonation', 'fake_invoice', 'grandparent_scam', 'other_app']
+// A payment the customer described, rather than picked, stays in Triage until it's traced
 export const goesStraightToDesk = claim => (claim?.segment || 'fi') === 'fi' && DESK_TYPES.includes(claim?.claimType) && claim?.answers?.recognisesTransaction !== false
+  && !(claim?.transactions || []).some(t => t.described)
 // The note on a claim sent to the Desk from Triage, and the kind it names (DeskClaims reads it back)
 export const deskNote = (type, note = '') => `Sent to the Desk from Triage as “${CLAIM_TYPES[type]}”${String(note).trim() ? `: ${String(note).trim()}` : ''}`
 export const deskTypeOf = row => {
@@ -99,7 +101,8 @@ export function normaliseClaim(b, now = new Date()) {
     const amount = Number(t?.amount)
     if (!t?.id || !isFinite(amount) || !isTs(t?.ts)) errors.push(`transactions[${i}]: id, ts (ISO 8601) and amount are required`)
     return { id: str(t?.id, 120), ts: isTs(t?.ts) ? iso(t.ts) : null, amount: Math.abs(amount) || 0, currency: str(t?.currency || 'USD', 3).toUpperCase(),
-      merchant: str(t?.merchant, 160), merchantCategory: str(t?.merchantCategory, 80), merchantLocation: str(t?.merchantLocation, 120), network: str(t?.network, 40), channel: str(t?.channel, 40) }
+      merchant: str(t?.merchant, 160), merchantCategory: str(t?.merchantCategory, 80), merchantLocation: str(t?.merchantLocation, 120), network: str(t?.network, 40), channel: str(t?.channel, 40),
+      ...(t?.described === true ? { described: true } : {}) }   // the customer couldn't find it: described in their words, for an analyst to trace
   })
   const reportedAt = isTs(b.reportedAt) ? new Date(b.reportedAt) : now
   if (reportedAt > new Date(now.getTime() + 5 * 60000)) errors.push('reportedAt is in the future')
@@ -142,6 +145,30 @@ export function claimClock(claim) {
   if (t === 'credit') { const d = new Date(start + 'T12:00:00'); d.setDate(d.getDate() + 30); return { rule: 'Reg Z', what: 'Acknowledge in writing', due: ymd(d) } }
   return null
 }
+// How old the payments were when the customer reported them, against the time limits. A late
+// report is still taken (the form never refuses one); this marks it so nobody misses it.
+//   Card networks: 120 days from the transaction (Visa and Mastercard, most reasons)
+//   Reg E (debit, ACH, P2P): 60 days from the statement it first appeared on; the statement is
+//   taken as the end of the transaction's month unless the bank says otherwise
+// → null when every payment is under 60 days old, else { days, network, regE, text }
+export const NETWORK_DAYS = 120, REG_E_DAYS = 60
+export function lateness(claim) {
+  const at = new Date(claim?.reportedAt || Date.now()), acct = claim?.customer?.accountType || ''
+  const dated = (claim?.transactions || []).filter(t => t.ts).map(t => new Date(t.ts))
+  if (!dated.length) return null
+  const first = new Date(Math.min(...dated)), days = Math.floor((at - first) / 86400000)
+  if (days < REG_E_DAYS) return null
+  const card = ['debit', 'credit'].includes(acct) || (claim.transactions || []).some(t => /visa|master/i.test(t.network || ''))
+  const statement = new Date(first.getFullYear(), first.getMonth() + 1, 0, 23, 59, 59)
+  const regEBy = new Date(statement.getTime() + REG_E_DAYS * 86400000)
+  const network = card ? (days > NETWORK_DAYS ? 'past' : 'within') : null
+  const regE = ['debit', 'p2p', 'ach_eft'].includes(acct) ? (at > regEBy ? 'past' : 'within') : null
+  const text = [`The oldest payment was ${days} days old when reported`,
+    network === 'past' ? `past the ${NETWORK_DAYS}-day network limit` : network ? `inside the ${NETWORK_DAYS}-day network limit` : '',
+    regE === 'past' ? `past ${REG_E_DAYS} days from its statement (Reg E): the customer may carry more of the loss` : regE ? `inside ${REG_E_DAYS} days from its statement (Reg E)` : ''].filter(Boolean).join('; ')
+  return { days, network, regE, text }
+}
+
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 // What's missing before an analyst could send it straight to the Desk
@@ -149,7 +176,8 @@ export function missingForDesk(claim) {
   const m = []
   if (!claim.claimType) m.push('what kind of problem it is (claimType)')
   if (!claim.customer.accountType && claim.segment === 'fi') m.push('the account type')
-  if (claim.transactions.some(t => !t.merchant)) m.push('the merchant on every transaction')
+  if (claim.transactions.some(t => t.described)) m.push('the payment the customer described, traced in your records')
+  else if (claim.transactions.some(t => !t.merchant)) m.push('the merchant on every transaction')
   if (claim.statement.length < 20) m.push('the customer’s own account of what happened')
   if (!claim.consent.given) m.push('the customer’s consent')
   if (/^unauth|^ato|^counterfeit/.test(claim.claimType) && claim.answers.recognisesTransaction !== false) m.push('the customer’s answer to “Is this yours?”')
@@ -170,7 +198,7 @@ export function claimRow(claim, { id, institution, by, now = new Date(), extra =
   const desk = !recognised && goesStraightToDesk(claim)
   const row = { institution_id: institution, id, external_id: claim.externalId, channel: claim.channel, segment: claim.segment,
     status: recognised ? 'closed' : desk ? 'with_desk' : 'received', ready: !recognised && !missing.length,
-    data: { ...claim, ...extra, clock: recognised ? null : clock, missing: recognised ? [] : missing, source: by,
+    data: { ...claim, ...extra, clock: recognised ? null : clock, ...(!recognised && lateness(claim) ? { late: lateness(claim) } : {}), missing: recognised ? [] : missing, source: by,
       ...(desk ? { route: 'desk' } : {}), ...(recognised ? { closedAtIntake: { reason: 'recognised', at } } : {}) }, reported_at: claim.reportedAt,
     history: recognised ? [received, { status: 'closed', at, by, note: 'The customer recognised the transaction (“That was me”)', public: RECOGNISED_NOTE }]
       : desk ? [received, { status: 'with_desk', at, by, note: `Sent straight to the Dispute Desk: ${CLAIM_TYPES[claim.claimType].toLowerCase()}, a dispute about a purchase`, public: 'We’re looking into your dispute.' }]
