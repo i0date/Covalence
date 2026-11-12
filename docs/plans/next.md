@@ -10,7 +10,7 @@ Status: agreed direction, 29 Oct 2026. Phases 1–3 of [roles and ARN linking](r
 4. **Settings redesign.**
 5. **Onboard with Covalence.** (built) Customer onboarding (KYC and KYB) for banks and FIs, so a customer's record starts the day they open the account.
 6. **Claim form rework.** (built) Customers who find fraud a month or more later can't find the payment; the questions are weak; and the confirmation reads as if Covalence, not the bank, is acting. The bank has to be integrated so its own systems act and confirm.
-7. **Settings, again.** The redesign didn't land; go through it together first. Every function becomes a toggle there, and you only see what you've switched on (the acquirer and merchant views included).
+7. **Settings, again.** (built) The redesign didn't land; go through it together first. Every function becomes a toggle there, and you only see what you've switched on (the acquirer and merchant views included).
 8. **Home, tighter.** A tighter revamp of the home page.
 9. **Every tool, with a fine-tooth comb.** After Onboard with Covalence: one tool at a time, list what's wrong, fix it.
 10. **Credit underwriting.** Lending decisions for banks and FIs, built on what Covalence already knows about a customer: who they are from onboarding, how money moves through their account, and any fraud or disputes. The bank decides; Covalence lays out the case.

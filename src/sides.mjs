@@ -3,9 +3,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // A workspace does one or more of: issuer (files for its cardholders), acquirer
 // (between the network and its merchants), merchant (answers chargebacks filed
-// against it). Every tool stays available; the sides set the menu order and each
-// tool's default view (docs/plans/roles-and-arn-linking.md). Separate from the
-// institution type, which picks FI or crypto wording and rules.
+// against it). The sides set the menu order and each tool's default view
+// (docs/plans/roles-and-arn-linking.md), and the merchant and acquirer views show
+// only for a workspace that ticked them. Separate from the institution type, which
+// picks FI or crypto wording and rules.
+import { isOn } from './features.mjs'
 
 export const SIDES = [
   ['issuer',   'Issuer',   'We file disputes for our cardholders and account holders'],
@@ -26,21 +28,24 @@ export const isIssuerCase   = c => caseSide(c) === 'issuer'
 export const isAcquirerCase = c => caseSide(c) === 'acquirer'
 export const doesAcquiring  = sides => sides.includes('acquirer')
 
-// What this workspace does: chosen in Settings, or implied by the institution type.
-// Demo visitors see every side.
+// What this workspace does: ticked in Settings → Your setup. Nothing ticked: an
+// issuer (demo visitors see every side until they tick their own).
 export function workspaceSides(settings, { demo = false } = {}) {
   const picked = Array.isArray(settings?.sides) ? settings.sides.filter(s => KNOWN.has(s)) : []
-  if (picked.length) return picked
-  if (demo) return ['issuer', 'merchant', 'acquirer']
+  if (picked.length) return SIDES.map(([k]) => k).filter(k => picked.includes(k))
+  return demo ? ['issuer', 'merchant', 'acquirer'] : ['issuer']
+}
+// Workspaces from before the ticks followed their institution type; what that implied
+export function impliedSides(settings) {
   if (settings?.institutionType === 'merchant')  return ['merchant']
   if (settings?.institutionType === 'processor') return ['acquirer']
-  return ['issuer']
+  return null
 }
 export const doesIssuing  = sides => sides.includes('issuer')
 export const doesMerchant = sides => sides.includes('merchant') || sides.includes('acquirer')
 
-// The menu, in the order that suits the workspace. Every tool is always on it:
-// merchant-side workspaces get their chargeback tools first, then the rest.
+// The menu, in the order that suits the workspace: merchant-side workspaces get
+// their chargeback tools first, then the rest. Tools switched off aren't on it.
 const TOOLS = {
   triage: '001  TRIAGE', desk: '002  DISPUTE DESK', multi: '003  MULTI', file: '004  FILE',
   licit: '005  LICIT', dfa: '006  DFA', duo: '007  DUO', trio: '008  TRIO',
@@ -50,9 +55,10 @@ const ISSUER_NAV = [['triage', 'Disputes'], ['desk', 'Disputes'], ['multi', 'Dis
 const MERCHANT_NAV = [['multi', 'Chargebacks'], ['desk', 'Chargebacks'], ['file', 'Chargebacks'], ['triage', 'Chargebacks'],
   ['duo', 'Collaboration'], ['trio', 'Collaboration'], ['licit', 'Compliance'], ['dfa', 'Recovery']]
 
-export function navFor(sides) {
+export function navFor(sides, settings) {
   const rows = doesIssuing(sides) ? ISSUER_NAV : MERCHANT_NAV
   return [{ id: 'home', label: 'HOME' }, ...rows.map(([id, group]) => ({ id, label: TOOLS[id], group })), { id: 'insights', label: 'INSIGHTS' }, { id: 'settings', label: 'SETTINGS' }]
+    .filter(n => isOn(settings, n.id))
 }
 
 // Triage's Alerts tab: who found it

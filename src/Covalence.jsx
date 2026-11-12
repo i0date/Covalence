@@ -26,7 +26,8 @@ import { TrioView } from './tools/Trio.jsx'
 import { readCases, writeCases } from './caseStore.js'
 import { LicitView } from './tools/Licit.jsx'
 import { screeningStatus } from './fincrime.js'
-import { doesIssuing, doesMerchant, navFor, workspaceSides } from './sides.mjs'
+import { doesIssuing, doesMerchant, impliedSides, navFor, workspaceSides } from './sides.mjs'
+import { isOn } from './features.mjs'
 import { useArnStageSync } from './useArnStageSync.js'
 import { AlarmBanner, AlarmButton, AlarmDialog } from './Alarms.jsx'
 
@@ -213,7 +214,7 @@ export default function Covalence() {
   // Workflow: auto-assignment and escalation rules run on the case pool (Settings → Workflow)
   const team = useTeam(covUser)
   useWorkflow({ outcomes, setOutcomes, settings, covUser, team })
-  // Financial crime: sanctions screening and AML flags (Settings → Financial crime)
+  // Financial crime: sanctions screening and AML flags (Settings → Fraud & AML)
   useFincrime({ outcomes, setOutcomes, settings, covUser })
   useArnStageSync(outcomes, setOutcomes)
   // Links in reminder emails: /?open=COV-123 opens that case once the app is ready
@@ -339,9 +340,18 @@ export default function Covalence() {
   }, [membership?.institution_id])
 
   // The menu follows what the workspace does (sides.mjs): issuers get the dispute
-  // pipeline first; merchant-side workspaces get their chargebacks first. Every tool is listed.
+  // pipeline first; merchant-side workspaces get their chargebacks first. Tools
+  // switched off in Settings → Your setup aren't listed (features.mjs).
   const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
-  const NAV = navFor(sides)
+  const NAV = navFor(sides, settings)
+  // A tool switched off: anyone on it (or sent to it) goes Home
+  useEffect(() => { if (!NAV.some(n => n.id === activeSection)) setActiveSection('home') }, [activeSection, NAV.map(n => n.id).join(',')])
+  // Workspaces from before the ticks followed their institution type: an admin's
+  // browser ticks what that implied, once, so nothing they had disappears
+  useEffect(() => {
+    const implied = impliedSides(settings)
+    if (covUser?.authed && covUser.role === 'admin' && implied && !(settings.sides || []).length) setSettings(s => ({ ...s, sides: implied }))
+  }, [covUser?.authed, covUser?.role, settings.institutionType])
   // Desk opens on a side this workspace works (both stay a click away)
   const sidesKey = sides.join(',')
   useEffect(() => {
@@ -396,7 +406,7 @@ export default function Covalence() {
               </React.Fragment>))}
             </div>
             <div className="cov-nav-right" style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
-              <AlarmButton covUser={covUser} outcomes={outcomes} platformMode={platformMode} />
+              {isOn(settings, 'alarm') && <AlarmButton covUser={covUser} outcomes={outcomes} platformMode={platformMode} />}
               {/* Desktop: a search field look (icon · label · shortcut). Phones: icon-only button. */}
               <button onClick={() => setSearchOpen(true)} title="Search cases" aria-label="Search cases" className="mono-font cov-nav-icon cov-nav-search cov-nav-ctl"
                 style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'#232019',border:'1px solid #3D3A35',color:'#A8A29E',padding:'0 8px 0 10px',minWidth:'190px',cursor:'pointer',fontSize:'10px',letterSpacing:'0.08em',whiteSpace:'nowrap'}}>
@@ -455,8 +465,10 @@ export default function Covalence() {
         )}
 
         {/* ── Sound the alarm: the open alarm, for everyone, on every screen ── */}
-        <AlarmBanner covUser={covUser} />
-        <AlarmDialog covUser={covUser} sides={sides} outcomes={outcomes} platformMode={platformMode} />
+        {isOn(settings, 'alarm') && <>
+          <AlarmBanner covUser={covUser} />
+          <AlarmDialog covUser={covUser} sides={sides} outcomes={outcomes} platformMode={platformMode} />
+        </>}
 
         {/* ── Case thread: panel + search, available from every tool ── */}
         {openCaseId && (

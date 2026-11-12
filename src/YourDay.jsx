@@ -25,6 +25,7 @@ import { waitingClaims, silentDays, claimTotal } from './claims.mjs'
 import { listClaims, openClaim } from './claimsData.js'
 import { alarmList } from './alarmData.js'
 import { usePatterns } from './Alarms.jsx'
+import { isOn } from './features.mjs'
 
 const TAB_KEY = 'cov_yourday_tab'     // per browser: which of its tabs is showing
 // Show/hide on Home: one look for every panel that folds
@@ -72,7 +73,8 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
   // Claims from the bank's app (issuers only) and alarms, for the brief and for customers waiting on an update
   const [claims, setClaims] = useState([])
   const [alarms, setAlarms] = useState([])
-  const fi = platformMode !== 'merchant', canAlarm = !!(covUser?.authed || covUser?.demo)
+  // Switched off in Settings → Your setup: not here either (features.mjs)
+  const fi = platformMode !== 'merchant' && isOn(settings, 'appClaims'), canAlarm = !!(covUser?.authed || covUser?.demo) && isOn(settings, 'alarm')
   useEffect(() => {
     if (!fi) { setClaims([]); return }
     let live = true
@@ -81,7 +83,7 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
     return () => { live = false; window.removeEventListener('cov:claims-changed', load) }
   }, [fi])
   useEffect(() => {
-    if (!canAlarm) return
+    if (!canAlarm) { setAlarms([]); return }
     let live = true
     const load = () => alarmList().then(r => { if (live) setAlarms(r) }).catch(() => {})
     load(); window.addEventListener('cov:alarm-changed', load)
@@ -114,7 +116,8 @@ export function useDay({ outcomes, covUser, settings, platformMode }) {
     return { all, items: list, team, scope: mine.length ? 'mine' : 'team', counts, comingUp, unowned }
   }, [outcomes, me, settings, platformMode, claims])
   const ins = useMemo(() => insights(work.all, { me, settings }), [work.all, me, settings])
-  const patterns = usePatterns(outcomes, platformMode)
+  const patternsAll = usePatterns(outcomes, platformMode)
+  const patterns = isOn(settings, 'alarm') ? patternsAll : []
   const myName = covUser?.name || ''
   const changed = c => c?._claimRow ? !!prev && new Date(c._claimRow.updated_at || 0) > prev : changedSince(c, prev, myName)
   const canTake = !!covUser?.email && canWrite()
@@ -268,6 +271,7 @@ export function YourDay({ day, covUser, settings }) {
     const me = covUser?.email || '', order = { invited: 0, member: 1, owner: 2, open: 3 }
     const firstName = s => String(s || '').split(/[\s@]/)[0]
     const needs = p => p.ask || (p.help || []).map(h => HELP[h] || h).join(', ').toLowerCase() || 'help with this case'
+    if (!isOn(settings, 'pools')) return []
     return (day.all || []).map(c => ({ c, role: poolRole(c, me) })).filter(x => x.role)
       .sort((a, b) => order[a.role] - order[b.role] || (b.c.pool.urgent - a.c.pool.urgent) || new Date(b.c.pool.openedAt) - new Date(a.c.pool.openedAt))
       .map(({ c, role }) => {

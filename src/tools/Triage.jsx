@@ -10,6 +10,7 @@ import { readCases } from '../caseStore.js'
 import { IntakeClose } from '../IntakeClose.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
 import { alertsSource } from '../sides.mjs'
+import { isOn } from '../features.mjs'
 import { AppClaims } from '../AppClaims.jsx'
 import { PreDisputePanel } from '../PreDisputePanel.jsx'
 import { setClaim } from '../claimsData.js'
@@ -97,6 +98,11 @@ export function TriageView({ onHandoff, onGoToDuo, onSendToDuo, onCloseAtIntake,
 
   // ── Channel mode: 'fi' = Financial Institution/card, 'ce' = Crypto Exchange ──
   const [triageChannelMode, setTriageChannelMode] = useState(() => ['fi', 'ce'].includes(settings?.triageDefaultSide) ? settings.triageDefaultSide : settings?.institutionType === 'exchange' ? 'ce' : 'fi')
+  // The Merchant side is for workspaces that ticked Merchant; Alerts go when what
+  // raises them is switched off (fraud rules, pre-dispute alerts: features.mjs)
+  const alertsOn = isOn(settings, triageChannelMode === 'mx' ? 'predispute' : 'fraudRules')
+  useEffect(() => { if (triageChannelMode === 'mx' && !sides.includes('merchant')) setTriageChannelMode('fi') }, [sides.join(','), triageChannelMode])
+  useEffect(() => { if (!alertsOn && intakeTab === 'alerts') setIntakeTab('claims') }, [alertsOn, intakeTab])
 
   // ── Crypto Exchange (CE) mode state ─────────────────────────────────────────
   const [ceAccountType, setCeAccountType]               = useState('')
@@ -847,7 +853,7 @@ Return ONLY valid JSON:
         </p>
         {/* Alerts (the FI, the exchange or the network found it) | Claims (the customer reported it) */}
         <div role="tablist" aria-label="Triage" className="mt-6" style={{ display:'flex', gap:'2px', borderBottom:'1px solid #D4CCBC' }}>
-          {[['alerts', 'Alerts', alertsSource(sides, isCE, triageChannelMode)], ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
+          {[...(alertsOn ? [['alerts', 'Alerts', alertsSource(sides, isCE, triageChannelMode)]] : []), ['claims', 'Claims', 'The customer reported it']].map(([k, l, sub]) => (
             <button key={k} role="tab" aria-selected={intakeTab === k} onClick={() => pickIntake(k)} className="mono-font"
               style={{ background:'none', border:'none', borderBottom: intakeTab === k ? '2px solid #1A1814' : '2px solid transparent', marginBottom:'-1px', padding:'10px 16px', cursor:'pointer', textAlign:'left' }}>
               <span style={{ display:'block', fontSize:'11px', letterSpacing:'0.14em', color: intakeTab === k ? '#1A1814' : '#6B6259', fontWeight:600 }}>{l.toUpperCase()}</span>
@@ -857,7 +863,7 @@ Return ONLY valid JSON:
         </div>
         {/* Bank / credit union or crypto exchange — for alerts and claims alike */}
         <div className="mt-5 flex gap-1 p-1 w-fit" style={{ background: '#E8E3DA', maxWidth: '100%', flexWrap: 'wrap' }}>
-          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, { id: 'mx', label: 'Merchant' }].map(m => (
+          {[{ id: 'fi', label: 'Financial Institution' }, { id: 'ce', label: 'Crypto Exchange' }, ...(sides.includes('merchant') ? [{ id: 'mx', label: 'Merchant' }] : [])].map(m => (
             <button key={m.id} onClick={() => { setTriageChannelMode(m.id); setResult(null); setError(null); setHandedOff(false) }}
               className="platform-toggle-btn mono-font text-xs tracking-widest px-4 py-2 transition-all"
               style={{ background: triageChannelMode === m.id ? '#1A1814' : 'transparent', color: triageChannelMode === m.id ? '#F5F1EA' : '#6B5F4D', cursor: 'pointer', border: 'none' }}>
@@ -868,8 +874,8 @@ Return ONLY valid JSON:
       </div>
 
       {/* A merchant's alerts are the network's warnings before a chargeback */}
-      {intakeTab === 'alerts' && triageChannelMode === 'mx' && <PreDisputePanel settings={settings} />}
-      {intakeTab === 'alerts' && triageChannelMode !== 'mx' && (
+      {intakeTab === 'alerts' && alertsOn && triageChannelMode === 'mx' && <PreDisputePanel settings={settings} />}
+      {intakeTab === 'alerts' && alertsOn && triageChannelMode !== 'mx' && (
         <AlertsPanel kind="fraud" segment={triageChannelMode} outcomes={appOutcomes || []} setOutcomes={setAppOutcomes} settings={settings} covUser={covUser} route={fraudRoute}
           institution={settings?.duoInstitutionName || covUser?.institution || ''} />
       )}
@@ -877,7 +883,7 @@ Return ONLY valid JSON:
       {/* Claims: kept mounted (hidden) so a half-written claim survives a look at the alerts */}
       <div style={{ display: intakeTab === 'claims' ? 'block' : 'none' }}>
       {/* Claims the customer reported in the bank's app, waiting to be triaged */}
-      <AppClaims segment={triageChannelMode} activeId={activeClaim?.id} onTriage={fillFromClaim} />
+      {isOn(settings, 'appClaims') && <AppClaims segment={triageChannelMode} activeId={activeClaim?.id} onTriage={fillFromClaim} />}
       {/* A merchant's own customers: settled in the list above (refund, replacement), not with the claim form below */}
       <div style={{ display: triageChannelMode === 'mx' ? 'none' : 'block' }}>
       {activeClaim && (

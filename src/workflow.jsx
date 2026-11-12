@@ -13,6 +13,7 @@ import { auditWrite } from './audit.js'
 import { openCase } from './CaseThread.jsx'
 import { workflowChanges, applyChanges, remindersFor, CLOSED_STATUSES } from './clocks.mjs'
 import { screenCase, screeningKey, subjectsOf, walletsOf, amlIndex, amlSignals, needsSarReview } from './fincrime.js'
+import { isOn } from './features.mjs'
 
 export const WORKFLOW_RUN_EVENT = 'cov:workflow-run'   // Settings → "Apply to existing cases"
 
@@ -73,7 +74,7 @@ export function useFincrime({ outcomes, setOutcomes, settings, covUser }) {
 
   // Sanctions screening — up to 4 cases per pass
   useEffect(() => {
-    if (!me || !canWrite() || settings?.screeningAuto === false) return
+    if (!me || !canWrite() || settings?.screeningAuto === false || !isOn(settings, 'screening')) return
     const due = outcomes.filter(c => (open(c) || c.sarReview) && !busy.current.has(c.id) && (subjectsOf(c).length || walletsOf(c).length)
       && (!c.screening || c.screening.key !== screeningKey(c))).slice(0, 4)
     due.forEach(c => {
@@ -83,11 +84,11 @@ export function useFincrime({ outcomes, setOutcomes, settings, covUser }) {
         auditWrite('sanctions.screened', 'case', c.id, { status: rec.status, hits: rec.hits.length, list: rec.list?.fetchedAt || '' })
       }).catch(() => {}).finally(() => setTimeout(() => busy.current.delete(c.id), 30000))
     })
-  }, [outcomes, settings?.screeningAuto, settings?.screeningThreshold, me, tick])
+  }, [outcomes, settings?.screeningAuto, settings?.off, settings?.screeningThreshold, me, tick])
 
   // AML: flag open cases whose signals reach "medium" for SAR review
   useEffect(() => {
-    if (!me || !canWrite()) return
+    if (!me || !canWrite() || !isOn(settings, 'sar')) return
     const ix = amlIndex(outcomes), now = new Date().toISOString()
     const flags = []
     outcomes.forEach(c => {

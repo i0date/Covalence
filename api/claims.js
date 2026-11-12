@@ -175,9 +175,16 @@ module.exports = async function handler(req, res) {
   // A link to the hosted claim form for one customer (src/claimLinks.mjs). by: who made it.
   const brandOf = async inst => cl.normaliseBrand((await rest(`claim_form?institution_id=eq.${inst}&select=*`).catch(() => []))?.[0] || {},
     (await rest(`institutions?id=eq.${inst}&select=name`).catch(() => []))?.[0]?.name || '')
+  const featureOn = async (inst, id) => {
+    const kv = await rest(`workspace_kv?institution_id=eq.${inst}&key=eq.cov_settings&select=value`).catch(() => [])
+    let s = {}; try { s = JSON.parse(kv?.[0]?.value || '{}') } catch {}
+    return (await import('../src/features.mjs')).isOn(s, id)
+  }
   const makeLink = async (inst, b, by) => {
     const { link, errors } = cl.normaliseLink(b)
     if (errors.length) return { code: 400, body: { error: 'The link has problems', problems: errors } }
+    // Switched off in Settings → Your setup: no new links (ones already sent still work)
+    if (!(await featureOn(inst, 'claimForm'))) return { code: 409, body: { error: 'The hosted claim form is switched off in Settings → Your setup' } }
     // Every word on the form is in the bank's name, so there's no link until it has one
     if (!(await brandOf(inst)).name) return { code: 409, body: { error: 'Set the name your customers know you by in Settings → Claim form before making links' } }
     const tok = 'cvf_' + crypto.randomBytes(24).toString('hex'), id = cl.linkIdFrom(crypto.randomBytes(4).toString('hex'))

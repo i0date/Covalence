@@ -7,6 +7,7 @@ import { NewDot } from '../ui.jsx'
 import { isDemoCase, allThreadCases, stageOf, PipelineDots, StatusChip } from '../CaseThread.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { GetSetUp } from '../GetSetUp.jsx'
+import { isOn } from '../features.mjs'
 import { isMerchantCase, isIssuerCase } from '../sides.mjs'
 import { merchantQueue } from '../merchantQueue.mjs'
 import { merchantFile } from '../merchantFile.mjs'
@@ -87,7 +88,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             </div>
             <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
               <button onClick={onLoadDemo} className="cov-btn" style={{ padding:'10px 16px', fontSize:'10px' }}>LOAD DEMO INSTITUTION</button>
-              <button onClick={() => setActiveSection('triage')} className="upload-btn">START A TRIAGE →</button>
+              {isOn(settings, 'triage') && <button onClick={() => setActiveSection('triage')} className="upload-btn">START A TRIAGE →</button>}
             </div>
           </div>
         )
@@ -138,7 +139,7 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
                 )
               })}
               <div className="mono-font text-stone-400" style={{ fontSize:'10px', letterSpacing:'0.1em', padding:'10px 18px', borderTop:'1px solid #E7E2D9', display:'flex', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-                <span>● TRIAGE · DESK · MULTI · FILE · LICIT · DFA — click a case for its full record{rows.length > 25 ? ` · showing 25 of ${rows.length}` : ''}</span>
+                <span>● {['triage', 'desk', 'multi', 'file', 'licit', 'dfa'].filter(t => isOn(settings, t)).map(t => t.toUpperCase()).join(' · ')} — click a case for its full record{rows.length > 25 ? ` · showing 25 of ${rows.length}` : ''}</span>
                 {!hasDemo && <button onClick={onLoadDemo} style={{ background:'none', border:'none', color:'#A8A29E', cursor:'pointer', fontFamily:'inherit', fontSize:'10px', letterSpacing:'0.1em', padding:0 }}>LOAD DEMO INSTITUTION</button>}
               </div>
             </div>)}
@@ -268,8 +269,9 @@ export function HomeView({ outcomes, settings: _ps, setActiveSection, platformMo
             problem:'The hardest fraud events involve three parties simultaneously — your institution, the receiving platform or FI, and the cardholder population in between. These require coordination across all three layers at once.',
             tool:'Trio is an incident command module with two modes: Operational (war room, linked cases, SAR tracking, receiving FI coordination) and Strategy (pattern intelligence, post-incident debrief, threat brief generation).',
             detail:'Fraud incidents at scale are not case management problems. They are coordination problems. Trio is a room, not a record.' },
-        ]
-        const slide = SLIDES[tourSlide]
+        ].filter(x => isOn(settings, x.section))   // switched-off tools aren't in the tour
+        const slide = SLIDES[Math.min(tourSlide, SLIDES.length - 1)]
+        if (!slide) return null
         return (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'24px' }}
             onClick={e => { if (e.target === e.currentTarget) setTourOpen(false) }}>

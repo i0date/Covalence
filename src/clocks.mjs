@@ -11,6 +11,7 @@
 //   regE      Reg E: 45 business days from provisional credit
 // Each clock is ok, soon (inside its warning window), breached, or met.
 import { isIssuerCase } from './sides.mjs'
+import { isOn } from './features.mjs'
 import { TO_ANSWER, respondBy } from './merchantQueue.mjs'
 
 export const CLOSED_STATUSES     = ['won','lost','withdrawn','resolved','closed']
@@ -83,11 +84,12 @@ export function caseClocks(c, settings, now = new Date()) {
   if (!c) return []
   const s = withDefaults(settings), out = []
   const sc = c.screening
-  if (sc && sc.status === 'potential' && !sc.decision)       // review a possible sanctions match within a business day
+  const screening = isOn(settings, 'screening'), sar = isOn(settings, 'sar')   // switched off: their clocks go too
+  if (screening && sc && sc.status === 'potential' && !sc.decision)       // review a possible sanctions match within a business day
     out.push(clock('screen', 'Sanctions match reviewed', addBusinessDays(sc.ts, 1), false, DAY, now))
-  if (sc?.decision?.outcome === 'true_match')                // OFAC: report blocked or rejected property within 10 business days
+  if (screening && sc?.decision?.outcome === 'true_match')                // OFAC: report blocked or rejected property within 10 business days
     out.push(clock('ofac', 'Report to OFAC', addBusinessDays(sc.decision.ts, 10), !!c.ofacReportedAt, 3 * DAY, now))
-  if (c.sarReview?.flaggedAt && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt)))
+  if (sar && c.sarReview?.flaggedAt && (!c.sarReview.decision || (c.sarReview.decision === 'file' && !c.sarReview.filedAt)))
     out.push(clock('sar', c.sarReview.decision === 'file' ? 'SAR filed with FinCEN' : 'SAR decision',   // FinCEN: 30 days from initial detection
       new Date(new Date(c.sarReview.flaggedAt).getTime() + 30 * DAY), false, 7 * DAY, now))
   if (!isOpen(c)) return out

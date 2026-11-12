@@ -7,9 +7,10 @@
 //   evaluate                        run the rules over each customer's last 30
 //                                   days; every alert says which rule fired, why,
 //                                   and which transactions it rests on
-// Rules are deliberately simple and tunable (Settings → Financial crime); they
+// Rules are deliberately simple and tunable (Settings → Monitoring rules and Fraud alert rules); they
 // raise alerts for a person to review in 005 Licit, never decisions.
 import { parseDate, parseAmount as parseMoney } from './csvImport.js'
+import { isOn, ruleOn } from './features.mjs'
 
 const DAY = 86400000
 export const TM_DEFAULTS = {
@@ -123,7 +124,7 @@ const fmtDay = t => new Date(t).toLocaleDateString('en-US', { month: 'short', da
 export function evaluate(history, newIds, settings, now = new Date(), opts = {}) {
   const segment = opts.segment || 'fi'   // 'fi' bank / credit union · 'ce' crypto exchange
   const s = { ...TM_DEFAULTS, ...(settings || {}) }
-  if (s.tmEnabled === false) return []
+  if (s.tmEnabled === false || !isOn(s, 'tmRules')) return []
   const fresh = new Set(newIds)
   const risky = new Set(String(s.tmHighRiskCountries || '').split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean))
   const byCustomer = new Map()
@@ -136,7 +137,7 @@ export function evaluate(history, newIds, settings, now = new Date(), opts = {})
     const name = txs.find(t => t.customerName)?.customerName || ''
     const at = t => new Date(t.ts).getTime()
     const raise = (rule, involved, detail) => {
-      if (!involved.some(t => fresh.has(t.id))) return
+      if (!ruleOn(s, rule) || !involved.some(t => fresh.has(t.id))) return
       const last = involved.reduce((m, t) => Math.max(m, at(t)), 0)
       const key = `${customerId}|${rule}|${new Date(last).toISOString().slice(0, 10)}`
       const r = RULES[rule], total = involved.reduce((n, t) => n + t.amount, 0)
@@ -295,11 +296,12 @@ const SCAM_WORDS = /\b(fee|release|unlock|tax|irs|customs|bail|lawyer|gift ?card
 export function evaluateFraud(history, events, fresh, settings, fraudCases = [], now = new Date(), opts = {}) {
   const segment = opts.segment || 'fi'
   const s = { ...FRAUD_DEFAULTS, ...(settings || {}) }
-  if (s.fraudEnabled === false) return []
+  if (s.fraudEnabled === false || !isOn(s, 'fraudRules')) return []
   const isNew = new Set(fresh)
   const at = t => new Date(t.ts).getTime()
   const out = []
   const raise = (rule, customerId, name, involved, evs, detail, extra = {}) => {
+    if (!ruleOn(s, rule)) return
     if (!involved.some(t => isNew.has(t.id)) && !evs.some(e => isNew.has(e.id)) && !extra.always) return
     const last = Math.max(...involved.map(at), ...evs.map(at), 0)
     const key = `${customerId}|${rule}|${new Date(last).toISOString().slice(0, 10)}`
