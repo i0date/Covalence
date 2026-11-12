@@ -17,6 +17,7 @@ import { EXPLAIN_RULES, aiDraftRecord, readAiJson } from '../ai.js'
 import { Badge, Button } from '../ui.jsx'
 import { AlertsPanel } from '../AlertsPanel.jsx'
 import { OnboardingQueue } from '../OnboardingQueue.jsx'
+import { isOn } from '../features.mjs'
 
 const DAY = 86400000
 const day = ts => ts ? new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '—'
@@ -113,7 +114,12 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
   const clusters = useMemo(() => clustersOf(cases, settings), [cases, settings])
   const open = cases.filter(c => !CLOSED_STATUSES.includes(c.status))
 
-  const TABS = [['queue', 'Queue', potential.length + toReport.length + toDecide.length + toFile.length], ['alerts', 'Alerts', null], ['onboarding', 'Onboarding', null], ['investigations', 'Investigations', clusters.length], ['sar', 'SAR builder', toDecide.length + toFile.length], ['log', 'Screening log', null]]
+  // Parts switched off in Settings → Your setup aren't here (features.mjs); their data stays
+  const screening = isOn(settings, 'screening'), sar = isOn(settings, 'sar')
+  const queueN = (screening ? potential.length + toReport.length : 0) + (sar ? toDecide.length + toFile.length : 0)
+  const TABS = [['queue', 'Queue', queueN], ['alerts', 'Alerts', null, 'tmRules'], ['onboarding', 'Onboarding', null, 'onboarding'], ['investigations', 'Investigations', clusters.length],
+    ['sar', 'SAR builder', toDecide.length + toFile.length, 'sar'], ['log', 'Screening log', null, 'screening']].filter(([, , , f]) => !f || isOn(settings, f))
+  useEffect(() => { if (!TABS.some(([k]) => k === tab)) setTab('queue') }, [TABS.map(([k]) => k).join(','), tab])
 
   return (
     <div style={{ maxWidth:'1280px', margin:'0 auto', padding:'40px 24px' }}>
@@ -143,7 +149,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
       {tab === 'queue' && (<>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))', gap:'10px', marginBottom:'20px' }}>
           {[['POSSIBLE MATCHES', potential.length, 'review within 1 business day'], ['OFAC REPORTS DUE', toReport.length, '10 business days from confirmation'],
-            ['SAR DECISIONS', toDecide.length, '30 days from detection'], ['SARS TO FILE', toFile.length, 'record the BSA ID']].map(([l, n, sub]) => (
+            ['SAR DECISIONS', toDecide.length, '30 days from detection'], ['SARS TO FILE', toFile.length, 'record the BSA ID']].filter((_, i) => i < 2 ? screening : sar).map(([l, n, sub]) => (
             <div key={l} style={{ background:'#FFFFFF', border:'1px solid #E7E2D9', padding:'12px 14px' }}>
               <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.12em', color:'#57534E' }}>{l}</div>
               <div className="display-font" style={{ fontSize:'28px', fontWeight:600, color: n ? '#1A1814' : '#8A7F72' }}>{n}</div>
@@ -154,7 +160,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
         {[['Possible sanctions matches', potential, c => note(c, 'screen', `${c.screening.hits.length} hit${c.screening.hits.length === 1 ? '' : 's'}`), 'danger', 'Nothing to review. Every screened case is clear or decided.'],
           ['Confirmed matches to report to OFAC', toReport, c => note(c, 'ofac', 'report due'), 'danger', 'No reports due.'],
           ['SAR decisions', toDecide, c => note(c, 'sar', 'decide'), 'warn', 'No cases waiting on a SAR decision.'],
-          ['SARs to file', toFile, c => note(c, 'sar', 'to file'), 'warn', 'No SARs waiting to be filed.']].map(([title, rows, fmt, tone, empty]) => (
+          ['SARs to file', toFile, c => note(c, 'sar', 'to file'), 'warn', 'No SARs waiting to be filed.']].filter((_, i) => i < 2 ? screening : sar).map(([title, rows, fmt, tone, empty]) => (
           <section key={title} style={box}>
             <div style={{ display:'flex', gap:'10px', alignItems:'center', marginBottom:'6px' }}>
               <span className="display-font" style={{ fontSize:'17px', fontWeight:600, color:'#1A1814' }}>{title}</span>
@@ -163,7 +169,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
             {rows.length ? rows.map(c => <Row key={c.id} c={c} note={fmt(c)} tone={tone} />) : <div className="display-font" style={{ fontSize:'14px', color:'#6B6259', fontStyle:'italic' }}>{empty}</div>}
           </section>
         ))}
-        <div className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{open.filter(c => c.screening).length} of {open.length} open cases screened. Decisions are made in each case file.</div>
+        {screening && <div className="mono-font" style={{ fontSize:'11px', color:'#57534E' }}>{open.filter(c => c.screening).length} of {open.length} open cases screened. Decisions are made in each case file.</div>}
       </>)}
 
       {tab === 'investigations' && (<>
@@ -179,7 +185,7 @@ export function LicitView({ outcomes, setOutcomes, settings, covUser }) {
               </div>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                 <Badge tone={cl.level === 'high' ? 'danger' : cl.level === 'medium' ? 'warn' : 'neutral'}>{cl.level.toUpperCase()} RISK</Badge>
-                <Button variant="secondary" onClick={() => { setSarIds(cl.cases.map(c => c.id)); pick('sar') }}>Build a SAR</Button>
+                {sar && <Button variant="secondary" onClick={() => { setSarIds(cl.cases.map(c => c.id)); pick('sar') }}>Build a SAR</Button>}
               </div>
             </div>
             <div style={{ overflowX:'auto' }}><ClusterMap cl={cl} /></div>
@@ -362,7 +368,7 @@ function ScreeningLog({ cases }) {
     <section style={box}>
       <H2>Lists in use</H2>
       <p className="display-font" style={{ fontSize:'14px', color: err ? '#991B1B' : '#3F3A35', margin:0, lineHeight:1.55 }}>
-        {list ? `${list.source}: ${list.entries.toLocaleString()} entries and ${list.wallets} crypto addresses, downloaded from the US Treasury ${day(list.fetchedAt)} and refreshed every 12 hours. Match threshold and automatic screening are set in Settings → Financial crime.` : err || 'Checking…'}
+        {list ? `${list.source}: ${list.entries.toLocaleString()} entries and ${list.wallets} crypto addresses, downloaded from the US Treasury ${day(list.fetchedAt)} and refreshed every 12 hours. Match threshold and automatic screening are set in Settings → Screening.` : err || 'Checking…'}
       </p>
     </section>
     <section style={box}>

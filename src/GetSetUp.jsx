@@ -34,7 +34,7 @@ export function GetSetUp({ outcomes, settings, covUser, onTour }) {
     { done: state.keys > 0, label: 'Connect your systems', hint: 'An API key lets your core, card processor or fraud engine send transactions and alerts.', act: () => go('settings', 'connections') },
     { done: (outcomes || []).some(c => !isDemoCase(c)), label: 'Bring in your cases', hint: 'Import open disputes from a spreadsheet, or they arrive through the API.', act: () => go('settings', 'import') },
     { done: state.team > 1, label: 'Invite your team', hint: 'Analysts, reviewers and auditors, each with the right access.', act: () => go('settings', 'team') },
-    ...(doesIssuing(sides) ? [{ done: state.sharing, label: 'Record your 314(b) registration', hint: 'So Duo sessions show whether information sharing is covered.', act: () => go('settings', 'fincrime') }] : []),
+    ...(doesIssuing(sides) ? [{ done: state.sharing, label: 'Record your 314(b) registration', hint: 'So Duo sessions show whether information sharing is covered.', act: () => go('settings', 'screening') }] : []),
     { done: tourDone, label: 'Take the tour', hint: 'Two minutes on what each tool does.', act: onTour },
   ]
   const left = steps.filter(s => !s.done).length

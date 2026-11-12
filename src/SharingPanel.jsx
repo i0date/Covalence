@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// 314(b) INFORMATION SHARING — Settings → Financial crime, and every Duo session
+// 314(b) INFORMATION SHARING — Settings → Screening, and every Duo session
 // ═══════════════════════════════════════════════════════════════════════════════
 // Section 314(b) gives institutions a safe harbor for sharing information to
 // identify and report possible money laundering or terrorist financing, when
@@ -31,7 +31,7 @@ export const AML_PURPOSES = [
 ]
 export const kindOf = st => st?.purpose?.kind || (st?.coordination ? 'dispute' : 'recovery')
 
-// ── Settings → Financial crime ───────────────────────────────────────────────
+// ── Settings → Screening ────────────────────────────────────────────────────
 export function SharingSettings({ admin }) {
   const [v, setV] = useState(undefined), [msg, setMsg] = useState(null), [busy, setBusy] = useState(false)
   const load = () => sharingGet().then(r => setV(r || { registered: false, expires_on: '', contact_name: '', contact_email: '', require_both: false })).catch(e => { setV(null); setMsg({ err: e.message }) })
@@ -136,7 +136,7 @@ export function DuoSharingBar({ st, myRole, sessionId, onChanged }) {
   )
   const tone = st.safe_harbor ? { c:'#065F46', bg:'#ECFDF5', b:'#6EE7B7' } : { c:'#92400E', bg:'#FEF3C7', b:'#FCD34D' }
   const why = st.safe_harbor ? null : !theirs ? 'The other institution hasn’t joined, so coverage can’t be checked yet.'
-    : !mine?.valid ? 'Your institution has no current 314(b) registration (Settings → Financial crime).'
+    : !mine?.valid ? 'Your institution has no current 314(b) registration (Settings → Screening).'
     : `${theirs.institution} has no current 314(b) registration recorded.`
   const KIND = { purpose: 'Purpose confirmed', message: 'Shared a message', status: 'Changed the status' }
   return (

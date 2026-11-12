@@ -11,6 +11,7 @@ import { EXPLAIN_RULES, EXPLAIN_JSON, aiRecord, aiDraftRecord, readAiJson, withD
 import { AiExplain, AiDraftNote } from '../AiExplain.jsx'
 import { readCases } from '../caseStore.js'
 import { isMerchantCase, isIssuerCase } from '../sides.mjs'
+import { isOn } from '../features.mjs'
 import { canWarn, startWarning, settleWarning, warningClock, OUTCOMES as WARN_OUTCOMES, WARN_HOURS } from '../merchantWarning.mjs'
 import { sendMerchantWarning } from '../preDisputeData.js'
 import { auditWrite } from '../audit.js'
@@ -3516,7 +3517,7 @@ ${merchant || '[Merchant Name]'} — Disputes Team`
                                     if (w?.outcome && w.outcome !== 'refunded' && ['pending', 'investigating'].includes(o.status || 'pending'))
                                       return <span className="mono-font text-[10px] px-1.5 py-0.5 border border-stone-400 text-stone-600 whitespace-nowrap" title={WARN_OUTCOMES[w.outcome]}>MCH WARNED · NO REFUND</span>
                                     const can = canWarn(o)
-                                    return can.ok ? <button onClick={() => warnMerchant(o)} title={can.why} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-600 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">WARN MCH</button> : null
+                                    return can.ok && isOn(rootSettings, 'warnMerchant') ? <button onClick={() => warnMerchant(o)} title={can.why} className="mono-font text-[10px] px-1.5 py-0.5 border border-amber-600 text-amber-800 hover:bg-amber-50 whitespace-nowrap transition-colors">WARN MCH</button> : null
                                   })()}
                                   {warnMsg?.id === o.id && <span role="status" className={`mono-font text-[10px] w-full ${warnMsg.bad ? 'text-red-700' : 'text-emerald-800'}`} style={{whiteSpace:'normal'}}>{warnMsg.text}</span>}
 

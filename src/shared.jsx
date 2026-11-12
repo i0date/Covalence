@@ -36,7 +36,9 @@ export const DEFAULT_SETTINGS = {
   // Institution profile
   duoInstitutionName:   '',
   institutionType:      '',          // bank | credit_union | fintech | mse | exchange | merchant | processor
-  sides:                [],          // issuer | acquirer | merchant — empty: implied by the type (sides.mjs)
+  sides:                [],          // issuer | acquirer | merchant, ticked in Settings → Your setup (sides.mjs)
+  off:                  [],          // tools and features switched off (features.mjs; admins only)
+  rulesOff:             [],          // single fraud and monitoring rules switched off
   mchRespondDays:       10,          // merchant side: days to answer a chargeback (merchantQueue.mjs)
   mchAcceptBelow:       25,          // …recommend accepting chargebacks under this amount
   mchFightCost:         25,          // …what one response costs to prepare
@@ -73,11 +75,11 @@ export const DEFAULT_SETTINGS = {
   ...WORKFLOW_DEFAULTS,
   // Quality review — monthly sample of closed cases (Settings → Quality review)
   ...QA_DEFAULTS,
-  // Financial crime — sanctions screening (Settings → Financial crime)
+  // Financial crime — sanctions screening (Settings → Screening)
   ...FINCRIME_DEFAULTS,
-  // Transaction monitoring rules (Settings → Financial crime)
+  // Transaction monitoring rules (Settings → Monitoring rules)
   ...TM_DEFAULTS,
-  // Fraud alert rules and the customer-contact deadline (Settings → Financial crime)
+  // Fraud alert rules and the customer-contact deadline (Settings → Fraud alert rules)
   ...FRAUD_DEFAULTS,
 }
 

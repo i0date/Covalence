@@ -1,12 +1,14 @@
 // SETTINGS — every setting, in pages grouped down the left (Linear-style)
 // ═══════════════════════════════════════════════════════════════════════════════
-// Groups: Workspace, Team & access, Cases & workflow, Financial crime,
-// Integrations, Records. A search box finds any setting by its name or what it
-// does and jumps to it. Each setting changed from the default has a dot (so has
-// its page), and a page only some roles can change has a lock. Only what applies
-// is shown: merchant settings for merchant-side workspaces, the team and the log
-// for workspaces. Links keep working: 'cov:go' { section: 'settings', tab: <page id> }
-// (the old 'settings' tab opens Profile).
+// Groups: Workspace, Team, Disputes, Fraud & AML, Integrations, Records. Your setup
+// comes first: what the workspace does, and every tool and feature switched on or
+// off (features.mjs; admins only, audited). Only what's on shows: a page for a
+// switched-off feature isn't listed or found by search, and merchant settings
+// show only for workspaces that ticked Merchant or Acquirer. A search box finds
+// any setting by its name or what it does and jumps to it. Each setting changed
+// from the default has a dot (so has its page), and a page only some roles can
+// change has a lock. Links keep working: 'cov:go' { section: 'settings', tab: <page id> }
+// (old tab names are mapped below).
 import React from 'react'
 import { TeamPanel } from '../AuthScreens.jsx'
 import { AuditPanel } from '../AuditPanel.jsx'
@@ -14,54 +16,63 @@ import { RetentionPanel } from '../RetentionPanel.jsx'
 import { WorkflowPanel } from '../WorkflowPanel.jsx'
 import { QaPanel } from '../QaPanel.jsx'
 import { ImportPanel } from '../ImportPanel.jsx'
-import { FincrimeSettings } from '../FincrimeSettings.jsx'
+import { FraudRulesSettings, MonitoringRulesSettings, ScreeningSettings, Switch } from '../FincrimeSettings.jsx'
 import { ConnectionsPanel } from '../ConnectionsPanel.jsx'
 import { ClaimFormSettings } from '../ClaimFormSettings.jsx'
 import { DEFAULT_SETTINGS } from '../shared.jsx'
 import { SIDES, alertsSource, doesMerchant, workspaceSides } from '../sides.mjs'
+import { TOOLS, FEATURES, isOn, switchTo } from '../features.mjs'
 
 
-const GROUPS = ['Workspace', 'Team & access', 'Cases & workflow', 'Financial crime', 'Integrations', 'Records']
+const GROUPS = ['Workspace', 'Team', 'Disputes', 'Fraud & AML', 'Integrations', 'Records']
 // who: the lowest role that can change the page (admin, or reviewer = admins and reviewers)
 // keys: the settings on the page, for the changed dot and Reset; find: what else search can match
+// on: the tool or feature the page belongs to (hidden when it's switched off)
 const PAGES = [
+  { group: 'Workspace', id: 'setup', label: 'Your setup', who: 'admin', blurb: 'What you do, and which tools and features are switched on. Only what’s on shows anywhere in Covalence.',
+    keys: ['sides', 'off'] },
   { group: 'Workspace', id: 'profile', label: 'Profile', who: 'reviewer', blurb: 'Who you are and the rules you work under. Used in filing packages, Duo sessions and AI triage.',
-    keys: ['duoInstitutionName', 'institutionType', 'sides', 'jurisdiction', 'regulatoryRegime'] },
+    keys: ['duoInstitutionName', 'institutionType', 'jurisdiction', 'regulatoryRegime'] },
   { group: 'Workspace', id: 'views', label: 'Default views', who: 'reviewer', blurb: 'Where each screen starts for everyone at the institution. Anyone can change them on the page.',
-    keys: ['homeRange', 'homeCasesOpen', 'triageDefaultTab', 'triageDefaultSide'] },
-  { group: 'Workspace', id: 'modules', label: 'Modules', who: 'reviewer', blurb: 'Parts of Covalence you can switch off.', keys: ['dfaEnabled', 'snapshotEnabled'] },
-  { group: 'Team & access', id: 'team', label: 'Team', who: 'admin', workspace: true, blurb: 'Who’s in the workspace, their roles, and invites.',
+    keys: ['homeRange', 'homeCasesOpen', 'snapshotEnabled', 'triageDefaultTab', 'triageDefaultSide'] },
+  { group: 'Team', id: 'team', label: 'Team', who: 'admin', workspace: true, blurb: 'Who’s in the workspace, their roles, and invites.',
     find: ['Invite someone', 'Roles', 'Remove a member', 'Admin', 'Reviewer', 'Analyst', 'Auditor'] },
-  { group: 'Cases & workflow', id: 'workflow', label: 'Workflow', who: 'reviewer', workspace: true, blurb: 'Service targets, who gets new cases, escalation and reminders.',
+  { group: 'Disputes', id: 'workflow', label: 'Workflow', who: 'reviewer', workspace: true, blurb: 'Service targets, who gets new cases, escalation and reminders.',
     keys: ['slaAssignHours', 'slaFileBusinessDays', 'reminderLeadDays', 'regEWarnDays', 'autoAssign', 'autoAssignRoles', 'escalateTo', 'escalateOnBreach', 'escalateAmount', 'emailReminders'],
     find: ['SLA targets', 'Owner assigned within (hours)', 'Filed with the network within (business days)', 'Warn before a response deadline (days)', 'Warn before the Reg E 45-day limit (days)', 'Auto-assignment', 'Who gets cases', 'Escalation', 'Escalate to', 'Escalate cases worth at least', 'Reminders', 'Daily email'] },
-  { group: 'Cases & workflow', id: 'filing', label: 'Deadlines and filing', who: 'reviewer', blurb: 'Filing windows, the daily batch and the provisional credit milestones.',
+  { group: 'Disputes', id: 'filing', label: 'Deadlines and filing', who: 'reviewer', blurb: 'Filing windows, the daily batch and the provisional credit milestones.',
     keys: ['smallDollarThreshold', 'fraudWindowDays', 'consumerWindowDays', 'absoluteCapDays', 'trackerWindowDays', 'batchFileTime', 'pcMilestones'] },
-  { group: 'Cases & workflow', id: 'merchant', label: 'Chargebacks against you', who: 'reviewer', when: sides => doesMerchant(sides), blurb: 'How Multi answers chargebacks raised against you, and your chargeback ratio.',
+  { group: 'Disputes', id: 'merchant', label: 'Chargebacks against you', who: 'reviewer', on: 'multi', when: sides => doesMerchant(sides), blurb: 'How Multi answers chargebacks raised against you, and your chargeback ratio.',
     keys: ['mchRespondDays', 'mchAcceptBelow', 'mchFightCost', 'mchMonthlyTxVisa', 'mchMonthlyTxMc', 'mchRatioVisa', 'mchRatioMc'] },
-  { group: 'Cases & workflow', id: 'qa', label: 'Quality review', who: 'reviewer', workspace: true, blurb: 'The monthly sample of closed cases a reviewer checks.',
+  { group: 'Disputes', id: 'qa', label: 'Quality review', who: 'reviewer', workspace: true, blurb: 'The monthly sample of closed cases a reviewer checks.',
     keys: ['qaSampleRate', 'qaAlwaysLost', 'qaAlwaysAiDisagreed'], find: ['Sample rate percent', 'Always review lost cases', 'Always review cases where people disagreed with the AI', 'Someone else reviews your own cases'] },
-  { group: 'Financial crime', id: 'fincrime', label: 'Financial crime', who: 'reviewer', workspace: true, blurb: 'Fraud alert rules, AML monitoring rules and sanctions screening.',
-    keys: ['fraudEnabled', 'fraudContactHours', 'tmEnabled', 'tmCtr', 'tmRapidMin', 'tmFanCount', 'tmVelocityMultiple', 'tmVelocityMin', 'tmCryptoMin', 'tmRoundMin', 'tmHighRiskCountries', 'screeningAuto', 'screeningThreshold',
-      'fraudAtoMin', 'fraudCardTestMax', 'fraudCardTestCount', 'fraudScamMin', 'fraudDormantDays', 'fraudDormantMin', 'fraudCppMin', 'fraudNewAddressMin'],
-    find: ['Fraud alerts (001 Triage)', 'AML monitoring rules (005 Licit)', 'Sanctions lists', 'Reach the customer within hours', 'Account takeover', 'Card testing', 'Scam victim', 'Dormant account', 'Cash reporting (CTR)', 'Structuring', 'High-risk countries', 'Rapid movement', 'Where the work happens'] },
-  { group: 'Financial crime', id: 'sar', label: 'SAR / STR thresholds', who: 'reviewer', blurb: 'The amount, by payment type, at which a case is considered for a suspicious activity report.',
+  { group: 'Disputes', id: 'claimform', label: 'Claim form', who: 'reviewer', on: 'claimForm', workspace: true, blurb: 'The form your app or website can open when a customer reports a problem: your name, logo and phone number on it.',
+    find: ['Hosted claim form', 'Report a problem', 'Logo', 'Support phone number', 'Help page'] },
+  { group: 'Fraud & AML', id: 'fraudrules', label: 'Fraud alert rules', who: 'reviewer', on: 'fraudRules', blurb: 'The rules that raise fraud alerts in 001 Triage: switch each one on or off and set where it starts.',
+    keys: ['fraudContactHours', 'fraudAtoMin', 'fraudCardTestMax', 'fraudCardTestCount', 'fraudScamMin', 'fraudDormantDays', 'fraudDormantMin', 'fraudCppMin', 'fraudNewAddressMin'],
+    find: ['Reach the customer within (hours)', 'Possible account takeover', 'Card testing', 'Possible scam', 'Dormant account suddenly active', 'Merchant shared by several fraud victims', 'Same check deposited twice', 'Withdrawal to a brand-new address'] },
+  { group: 'Fraud & AML', id: 'tmrules', label: 'Monitoring rules', who: 'reviewer', on: 'tmRules', blurb: 'The AML rules that raise alerts in 005 Licit: switch each one on or off and set where it starts.',
+    keys: ['tmCtr', 'tmRapidMin', 'tmFanCount', 'tmVelocityMultiple', 'tmVelocityMin', 'tmCryptoMin', 'tmRoundMin', 'tmHighRiskCountries'],
+    find: ['Cash just under the reporting threshold', 'Structuring', 'CTR', 'Money in and straight back out', 'Many senders paying one account', 'Many new payees at once', 'Sudden jump in money going out', 'Large amounts sent to crypto', 'Repeated large round-dollar payments', 'Payment involving a high-risk country', 'High-risk countries'] },
+  { group: 'Fraud & AML', id: 'screening', label: 'Screening', who: 'reviewer', on: 'screening', blurb: 'The sanctions lists cases are screened against, and your 314(b) registration.',
+    keys: ['screeningAuto', 'screeningThreshold'], find: ['Sanctions lists', 'OFAC', 'Screen new and changed cases automatically', 'Flag names that match at least', '314(b)', 'Information sharing'] },
+  { group: 'Fraud & AML', id: 'sar', label: 'SAR / STR thresholds', who: 'reviewer', on: 'sar', blurb: 'The amount, by payment type, at which a case is considered for a suspicious activity report.',
     keys: ['sarThreshold', 'sarThresholdACH', 'sarThresholdP2P', 'sarThresholdCrypto'] },
   { group: 'Integrations', id: 'connections', label: 'Connections', who: 'admin', workspace: true, blurb: 'Your systems sending data to Covalence, and Covalence acting in them.',
     find: ['API keys', 'Create a key', 'Act in your systems', 'Your endpoint', 'Signing secret', 'Alert notifications', 'Slack', 'For your developers', 'Developer guide'] },
-  { group: 'Integrations', id: 'claimform', label: 'Claim form', who: 'reviewer', workspace: true, blurb: 'The form your app or website can open when a customer reports a problem: your name, logo and phone number on it.',
-    find: ['Hosted claim form', 'Report a problem', 'Logo', 'Support phone number', 'Help page'] },
   { group: 'Integrations', id: 'import', label: 'Import cases', who: 'reviewer', workspace: true, blurb: 'Bring cases in from a CSV or spreadsheet export.', find: ['CSV', 'Mapping', 'Spreadsheet'] },
   { group: 'Records', id: 'audit', label: 'Audit log', workspace: true, blurb: 'Everything that happened in the workspace, in a chain that can’t be changed.', find: ['Export the log', 'Verify the chain'] },
   { group: 'Records', id: 'retention', label: 'Data retention', who: 'admin', workspace: true, blurb: 'How long closed cases are kept, and legal holds.', find: ['Retention period', 'Legal hold', 'Purge'] },
 ]
-const INSTITUTION = ['profile', 'views', 'modules', 'filing', 'merchant', 'sar']
+const INSTITUTION = ['setup', 'profile', 'views', 'filing', 'merchant', 'sar', 'fraudrules', 'tmrules', 'screening']
+// Old tab names, in links and in browsers
+const LEGACY = { settings: 'profile', modules: 'setup', fincrime: 'screening' }
 // Field labels and hints on the pages above that live in this file, for search
 const FIELDS = {
-  profile: [['Institution Name', 'Used in filing packages, Duo sessions and AI triage context.'], ['Institution Type', 'credit union bank fintech exchange merchant processor'], ['What you do', 'issuer acquirer merchant menu order'], ['Jurisdiction', 'SAR STR thresholds country'], ['Consumer Protection Regime', 'Reg E FCAC FCA filing windows']],
-  views: [['Home date range', 'period Home covers'], ['Home case list', 'open or folded'], ['Triage opens on', 'alerts claims'], ['Triage side', 'Financial Institution Crypto Exchange']],
-  modules: [['DFA Scoring Engine', 'Dispute Funding Analyzer'], ['Home Snapshot', 'resolution time fraud service split']],
-  filing: [['Small-Dollar Write-Off Threshold ($)', 'courtesy credit'], ['Fraud Filing Window (days)', 'Visa Mastercard 120 days'], ['Consumer Dispute Window (days)', 'expected delivery'], ['Absolute Cap (days)', '540 days'], ['Tracker Window (days)', 'tracker'], ['Batch Filing Time (daily auto-file)', 'batch Multi'], ['PC Milestones (business days)', 'provisional credit countdown']],
+  setup: [['What you do', 'issuer acquirer merchant sides'], ...[...TOOLS, ...FEATURES].map(f => [f.label, `${f.what} switch on off`])],
+  profile: [['Institution name', 'Used in filing packages, Duo sessions and AI triage context.'], ['Institution type', 'credit union bank fintech exchange merchant processor'], ['Jurisdiction', 'SAR STR thresholds country'], ['Consumer protection regime', 'Reg E FCAC FCA filing windows']],
+  views: [['Home date range', 'period Home covers'], ['Home case list', 'open or folded'], ['Home snapshot', 'resolution time fraud service split'], ['Triage opens on', 'alerts claims'], ['Triage side', 'Financial Institution Crypto Exchange']],
+  filing: [['Small-dollar write-off threshold ($)', 'courtesy credit'], ['Fraud filing window (days)', 'Visa Mastercard 120 days'], ['Consumer dispute window (days)', 'expected delivery'], ['Absolute cap (days)', '540 days'], ['Tracker window (days)', 'tracker'], ['Batch filing time', 'daily auto-file batch Multi'], ['Provisional credit milestones (business days)', 'PC countdown']],
   merchant: [['Days to answer', 'acquirer deadline'], ['Accept chargebacks under ($)', 'accept in bulk'], ['Cost to fight one ($)', 'fees staff time'], ['Card sales per month — Visa / Mastercard', 'chargeback ratio'], ['Ratio thresholds, % — Visa / Mastercard', 'VAMP ECM']],
   sar: [['Card / General ($)', 'card fraud'], ['ACH / EFT ($)', 'bank transfer'], ['P2P / E-Transfer ($)', 'Zelle Interac wire'], ['Crypto / Digital Asset ($)', 'virtual asset']],
 }
@@ -94,17 +105,17 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
   const agent = (() => { try { return JSON.parse(localStorage.getItem('cov_user') || 'null') } catch { return null } })()
   // Institution settings: admins and reviewers change them; analysts and auditors see them (enforced in the database too)
   const locked = !!(covUser?.authed || covUser?.demo) && !['admin', 'reviewer'].includes(covUser.role)
+  const adminOnly = !!(covUser?.authed || covUser?.demo) && covUser.role !== 'admin'   // Your setup: admins only (the database checks too)
   const sides = workspaceSides(settings, { demo: !!covUser?.demo && !covUser?.authed })
   const workspace = covUser?.authed || covUser?.demo   // demo visitors get Demo Bank's team, log and retention
   // Pages in groups, Linear-style; only what applies to this workspace (PAGES below)
   const role = covUser?.role || ''
-  const pages = PAGES.filter(p => (!p.workspace || workspace) && (!p.when || p.when(sides)))
-  const legacy = { settings: 'profile' }   // old tab names in links and in this browser
-  const [tab, setTab] = React.useState(() => { try { const t = localStorage.getItem('cov_settings_tab') || 'profile'; return legacy[t] || t } catch { return 'profile' } })
-  const activeTab = pages.some(p => p.id === tab) ? tab : 'profile'
+  const pages = PAGES.filter(p => (!p.workspace || workspace) && (!p.when || p.when(sides)) && (!p.on || isOn(settings, p.on)))
+  const [tab, setTab] = React.useState(() => { try { const t = localStorage.getItem('cov_settings_tab') || 'setup'; return LEGACY[t] || t } catch { return 'setup' } })
+  const activeTab = pages.some(p => p.id === tab) ? tab : 'setup'
   const page = pages.find(p => p.id === activeTab)
   const [q, setQ] = React.useState(''), [flash, setFlash] = React.useState(null), [lit, setLit] = React.useState('')
-  const pickTab = (k, label) => { k = legacy[k] || k; setTab(k); setQ(''); setFlash(label || null); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
+  const pickTab = (k, label) => { k = LEGACY[k] || k; setTab(k); setQ(''); setFlash(label || null); try { localStorage.setItem('cov_settings_tab', k) } catch {} }
   React.useEffect(() => {
     const h = e => { if (e.detail?.section === 'settings' && e.detail.tab) pickTab(e.detail.tab) }
     window.addEventListener('cov:go', h); return () => window.removeEventListener('cov:go', h)
@@ -261,7 +272,6 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
 
       {activeTab === 'workflow'  && <WorkflowPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} team={team || []} />}
       {activeTab === 'qa'        && <QaPanel settings={settings} set={set} locked={locked} covUser={covUser} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
-      {activeTab === 'fincrime'  && <FincrimeSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} admin={covUser?.role === 'admin'} />}
       {activeTab === 'connections' && <ConnectionsPanel covUser={covUser} />}
       {activeTab === 'claimform' && <ClaimFormSettings locked={!canChange(page)} demo={!!covUser?.demo && !covUser?.authed} />}
       {activeTab === 'import'    && <ImportPanel covUser={covUser} locked={locked} outcomes={outcomes || []} setOutcomes={setOutcomes} />}
@@ -270,32 +280,25 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
       {activeTab === 'retention' && <RetentionPanel covUser={covUser} />}
 
       {INSTITUTION.includes(activeTab) && (
-      <fieldset disabled={locked} style={{ border:0, padding:0, margin:0, minWidth:0, opacity: locked ? 0.75 : 1 }}>
+      <fieldset disabled={activeTab === 'setup' ? adminOnly : locked} style={{ border:0, padding:0, margin:0, minWidth:0, opacity: (activeTab === 'setup' ? adminOnly : locked) ? 0.75 : 1 }}>
+      {activeTab === 'setup' && <YourSetup settings={settings} set={set} sides={sides} locked={adminOnly} demo={!!covUser?.demo && !covUser?.authed} Field={Field} Card={Card} />}
+      {activeTab === 'fraudrules' && <FraudRulesSettings settings={settings} set={set} locked={locked} />}
+      {activeTab === 'tmrules'    && <MonitoringRulesSettings settings={settings} set={set} locked={locked} />}
+      {activeTab === 'screening'  && <ScreeningSettings settings={settings} set={set} locked={locked} outcomes={outcomes || []} admin={covUser?.role === 'admin'} />}
       {activeTab === 'profile' && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:'20px', alignItems:'start' }}>
         {/* ── Institution Profile ── */}
         <Card title="INSTITUTION PROFILE">
-          <Field k="duoInstitutionName" label="Institution Name" hint="Used in filing packages, Duo sessions and AI triage context.">
+          <Field k="duoInstitutionName" label="Institution name" hint="Used in filing packages, Duo sessions and AI triage context.">
             <Txt field="duoInstitutionName" placeholder="First Community Credit Union" />
           </Field>
-          <Field k="institutionType" label="Institution Type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
+          <Field k="institutionType" label="Institution type" hint="Informs AI analysis — credit unions have different chargeback obligations than banks.">
             <Sel field="institutionType" options={[['bank','Bank'],['credit_union','Credit Union'],['fintech','Fintech / Neo-bank'],['mse','Money Service Business'],['exchange','Crypto Exchange / Platform'],['merchant','Merchant'],['processor','Payment Processor / Acquirer']]} />
-          </Field>
-          <Field k="sides" label="What you do" hint="Sets the menu order and where each tool starts. Every tool stays on the menu. Leave as it is to follow the institution type.">
-            <div role="group" aria-label="What you do" style={{ display:'grid', gap:'6px' }}>
-              {SIDES.map(([k, l, d]) => (
-                <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
-                  <input type="checkbox" checked={sides.includes(k)} style={{ marginTop:'4px' }}
-                    onChange={e => { const next = e.target.checked ? [...sides, k] : sides.filter(x => x !== k); if (next.length) set('sides', SIDES.map(([x]) => x).filter(x => next.includes(x))) }} />
-                  <span>{l} <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>{d}</span></span>
-                </label>
-              ))}
-            </div>
           </Field>
           <Field k="jurisdiction" label="Jurisdiction" hint="Sets the regulatory lens for SAR/STR thresholds and consumer protection rules.">
             <Sel field="jurisdiction" options={[['us','United States'],['ca','Canada'],['uk','United Kingdom'],['other','Other']]} />
           </Field>
-          <Field k="regulatoryRegime" label="Consumer Protection Regime" hint="Calibrates filing windows and dispute eligibility rules in Triage.">
+          <Field k="regulatoryRegime" label="Consumer protection regime" hint="Calibrates filing windows and dispute eligibility rules in Triage.">
             <Sel field="regulatoryRegime" options={[['reg_e','Reg E (US — EFTA)'],['fcac','FCAC (Canada)'],['fca','FCA (UK)'],['other','Other / Mixed']]} />
           </Field>
         </Card>
@@ -311,6 +314,11 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
           <Field k="homeCasesOpen" label="Home case list" hint="Whether the full case list starts open or folded away.">
             <Sel field="homeCasesOpen" options={[['closed','Folded away'],['open','Open']]} />
           </Field>
+          <Field k="snapshotEnabled" label="Home snapshot" hint="Resolution time, the fraud / other split and the largest category in Home’s numbers.">
+            <select value={settings.snapshotEnabled === false ? 'hidden' : 'shown'} onChange={e => set('snapshotEnabled', e.target.value === 'shown')} className="input-field" style={{ width:'100%' }}>
+              <option value="shown">Shown</option><option value="hidden">Hidden</option>
+            </select>
+          </Field>
           <Field k="triageDefaultTab" label="Triage opens on" hint="Alerts suit a team whose systems send data to Covalence; Claims suits one that starts from customer reports.">
             <Sel field="triageDefaultTab" options={[['alerts',`Alerts — ${alertsSource(sides, settings.institutionType === 'exchange').toLowerCase()}`],['claims','Claims — the customer reported it']]} />
           </Field>
@@ -320,47 +328,26 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
         </Card>
         </div>
       )}
-      {activeTab === 'modules' && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:'20px', alignItems:'start' }}>
-        {/* ── Module Settings ── */}
-        <Card title="MODULE SETTINGS">
-          <Field k="dfaEnabled" label="DFA Scoring Engine" hint="Toggle the Dispute Funding Analyzer scoring engine. Default: on.">
-            <button onClick={() => set('dfaEnabled', settings.dfaEnabled === false ? true : false)}
-              style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.dfaEnabled !== false ? '#064E3B' : '#292524', color: settings.dfaEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.dfaEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
-              <span style={{ fontSize:'10px' }}>{settings.dfaEnabled !== false ? '●' : '○'}</span>
-              {settings.dfaEnabled !== false ? 'DFA ON' : 'DFA OFF'}
-            </button>
-          </Field>
-          <Field k="snapshotEnabled" label="Home Snapshot" hint="Show resolution time, fraud / service split and top category in Home’s numbers.">
-            <button onClick={() => set('snapshotEnabled', settings.snapshotEnabled === false ? true : false)}
-              style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'8px 16px', border:'1px solid', cursor:'pointer', width:'fit-content', fontFamily:"'JetBrains Mono',monospace", fontSize:'10px', letterSpacing:'0.12em', background: settings.snapshotEnabled !== false ? '#064E3B' : '#292524', color: settings.snapshotEnabled !== false ? '#D1FAE5' : '#A8A29E', borderColor: settings.snapshotEnabled !== false ? '#064E3B' : '#44403C', transition:'all 0.15s' }}>
-              <span style={{ fontSize:'10px' }}>{settings.snapshotEnabled !== false ? '●' : '○'}</span>
-              {settings.snapshotEnabled !== false ? 'SNAPSHOT ON' : 'SNAPSHOT OFF'}
-            </button>
-          </Field>
-        </Card>
-        </div>
-      )}
       {activeTab === 'filing' && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:'20px', alignItems:'start' }}>
         {/* ── Filing Windows ── */}
         <Card title="FILING WINDOWS">
-          <Field k="smallDollarThreshold" label="Small-Dollar Write-Off Threshold ($)" hint="Cases below this amount may be courtesy-credited directly."><Num field="smallDollarThreshold" min={0} /></Field>
-          <Field k="fraudWindowDays" label="Fraud Filing Window (days)" hint="Visa/MC standard: 120 days from transaction."><Num field="fraudWindowDays" min={1} /></Field>
-          <Field k="consumerWindowDays" label="Consumer Dispute Window (days)" hint="Typically 120 days from expected delivery."><Num field="consumerWindowDays" min={1} /></Field>
-          <Field k="absoluteCapDays" label="Absolute Cap (days)" hint="Hard cap on any filing. Visa: 540 days from transaction."><Num field="absoluteCapDays" min={1} /></Field>
+          <Field k="smallDollarThreshold" label="Small-dollar write-off threshold ($)" hint="Cases below this amount may be courtesy-credited directly."><Num field="smallDollarThreshold" min={0} /></Field>
+          <Field k="fraudWindowDays" label="Fraud filing window (days)" hint="Visa/MC standard: 120 days from transaction."><Num field="fraudWindowDays" min={1} /></Field>
+          <Field k="consumerWindowDays" label="Consumer dispute window (days)" hint="Typically 120 days from expected delivery."><Num field="consumerWindowDays" min={1} /></Field>
+          <Field k="absoluteCapDays" label="Absolute cap (days)" hint="Hard cap on any filing. Visa: 540 days from transaction."><Num field="absoluteCapDays" min={1} /></Field>
         </Card>
         {/* ── Operational Defaults ── */}
-        <Card title="OPERATIONAL DEFAULTS">
-          <Field k="trackerWindowDays" label="Tracker Window (days)" hint="Days of cases shown in the tracker.">
+        <Card title="TRACKER, BATCH AND PROVISIONAL CREDIT">
+          <Field k="trackerWindowDays" label="Tracker window (days)" hint="Days of cases shown in the tracker.">
             <Num field="trackerWindowDays" min={1} max={365} />
           </Field>
-          <Field k="batchFileTime" label="Batch Filing Time (daily auto-file)" hint="Queued fraud cases auto-file at this time daily when the Multi tab is open.">
+          <Field k="batchFileTime" label="Batch filing time" hint="Queued fraud cases file at this time each day while Multi is open.">
             <input type="time" value={settings.batchFileTime || '15:00'}
               onChange={e => set('batchFileTime', e.target.value)}
               style={{ background:'white', border:'1px solid #D4CCBC', padding:'9px 12px', fontFamily:"'JetBrains Mono',monospace", fontSize:'13px', color:'#1A1814', width:'140px', outline:'none', cursor:'pointer' }} />
           </Field>
-          <Field k="pcMilestones" label="PC Milestones (business days)" hint="Three milestone deadlines shown on the PC countdown row.">
+          <Field k="pcMilestones" label="Provisional credit milestones (business days)" hint="Three deadlines shown on the provisional credit countdown.">
             <div style={{ display:'flex', gap:'8px' }}>
               {(settings.pcMilestones || DEFAULT_SETTINGS.pcMilestones).map((m, i) => (
                 <input key={i} type="number" value={m} min={1}
@@ -416,6 +403,61 @@ export function SettingsView({ settings, setSettings, covUser, outcomes, setOutc
       )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Your setup: what the workspace does, then every tool and its features with a switch.
+// Off means gone everywhere; nothing is deleted (features.mjs).
+function YourSetup({ settings, set, sides, locked, demo, Field, Card }) {
+  const flip = (id, on) => set('off', switchTo(settings, id, on))
+  // A plain function, not a component, so a switch keeps focus when the page redraws
+  const row = (f, child) => {
+    const on = isOn(settings, f.id), parentOff = f.in && !isOn(settings, f.in)
+    return (
+      <div key={f.id} data-setting-box="" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'12px', padding: child ? '10px 0 10px 18px' : '14px 0 10px', borderTop: child ? 'none' : '1px solid #E7E2D9', borderLeft: child ? '2px solid #E7E2D9' : 'none', marginLeft: child ? '4px' : 0 }}>
+        <div style={{ minWidth:0 }}>
+          <div className="display-font" data-setting={f.label} style={{ fontSize: child ? '15px' : '17px', fontWeight:600, color: on ? '#1A1814' : '#8A7F72' }}>{f.label}</div>
+          <div className="display-font" style={{ fontSize:'13px', color:'#57534E', lineHeight:1.45 }}>{f.what}</div>
+          {f.hides && <div className="display-font" style={{ fontSize:'12px', color:'#6B6259', lineHeight:1.45, marginTop:'2px' }}>Off: {f.hides}</div>}
+        </div>
+        {parentOff ? <span className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.1em', color:'#8A7F72', whiteSpace:'nowrap', paddingTop:'6px' }}>OFF WITH {featureTool(f).toUpperCase()}</span>
+          : <Switch on={on} label={f.label} disabled={locked} onChange={v => flip(f.id, v)} />}
+      </div>
+    )
+  }
+  const featureTool = f => TOOLS.find(t => t.id === f.in)?.label || ''
+  return (
+    <div style={{ display:'grid', gap:'20px', maxWidth:'760px' }}>
+      <Card title="WHAT YOU DO">
+        <Field k="sides" label="What you do" hint="The merchant views (chargebacks against you, Triage’s Merchant side) and the acquirer view (Your merchants in Multi) show only when ticked. Also sets the menu order.">
+          <div role="group" aria-label="What you do" style={{ display:'grid', gap:'6px' }}>
+            {SIDES.map(([k, l, d]) => (
+              <label key={k} className="display-font" style={{ fontSize:'14px', display:'flex', gap:'8px', alignItems:'flex-start', cursor:'pointer' }}>
+                <input type="checkbox" checked={sides.includes(k)} style={{ marginTop:'4px' }}
+                  onChange={e => { const next = e.target.checked ? [...sides, k] : sides.filter(x => x !== k); if (next.length) set('sides', SIDES.map(([x]) => x).filter(x => next.includes(x))) }} />
+                <span>{l} <span style={{ display:'block', fontSize:'12px', color:'#6B6259' }}>{d}</span></span>
+              </label>
+            ))}
+          </div>
+        </Field>
+      </Card>
+      <Card title="TOOLS AND FEATURES">
+        <p className="display-font" style={{ fontSize:'14px', color:'#3F3A35', lineHeight:1.55, margin:0 }}>
+          Switched off means gone: not in the menu, not on Home, not in Your day, not in search. Nothing is deleted; switch it back on and it’s all there.
+          {demo && ' In the demo everything starts on; switch things off to see what a workspace without them looks like.'}
+        </p>
+        <div>
+          {TOOLS.map(t => (
+            <div key={t.id}>
+              {row(t)}
+              {FEATURES.filter(f => f.in === t.id).map(f => row(f, true))}
+            </div>
+          ))}
+          <div className="mono-font" style={{ fontSize:'10px', letterSpacing:'0.16em', color:'#8A7F72', padding:'18px 0 0' }}>ACROSS COVALENCE</div>
+          {FEATURES.filter(f => !f.in).map(f => row(f))}
+        </div>
+      </Card>
     </div>
   )
 }

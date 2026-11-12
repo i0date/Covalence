@@ -24,6 +24,7 @@ import { screeningStatus } from './fincrime.js'
 import { ArnLink } from './ArnLink.jsx'
 import { previousVisit } from './brief.js'
 import { PoolPanel } from './Pool.jsx'
+import { isOn } from './features.mjs'
 
 const OPEN_EVENT = 'cov:open-case'
 export function openCase(id) { if (id) window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { id } })) }
@@ -396,7 +397,7 @@ export function CasePanel({ caseId, outcomes, setOutcomes, onClose, onGo, onDesk
         ) : (
         <div style={{ padding:'20px 22px 40px', display:'flex', flexDirection:'column', gap:'22px' }}>
           <OwnerLine c={c} covUser={covUser} setOutcomes={setOutcomes} settings={settings} />
-          {!c._triageOnly && <PoolPanel c={c} covUser={covUser} setOutcomes={setOutcomes} />}
+          {!c._triageOnly && isOn(settings, 'pools') && <PoolPanel c={c} covUser={covUser} setOutcomes={setOutcomes} />}
           {/* What changed since the previous day's visit, other than by you */}
           {(() => {
             const prev = previousVisit(), mine = covUser?.name || ''
